@@ -6,8 +6,6 @@ on:
     branches:
       - main
   workflow_dispatch:
-  schedule:
-    - cron: '0 3 * * *'
 
 jobs:
   gate-check:
@@ -33,7 +31,7 @@ jobs:
         run: npm run gate:check
 
   pack-smoke:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
