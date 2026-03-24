@@ -1,7 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CATDatabase } from "./index";
-import { join } from "path";
-import { unlinkSync, existsSync } from "fs";
 
 describe("CATDatabase", () => {
   let db: CATDatabase;
@@ -9,6 +7,10 @@ describe("CATDatabase", () => {
 
   beforeEach(() => {
     db = new CATDatabase(testDbPath);
+  });
+
+  afterEach(() => {
+    db.close();
   });
 
   it("should create a project and retrieve it", () => {
@@ -166,6 +168,8 @@ describe("CATDatabase", () => {
 
     file = db.getFile(fileId);
     expect(file?.confirmedSegments).toBe(1);
+    expect(file?.segmentStatusStats.totalSegments).toBe(2);
+    expect(file?.segmentStatusStats.confirmedSegmentsForBar).toBe(1);
   });
 
   it("should include per-file segment status stats for progress bar rendering", () => {
@@ -277,6 +281,106 @@ describe("CATDatabase", () => {
       (stats?.inProgressSegments ?? 0) +
       (stats?.newSegments ?? 0);
     expect(totalFromBuckets).toBe(stats?.totalSegments);
+  });
+
+  it("should scope getFile and listFiles stats to the relevant project files only", () => {
+    const projectId = db.createProject("Scoped Stats Project", "en", "zh");
+    const otherProjectId = db.createProject("Other Stats Project", "en", "fr");
+    const targetFileId = db.createFile(projectId, "target.xlsx");
+    const siblingFileId = db.createFile(projectId, "sibling.xlsx");
+    const otherProjectFileId = db.createFile(otherProjectId, "other.xlsx");
+
+    db.bulkInsertSegments([
+      {
+        segmentId: "target-confirmed",
+        fileId: targetFileId,
+        orderIndex: 0,
+        sourceTokens: [{ type: "text", content: "target confirmed" }],
+        targetTokens: [{ type: "text", content: "target confirmed zh" }],
+        status: "confirmed",
+        tagsSignature: "",
+        matchKey: "target-confirmed",
+        srcHash: "target-confirmed",
+        meta: { updatedAt: new Date().toISOString() },
+      },
+      {
+        segmentId: "target-draft-qa",
+        fileId: targetFileId,
+        orderIndex: 1,
+        sourceTokens: [{ type: "text", content: "target qa" }],
+        targetTokens: [{ type: "text", content: "target qa zh" }],
+        status: "draft",
+        tagsSignature: "",
+        matchKey: "target-qa",
+        srcHash: "target-qa",
+        meta: { updatedAt: new Date().toISOString() },
+        qaIssues: [{ ruleId: "tag-order", severity: "warning", message: "order mismatch" }],
+      },
+      {
+        segmentId: "sibling-draft",
+        fileId: siblingFileId,
+        orderIndex: 0,
+        sourceTokens: [{ type: "text", content: "sibling draft" }],
+        targetTokens: [{ type: "text", content: "sibling draft zh" }],
+        status: "draft",
+        tagsSignature: "",
+        matchKey: "sibling-draft",
+        srcHash: "sibling-draft",
+        meta: { updatedAt: new Date().toISOString() },
+      },
+      {
+        segmentId: "other-reviewed",
+        fileId: otherProjectFileId,
+        orderIndex: 0,
+        sourceTokens: [{ type: "text", content: "other reviewed" }],
+        targetTokens: [{ type: "text", content: "other reviewed fr" }],
+        status: "reviewed",
+        tagsSignature: "",
+        matchKey: "other-reviewed",
+        srcHash: "other-reviewed",
+        meta: { updatedAt: new Date().toISOString() },
+      },
+      {
+        segmentId: "other-new",
+        fileId: otherProjectFileId,
+        orderIndex: 1,
+        sourceTokens: [{ type: "text", content: "other new" }],
+        targetTokens: [],
+        status: "new",
+        tagsSignature: "",
+        matchKey: "other-new",
+        srcHash: "other-new",
+        meta: { updatedAt: new Date().toISOString() },
+      },
+    ]);
+
+    db.updateFileStats(siblingFileId);
+    db.updateFileStats(otherProjectFileId);
+
+    const targetFile = db.getFile(targetFileId);
+    expect(targetFile).toBeDefined();
+    expect(targetFile?.segmentStatusStats).toEqual({
+      totalSegments: 2,
+      qaProblemSegments: 1,
+      confirmedSegmentsForBar: 1,
+      inProgressSegments: 0,
+      newSegments: 0,
+    });
+
+    const projectFiles = db.listFiles(projectId);
+    expect(projectFiles).toHaveLength(2);
+
+    const listedTargetFile = projectFiles.find((file) => file.id === targetFileId);
+    expect(listedTargetFile?.segmentStatusStats).toEqual(targetFile?.segmentStatusStats);
+
+    const siblingFile = projectFiles.find((file) => file.id === siblingFileId);
+    expect(siblingFile?.segmentStatusStats).toEqual({
+      totalSegments: 1,
+      qaProblemSegments: 0,
+      confirmedSegmentsForBar: 0,
+      inProgressSegments: 1,
+      newSegments: 0,
+    });
   });
 
   it("should persist qa issues and clear them after segment update", () => {

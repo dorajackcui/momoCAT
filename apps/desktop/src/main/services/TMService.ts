@@ -37,9 +37,9 @@ export class TMService {
 
     // V5: Find the writable TM (Working TM) for this project
     const mountedTMs = this.tmRepo.getProjectMountedTMs(projectId);
-    const workingTM = mountedTMs.find(
-      (tm) => tm.type === 'working' && (tm.permission === 'write' || tm.permission === 'readwrite'),
-    );
+    const workingTM = mountedTMs.find((tm) => {
+      return tm.type === 'working' && (tm.permission === 'write' || tm.permission === 'readwrite');
+    });
 
     if (!workingTM) {
       console.warn(`[TMService] No writable Working TM found for project ${projectId}`);
@@ -154,29 +154,12 @@ export class TMService {
     }
 
     // Sort by similarity desc, then by usageCount desc
-    return results.sort((a, b) => {
-      if (b.similarity !== a.similarity) return b.similarity - a.similarity;
-      return b.usageCount - a.usageCount;
-    }).slice(0, TMService.TM_MATCH_RESULT_LIMIT);
-  }
-
-  public async find100Match(projectId: number, srcHash: string) {
-    // Keep for backward compatibility if needed, but UI should move to findMatches
-    const mountedTMs = this.tmRepo.getProjectMountedTMs(projectId);
-
-    for (const tm of mountedTMs) {
-      const match = this.tmRepo.findTMEntryByHash(tm.id, srcHash);
-      if (match) {
-        return {
-          ...match,
-          similarity: 100,
-          tmName: tm.name,
-          tmType: tm.type,
-        };
-      }
-    }
-
-    return null;
+    return results
+      .sort((a, b) => {
+        if (b.similarity !== a.similarity) return b.similarity - a.similarity;
+        return b.usageCount - a.usageCount;
+      })
+      .slice(0, TMService.TM_MATCH_RESULT_LIMIT);
   }
 
   private normalizeForSimilarity(text: string): string {
@@ -221,7 +204,7 @@ export class TMService {
     }
 
     if (aCount + bCount === 0) return 0;
-    return Math.round((2 * overlap / (aCount + bCount)) * 100);
+    return Math.round(((2 * overlap) / (aCount + bCount)) * 100);
   }
 
   private buildBigramCounts(text: string): Map<string, number> {

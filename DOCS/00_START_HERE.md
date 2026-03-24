@@ -16,7 +16,7 @@ Read first for every new task, new session, or handoff.
 
 ## Last Updated
 
-2026-03-01
+2026-03-24
 
 ## Owner
 
@@ -52,7 +52,7 @@ Package validation by target OS:
 | New feature touching renderer flow   | `DOCS/10_ARCHITECTURE.md`                                      |
 | Main process service/module changes  | `DOCS/10_ARCHITECTURE.md`                                      |
 | IPC contract changes                 | `DOCS/10_ARCHITECTURE.md` and `DOCS/20_ENGINEERING_RUNBOOK.md` |
-| Migration/schema/repo SQL work       | `DOCS/30_DATA_MODEL.md`                                        |
+| Schema/repo SQL work                 | `DOCS/30_DATA_MODEL.md`                                        |
 | Build/test/gate failures             | `DOCS/20_ENGINEERING_RUNBOOK.md`                               |
 | Priorities and risk decisions        | `DOCS/40_STATUS_AND_ROADMAP.md`                                |
 | Historical context for old decisions | `DOCS/90_HISTORY_CONSOLIDATED.md`                              |
@@ -79,7 +79,7 @@ npx vitest run apps/desktop/src/renderer/src/hooks/useEditorFilters.behavior.tes
 npx vitest run apps/desktop/src/renderer/src/components/EditorRow.integration.test.ts
 npx vitest run apps/desktop/src/renderer/src/components/editor-row/useEditorRowDisplayModel.test.ts
 npx vitest run apps/desktop/src/renderer/src/components/editor-row/useEditorRowCommandHandlers.test.ts
-npx vitest run packages/db/src/migration/runMigrations.test.ts
+npx vitest run packages/db/src/currentSchema.test.ts
 npx vitest run packages/core/src/TagManager.test.ts
 ```
 

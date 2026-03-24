@@ -135,16 +135,6 @@ export interface TransactionManager {
   runInTransaction<T>(fn: () => T): T;
 }
 
-// Backward-compatible aggregate type for incremental migration.
-export interface DatabaseGateway
-  extends
-    ProjectRepository,
-    SegmentRepository,
-    TMRepository,
-    TBRepository,
-    SettingsRepository,
-    TransactionManager {}
-
 export interface SpreadsheetGateway {
   import(
     filePath: string,

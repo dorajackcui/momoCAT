@@ -92,33 +92,4 @@ describe('fileProgressStats', () => {
       newPct: 0,
     });
   });
-
-  it('falls back to legacy confirmed-only behavior when extended stats are missing', () => {
-    const buckets = deriveFileProgressBuckets({
-      id: 4,
-      uuid: 'file-4',
-      projectId: 1,
-      name: 'fallback.xlsx',
-      totalSegments: 8,
-      confirmedSegments: 3,
-      createdAt: '',
-      updatedAt: '',
-    });
-
-    expect(buckets).toEqual({
-      totalSegments: 8,
-      qaProblemSegments: 0,
-      confirmedSegmentsForBar: 3,
-      inProgressSegments: 0,
-      newSegments: 5,
-    });
-
-    expect(toPercent(buckets)).toEqual({
-      qaProblemPct: 0,
-      confirmedPct: 37.5,
-      inProgressPct: 0,
-      newPct: 62.5,
-      confirmedDisplayPct: 38,
-    });
-  });
 });

@@ -15,7 +15,7 @@ Read at task start, before planning scope, and before merge.
 
 ## Last Updated
 
-2026-03-01
+2026-03-24
 
 ## Owner
 
@@ -27,8 +27,8 @@ This is the only active documentation page that may contain live gate status and
 
 ## Current Phase
 
-- Phase: `Feature-First`
-- Strategy: incremental refactor + compatibility-first delivery
+- Phase: `Current-Only Simplification`
+- Strategy: current-version-first simplification
 
 ## Current Gate Status (Local Verification)
 
@@ -43,43 +43,52 @@ Verification date: 2026-03-01
 
 1. Remaining large-file hotspot in `packages/core/src/index.ts` (core model + algorithm + export surface mixed).
 2. Historical warning backlog still exists in some workspaces.
-3. Boundary drift risk whenever IPC/service/database contracts change without paired tests.
+3. Remaining cleanup follow-through is now mainly docs/guardrails alignment and residual large-file/historical warning work.
 
-## Latest Completed Milestone (2026-03-01)
+## Latest Completed Milestone (2026-03-24)
 
-1. AI orchestrator large-file split completed with compatibility facade:
-   - `AITranslationOrchestrator.ts` reduced below file-size warning threshold,
-   - workflows split into `fileTranslationWorkflow`, `dialogueTranslationWorkflow`, `segmentTranslationWorkflow`, `translationTargetScope`.
-2. Project AI hook large-file split completed:
-   - `useProjectAI.ts` kept as stable facade export,
-   - internals moved to `hooks/projectDetail/ai/*`.
-3. Editor filter hook large-file split completed:
-   - `useEditorFilters.ts` kept as stable facade export,
-   - storage/searchable/menu logic moved to focused modules under `hooks/editor/*`.
-4. Added refactor regression coverage:
-   - `AITranslationWorkflows.test.ts`,
-   - `useProjectAI.behavior.test.ts`,
-   - `useEditorFilters.behavior.test.ts`.
+1. Replaced runtime DB migrations with a canonical current-schema bootstrap and validation path.
+2. Current DB behavior is now explicit:
+   - empty DB bootstraps latest schema,
+   - current-marker DB opens,
+   - unsupported old DB fails fast at startup with a blocking error.
+3. Removed dead compatibility surfaces:
+   - TM exact-match compatibility chain (`get100Match` / `find100Match`),
+   - unused aggregate type `DatabaseGateway`,
+   - legacy file-progress fallback for pre-extended file stats.
+
+## Cleanup Rules
+
+1. Remove compatibility code only when all in-repo callers already use the newer shape or can be switched in the same change.
+2. Keep architectural boundaries that still provide a clear import seam; do not delete facades just because they are thin.
+3. Prefer replacing multi-step upgrade logic with one canonical latest-schema bootstrap for current-only environments.
+4. If old user data must be handled later, add an explicit import/reset tool rather than keeping permanent runtime compatibility paths.
 
 ## Roadmap
 
 ### Now (1-2 iterations)
 
-1. Keep gate and architecture guard consistency for all boundary changes.
-2. Continue reducing the remaining `packages/core/src/index.ts` hotspot without contract breakage.
-3. Prevent net-new lint warning growth in touched files.
+1. Freeze net-new compatibility debt:
+   - no new legacy fallbacks,
+   - no new compatibility facades unless they are justified as long-term boundaries.
+2. Revisit guardrails after the current-only cleanup:
+   - remove compatibility-first wording from docs and checks,
+   - shrink `legacyMultiRepoMethods` exceptions where the new structure allows it.
+3. Keep targeted regression coverage current for DB bootstrap, TM query flow, and renderer file-progress shape.
 
 ### Next
 
-1. Continue core package responsibility cleanup and export-surface clarity.
-2. Split long tests into feature-focused suites for maintainability.
-3. Improve observability for long-running jobs and failure diagnostics.
+1. Simplify import surfaces selectively:
+   - keep stable entry files that still define useful module boundaries,
+   - inline or remove zero-value pass-through wrappers.
+2. Continue core package responsibility cleanup once compatibility noise is reduced.
+3. Reduce historical warning backlog in touched workspaces.
 
 ### Later
 
-1. Deeper provider pluggability for AI/TM/TB integrations.
-2. Additional import/export format expansion under reversible pipeline rules.
-3. Advanced TM/TB operational tooling based on product demand.
+1. If historical data recovery becomes necessary, build a one-off importer or reset/migrate utility outside the normal startup path.
+2. Resume deeper provider pluggability for AI/TM/TB integrations on top of the simplified current-only baseline.
+3. Expand operational tooling only after current-schema and current-contract boundaries are stable.
 
 ## Update Rules
 

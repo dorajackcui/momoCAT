@@ -3,7 +3,6 @@ import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import type { DesktopApiSlice, IpcRendererLike } from './types';
 
 type TMApiKeys =
-  | 'get100Match'
   | 'getMatches'
   | 'searchConcordance'
   | 'listTMs'
@@ -19,10 +18,6 @@ type TMApiKeys =
 
 export function createTMApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<TMApiKeys> {
   return {
-    get100Match: (projectId, srcHash) =>
-      ipcRenderer.invoke(IPC_CHANNELS.tm.get100Match, projectId, srcHash) as ReturnType<
-        DesktopApi['get100Match']
-      >,
     getMatches: (projectId, segment) =>
       ipcRenderer.invoke(IPC_CHANNELS.tm.getMatches, projectId, segment) as ReturnType<
         DesktopApi['getMatches']

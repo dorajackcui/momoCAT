@@ -3,7 +3,7 @@ import { join } from 'path';
 import { mkdir, readFile } from 'fs/promises';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
-import { CATDatabase } from '@cat/db';
+import { CATDatabase, UnsupportedDatabaseSchemaError } from '@cat/db';
 import { ProjectService } from './services/ProjectService';
 import { JobManager } from './JobManager';
 import { IPC_CHANNELS } from '../shared/ipcChannels';
@@ -130,7 +130,19 @@ app.whenReady().then(async () => {
     db = new CATDatabase(dbPath);
   } catch (err) {
     console.error('Failed to initialize database:', err);
-    // Fallback to in-memory for dev if needed, or just exit
+    if (err instanceof UnsupportedDatabaseSchemaError) {
+      await dialog.showMessageBox({
+        type: 'error',
+        buttons: ['Exit'],
+        defaultId: 0,
+        title: 'Unsupported Database Schema',
+        message: 'This database was created by an unsupported older version of the app.',
+        detail: `The current app only supports the current schema marker and will not auto-migrate old data.\n\nDatabase path: ${dbPath}\n\nPlease rebuild the local database or re-import your project data into a fresh workspace.`,
+        noLink: true,
+      });
+      app.exit(1);
+      return;
+    }
     throw err;
   }
   const projectService = new ProjectService(db, projectsDir, dbPath);

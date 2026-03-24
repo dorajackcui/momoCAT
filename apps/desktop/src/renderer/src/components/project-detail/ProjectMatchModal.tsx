@@ -1,9 +1,8 @@
-import { ProjectFile } from '@cat/core';
-import type { MountedTM } from '../../../../shared/ipc';
+import type { MountedTM, ProjectFileRecord } from '../../../../shared/ipc';
 import { Button, Modal, Select } from '../ui';
 
 interface ProjectMatchModalProps {
-  file: ProjectFile | null;
+  file: ProjectFileRecord | null;
   mountedTMs: MountedTM[];
   selectedTmId: string;
   onSelectedTmIdChange: (tmId: string) => void;

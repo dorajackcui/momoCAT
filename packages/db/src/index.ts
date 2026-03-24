@@ -3,7 +3,6 @@ import {
   ProjectQASettings,
   Project,
   ProjectAIModel,
-  ProjectFile,
   ProjectType,
   QaIssue,
   Segment,
@@ -24,13 +23,14 @@ import {
   TMType,
 } from "./types";
 
-import { runMigrations } from "./migration/runMigrations";
+import { ensureCurrentSchema } from './currentSchema';
 import { ProjectRepo } from "./repos/ProjectRepo";
 import { SegmentRepo } from "./repos/SegmentRepo";
 import { SettingsRepo } from "./repos/SettingsRepo";
 import { TBRepo } from "./repos/TBRepo";
 import { TMRepo } from "./repos/TMRepo";
 export * from "./types";
+export { CURRENT_SCHEMA_VERSION, UnsupportedDatabaseSchemaError } from './currentSchema';
 
 export class CATDatabase {
   private readonly db: Database.Database;
@@ -47,7 +47,7 @@ export class CATDatabase {
     this.db.pragma("synchronous = NORMAL");
     this.db.pragma("temp_store = MEMORY");
 
-    runMigrations(this.db);
+    ensureCurrentSchema(this.db);
 
     this.projectRepo = new ProjectRepo(this.db);
     this.segmentRepo = new SegmentRepo(this.db, (fileId) =>

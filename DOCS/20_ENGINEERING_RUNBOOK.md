@@ -16,7 +16,7 @@ Read before coding, before opening PRs, and whenever gate/test failures occur.
 
 ## Last Updated
 
-2026-03-01
+2026-03-24
 
 ## Owner
 
@@ -26,7 +26,7 @@ Core maintainers of `simple-cat-tool`
 
 1. Start from `DOCS/00_START_HERE.md`.
 2. Keep changes scoped: feature + direct blockers + required tests.
-3. Preserve public contracts unless a migration plan is explicitly documented.
+3. Preserve public contracts unless an intentional contract cleanup is explicitly documented.
 4. Update docs in the same change when behavior, boundaries, or process changes.
 
 ## Cross-Platform Baseline (Windows + macOS)
@@ -72,7 +72,7 @@ Current `gate:check` chain:
 ## Required Test Policy
 
 1. If you touch `ProjectService`, IPC contracts, or `CATDatabase` behavior, add or update tests in the same change.
-2. If you touch migrations, run migration tests and include compatibility notes.
+2. If you touch `CATDatabase` schema/bootstrap behavior, run current-schema tests and document the startup/data impact.
 3. If you touch AI/TM/editor boundaries, run targeted test suites before merge.
 
 ## Large-File Refactor Submission Requirements
@@ -131,10 +131,10 @@ CI matrix:
 1. Block net-new warning growth in touched files.
 2. If unavoidable, document rationale and follow-up issue.
 
-### DB migration issues
+### DB schema/bootstrap issues
 
-1. Re-run migration tests.
-2. Verify idempotency and v3->latest upgrade path.
+1. Re-run current-schema tests.
+2. Verify empty DB bootstrap, current-marker reopen, and unsupported-old-DB rejection.
 3. Update `DOCS/30_DATA_MODEL.md` in same change.
 
 ### Windows/macOS command mismatch

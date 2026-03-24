@@ -1,15 +1,15 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { ProjectFile } from '@cat/core';
 import type { ProjectAIController } from '../../hooks/projectDetail/useProjectAI';
+import type { ProjectFileRecord } from '../../../../shared/ipc';
 import { ProjectFilesPane } from './ProjectFilesPane';
 
 vi.mock('./ProjectAIPane', () => ({
   ProjectAIPane: () => React.createElement('div', { 'data-testid': 'project-ai-pane' }),
 }));
 
-function createFile(overrides?: Partial<ProjectFile>): ProjectFile {
+function createFile(overrides?: Partial<ProjectFileRecord>): ProjectFileRecord {
   return {
     id: 1,
     uuid: 'file-1',
@@ -17,6 +17,14 @@ function createFile(overrides?: Partial<ProjectFile>): ProjectFile {
     name: 'demo.xlsx',
     totalSegments: 10,
     confirmedSegments: 0,
+    importOptionsJson: null,
+    segmentStatusStats: {
+      totalSegments: 10,
+      qaProblemSegments: 0,
+      confirmedSegmentsForBar: 0,
+      inProgressSegments: 0,
+      newSegments: 10,
+    },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides,

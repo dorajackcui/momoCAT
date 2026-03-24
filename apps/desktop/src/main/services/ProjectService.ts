@@ -227,10 +227,6 @@ export class ProjectService {
     this.progressCallbacks.forEach((cb) => cb({ type, current, total, message }));
   }
 
-  public async get100Match(projectId: number, srcHash: string) {
-    return this.tmModule.get100Match(projectId, srcHash);
-  }
-
   public async findMatches(projectId: number, segment: Segment) {
     return this.tmModule.findMatches(projectId, segment);
   }

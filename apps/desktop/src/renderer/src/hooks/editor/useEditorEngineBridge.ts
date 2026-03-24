@@ -1,6 +1,10 @@
 import { RefObject, useEffect, useRef } from 'react';
 import { createCodeMirrorAdapter } from '../../components/editor-engine/codemirrorAdapter';
-import { EditorEngineAdapter, EditorEngineCallbacks, EditorEngineOptions } from '../../components/editor-engine/types';
+import {
+  EditorEngineAdapter,
+  EditorEngineCallbacks,
+  EditorEngineOptions,
+} from '../../components/editor-engine/types';
 
 interface UseEditorEngineBridgeParams {
   initialText: string;
@@ -21,27 +25,30 @@ export function useEditorEngineBridge({
   const editorHostRef = useRef<HTMLDivElement>(null);
   const adapterRef = useRef<EditorEngineAdapter | null>(null);
   const initialTextRef = useRef(initialText);
+  const initialOptionsRef = useRef(options);
   const callbackRef = useRef(callbacks);
-  callbackRef.current = callbacks;
 
-  if (!adapterRef.current) {
-    adapterRef.current = createCodeMirrorAdapter({
+  useEffect(() => {
+    callbackRef.current = callbacks;
+  }, [callbacks]);
+
+  useEffect(() => {
+    const host = editorHostRef.current;
+    if (!host) return;
+
+    const adapter = createCodeMirrorAdapter({
       callbacks: {
         onTextChange: (nextText) => callbackRef.current.onTextChange(nextText),
         onFocusChange: (focused) => callbackRef.current.onFocusChange(focused),
         onShortcutAction: (action) => callbackRef.current.onShortcutAction(action),
       },
-      initialOptions: options,
+      initialOptions: initialOptionsRef.current,
     });
-  }
-
-  useEffect(() => {
-    const host = editorHostRef.current;
-    if (!host || !adapterRef.current) return;
-
-    adapterRef.current.mount(host, initialTextRef.current);
+    adapterRef.current = adapter;
+    adapter.mount(host, initialTextRef.current);
     return () => {
-      adapterRef.current?.destroy();
+      adapter.destroy();
+      adapterRef.current = null;
     };
   }, []);
 
@@ -52,7 +59,12 @@ export function useEditorEngineBridge({
       highlightQuery: options.highlightQuery,
       highlightMode: options.highlightMode,
     });
-  }, [options.editable, options.highlightMode, options.highlightQuery, options.showNonPrintingSymbols]);
+  }, [
+    options.editable,
+    options.highlightMode,
+    options.highlightQuery,
+    options.showNonPrintingSymbols,
+  ]);
 
   return {
     editorHostRef,

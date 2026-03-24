@@ -20,15 +20,6 @@ export function registerTMHandlers({
 }: JobBackedHandlerDeps): void {
   registerHandle(
     { ipcMain, projectService, jobManager },
-    IPC_CHANNELS.tm.get100Match,
-    (_event, ...args) => {
-      const [projectId, srcHash] = args as [number, string];
-      return projectService.get100Match(projectId, srcHash);
-    },
-  );
-
-  registerHandle(
-    { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.getMatches,
     (_event, ...args) => {
       const [projectId, segment] = args as [number, Segment];

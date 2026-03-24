@@ -233,7 +233,6 @@ export interface DesktopApi {
     clientRequestId?: string,
   ) => Promise<SegmentUpdateResult>;
 
-  get100Match: (projectId: number, srcHash: string) => Promise<TMMatch | null>;
   getMatches: (projectId: number, segment: Segment) => Promise<TMMatch[]>;
   searchConcordance: (projectId: number, query: string) => Promise<TMConcordanceEntry[]>;
   getTermMatches: (projectId: number, segment: Segment) => Promise<TBMatch[]>;

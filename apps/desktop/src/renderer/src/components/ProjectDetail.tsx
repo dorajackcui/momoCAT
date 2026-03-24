@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { DEFAULT_PROJECT_QA_SETTINGS, ProjectFile, ProjectQASettings } from '@cat/core';
+import { DEFAULT_PROJECT_QA_SETTINGS, ProjectQASettings } from '@cat/core';
+import type { ProjectFileRecord } from '../../../shared/ipc';
 import { ColumnSelector } from './ColumnSelector';
 import { apiClient } from '../services/apiClient';
 import { feedbackService } from '../services/feedbackService';
@@ -23,9 +24,9 @@ interface ProjectDetailProps {
 
 export function ProjectDetail({ projectId, onBack, onOpenFile }: ProjectDetailProps) {
   const [activeTab, setActiveTab] = useState<'files' | 'tm' | 'tb'>('files');
-  const [commitModalFile, setCommitModalFile] = useState<ProjectFile | null>(null);
+  const [commitModalFile, setCommitModalFile] = useState<ProjectFileRecord | null>(null);
   const [commitTmId, setCommitTmId] = useState('');
-  const [matchModalFile, setMatchModalFile] = useState<ProjectFile | null>(null);
+  const [matchModalFile, setMatchModalFile] = useState<ProjectFileRecord | null>(null);
   const [matchTmId, setMatchTmId] = useState('');
   const [qaSettingsOpen, setQaSettingsOpen] = useState(false);
   const [qaSettingsSaving, setQaSettingsSaving] = useState(false);
@@ -65,7 +66,7 @@ export function ProjectDetail({ projectId, onBack, onOpenFile }: ProjectDetailPr
     runMutation,
   });
 
-  const openCommitModal = (file: ProjectFile) => {
+  const openCommitModal = (file: ProjectFileRecord) => {
     const mountedMainTMs = mountedTMs.filter((tm) => tm.type === 'main');
     if (mountedMainTMs.length === 0) {
       feedbackService.info('No mounted Main TM found. Please mount a Main TM first.');
@@ -88,7 +89,7 @@ export function ProjectDetail({ projectId, onBack, onOpenFile }: ProjectDetailPr
     }
   };
 
-  const openMatchModal = (file: ProjectFile) => {
+  const openMatchModal = (file: ProjectFileRecord) => {
     if (mountedTMs.length === 0) {
       feedbackService.info('No mounted TM found. Please mount a TM first.');
       return;

@@ -38,10 +38,6 @@ export class TMModule {
     this.batchOpsService = new TMBatchOpsService(projectRepo, segmentRepo, tmRepo, segmentService);
   }
 
-  public async get100Match(projectId: number, srcHash: string) {
-    return this.queryService.get100Match(projectId, srcHash);
-  }
-
   public async findMatches(projectId: number, segment: Segment) {
     return this.queryService.findMatches(projectId, segment);
   }

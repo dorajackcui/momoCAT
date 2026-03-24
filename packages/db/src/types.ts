@@ -14,7 +14,7 @@ export interface FileSegmentStatusStats {
 
 export type ProjectFileRecord = ProjectFile & {
   importOptionsJson?: string | null;
-  segmentStatusStats?: FileSegmentStatusStats;
+  segmentStatusStats: FileSegmentStatusStats;
 };
 
 export interface TMRecord {

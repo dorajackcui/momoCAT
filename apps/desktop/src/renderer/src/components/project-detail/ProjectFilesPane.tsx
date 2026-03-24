@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ProjectFile, ProjectType } from '@cat/core';
+import { ProjectType } from '@cat/core';
+import type { ProjectFileRecord } from '../../../../shared/ipc';
 import { ProjectAIController } from '../../hooks/projectDetail/useProjectAI';
 import { Button, Card, IconButton } from '../ui';
 import { ProjectAIPane } from './ProjectAIPane';
@@ -7,10 +8,10 @@ import { ProjectAITranslateModal } from './ProjectAITranslateModal';
 import { deriveFileProgressBuckets, toPercent } from './fileProgressStats';
 
 interface ProjectFilesPaneProps {
-  files: ProjectFile[];
+  files: ProjectFileRecord[];
   onOpenFile: (fileId: number) => void;
-  onOpenCommitModal: (file: ProjectFile) => void;
-  onOpenMatchModal: (file: ProjectFile) => void;
+  onOpenCommitModal: (file: ProjectFileRecord) => void;
+  onOpenMatchModal: (file: ProjectFileRecord) => void;
   onDeleteFile: (fileId: number, fileName: string) => Promise<void>;
   onExportFile: (fileId: number, fileName: string) => Promise<void>;
   onRunFileQA: (fileId: number, fileName: string) => Promise<void>;

@@ -18,6 +18,38 @@ interface FileWithSegmentStatsRow extends Omit<ProjectFileRecord, 'segmentStatus
 export class ProjectRepo {
   constructor(private readonly db: Database.Database) {}
 
+  private static readonly FILE_SEGMENT_STATS_SELECT = `
+    COALESCE(
+      SUM(CASE WHEN s.qaIssuesJson IS NOT NULL AND s.qaIssuesJson <> '' AND s.qaIssuesJson <> '[]' THEN 1 ELSE 0 END),
+      0
+    ) as qaProblemSegments,
+    COALESCE(
+      SUM(CASE
+        WHEN s.status = 'confirmed' AND (s.qaIssuesJson IS NULL OR s.qaIssuesJson = '' OR s.qaIssuesJson = '[]')
+        THEN 1
+        ELSE 0
+      END),
+      0
+    ) as confirmedSegmentsForBar,
+    COALESCE(
+      SUM(CASE
+        WHEN s.status IN ('draft', 'translated', 'reviewed')
+          AND (s.qaIssuesJson IS NULL OR s.qaIssuesJson = '' OR s.qaIssuesJson = '[]')
+        THEN 1
+        ELSE 0
+      END),
+      0
+    ) as inProgressSegments
+  `;
+
+  private static readonly FILES_WITH_STATS_SELECT = `
+    SELECT
+      f.*,
+      ${ProjectRepo.FILE_SEGMENT_STATS_SELECT}
+    FROM files f
+    LEFT JOIN segments s ON s.fileId = f.id
+  `;
+
   private toProject(row: (Project & { qaSettingsJson?: string | null }) | undefined): Project | undefined {
     if (!row) return undefined;
     const { qaSettingsJson, ...rest } = row;
@@ -132,70 +164,33 @@ export class ProjectRepo {
     const rows = this.db
       .prepare(
         `
-        SELECT
-          f.*,
-          COALESCE(s.qaProblemSegments, 0) as qaProblemSegments,
-          COALESCE(s.confirmedSegmentsForBar, 0) as confirmedSegmentsForBar,
-          COALESCE(s.inProgressSegments, 0) as inProgressSegments
-        FROM files f
-        LEFT JOIN (
-          SELECT
-            fileId,
-            SUM(CASE WHEN qaIssuesJson IS NOT NULL AND qaIssuesJson <> '' AND qaIssuesJson <> '[]' THEN 1 ELSE 0 END) as qaProblemSegments,
-            SUM(CASE
-              WHEN status = 'confirmed' AND (qaIssuesJson IS NULL OR qaIssuesJson = '' OR qaIssuesJson = '[]')
-              THEN 1
-              ELSE 0
-            END) as confirmedSegmentsForBar,
-            SUM(CASE
-              WHEN status IN ('draft', 'translated', 'reviewed') AND (qaIssuesJson IS NULL OR qaIssuesJson = '' OR qaIssuesJson = '[]')
-              THEN 1
-              ELSE 0
-            END) as inProgressSegments
-          FROM segments
-          GROUP BY fileId
-        ) s ON s.fileId = f.id
+        ${ProjectRepo.FILES_WITH_STATS_SELECT}
         WHERE f.projectId = ?
+        GROUP BY f.id
         ORDER BY f.createdAt DESC
         `,
       )
       .all(projectId) as FileWithSegmentStatsRow[];
 
-    return rows.map((row) => {
-      const qaProblemSegments = Math.max(0, Number(row.qaProblemSegments ?? 0));
-      const confirmedSegmentsForBar = Math.max(0, Number(row.confirmedSegmentsForBar ?? 0));
-      const inProgressSegments = Math.max(0, Number(row.inProgressSegments ?? 0));
-      const newSegments = Math.max(
-        0,
-        row.totalSegments - qaProblemSegments - confirmedSegmentsForBar - inProgressSegments,
-      );
-      const segmentStatusStats: FileSegmentStatusStats = {
-        totalSegments: row.totalSegments,
-        qaProblemSegments,
-        confirmedSegmentsForBar,
-        inProgressSegments,
-        newSegments,
-      };
-
-      return {
-        id: row.id,
-        uuid: row.uuid,
-        projectId: row.projectId,
-        name: row.name,
-        totalSegments: row.totalSegments,
-        confirmedSegments: row.confirmedSegments,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-        importOptionsJson: row.importOptionsJson ?? null,
-        segmentStatusStats,
-      };
-    });
+    return rows.map((row) => this.toProjectFileRecord(row));
   }
 
   public getFile(id: number): ProjectFileRecord | undefined {
-    return this.db.prepare('SELECT * FROM files WHERE id = ?').get(id) as
-      | ProjectFileRecord
-      | undefined;
+    const row = this.db
+      .prepare(
+        `
+        ${ProjectRepo.FILES_WITH_STATS_SELECT}
+        WHERE f.id = ?
+        GROUP BY f.id
+        `,
+      )
+      .get(id) as FileWithSegmentStatsRow | undefined;
+
+    if (!row) {
+      return undefined;
+    }
+
+    return this.toProjectFileRecord(row);
   }
 
   public deleteFile(id: number) {
@@ -240,5 +235,36 @@ export class ProjectRepo {
       .get(fileId) as { projectType?: ProjectType } | undefined;
 
     return row?.projectType;
+  }
+
+  private toProjectFileRecord(row: FileWithSegmentStatsRow): ProjectFileRecord {
+    const totalSegments = Math.max(0, Number(row.totalSegments));
+    const qaProblemSegments = Math.max(0, Number(row.qaProblemSegments ?? 0));
+    const confirmedSegmentsForBar = Math.max(0, Number(row.confirmedSegmentsForBar ?? 0));
+    const inProgressSegments = Math.max(0, Number(row.inProgressSegments ?? 0));
+    const newSegments = Math.max(
+      0,
+      totalSegments - qaProblemSegments - confirmedSegmentsForBar - inProgressSegments,
+    );
+    const segmentStatusStats: FileSegmentStatusStats = {
+      totalSegments,
+      qaProblemSegments,
+      confirmedSegmentsForBar,
+      inProgressSegments,
+      newSegments,
+    };
+
+    return {
+      id: row.id,
+      uuid: row.uuid,
+      projectId: row.projectId,
+      name: row.name,
+      totalSegments,
+      confirmedSegments: row.confirmedSegments,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      importOptionsJson: row.importOptionsJson ?? null,
+      segmentStatusStats,
+    };
   }
 }

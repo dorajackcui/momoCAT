@@ -8,10 +8,6 @@ export class TMQueryService {
     private readonly tmService: TMService,
   ) {}
 
-  public async get100Match(projectId: number, srcHash: string) {
-    return this.tmService.find100Match(projectId, srcHash);
-  }
-
   public async findMatches(projectId: number, segment: Segment) {
     return this.tmService.findMatches(projectId, segment);
   }

@@ -15,7 +15,7 @@ Read before modifying module boundaries, cross-layer contracts, or multi-subsyst
 
 ## Last Updated
 
-2026-03-01
+2026-03-24
 
 ## Owner
 
@@ -41,7 +41,7 @@ Core maintainers of `simple-cat-tool`
 4. Packages
 
 - `@cat/core`: domain models and pure/domain algorithms.
-- `@cat/db`: persistence, migration runner, repositories.
+- `@cat/db`: persistence, current-schema bootstrap/validation, repositories.
 
 ## Current Module Responsibilities
 

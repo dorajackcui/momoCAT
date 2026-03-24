@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Project, ProjectFile } from '@cat/core';
+import { Project } from '@cat/core';
 import type {
   DesktopApi,
   MountedTB,
   MountedTM,
+  ProjectFileRecord,
   TBWithStats,
   TMBatchMatchResult,
   TMWithStats,
@@ -13,7 +14,7 @@ import { apiClient } from '../../services/apiClient';
 export interface UseProjectDetailDataResult {
   project: Project | null;
   setProject: React.Dispatch<React.SetStateAction<Project | null>>;
-  files: ProjectFile[];
+  files: ProjectFileRecord[];
   mountedTMs: MountedTM[];
   allMainTMs: TMWithStats[];
   mountedTBs: MountedTB[];
@@ -96,7 +97,7 @@ export function createProjectDetailActions({
 
 export function useProjectDetailData(projectId: number): UseProjectDetailDataResult {
   const [project, setProject] = useState<Project | null>(null);
-  const [files, setFiles] = useState<ProjectFile[]>([]);
+  const [files, setFiles] = useState<ProjectFileRecord[]>([]);
   const [mountedTMs, setMountedTMs] = useState<MountedTM[]>([]);
   const [allMainTMs, setAllMainTMs] = useState<TMWithStats[]>([]);
   const [mountedTBs, setMountedTBs] = useState<MountedTB[]>([]);

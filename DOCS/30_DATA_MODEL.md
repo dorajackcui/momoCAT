@@ -1,18 +1,17 @@
 # 30_DATA_MODEL
 
 ## Purpose
-Document the persistent data model, migration execution model, and compatibility expectations for safe schema evolution.
+Document the persistent data model and current-schema bootstrap contract used by the app.
 
 ## When to Read
-Read before changing schema, migration steps, repositories, or SQL-level behavior.
+Read before changing schema, repositories, or SQL-level behavior.
 
 ## Source of Truth
-- Migration runner: `packages/db/src/migration/runMigrations.ts`
-- Migration steps: `packages/db/src/migration/migrations/*.ts`
+- Schema bootstrap/validation: `packages/db/src/currentSchema.ts`
 - Repositories: `packages/db/src/repos/*.ts`
 
 ## Last Updated
-2026-02-23
+2026-03-24
 
 ## Owner
 Core maintainers of `simple-cat-tool`
@@ -20,14 +19,13 @@ Core maintainers of `simple-cat-tool`
 ## Schema Version
 - Current target schema version: `v14`
 - Version table: `schema_version`
-- Runner behavior: execute migration steps in ascending order from current version to target
+- Bootstrap behavior: create latest schema for empty DBs, allow current-marker DBs, reject unsupported old DBs
 
-## Migration Runner Model
-1. Ensure `schema_version` table exists.
-2. Read current version.
-3. Apply bootstrap path for legacy versions (`< v3`) via `v003` entrypoint.
-4. Execute versioned steps (`v004 ... v014`) sequentially.
-5. Each migration owns its own `up(db)` and version bump.
+## Current-Schema Contract
+1. Empty database files bootstrap directly to the latest schema.
+2. Existing databases open only when they already carry the current `schema_version` marker and current required tables/columns.
+3. Older or partial databases are intentionally rejected with a startup error; the app does not perform in-place historical migration.
+4. Future schema changes must update the canonical schema definition and current marker together.
 
 ## Core Tables
 ### Project and file layer
@@ -61,23 +59,25 @@ Key fields:
 3. TB uniqueness and term lookup indexes (`tbId+srcNorm`, `srcTerm`).
 4. Project mounting indexes for TM/TB priority and enabled-state retrieval.
 
-## Compatibility Notes (v3 -> v14)
-1. Empty database must upgrade directly to `v14` with no manual steps.
-2. Historical databases from `v3+` must upgrade incrementally and safely.
-3. Re-running migrations must be idempotent (no duplicate columns/indexes, no destructive side effects).
-4. `v013` introduces/normalizes `projects.qaSettingsJson`.
-5. `v014` introduces `segments.qaIssuesJson` cache column.
+## Compatibility Notes
+1. Current-version-only startup is intentional in this project phase.
+2. Historical database recovery, if needed later, should be implemented as an explicit import/reset tool, not as a permanent startup migration path.
+3. The canonical current schema includes:
+   - `projects.projectType`, `projects.aiPrompt`, `projects.aiTemperature`, `projects.aiModel`, `projects.qaSettingsJson`
+   - `files.importOptionsJson`
+   - `segments.qaIssuesJson`
+   - TM/TB mounting and search tables (`tms`, `project_tms`, `tm_entries`, `tm_fts`, `term_bases`, `project_term_bases`, `tb_entries`)
+   - `app_settings`
 
 ## Change Protocol
-1. Add a new `migrations/vXXX.ts` with focused responsibility.
-2. Register migration in `runMigrations.ts` in ascending order.
+1. Update the canonical schema definition in `packages/db/src/currentSchema.ts`.
+2. Update the current schema marker if the persistent shape changes.
 3. Cover at least:
-- fresh DB upgrade
-- old DB upgrade path
-- idempotent re-run
+- empty DB bootstrap
+- current-marker reopen
+- unsupported old/non-current DB rejection
 4. Update this document in the same change.
 
 ## Related Code Entry Points
 - `packages/db/src/index.ts`
-- `packages/db/src/migration/types.ts`
-- `packages/db/src/migration/utils.ts`
+- `packages/db/src/currentSchema.ts`

@@ -9,7 +9,7 @@ interface FileSegmentStatusStatsLike {
 }
 
 type FileProgressInput = ProjectFile & {
-  segmentStatusStats?: FileSegmentStatusStatsLike;
+  segmentStatusStats: FileSegmentStatusStatsLike;
 };
 
 export interface FileProgressBuckets {
@@ -30,21 +30,6 @@ export interface FileProgressPercentages {
 
 export function deriveFileProgressBuckets(file: FileProgressInput): FileProgressBuckets {
   const stats = file.segmentStatusStats;
-
-  if (!stats) {
-    const totalSegments = Math.max(0, Number(file.totalSegments));
-    const confirmedSegmentsForBar = Math.max(
-      0,
-      Math.min(totalSegments, Number(file.confirmedSegments)),
-    );
-    return {
-      totalSegments,
-      qaProblemSegments: 0,
-      confirmedSegmentsForBar,
-      inProgressSegments: 0,
-      newSegments: Math.max(0, totalSegments - confirmedSegmentsForBar),
-    };
-  }
 
   const totalSegments = Math.max(0, Number(stats.totalSegments));
   const qaProblemSegments = Math.max(0, Number(stats.qaProblemSegments));

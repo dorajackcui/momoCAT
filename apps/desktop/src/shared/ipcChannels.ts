@@ -22,7 +22,6 @@ export const IPC_CHANNELS = {
     update: 'segment-update',
   },
   tm: {
-    get100Match: 'tm-get-100-match',
     getMatches: 'tm-get-matches',
     concordance: 'tm-concordance',
     list: 'tm-list',
