@@ -37,11 +37,13 @@ node_modules/
 .electron-gyp/
 .gyp/
 .npm/
+.npm-cache/
 
 # OS specific
 Thumbs.db
 
 # Temporary / Sample Data
+.tmp/
 *.tmp
 *_translated.xlsx
 *_translated.csv
