@@ -1,9 +1,6 @@
-import {
-  Segment,
-  SegmentStatus,
-  serializeTokensToDisplayText,
-  serializeTokensToEditorText,
-} from '@cat/core';
+import { type Segment, type SegmentStatus } from '@cat/core/models';
+import { serializeTokensToEditorText } from '@cat/core/tag';
+import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { ProjectRepository, SegmentRepository } from '../../ports';
 import { SegmentService } from '../../SegmentService';
 import { buildAIUserPrompt, buildAISystemPrompt, normalizeProjectType } from '../ai-prompts';

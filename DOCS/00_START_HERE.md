@@ -83,6 +83,13 @@ npx vitest run packages/db/src/currentSchema.test.ts
 npx vitest run packages/core/src/TagManager.test.ts
 ```
 
+## Test Layout
+
+1. Default to colocated tests: keep unit, behavior, and integration tests next to the code they exercise.
+2. Use `*.test.ts` or `*.test.tsx` so targeted `vitest run <path>` stays predictable during refactors.
+3. Keep end-to-end coverage centralized under `apps/desktop/e2e`.
+4. Extract shared fixtures/helpers only when reused across multiple nearby tests; do not move entire suites into a repo-level `tests/` folder by default.
+
 ## Fast Code Entry Index
 
 - Renderer root: `apps/desktop/src/renderer/src`

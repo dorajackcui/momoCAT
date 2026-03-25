@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Segment } from '@cat/core';
+import type { Segment } from '@cat/core/models';
 import {
   EditorFilterCriteria,
   EditorMatchMode,

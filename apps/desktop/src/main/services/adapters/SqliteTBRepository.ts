@@ -1,5 +1,5 @@
 import { CATDatabase } from '@cat/db';
-import { TBEntry } from '@cat/core';
+import type { TBEntry } from '@cat/core/models';
 import { MountedTBRecord, TBRecord, TBRepository } from '../ports';
 
 export class SqliteTBRepository implements TBRepository {
@@ -41,9 +41,18 @@ export class SqliteTBRepository implements TBRepository {
     return this.db.listProjectTermEntries(projectId);
   }
 
+  searchProjectTermEntries(
+    projectId: number,
+    sourceText: string,
+    options?: { srcLang?: string; limit?: number },
+  ): Array<TBEntry & { tbName: string; priority: number }> {
+    return this.db.searchProjectTermEntries(projectId, sourceText, options);
+  }
+
   upsertTBEntryBySrcTerm(params: {
     id: string;
     tbId: string;
+    srcLang: string;
     srcTerm: string;
     tgtTerm: string;
     note?: string | null;
@@ -55,6 +64,7 @@ export class SqliteTBRepository implements TBRepository {
   insertTBEntryIfAbsentBySrcTerm(params: {
     id: string;
     tbId: string;
+    srcLang: string;
     srcTerm: string;
     tgtTerm: string;
     note?: string | null;

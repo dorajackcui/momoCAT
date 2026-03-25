@@ -1,4 +1,4 @@
-import { Segment, SegmentStatus, Token } from '@cat/core';
+import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import { TMService } from './TMService';
 import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';

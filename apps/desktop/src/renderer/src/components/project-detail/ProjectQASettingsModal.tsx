@@ -1,4 +1,8 @@
-import { DEFAULT_PROJECT_QA_SETTINGS, ProjectQASettings, SEGMENT_QA_RULE_OPTIONS } from '@cat/core';
+import {
+  DEFAULT_PROJECT_QA_SETTINGS,
+  SEGMENT_QA_RULE_OPTIONS,
+  type ProjectQASettings,
+} from '@cat/core/project';
 import { Button, Card, Modal } from '../ui';
 
 interface ProjectQASettingsModalProps {

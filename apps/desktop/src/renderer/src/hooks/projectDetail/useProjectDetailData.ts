@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Project } from '@cat/core';
+import type { Project } from '@cat/core/project';
 import type {
   DesktopApi,
   MountedTB,

@@ -1,10 +1,7 @@
 import { randomUUID } from 'crypto';
-import { Segment, serializeTokensToDisplayText } from '@cat/core';
-import type {
-  ProjectRepository,
-  SegmentRepository,
-  TMRepository,
-} from '../../ports';
+import type { Segment } from '@cat/core/models';
+import { serializeTokensToDisplayText } from '@cat/core/text';
+import type { ProjectRepository, SegmentRepository, TMRepository } from '../../ports';
 import { SegmentService } from '../../SegmentService';
 
 export class TMBatchOpsService {
@@ -114,7 +111,11 @@ export class TMBatchOpsService {
     let hasMore = true;
 
     while (hasMore) {
-      const page = this.segmentRepo.getSegmentsPage(fileId, offset, TMBatchOpsService.SEGMENT_PAGE_SIZE);
+      const page = this.segmentRepo.getSegmentsPage(
+        fileId,
+        offset,
+        TMBatchOpsService.SEGMENT_PAGE_SIZE,
+      );
       if (page.length === 0) break;
       for (const segment of page) {
         visitor(segment);

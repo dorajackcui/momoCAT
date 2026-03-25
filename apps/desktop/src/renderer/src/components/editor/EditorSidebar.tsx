@@ -1,5 +1,5 @@
 import React from 'react';
-import type { TBMatch, Token } from '@cat/core';
+import type { TBMatch, Token } from '@cat/core/models';
 import type { TMMatch } from '../../../../shared/ipc';
 import { TMPanel } from '../TMPanel';
 import { ConcordancePanel } from '../ConcordancePanel';

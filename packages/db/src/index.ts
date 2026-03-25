@@ -1,16 +1,18 @@
 import Database from "better-sqlite3";
 import {
-  ProjectQASettings,
-  Project,
-  ProjectAIModel,
-  ProjectType,
   QaIssue,
   Segment,
   SegmentStatus,
   TBEntry,
   TMEntry,
   Token,
-} from "@cat/core";
+} from "@cat/core/models";
+import {
+  Project,
+  ProjectAIModel,
+  ProjectQASettings,
+  ProjectType,
+} from "@cat/core/project";
 import {
   MountedTBRecord,
   MountedTMRecord,
@@ -278,9 +280,18 @@ export class CATDatabase {
     return this.tbRepo.listProjectTermEntries(projectId);
   }
 
+  public searchProjectTermEntries(
+    projectId: number,
+    sourceText: string,
+    options?: { srcLang?: string; limit?: number },
+  ): ProjectTermEntryRecord[] {
+    return this.tbRepo.searchProjectTermEntries(projectId, sourceText, options);
+  }
+
   public insertTBEntryIfAbsentBySrcTerm(params: {
     id: string;
     tbId: string;
+    srcLang: string;
     srcTerm: string;
     tgtTerm: string;
     note?: string | null;
@@ -292,6 +303,7 @@ export class CATDatabase {
   public upsertTBEntryBySrcTerm(params: {
     id: string;
     tbId: string;
+    srcLang: string;
     srcTerm: string;
     tgtTerm: string;
     note?: string | null;

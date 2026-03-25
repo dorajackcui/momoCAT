@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Project, ProjectFile } from '@cat/core';
+import type { Project, ProjectFile } from '@cat/core/project';
 import { ProjectAITranslateModal } from './project-detail/ProjectAITranslateModal';
 import { useEditor } from '../hooks/useEditor';
 import { useEditorFilters } from '../hooks/useEditorFilters';

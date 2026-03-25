@@ -1,4 +1,4 @@
-import { Segment } from '@cat/core';
+import type { Segment } from '@cat/core/models';
 import { buildHighlightChunks, EditorMatchMode } from '../editorFilterUtils';
 import {
   hasRefinableTargetText,

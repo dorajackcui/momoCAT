@@ -1,5 +1,5 @@
 import { CATDatabase } from '@cat/db';
-import { TMEntry } from '@cat/core';
+import type { TMEntry } from '@cat/core/models';
 import { MountedTMRecord, TMRecord, TMRepository } from '../ports';
 
 export class SqliteTMRepository implements TMRepository {

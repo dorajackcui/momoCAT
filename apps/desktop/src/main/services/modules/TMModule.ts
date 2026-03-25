@@ -1,4 +1,4 @@
-import type { Segment } from '@cat/core';
+import type { Segment } from '@cat/core/models';
 import type {
   ProgressEmitter,
   ProjectRepository,

@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { TMEntry } from '@cat/core';
+import type { TMEntry } from '@cat/core/models';
 import { randomUUID } from 'crypto';
 import type { MountedTMRecord, TMEntryRow, TMRecord, TMType } from '../types';
 

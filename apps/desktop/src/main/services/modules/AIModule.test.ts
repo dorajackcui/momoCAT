@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_PROJECT_AI_MODEL, Segment, serializeTokensToDisplayText } from '@cat/core';
+import type { Segment } from '@cat/core/models';
+import { DEFAULT_PROJECT_AI_MODEL } from '@cat/core/project';
+import { serializeTokensToDisplayText } from '@cat/core/text';
 import { AIModule } from './AIModule';
 import { AITransport, ProjectRepository, SegmentRepository, SettingsRepository } from '../ports';
 import type { ProxySettingsApplier } from '../proxy/ProxySettingsManager';

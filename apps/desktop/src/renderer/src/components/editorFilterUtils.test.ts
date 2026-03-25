@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Segment } from '@cat/core';
+import type { Segment } from '@cat/core/models';
 import {
   buildHighlightChunks,
   countActiveFilterFields,

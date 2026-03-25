@@ -1,12 +1,12 @@
 import {
   DEFAULT_PROJECT_AI_MODEL,
-  ProjectAIModel,
-  ProjectType,
-  TagValidator,
-  Token,
   isProjectAIModel,
-  parseEditorTextToTokens,
-} from '@cat/core';
+  type ProjectAIModel,
+  type ProjectType,
+} from '@cat/core/project';
+import type { Token } from '@cat/core/models';
+import { TagValidator } from '@cat/core/qa';
+import { parseEditorTextToTokens } from '@cat/core/tag';
 import { buildAISystemPrompt, buildAIUserPrompt, normalizeProjectType } from '../ai-prompts';
 import type { PromptTBReference, PromptTMReference } from '../ai-prompts/types';
 import type { AITransport } from '../../ports';

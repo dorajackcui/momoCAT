@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { Segment, SegmentQaRuleId, SegmentStatus, Token } from '@cat/core';
-import { DEFAULT_PROJECT_QA_SETTINGS } from '@cat/core';
+import type { Segment, SegmentStatus, Token } from '@cat/core/models';
+import type { SegmentQaRuleId } from '@cat/core/project';
+import { DEFAULT_PROJECT_QA_SETTINGS } from '@cat/core/project';
 import type { SegmentsUpdatedEvent } from '../../../../shared/ipc';
 import { apiClient } from '../../services/apiClient';
 
@@ -13,6 +14,7 @@ interface UseEditorDataLoaderParams {
   normalizeStatus: (status: unknown, targetTokens: Token[]) => SegmentStatus;
   setSegments: Dispatch<SetStateAction<Segment[]>>;
   setProjectId: Dispatch<SetStateAction<number | null>>;
+  setProjectTgtLang: Dispatch<SetStateAction<string | null>>;
   setEnabledQaRuleIds: Dispatch<SetStateAction<SegmentQaRuleId[]>>;
   setInstantQaOnConfirm: Dispatch<SetStateAction<boolean>>;
   setSegmentSaveErrors: Dispatch<SetStateAction<Record<string, string>>>;
@@ -81,6 +83,7 @@ export function useEditorDataLoader({
   normalizeStatus,
   setSegments,
   setProjectId,
+  setProjectTgtLang,
   setEnabledQaRuleIds,
   setInstantQaOnConfirm,
   setSegmentSaveErrors,
@@ -159,6 +162,7 @@ export function useEditorDataLoader({
     if (activeFileId === null) {
       setSegments([]);
       setProjectId(null);
+      setProjectTgtLang(null);
       setEnabledQaRuleIds(DEFAULT_PROJECT_QA_SETTINGS.enabledRuleIds);
       setInstantQaOnConfirm(DEFAULT_PROJECT_QA_SETTINGS.instantQaOnConfirm);
       setSegmentSaveErrors({});
@@ -174,6 +178,7 @@ export function useEditorDataLoader({
       if (file) {
         setProjectId(file.projectId);
         const project = await apiClient.getProject(file.projectId);
+        setProjectTgtLang(project?.tgtLang ?? null);
         const qaSettings = project?.qaSettings || DEFAULT_PROJECT_QA_SETTINGS;
         setEnabledQaRuleIds(
           qaSettings.enabledRuleIds || DEFAULT_PROJECT_QA_SETTINGS.enabledRuleIds,
@@ -183,6 +188,9 @@ export function useEditorDataLoader({
             ? qaSettings.instantQaOnConfirm
             : DEFAULT_PROJECT_QA_SETTINGS.instantQaOnConfirm,
         );
+      } else {
+        setProjectId(null);
+        setProjectTgtLang(null);
       }
 
       const segmentsArray: Segment[] = [];
@@ -239,6 +247,7 @@ export function useEditorDataLoader({
     setInstantQaOnConfirm,
     setLoading,
     setProjectId,
+    setProjectTgtLang,
     setSegmentSaveErrors,
     setSegments,
   ]);

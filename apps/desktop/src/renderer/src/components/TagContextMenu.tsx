@@ -1,5 +1,5 @@
 import React from 'react';
-import { Token } from '@cat/core';
+import type { Token } from '@cat/core/models';
 
 /**
  * Props interface for the TagContextMenu component

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { Segment, SegmentStatus, Token } from '@cat/core';
+import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import { apiClient } from '../../services/apiClient';
 
 const DEFAULT_PERSIST_DEBOUNCE_MS = 350;

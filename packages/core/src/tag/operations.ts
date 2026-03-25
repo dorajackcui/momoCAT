@@ -1,4 +1,5 @@
-import type { TagMetadata, TagType, Token } from '../index';
+import type { TagMetadata, Token } from '../models';
+import { getTagDisplayInfo } from './display';
 
 export interface InsertTagResult {
   tokens: Token[];
@@ -206,38 +207,8 @@ export function findPairedTagIndex(tokens: Token[], tagIndex: number): number | 
   return undefined;
 }
 
-function getTagDisplayInfoLocal(tagContent: string, index: number): { display: string; type: TagType } {
-  const pairedStartMatch = tagContent.match(/^<([^/>]+)>$/);
-  const pairedEndMatch = tagContent.match(/^<\/([^>]+)>$/);
-
-  if (pairedStartMatch) {
-    return {
-      display: `[${index + 1}`,
-      type: 'paired-start',
-    };
-  }
-
-  if (pairedEndMatch) {
-    return {
-      display: `${index + 1}]`,
-      type: 'paired-end',
-    };
-  }
-
-  let displayNum = String(index + 1);
-  const bracketMatch = tagContent.match(/^\{(\d+)\}$/);
-  if (bracketMatch) {
-    displayNum = bracketMatch[1];
-  }
-
-  return {
-    display: `⟨${displayNum}⟩`,
-    type: 'standalone',
-  };
-}
-
 export function buildTagMetadata(token: Token, index: number, allTokens: Token[]): TagMetadata {
-  const tagInfo = getTagDisplayInfoLocal(token.content, index);
+  const tagInfo = getTagDisplayInfo(token.content, index);
   const pairedIndex = findPairedTagIndex(allTokens, index);
 
   return {

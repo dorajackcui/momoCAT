@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { TBMatch } from '@cat/core';
+import type { TBMatch } from '@cat/core/models';
 import type { TMMatch } from './TMPanel';
 import { buildCombinedMatches } from './TMPanel';
 

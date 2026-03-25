@@ -1,4 +1,4 @@
-import type { FileQaReport } from '@cat/core';
+import type { FileQaReport } from '@cat/core/project';
 
 export interface FileQaFeedback {
   level: 'success' | 'info';

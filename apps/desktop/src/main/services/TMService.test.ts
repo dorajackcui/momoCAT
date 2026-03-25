@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Segment, TMEntry } from '@cat/core';
+import type { Segment, TMEntry } from '@cat/core/models';
 import { TMService } from './TMService';
 import { ProjectRepository, TMRepository } from './ports';
 
@@ -18,11 +18,30 @@ function createSegment(sourceText: string, srcHash: string): Segment {
   };
 }
 
+function createTaggedSegment(sourceText: string, srcHash: string): Segment {
+  return {
+    segmentId: `seg-${srcHash}`,
+    fileId: 1,
+    orderIndex: 0,
+    sourceTokens: [
+      { type: 'text', content: sourceText },
+      { type: 'tag', content: '<b>' },
+    ],
+    targetTokens: [],
+    status: 'new',
+    tagsSignature: '<b>',
+    matchKey: `${sourceText.toLowerCase()} {tag}`,
+    srcHash,
+    meta: { updatedAt: new Date().toISOString() },
+  };
+}
+
 function createTMEntry(params: {
   srcHash: string;
   sourceText: string;
   targetText?: string;
   usageCount?: number;
+  tagsSignature?: string;
 }): TMEntry {
   const now = new Date().toISOString();
   return {
@@ -32,7 +51,7 @@ function createTMEntry(params: {
     tgtLang: 'fr-FR',
     srcHash: params.srcHash,
     matchKey: params.sourceText.toLowerCase(),
-    tagsSignature: '',
+    tagsSignature: params.tagsSignature ?? '',
     sourceTokens: [{ type: 'text', content: params.sourceText }],
     targetTokens: [{ type: 'text', content: params.targetText ?? `tgt-${params.srcHash}` }],
     usageCount: params.usageCount ?? 1,
@@ -195,5 +214,42 @@ describe('TMService.findMatches', () => {
     expect(fuzzyMatches[0].srcHash).toBe('fuzzy-high-usage');
     expect(fuzzyMatches[1].srcHash).toBe('fuzzy-low-usage');
   });
-});
 
+  it('keeps identical normalized text with different tags at similarity 99', async () => {
+    const source = 'Hello world';
+    const service = createService({
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      concordanceEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'same-text-different-tags',
+          sourceText: source,
+          tagsSignature: '',
+        }),
+      ],
+    });
+
+    const matches = await service.findMatches(1, createTaggedSegment(source, 'tagged-hash'));
+    expect(matches).toHaveLength(1);
+    expect(matches[0].srcHash).toBe('same-text-different-tags');
+    expect(matches[0].similarity).toBe(99);
+  });
+
+  it('caps fuzzy weighted matches at similarity 99 even when the computed score would round to 100', async () => {
+    const source = 'Translation memory scoring example';
+    const service = createService({
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      concordanceEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'fuzzy-almost-exact',
+          sourceText: 'Translation memory scoring examplex',
+          usageCount: 3,
+        }),
+      ],
+    });
+
+    const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
+    expect(matches).toHaveLength(1);
+    expect(matches[0].srcHash).toBe('fuzzy-almost-exact');
+    expect(matches[0].similarity).toBe(99);
+  });
+});

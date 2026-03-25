@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { serializeTokensToDisplayText } from '@cat/core';
+import { serializeTokensToDisplayText } from '@cat/core/text';
 import { apiClient } from '../services/apiClient';
 import type { TMConcordanceEntry } from '../../../shared/ipc';
 

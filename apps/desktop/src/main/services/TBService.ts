@@ -1,5 +1,6 @@
-import { Segment, TBMatch, TBEntry, serializeTokensToDisplayText } from '@cat/core';
-import { TBRepository } from './ports';
+import type { Segment, TBEntry, TBMatch } from '@cat/core/models';
+import { findTermPositionsInText, serializeTokensToSearchText } from '@cat/core/text';
+import { ProjectRepository, TBRepository } from './ports';
 
 type ProjectTBEntry = TBEntry & {
   tbName: string;
@@ -7,17 +8,37 @@ type ProjectTBEntry = TBEntry & {
 };
 
 export class TBService {
+  private static readonly TB_CANDIDATE_LIMIT = 200;
+
+  private projectRepo: ProjectRepository;
   private db: TBRepository;
 
-  constructor(db: TBRepository) {
+  constructor(projectRepo: ProjectRepository, db: TBRepository) {
+    this.projectRepo = projectRepo;
     this.db = db;
   }
 
   public async findMatches(projectId: number, segment: Segment): Promise<TBMatch[]> {
-    const sourceText = serializeTokensToDisplayText(segment.sourceTokens);
+    const sourceText = serializeTokensToSearchText(segment.sourceTokens);
     if (!sourceText.trim()) return [];
 
-    const entries = this.db.listProjectTermEntries(projectId) as ProjectTBEntry[];
+    const project = this.projectRepo.getProject(projectId);
+    if (!project) return [];
+
+    const searchEntries = this.db.searchProjectTermEntries(projectId, sourceText, {
+      srcLang: project.srcLang,
+      limit: TBService.TB_CANDIDATE_LIMIT,
+    }) as ProjectTBEntry[];
+    const fullEntries = this.db.listProjectTermEntries(projectId) as ProjectTBEntry[];
+    const shortEntries =
+      searchEntries.length > 0
+        ? fullEntries.filter(
+            (entry) =>
+              entry.srcNorm.length < 3 &&
+              !searchEntries.some((candidate) => candidate.id === entry.id),
+          )
+        : [];
+    const entries = searchEntries.length > 0 ? [...searchEntries, ...shortEntries] : fullEntries;
     if (entries.length === 0) return [];
 
     const matches: TBMatch[] = [];
@@ -25,7 +46,9 @@ export class TBService {
 
     for (const entry of entries) {
       if (seenSrcNorm.has(entry.srcNorm)) continue;
-      const positions = this.findPositions(sourceText, entry.srcTerm);
+      const positions = findTermPositionsInText(sourceText, entry.srcTerm, {
+        locale: project.srcLang,
+      });
       if (positions.length === 0) continue;
 
       matches.push({
@@ -39,48 +62,5 @@ export class TBService {
       if (b.srcTerm.length !== a.srcTerm.length) return b.srcTerm.length - a.srcTerm.length;
       return a.priority - b.priority;
     });
-  }
-
-  private findPositions(text: string, term: string): Array<{ start: number; end: number }> {
-    const source = text;
-    const target = term.trim();
-    if (!source.trim() || !target) return [];
-
-    const hasCjk = /[\u3400-\u9fff]/u.test(target);
-    if (hasCjk) {
-      const positions: Array<{ start: number; end: number }> = [];
-      const sourceLower = source.toLocaleLowerCase();
-      const targetLower = target.toLocaleLowerCase();
-      let from = 0;
-
-      while (from < sourceLower.length) {
-        const index = sourceLower.indexOf(targetLower, from);
-        if (index < 0) break;
-        positions.push({ start: index, end: index + target.length });
-        from = index + target.length;
-      }
-
-      return positions;
-    }
-
-    const escaped = this.escapeRegex(target);
-    const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'giu');
-    const positions: Array<{ start: number; end: number }> = [];
-    let match: RegExpExecArray | null;
-
-    while ((match = pattern.exec(source)) !== null) {
-      const start = match.index;
-      const end = start + match[0].length;
-      positions.push({ start, end });
-      if (pattern.lastIndex === start) {
-        pattern.lastIndex += 1;
-      }
-    }
-
-    return positions;
-  }
-
-  private escapeRegex(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 }

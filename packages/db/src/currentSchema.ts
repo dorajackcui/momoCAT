@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
-import { DEFAULT_PROJECT_AI_MODEL, DEFAULT_PROJECT_QA_SETTINGS } from '@cat/core';
+import { DEFAULT_PROJECT_AI_MODEL, DEFAULT_PROJECT_QA_SETTINGS } from '@cat/core/project';
 
-export const CURRENT_SCHEMA_VERSION = 14;
+export const CURRENT_SCHEMA_VERSION = 15;
 
 const CURRENT_QA_SETTINGS_JSON = JSON.stringify(DEFAULT_PROJECT_QA_SETTINGS);
 
@@ -17,6 +17,7 @@ const REQUIRED_TABLES = [
   'term_bases',
   'project_term_bases',
   'tb_entries',
+  'tb_fts',
   'app_settings',
 ] as const;
 
@@ -88,6 +89,7 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
     'updatedAt',
     'usageCount',
   ],
+  tb_fts: ['tbId', 'srcText', 'tbEntryId'],
   app_settings: ['key', 'value', 'updatedAt'],
   schema_version: ['version'],
 };
@@ -249,6 +251,13 @@ function createCurrentSchema(db: Database.Database): void {
         updatedAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         usageCount INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY (tbId) REFERENCES term_bases(id) ON DELETE CASCADE
+      );
+
+      CREATE VIRTUAL TABLE tb_fts USING fts5(
+        tbId UNINDEXED,
+        srcText,
+        tbEntryId UNINDEXED,
+        tokenize='trigram'
       );
 
       CREATE TABLE app_settings (

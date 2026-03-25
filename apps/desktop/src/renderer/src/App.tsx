@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ProjectType } from '@cat/core';
+import type { ProjectType } from '@cat/core/project';
 import { Dashboard } from './components/Dashboard';
 import { ProjectDetail } from './components/ProjectDetail';
 import { Editor } from './components/Editor';

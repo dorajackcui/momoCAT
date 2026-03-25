@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Segment, TBMatch } from '@cat/core';
+import type { Segment, TBMatch } from '@cat/core/models';
 import type { TMMatch } from '../../../../shared/ipc';
 import { apiClient } from '../../services/apiClient';
 

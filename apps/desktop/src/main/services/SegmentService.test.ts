@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Segment, SegmentStatus, Token } from '@cat/core';
+import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import { CATDatabase } from '../../../../../packages/db/src';
 import { SegmentService } from './SegmentService';
 import { TMService } from './TMService';

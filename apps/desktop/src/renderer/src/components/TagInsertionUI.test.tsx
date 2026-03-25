@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TagInsertionUI } from './TagInsertionUI';
-import { Token } from '@cat/core';
+import type { Token } from '@cat/core/models';
 
 describe('TagInsertionUI', () => {
   const mockSourceTags: Token[] = [

@@ -3,12 +3,8 @@ import { join } from 'path';
 import { Worker } from 'worker_threads';
 import { access, readFile } from 'fs/promises';
 import * as XLSX from 'xlsx';
-import {
-  computeMatchKey,
-  computeSrcHash,
-  computeTagsSignature,
-  parseDisplayTextToTokens,
-} from '@cat/core';
+import { computeTagsSignature, parseDisplayTextToTokens } from '@cat/core/tag';
+import { computeMatchKey, computeSrcHash } from '@cat/core/text';
 import { extractSheetRows } from '../../../filters/sheetRows';
 import type {
   ProgressEmitter,

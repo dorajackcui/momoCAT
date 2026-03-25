@@ -1,5 +1,6 @@
 import { CATDatabase } from '@cat/db';
-import { ProjectType, QaIssue, Segment, SegmentStatus, Token } from '@cat/core';
+import type { QaIssue, Segment, SegmentStatus, Token } from '@cat/core/models';
+import type { ProjectType } from '@cat/core/project';
 import { SegmentRepository } from '../ports';
 
 export class SqliteSegmentRepository implements SegmentRepository {

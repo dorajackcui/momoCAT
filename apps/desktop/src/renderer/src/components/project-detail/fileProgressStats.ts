@@ -1,4 +1,4 @@
-import type { ProjectFile } from '@cat/core';
+import type { ProjectFile } from '@cat/core/project';
 
 interface FileSegmentStatusStatsLike {
   totalSegments: number;

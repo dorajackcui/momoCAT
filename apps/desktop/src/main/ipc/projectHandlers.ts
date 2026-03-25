@@ -1,10 +1,5 @@
-import type {
-  ProjectAIModel,
-  ProjectQASettings,
-  ProjectType,
-  SegmentStatus,
-  Token,
-} from '@cat/core';
+import type { ProjectAIModel, ProjectQASettings, ProjectType } from '@cat/core/project';
+import type { SegmentStatus, Token } from '@cat/core/models';
 import type { ImportOptions } from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import type { MainHandlerDeps } from './types';

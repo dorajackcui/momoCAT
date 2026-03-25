@@ -1,4 +1,4 @@
-import type { Token, TagType } from '../index';
+import type { Token, TagType } from '../models';
 import {
   EditorMarkerPattern,
   getDisplayTagPatterns,

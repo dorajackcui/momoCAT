@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { readFile } from 'fs/promises';
 import * as XLSX from 'xlsx';
-import { Segment } from '@cat/core';
+import type { Segment } from '@cat/core/models';
 import {
   ProgressEmitter,
   SpreadsheetPreviewData,
@@ -133,6 +133,7 @@ export class TBModule {
           const entryBase = {
             id: randomUUID(),
             tbId,
+            srcLang: tb.srcLang,
             srcTerm,
             tgtTerm,
             note,

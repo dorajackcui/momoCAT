@@ -1,12 +1,14 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { Segment, SegmentQaRuleId, TBMatch } from '@cat/core';
-import { evaluateSegmentQa, TagValidator } from '@cat/core';
+import type { Segment, TBMatch } from '@cat/core/models';
+import type { SegmentQaRuleId } from '@cat/core/project';
+import { evaluateSegmentQa, TagValidator } from '@cat/core/qa';
 import { apiClient } from '../../services/apiClient';
 
 interface UseSegmentQaWorkflowParams {
   segments: Segment[];
   projectId: number | null;
+  targetLocale: string | null;
   enabledQaRuleIds: SegmentQaRuleId[];
   instantQaOnConfirm: boolean;
   setSegments: Dispatch<SetStateAction<Segment[]>>;
@@ -19,6 +21,7 @@ interface UseSegmentQaWorkflowParams {
 export function useSegmentQaWorkflow({
   segments,
   projectId,
+  targetLocale,
   enabledQaRuleIds,
   instantQaOnConfirm,
   setSegments,
@@ -46,6 +49,7 @@ export function useSegmentQaWorkflow({
         const combinedIssues = evaluateSegmentQa(segment, {
           enabledRuleIds: enabledQaRuleIds,
           termMatches,
+          targetLocale: targetLocale ?? undefined,
         });
         const hasBlockingErrors = combinedIssues.some((issue) => issue.severity === 'error');
         const tagValidationResult = enabledQaRuleIds.includes('tag-integrity')
@@ -115,6 +119,7 @@ export function useSegmentQaWorkflow({
       enabledQaRuleIds,
       instantQaOnConfirm,
       projectId,
+      targetLocale,
       segments,
       clearSegmentSaveError,
       setActiveSegmentId,

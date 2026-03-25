@@ -1,4 +1,4 @@
-import { TagValidator } from '@cat/core';
+import { TagValidator } from '@cat/core/qa';
 import type {
   AIBatchMode,
   AIBatchTargetScope,
@@ -37,7 +37,10 @@ export class AIModule {
   ) {
     const tagValidator = new TagValidator();
     const textTranslator = new AITextTranslator(transport, tagValidator);
-    const segmentPagingIterator = new SegmentPagingIterator(segmentRepo, AIModule.SEGMENT_PAGE_SIZE);
+    const segmentPagingIterator = new SegmentPagingIterator(
+      segmentRepo,
+      AIModule.SEGMENT_PAGE_SIZE,
+    );
 
     this.settingsService = new AISettingsService(settingsRepo, transport, proxySettingsManager);
     this.translationOrchestrator = new AITranslationOrchestrator(

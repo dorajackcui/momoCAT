@@ -1,5 +1,6 @@
 import React from 'react';
-import { Token, getTagDisplayInfo } from '@cat/core';
+import type { Token } from '@cat/core/models';
+import { getTagDisplayInfo } from '@cat/core/tag';
 
 /**
  * Props interface for the TagCapsule component

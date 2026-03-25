@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Segment, Token } from '@cat/core';
+import type { Segment, Token } from '@cat/core/models';
 import { TMModule } from './TMModule';
 import { ProjectRepository, SegmentRepository, TMRepository, TransactionManager } from '../ports';
 import { TMService } from '../TMService';

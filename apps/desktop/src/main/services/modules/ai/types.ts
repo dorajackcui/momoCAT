@@ -1,4 +1,4 @@
-import type { Segment, SegmentStatus, Token } from '@cat/core';
+import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import type { TBService } from '../../TBService';
 import type { TMService } from '../../TMService';
 import type {

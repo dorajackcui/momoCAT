@@ -1,4 +1,6 @@
-import { Project, TagValidator, serializeTokensToEditorText } from '@cat/core';
+import type { Project } from '@cat/core/project';
+import { TagValidator } from '@cat/core/qa';
+import { serializeTokensToEditorText } from '@cat/core/tag';
 import type { AIBatchTargetScope } from '../../../../shared/ipc';
 import type { AITransport } from '../../ports';
 import { SegmentService } from '../../SegmentService';

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
-import { Segment, Token, serializeTokensToEditorText } from '@cat/core';
+import type { Segment, Token } from '@cat/core/models';
+import { serializeTokensToEditorText } from '@cat/core/tag';
 import { TagInsertionUI } from './TagInsertionUI';
 import { EditorMatchMode } from './editorFilterUtils';
 import { EditorRowSourceCell } from './editor-row/EditorRowSourceCell';

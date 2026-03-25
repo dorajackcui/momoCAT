@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ProjectType } from '@cat/core';
+import type { ProjectType } from '@cat/core/project';
 import { CreateProjectModal } from './CreateProjectModal';
 import { ProjectWithStats } from '../hooks/useProjects';
 

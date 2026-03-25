@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { QaIssue, Segment, SegmentStatus, Token } from "@cat/core";
+import type { QaIssue, Segment, SegmentStatus, Token } from "@cat/core/models";
 
 interface SegmentRow {
   segmentId: string;

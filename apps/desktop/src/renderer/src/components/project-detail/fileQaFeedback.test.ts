@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FileQaReport } from '@cat/core';
+import type { FileQaReport } from '@cat/core/project';
 import { buildFileQaFeedback } from './fileQaFeedback';
 
 function createReport(overrides?: Partial<FileQaReport>): FileQaReport {

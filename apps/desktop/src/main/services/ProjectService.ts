@@ -1,12 +1,10 @@
-import {
+import { Segment, SegmentStatus, Token } from '@cat/core/models';
+import type {
   FileQaReport,
   ProjectAIModel,
   ProjectQASettings,
   ProjectType,
-  Segment,
-  SegmentStatus,
-  Token,
-} from '@cat/core';
+} from '@cat/core/project';
 import { CATDatabase } from '@cat/db';
 import { SpreadsheetFilter } from '../filters/SpreadsheetFilter';
 import { TMService } from './TMService';
@@ -86,7 +84,7 @@ export class ProjectService {
 
     const filter = deps.filter ?? new SpreadsheetFilter();
     const tmService = deps.tmService ?? new TMService(projectRepo, tmRepo);
-    const tbService = deps.tbService ?? new TBService(tbRepo);
+    const tbService = deps.tbService ?? new TBService(projectRepo, tbRepo);
     this.segmentService = deps.segmentService ?? new SegmentService(segmentRepo, tmService, tx);
 
     const emitProgress = (payload: {

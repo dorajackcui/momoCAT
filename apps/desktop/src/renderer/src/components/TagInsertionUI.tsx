@@ -1,5 +1,6 @@
 import React from 'react';
-import { Token, formatTagAsMemoQMarker } from '@cat/core';
+import type { Token } from '@cat/core/models';
+import { formatTagAsMemoQMarker } from '@cat/core/tag';
 
 /**
  * Props interface for the TagInsertionUI component

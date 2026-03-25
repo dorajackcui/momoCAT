@@ -1,13 +1,9 @@
 import * as XLSX from 'xlsx';
 import { readFile, writeFile } from 'fs/promises';
 import { extname } from 'path';
-import {
-  Segment,
-  parseDisplayTextToTokens,
-  computeTagsSignature,
-  computeMatchKey,
-  computeSrcHash,
-} from '@cat/core';
+import { type Segment } from '@cat/core/models';
+import { parseDisplayTextToTokens, computeTagsSignature } from '@cat/core/tag';
+import { computeMatchKey, computeSrcHash } from '@cat/core/text';
 import { randomUUID } from 'crypto';
 import { extractSheetRows, SheetCellValue } from './sheetRows';
 import type { ImportOptions } from '../../shared/ipc';

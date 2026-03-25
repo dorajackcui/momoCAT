@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ProjectAIModel, ProjectType } from '@cat/core';
+import type { ProjectAIModel, ProjectType } from '@cat/core/project';
 import type { AIBatchMode, AIBatchTargetScope, JobProgressEvent } from '../../../../../shared/ipc';
 import { apiClient } from '../../../services/apiClient';
 import { feedbackService } from '../../../services/feedbackService';

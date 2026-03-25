@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import type { Segment } from '@cat/core';
+import type { Segment } from '@cat/core/models';
 import type { StructuredJobError, TBImportOptions } from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import type { JobBackedHandlerDeps } from './types';

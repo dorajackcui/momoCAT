@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { TagManager } from './TagManager';
-import { Token } from './index';
+import type { Token } from './models';
 
 describe('TagManager', () => {
   let tagManager: TagManager;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DEFAULT_PROJECT_QA_SETTINGS, ProjectQASettings } from '@cat/core';
+import { DEFAULT_PROJECT_QA_SETTINGS, type ProjectQASettings } from '@cat/core/project';
 import type { ProjectFileRecord } from '../../../shared/ipc';
 import { ColumnSelector } from './ColumnSelector';
 import { apiClient } from '../services/apiClient';

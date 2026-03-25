@@ -1,4 +1,4 @@
-import type { Token } from '../index';
+import type { Token } from '../models';
 
 export const getUniqueTagContents = (sourceTokens: Token[]): string[] => {
   const seen = new Set<string>();
@@ -30,4 +30,3 @@ export const getTagContentByMarkerIndex = (sourceTokens: Token[], markerNumber: 
   const unique = getUniqueTagContents(sourceTokens);
   return unique[markerNumber - 1];
 };
-

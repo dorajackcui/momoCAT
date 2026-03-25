@@ -26,7 +26,8 @@ const CONTROL_FLOW_KINDS = new Set([
 
 function readSourceFile(filePath) {
   const text = fs.readFileSync(filePath, 'utf8');
-  return ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const scriptKind = filePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  return ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true, scriptKind);
 }
 
 function hasModifier(node, modifierKind) {
@@ -93,6 +94,48 @@ function collectMethodFacts(method) {
 
 function compareSetWithAllowlist(actualSet, allowlist) {
   return [...actualSet].filter((value) => !allowlist.has(value));
+}
+
+function listSourceFiles(rootDir) {
+  const result = [];
+
+  const walk = (currentDir) => {
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name === 'dist' || entry.name === 'node_modules') continue;
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+        continue;
+      }
+      if (fullPath.endsWith('.ts') || fullPath.endsWith('.tsx')) {
+        result.push(fullPath);
+      }
+    }
+  };
+
+  walk(rootDir);
+  return result;
+}
+
+function getImportSpecifiers(sourceFile) {
+  return sourceFile.statements
+    .filter((statement) => ts.isImportDeclaration(statement))
+    .map((statement) => statement.moduleSpecifier.text)
+    .filter((specifier) => typeof specifier === 'string');
+}
+
+function resolveImportTarget(fromFile, specifier) {
+  const basePath = path.resolve(path.dirname(fromFile), specifier);
+  const candidates = [
+    basePath,
+    `${basePath}.ts`,
+    `${basePath}.tsx`,
+    path.join(basePath, 'index.ts'),
+    path.join(basePath, 'index.tsx'),
+  ];
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
 }
 
 function validateProjectService() {
@@ -189,9 +232,61 @@ function validateCatDatabase() {
   }
 }
 
+function validateCatCoreImports() {
+  const catCoreGuard = guardrails.catCore;
+  const rootBarrelModule = catCoreGuard.rootBarrelModule;
+  const rootBarrelPath = path.join(ROOT, catCoreGuard.rootBarrelPath);
+  const checkedRoots = catCoreGuard.checkedRoots.map((checkedRoot) => path.join(ROOT, checkedRoot));
+  const allowedRootBarrelImportFiles = new Set(catCoreGuard.allowedRootBarrelImportFiles);
+  const allowedInternalRootIndexImportFiles = new Set(
+    catCoreGuard.allowedInternalRootIndexImportFiles,
+  );
+  const coreSourceRoot = path.join(ROOT, 'packages/core/src');
+
+  for (const checkedRoot of checkedRoots) {
+    const files = listSourceFiles(checkedRoot);
+
+    for (const filePath of files) {
+      const relativeFilePath = path.relative(ROOT, filePath);
+      const sourceFile = readSourceFile(filePath);
+      const importSpecifiers = getImportSpecifiers(sourceFile);
+
+      for (const specifier of importSpecifiers) {
+        if (
+          specifier === rootBarrelModule &&
+          !allowedRootBarrelImportFiles.has(relativeFilePath)
+        ) {
+          errors.push(
+            `${relativeFilePath} imports root ${rootBarrelModule}; use a slice entrypoint instead`,
+          );
+        }
+
+        if (!filePath.startsWith(coreSourceRoot) || !specifier.startsWith('.')) {
+          continue;
+        }
+
+        const resolvedTarget = resolveImportTarget(filePath, specifier);
+        if (!resolvedTarget) {
+          continue;
+        }
+
+        if (
+          path.normalize(resolvedTarget) === path.normalize(rootBarrelPath) &&
+          !allowedInternalRootIndexImportFiles.has(relativeFilePath)
+        ) {
+          errors.push(
+            `${relativeFilePath} imports packages/core root index via "${specifier}"; import the needed slice or sibling module instead`,
+          );
+        }
+      }
+    }
+  }
+}
+
 try {
   validateProjectService();
   validateCatDatabase();
+  validateCatCoreImports();
 } catch (error) {
   console.error('[gate:arch] Fatal error:', error instanceof Error ? error.message : String(error));
   process.exit(1);

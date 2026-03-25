@@ -1,4 +1,4 @@
-import { ProjectAIModel, ProjectQASettings, ProjectType } from '@cat/core';
+import type { ProjectAIModel, ProjectQASettings, ProjectType } from '@cat/core/project';
 import { CATDatabase } from '@cat/db';
 import { ProjectRepository, ProjectFileRecord, ProjectListRecord, ProjectRecord } from '../ports';
 

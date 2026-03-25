@@ -1,15 +1,5 @@
-import {
-  Project,
-  ProjectAIModel,
-  ProjectQASettings,
-  ProjectType,
-  QaIssue,
-  Segment,
-  SegmentStatus,
-  TBEntry,
-  TMEntry,
-  Token,
-} from '@cat/core';
+import { QaIssue, Segment, SegmentStatus, TBEntry, TMEntry, Token } from '@cat/core/models';
+import { Project, ProjectAIModel, ProjectQASettings, ProjectType } from '@cat/core/project';
 import type {
   MountedTBRecord as DbMountedTBRecord,
   MountedTMRecord as DbMountedTMRecord,
@@ -108,9 +98,15 @@ export interface TBRepository {
   mountTermBaseToProject(projectId: number, tbId: string, priority?: number): void;
   unmountTermBaseFromProject(projectId: number, tbId: string): void;
   listProjectTermEntries(projectId: number): Array<TBEntry & { tbName: string; priority: number }>;
+  searchProjectTermEntries(
+    projectId: number,
+    sourceText: string,
+    options?: { srcLang?: string; limit?: number },
+  ): Array<TBEntry & { tbName: string; priority: number }>;
   upsertTBEntryBySrcTerm(params: {
     id: string;
     tbId: string;
+    srcLang: string;
     srcTerm: string;
     tgtTerm: string;
     note?: string | null;
@@ -119,6 +115,7 @@ export interface TBRepository {
   insertTBEntryIfAbsentBySrcTerm(params: {
     id: string;
     tbId: string;
+    srcLang: string;
     srcTerm: string;
     tgtTerm: string;
     note?: string | null;

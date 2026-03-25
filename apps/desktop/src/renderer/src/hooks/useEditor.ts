@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  DEFAULT_PROJECT_QA_SETTINGS,
-  Segment,
-  SegmentQaRuleId,
-  SegmentStatus,
-  Token,
-  parseEditorTextToTokens,
-  serializeTokensToDisplayText,
-  serializeTokensToEditorText,
-  TagValidator,
-} from '@cat/core';
+import { DEFAULT_PROJECT_QA_SETTINGS, type SegmentQaRuleId } from '@cat/core/project';
+import type { Segment, SegmentStatus, Token } from '@cat/core/models';
+import { TagValidator } from '@cat/core/qa';
+import { parseEditorTextToTokens, serializeTokensToEditorText } from '@cat/core/tag';
+import { serializeTokensToDisplayText } from '@cat/core/text';
 import { useActiveSegmentMatches } from './editor/useActiveSegmentMatches';
 import { createSegmentPersistor, useSegmentPersistence } from './editor/useSegmentPersistence';
 import { useEditorDataLoader } from './editor/useEditorDataLoader';
@@ -33,6 +27,7 @@ export { createSegmentPersistor };
 export function useEditor({ activeFileId }: UseEditorProps) {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [projectId, setProjectId] = useState<number | null>(null);
+  const [projectTgtLang, setProjectTgtLang] = useState<string | null>(null);
   const [enabledQaRuleIds, setEnabledQaRuleIds] = useState<SegmentQaRuleId[]>(
     DEFAULT_PROJECT_QA_SETTINGS.enabledRuleIds,
   );
@@ -116,6 +111,7 @@ export function useEditor({ activeFileId }: UseEditorProps) {
     normalizeStatus,
     setSegments,
     setProjectId,
+    setProjectTgtLang,
     setEnabledQaRuleIds,
     setInstantQaOnConfirm,
     setSegmentSaveErrors,
@@ -144,6 +140,7 @@ export function useEditor({ activeFileId }: UseEditorProps) {
   const { confirmSegment: confirmSegmentWithQa } = useSegmentQaWorkflow({
     segments,
     projectId,
+    targetLocale: projectTgtLang,
     enabledQaRuleIds,
     instantQaOnConfirm,
     setSegments,

@@ -55,6 +55,7 @@
       "mountTermBaseToProject",
       "replaceTMFts",
       "runInTransaction",
+      "searchProjectTermEntries",
       "searchConcordance",
       "setSetting",
       "unmountTMFromProject",
@@ -75,6 +76,21 @@
     ],
     "allowedDirectDbMethods": [
       "close"
+    ]
+  },
+  "catCore": {
+    "rootBarrelModule": "@cat/core",
+    "rootBarrelPath": "packages/core/src/index.ts",
+    "checkedRoots": [
+      "apps/desktop/src",
+      "packages/db/src",
+      "packages/core/src"
+    ],
+    "allowedRootBarrelImportFiles": [
+      "packages/core/src/index.test.ts"
+    ],
+    "allowedInternalRootIndexImportFiles": [
+      "packages/core/src/index.test.ts"
     ]
   }
 }

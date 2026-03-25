@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
-import type { Project, ProjectAIModel } from '@cat/core';
+import type { Project, ProjectAIModel } from '@cat/core/project';
 import type { AIBatchMode, AIBatchTargetScope, JobProgressEvent } from '../../../../../shared/ipc';
 
 export interface ProjectAIFlagsInput {

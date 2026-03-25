@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Project, Segment } from '@cat/core';
-import { TagValidator } from '@cat/core';
+import type { Segment } from '@cat/core/models';
+import type { Project } from '@cat/core/project';
+import { TagValidator } from '@cat/core/qa';
 import { runStandardFileTranslation } from './fileTranslationWorkflow';
 import { runDialogueFileTranslation } from './dialogueTranslationWorkflow';
 

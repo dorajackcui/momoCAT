@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Project, ProjectType } from '@cat/core';
+import type { Project, ProjectType } from '@cat/core/project';
 import { apiClient } from '../services/apiClient';
 import { feedbackService } from '../services/feedbackService';
 

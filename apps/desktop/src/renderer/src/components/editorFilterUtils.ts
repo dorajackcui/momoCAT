@@ -1,4 +1,4 @@
-import { Segment } from '@cat/core';
+import type { Segment } from '@cat/core/models';
 
 export type EditorStatusFilter = 'all' | 'new' | 'draft' | 'translated' | 'reviewed' | 'confirmed';
 export type EditorMatchMode = 'contains' | 'exact' | 'regex';

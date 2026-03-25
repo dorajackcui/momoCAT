@@ -1,4 +1,4 @@
-import type { TagType } from '../index';
+import type { TagType } from '../models';
 
 export interface EditorMarkerPattern {
   /**

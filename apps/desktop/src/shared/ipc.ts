@@ -1,15 +1,11 @@
-import {
+import type { Segment, SegmentStatus, TBMatch, TMEntry, Token } from '@cat/core/models';
+import type {
   FileQaReport,
   Project,
   ProjectAIModel as CoreProjectAIModel,
   ProjectQASettings,
   ProjectType as CoreProjectType,
-  Segment,
-  SegmentStatus,
-  TBMatch,
-  TMEntry,
-  Token,
-} from '@cat/core';
+} from '@cat/core/project';
 import type {
   MountedTBRecord as DbMountedTBRecord,
   MountedTMRecord as DbMountedTMRecord,

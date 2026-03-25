@@ -51,6 +51,7 @@ describe('ensureCurrentSchema', () => {
     expect(tables.has('term_bases')).toBe(true);
     expect(tables.has('project_term_bases')).toBe(true);
     expect(tables.has('tb_entries')).toBe(true);
+    expect(tables.has('tb_fts')).toBe(true);
     expect(tables.has('app_settings')).toBe(true);
 
     db.close();

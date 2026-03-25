@@ -1,11 +1,7 @@
 import { parentPort, workerData } from 'worker_threads';
 import { CATDatabase } from '@cat/db';
-import {
-  parseDisplayTextToTokens,
-  computeTagsSignature,
-  computeMatchKey,
-  computeSrcHash,
-} from '@cat/core';
+import { parseDisplayTextToTokens, computeTagsSignature } from '@cat/core/tag';
+import { computeMatchKey, computeSrcHash } from '@cat/core/text';
 import { randomUUID } from 'crypto';
 import { readFile } from 'fs/promises';
 import * as XLSX from 'xlsx';

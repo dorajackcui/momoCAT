@@ -1,9 +1,5 @@
-import {
-  Segment,
-  TMEntry,
-  serializeTokensToDisplayText,
-  serializeTokensToTextOnly,
-} from '@cat/core';
+import { type Segment, type TMEntry } from '@cat/core/models';
+import { serializeTokensToDisplayText, serializeTokensToTextOnly } from '@cat/core/text';
 import { randomUUID } from 'crypto';
 import { distance } from 'fastest-levenshtein';
 import { ProjectRepository, TMRepository } from './ports';
@@ -131,7 +127,7 @@ export class TMService {
           const diceSimilarity = this.computeDiceSimilarity(sourceNormalized, candNormalized);
           const bonus = this.computeSimilarityBonus(sourceNormalized, candNormalized);
           similarity = Math.min(
-            100,
+            99,
             Math.round(
               levSimilarity * TMService.LEVENSHTEIN_WEIGHT +
                 diceSimilarity * TMService.DICE_WEIGHT +

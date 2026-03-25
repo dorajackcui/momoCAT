@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ProjectType } from '@cat/core';
+import type { ProjectType } from '@cat/core/project';
 import type { ImportOptions, SpreadsheetPreviewData } from '../../../shared/ipc';
 import { Button, Card, IconButton, Select } from './ui';
 

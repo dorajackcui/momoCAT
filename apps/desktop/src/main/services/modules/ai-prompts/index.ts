@@ -1,4 +1,4 @@
-import { ProjectType } from '@cat/core';
+import type { ProjectType } from '@cat/core/project';
 import { buildCustomSystemPrompt, buildCustomUserPrompt } from './customPromptTemplate';
 import { buildReviewSystemPrompt, buildReviewUserPrompt } from './reviewPromptTemplate';
 import {

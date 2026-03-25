@@ -11,7 +11,8 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@cat/core": ["../core/src"]
+      "@cat/core": ["../core/src"],
+      "@cat/core/*": ["../core/src/*"]
     }
   },
   "include": ["src"],

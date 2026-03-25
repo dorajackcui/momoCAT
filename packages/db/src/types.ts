@@ -1,4 +1,5 @@
-import type { Project, ProjectFile, TBEntry, TMEntry } from '@cat/core';
+import type { TBEntry, TMEntry } from '@cat/core/models';
+import type { Project, ProjectFile } from '@cat/core/project';
 
 export type TMType = 'working' | 'main';
 

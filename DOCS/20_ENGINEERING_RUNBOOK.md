@@ -75,12 +75,22 @@ Current `gate:check` chain:
 2. If you touch `CATDatabase` schema/bootstrap behavior, run current-schema tests and document the startup/data impact.
 3. If you touch AI/TM/editor boundaries, run targeted test suites before merge.
 
+## Test Organization Convention
+
+1. Keep unit, behavior, and integration tests colocated with the implementation they cover.
+2. Prefer file-adjacent names such as `TMService.test.ts`, `useEditorFilters.behavior.test.ts`, and `EditorRow.integration.test.ts`.
+3. Keep Playwright end-to-end suites under `apps/desktop/e2e`.
+4. Introduce shared helpers or fixtures only for genuine reuse; keep them near the consuming area when possible.
+5. Do not centralize tests into a top-level repo `tests/` directory unless a tool requires it or the suite is cross-cutting by design.
+
 ## Large-File Refactor Submission Requirements
 
 1. Keep external contracts stable (`IPC`, facade public methods, hook export names) unless an explicit migration plan is included.
 2. Use compatibility facades (`old entry -> new internal modules`) when splitting large files.
 3. Add workflow/behavior tests for extracted modules; helper-only tests are not enough.
 4. Run and record `gate:file-size` after refactor; avoid allowlist additions unless explicitly approved.
+5. For `@cat/core`, use slice entrypoints (`models`, `project`, `tag`, `text`, `qa`) in repo code instead of the root barrel.
+6. Inside `packages/core/src`, do not import the root `index.ts` barrel except for the dedicated barrel smoke test.
 
 ## PR Checklist
 

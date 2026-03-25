@@ -1,5 +1,5 @@
 import React from 'react';
-import { Segment } from '@cat/core';
+import type { Segment } from '@cat/core/models';
 
 interface ProgressBarProps {
   segments: Segment[];

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Token, formatTagAsMemoQMarker } from '@cat/core';
+import type { Token } from '@cat/core/models';
+import { formatTagAsMemoQMarker } from '@cat/core/tag';
 import { resolveEditorShortcutAction } from '../editor-engine/shortcut';
 import { EditorShortcutAction } from '../editor-engine/types';
 import { normalizeRefinementInstruction } from './editorRowUtils';

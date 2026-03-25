@@ -1,4 +1,4 @@
-import type { FileQaReport } from '@cat/core';
+import type { FileQaReport } from '@cat/core/project';
 
 interface RunFileQaWithRefreshParams {
   fileId: number;

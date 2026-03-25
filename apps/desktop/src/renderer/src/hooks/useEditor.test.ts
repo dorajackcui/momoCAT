@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Segment, Token } from '@cat/core';
+import type { Segment, Token } from '@cat/core/models';
 
 vi.mock('../services/apiClient', () => ({
   apiClient: {},

@@ -15,7 +15,7 @@ Read before modifying module boundaries, cross-layer contracts, or multi-subsyst
 
 ## Last Updated
 
-2026-03-24
+2026-03-25
 
 ## Owner
 
@@ -43,6 +43,22 @@ Core maintainers of `simple-cat-tool`
 - `@cat/core`: domain models and pure/domain algorithms.
 - `@cat/db`: persistence, current-schema bootstrap/validation, repositories.
 
+### `@cat/core` internal slices
+
+- `@cat/core/models`: shared domain types only.
+- `@cat/core/project`: project-level enums, AI model registry, QA defaults, and project/file report types.
+- `@cat/core/tag`: tag parsing, markers, signatures, display helpers, and tag services.
+- `@cat/core/text`: token text serialization, term matching, TM key/hash helpers.
+- `@cat/core/qa`: tag/terminology QA and validation adapters.
+
+Internal dependency direction:
+
+- `models` -> no internal dependencies
+- `project` -> `models`
+- `tag` -> `models`
+- `text` -> `models`
+- `qa` -> `models`, `project`, `tag`, `text`
+
 ## Current Module Responsibilities
 
 ### Main modules (facades)
@@ -69,6 +85,15 @@ Core maintainers of `simple-cat-tool`
 - `TMQueryService`
 - `TMImportService`
 - `TMBatchOpsService`
+
+### Core package boundaries
+
+- Use `@cat/core/models` for shared entities and token/segment types.
+- Use `@cat/core/project` for project-facing config/constants and QA settings.
+- Use `@cat/core/tag` for tag parsing, markers, display, and signatures.
+- Use `@cat/core/text` for linguistic text serialization and term matching.
+- Use `@cat/core/qa` for QA evaluation and `TagValidator`.
+- Keep root `@cat/core` as a compatibility barrel only; repo code should import from a slice entrypoint instead.
 
 ### Editor domain split (renderer)
 
@@ -128,6 +153,7 @@ renderer components/hooks
 2. Add business behavior in modules/services, not in IPC registration code.
 3. Keep IPC types centralized in `apps/desktop/src/shared/ipc.ts`.
 4. Use repository/service abstractions from ports instead of coupling UI to persistence details.
+5. Import `@cat/core` through slice entrypoints in repo code; avoid the root barrel except for explicit compatibility tests.
 
 ### Don't
 
@@ -135,6 +161,7 @@ renderer components/hooks
 2. Don't bypass `apiClient` in renderer.
 3. Don't add cross-repo orchestration into `CATDatabase`.
 4. Don't introduce new large monolithic files when a focused internal service is appropriate.
+5. Don't import `packages/core/src/index.ts` from inside `packages/core`; import the needed slice or sibling module directly.
 
 ## Architecture Evolution Guidance
 

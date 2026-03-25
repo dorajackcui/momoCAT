@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ProjectType } from '@cat/core';
+import type { ProjectType } from '@cat/core/project';
 import type { ProjectFileRecord } from '../../../../shared/ipc';
 import { ProjectAIController } from '../../hooks/projectDetail/useProjectAI';
 import { Button, Card, IconButton } from '../ui';

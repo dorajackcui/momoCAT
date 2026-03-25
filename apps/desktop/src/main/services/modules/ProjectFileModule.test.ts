@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { Segment } from '@cat/core';
+import type { Segment } from '@cat/core/models';
 import { ProjectFileModule } from './ProjectFileModule';
 import { ProjectRepository, SegmentRepository, SpreadsheetGateway } from '../ports';
 
@@ -239,5 +239,71 @@ describe('ProjectFileModule.runFileQA', () => {
       ]),
     );
     expect(segmentRepo.updateSegmentQaIssues).toHaveBeenNthCalledWith(2, 'seg-clean', []);
+  });
+
+  it('passes project target locale into terminology QA during file QA runs', async () => {
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({ id: 1, projectId: 99 }),
+      getProject: vi.fn().mockReturnValue({
+        id: 99,
+        tgtLang: 'tr-TR',
+        qaSettings: {
+          enabledRuleIds: ['terminology-consistency'],
+          instantQaOnConfirm: true,
+        },
+      }),
+    } as unknown as ProjectRepository;
+
+    const segment: Segment = {
+      segmentId: 'seg-tr-locale',
+      fileId: 1,
+      orderIndex: 0,
+      sourceTokens: [{ type: 'text', content: 'Please preserve the heat insulation.' }],
+      targetTokens: [{ type: 'text', content: 'Lütfen ısı yalıtımı koruyun.' }],
+      status: 'draft',
+      tagsSignature: '',
+      matchKey: 'k-tr',
+      srcHash: 'h-tr',
+      meta: { rowRef: 8, updatedAt: new Date().toISOString() },
+    };
+
+    const resolveTermMatches = vi.fn().mockResolvedValue([
+      {
+        id: 'tb-tr-1',
+        tbId: 'tb-tr',
+        srcTerm: 'heat insulation',
+        tgtTerm: 'ISI YALITIMI',
+        srcNorm: 'heat insulation',
+        note: null,
+        createdAt: '',
+        updatedAt: '',
+        usageCount: 1,
+        tbName: 'TR TB',
+        priority: 1,
+        positions: [{ start: 21, end: 36 }],
+      },
+    ]);
+
+    const segmentRepo = {
+      getSegmentsPage: vi
+        .fn()
+        .mockImplementation((_fileId: number, offset: number) => (offset === 0 ? [segment] : [])),
+      updateSegmentQaIssues: vi.fn(),
+    } as unknown as SegmentRepository;
+
+    const filter = {
+      import: vi.fn(),
+      export: vi.fn(),
+      getPreview: vi.fn(),
+    } as unknown as SpreadsheetGateway;
+
+    const module = new ProjectFileModule(projectRepo, segmentRepo, filter, '/tmp');
+    const report = await module.runFileQA(1, resolveTermMatches);
+
+    expect(resolveTermMatches).toHaveBeenCalledWith(99, segment);
+    expect(report.checkedSegments).toBe(1);
+    expect(report.warningCount).toBe(0);
+    expect(report.issues).toEqual([]);
+    expect(segmentRepo.updateSegmentQaIssues).toHaveBeenCalledWith('seg-tr-locale', []);
   });
 });

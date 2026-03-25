@@ -1,4 +1,4 @@
-import { Segment } from '@cat/core';
+import type { Segment } from '@cat/core/models';
 import type { AIBatchMode, AIBatchTargetScope } from '../../../../shared/ipc';
 import type { AITransport, ProjectRepository, SegmentRepository } from '../../ports';
 import { SegmentService } from '../../SegmentService';
@@ -17,7 +17,7 @@ import {
   runSegmentTranslation,
   runTestTranslation,
 } from './segmentTranslationWorkflow';
-import { TagValidator } from '@cat/core';
+import { TagValidator } from '@cat/core/qa';
 
 export interface AITranslateFileOptions {
   model?: string;

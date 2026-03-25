@@ -1,4 +1,5 @@
-import { PROJECT_AI_MODELS, ProjectType } from '@cat/core';
+import { PROJECT_AI_MODELS } from '@cat/core/project';
+import type { ProjectType } from '@cat/core/project';
 import { ProjectAIController } from '../../hooks/projectDetail/useProjectAI';
 import { Badge, Button, Card, Input, Notice, Select, Textarea } from '../ui';
 

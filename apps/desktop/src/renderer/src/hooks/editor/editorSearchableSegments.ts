@@ -1,4 +1,5 @@
-import { Segment, serializeTokensToEditorText } from '@cat/core';
+import type { Segment } from '@cat/core/models';
+import { serializeTokensToEditorText } from '@cat/core/tag';
 import { SearchableEditorSegment } from '../../components/editorFilterUtils';
 
 function normalizeEditorText(

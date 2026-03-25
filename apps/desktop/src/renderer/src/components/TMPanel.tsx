@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { TBMatch, TMEntry, Token, serializeTokensToDisplayText } from '@cat/core';
+import type { TBMatch, TMEntry, Token } from '@cat/core/models';
+import { serializeTokensToDisplayText } from '@cat/core/text';
 
 export interface TMMatch extends TMEntry {
   similarity: number;

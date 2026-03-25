@@ -1,7 +1,7 @@
 import {
   DEFAULT_PROJECT_AI_MODEL,
   normalizeProjectAIModel as normalizeProjectAIModelCore,
-} from '@cat/core';
+} from '@cat/core/project';
 import type { AITestMetaInput, ProjectAIFlags, ProjectAIFlagsInput } from './types';
 
 export { DEFAULT_PROJECT_AI_MODEL };

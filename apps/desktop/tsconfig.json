@@ -16,6 +16,7 @@
     "paths": {
       "@renderer/*": ["src/renderer/src/*"],
       "@cat/core": ["../../packages/core/src"],
+      "@cat/core/*": ["../../packages/core/src/*"],
       "@cat/db": ["../../packages/db/src"]
     }
   },

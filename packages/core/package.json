@@ -4,6 +4,33 @@
   "private": true,
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    },
+    "./models": {
+      "types": "./dist/src/models/index.d.ts",
+      "default": "./dist/src/models/index.js"
+    },
+    "./project": {
+      "types": "./dist/src/project/index.d.ts",
+      "default": "./dist/src/project/index.js"
+    },
+    "./tag": {
+      "types": "./dist/src/tag/index.d.ts",
+      "default": "./dist/src/tag/index.js"
+    },
+    "./text": {
+      "types": "./dist/src/text/index.d.ts",
+      "default": "./dist/src/text/index.js"
+    },
+    "./qa": {
+      "types": "./dist/src/qa/index.d.ts",
+      "default": "./dist/src/qa/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "build": "tsc",
     "lint": "eslint \"src/**/*.{ts,tsx}\""

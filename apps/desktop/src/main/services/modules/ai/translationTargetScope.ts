@@ -1,4 +1,5 @@
-import { Segment, serializeTokensToDisplayText } from '@cat/core';
+import type { Segment } from '@cat/core/models';
+import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { AIBatchTargetScope } from '../../../../shared/ipc';
 
 export function resolveBatchTargetScope(scope?: AIBatchTargetScope): AIBatchTargetScope {

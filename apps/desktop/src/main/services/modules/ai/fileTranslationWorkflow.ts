@@ -1,12 +1,7 @@
-import {
-  Project,
-  ProjectType,
-  Segment,
-  SegmentStatus,
-  Token,
-  serializeTokensToDisplayText,
-  serializeTokensToEditorText,
-} from '@cat/core';
+import { type Segment, type SegmentStatus, type Token } from '@cat/core/models';
+import type { Project, ProjectType } from '@cat/core/project';
+import { serializeTokensToEditorText } from '@cat/core/tag';
+import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { AIBatchTargetScope } from '../../../../shared/ipc';
 import { SegmentService } from '../../SegmentService';
 import { getAIProgressVerb } from '../ai-prompts';

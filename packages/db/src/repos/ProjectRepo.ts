@@ -5,7 +5,7 @@ import {
   ProjectAIModel,
   ProjectQASettings,
   ProjectType,
-} from '@cat/core';
+} from '@cat/core/project';
 import { randomUUID } from 'crypto';
 import type { FileSegmentStatusStats, ProjectFileRecord } from '../types';
 

@@ -667,6 +667,7 @@ describe("CATDatabase", () => {
       const firstInsert = db.insertTBEntryIfAbsentBySrcTerm({
         id: "tb-e1",
         tbId,
+        srcLang: "en-US",
         srcTerm: "Power Supply",
         tgtTerm: "电源",
       });
@@ -675,6 +676,7 @@ describe("CATDatabase", () => {
       const duplicateInsert = db.insertTBEntryIfAbsentBySrcTerm({
         id: "tb-e2",
         tbId,
+        srcLang: "en-US",
         srcTerm: " power   supply ",
         tgtTerm: "供电",
       });
@@ -683,6 +685,7 @@ describe("CATDatabase", () => {
       const upserted = db.upsertTBEntryBySrcTerm({
         id: "tb-e3",
         tbId,
+        srcLang: "en-US",
         srcTerm: "Power Supply",
         tgtTerm: "供电模块",
       });
@@ -692,6 +695,98 @@ describe("CATDatabase", () => {
       expect(entries).toHaveLength(1);
       expect(entries[0].srcNorm).toBe("power supply");
       expect(entries[0].tgtTerm).toBe("供电模块");
+    });
+
+    it("should normalize width variants into the same TB source norm", () => {
+      const tbId = db.createTermBase("Width Normalized", "en-US", "ja-JP");
+
+      const firstInsert = db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-width-1",
+        tbId,
+        srcLang: "en-US",
+        srcTerm: "API Key",
+        tgtTerm: "APIキー",
+      });
+      const duplicateInsert = db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-width-2",
+        tbId,
+        srcLang: "en-US",
+        srcTerm: "ＡＰＩ Key",
+        tgtTerm: "別訳",
+      });
+
+      expect(firstInsert).toBe("tb-width-1");
+      expect(duplicateInsert).toBeUndefined();
+      expect(db.listTBEntries(tbId, 20, 0)[0].srcNorm).toBe("api key");
+    });
+
+    it("should search mounted term entries through tb_fts and respect mounted priority order", () => {
+      const projectId = db.createProject("TB Search", "zh-CN", "en-US");
+      const highTbId = db.createTermBase("High TB", "zh-CN", "en-US");
+      const lowTbId = db.createTermBase("Low TB", "zh-CN", "en-US");
+
+      db.mountTermBaseToProject(projectId, highTbId, 1);
+      db.mountTermBaseToProject(projectId, lowTbId, 9);
+
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-search-1",
+        tbId: highTbId,
+        srcLang: "zh-CN",
+        srcTerm: "设置页面",
+        tgtTerm: "settings page",
+      });
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-search-2",
+        tbId: lowTbId,
+        srcLang: "zh-CN",
+        srcTerm: "打开设置页面",
+        tgtTerm: "open settings page",
+      });
+
+      const results = db.searchProjectTermEntries(projectId, "请先打开设置页面，然后继续。", {
+        srcLang: "zh-CN",
+        limit: 10,
+      });
+
+      expect(results).toHaveLength(2);
+      expect(results[0].tbName).toBe("High TB");
+      expect(results[0].srcTerm).toBe("设置页面");
+      expect(results[1].tbName).toBe("Low TB");
+      expect(results[1].srcTerm).toBe("打开设置页面");
+    });
+
+    it("should return Chinese and Latin TB candidates from mixed-source text via trigram search", () => {
+      const projectId = db.createProject("TB Search Mixed", "zh-CN", "ko-KR");
+      const tbId = db.createTermBase("Mixed TB", "zh-CN", "ko-KR");
+      db.mountTermBaseToProject(projectId, tbId, 5);
+
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-mixed-zh",
+        tbId,
+        srcLang: "zh-CN",
+        srcTerm: "设置页面",
+        tgtTerm: "설정 페이지",
+      });
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-mixed-en",
+        tbId,
+        srcLang: "zh-CN",
+        srcTerm: "API key",
+        tgtTerm: "API 키",
+      });
+
+      const results = db.searchProjectTermEntries(
+        projectId,
+        "请保护你的ＡＰＩ key，然后打开设置页面。",
+        {
+          srcLang: "zh-CN",
+          limit: 10,
+        },
+      );
+
+      expect(results.map((row) => row.srcTerm)).toEqual(
+        expect.arrayContaining(["设置页面", "API key"]),
+      );
     });
   });
 });

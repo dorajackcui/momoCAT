@@ -1,16 +1,14 @@
 import { basename, join } from 'path';
 import { copyFile, mkdir, rm, unlink } from 'fs/promises';
+import { type Segment, type TBMatch } from '@cat/core/models';
 import {
   DEFAULT_PROJECT_QA_SETTINGS,
-  FileQaReport,
-  ProjectAIModel,
-  ProjectQASettings,
-  ProjectType,
-  Segment,
-  TBMatch,
-  evaluateSegmentQa,
-  validateSegmentTags,
-} from '@cat/core';
+  type FileQaReport,
+  type ProjectAIModel,
+  type ProjectQASettings,
+  type ProjectType,
+} from '@cat/core/project';
+import { evaluateSegmentQa, validateSegmentTags } from '@cat/core/qa';
 import {
   ImportOptions,
   ProjectRepository,
@@ -281,6 +279,7 @@ export class ProjectFileModule {
         const segmentIssues = evaluateSegmentQa(segment, {
           enabledRuleIds,
           termMatches,
+          targetLocale: project.tgtLang,
         });
         this.segmentRepo.updateSegmentQaIssues(segment.segmentId, segmentIssues);
 
