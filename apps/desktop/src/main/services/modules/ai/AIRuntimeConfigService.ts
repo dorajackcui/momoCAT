@@ -1,0 +1,162 @@
+import { mkdir, readFile, writeFile } from 'fs/promises';
+import { dirname } from 'path';
+import { type ProjectAIModel } from '@cat/core/project';
+import type { AIRuntimeConfigProvider, AiModelRuntimeConfig, ReasoningEffort } from '../../ports';
+
+export interface AiRuntimeConfig {
+  version: 1;
+  models: Record<ProjectAIModel, AiModelRuntimeConfig>;
+}
+
+const REASONING_EFFORTS = new Set<ReasoningEffort>([
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+]);
+
+const DEFAULT_MODEL_RUNTIME_CONFIG: AiModelRuntimeConfig = {
+  reasoningEffort: 'medium',
+};
+
+function cloneModelRuntimeConfig(config: AiModelRuntimeConfig): AiModelRuntimeConfig {
+  return {
+    reasoningEffort: config.reasoningEffort,
+  };
+}
+
+export function createDefaultAIRuntimeConfig(): AiRuntimeConfig {
+  return {
+    version: 1,
+    models: {
+      'gpt-5.4': cloneModelRuntimeConfig(DEFAULT_MODEL_RUNTIME_CONFIG),
+      'gpt-5.4-mini': cloneModelRuntimeConfig(DEFAULT_MODEL_RUNTIME_CONFIG),
+      'gpt-5': cloneModelRuntimeConfig(DEFAULT_MODEL_RUNTIME_CONFIG),
+      'gpt-5-mini': cloneModelRuntimeConfig(DEFAULT_MODEL_RUNTIME_CONFIG),
+    },
+  };
+}
+
+function normalizeReasoningEffort(value: unknown): ReasoningEffort | null {
+  return typeof value === 'string' && REASONING_EFFORTS.has(value as ReasoningEffort)
+    ? (value as ReasoningEffort)
+    : null;
+}
+
+function sanitizeModelConfig(
+  model: ProjectAIModel,
+  value: unknown,
+  warn: (message: string) => void,
+): AiModelRuntimeConfig {
+  const fallback = createDefaultAIRuntimeConfig().models[model];
+  if (!value || typeof value !== 'object') {
+    warn(`Invalid runtime config for model "${model}", using defaults.`);
+    return fallback;
+  }
+
+  const record = value as Partial<AiModelRuntimeConfig>;
+  const reasoningEffort = normalizeReasoningEffort(record.reasoningEffort);
+
+  if (reasoningEffort === null) {
+    warn(`Invalid runtime config for model "${model}", using defaults.`);
+    return fallback;
+  }
+
+  return { reasoningEffort };
+}
+
+export function sanitizeAIRuntimeConfig(
+  raw: unknown,
+  warn: (message: string) => void,
+): AiRuntimeConfig {
+  const fallback = createDefaultAIRuntimeConfig();
+  if (!raw || typeof raw !== 'object') {
+    warn('Invalid AI runtime config root, using defaults.');
+    return fallback;
+  }
+
+  const record = raw as {
+    version?: unknown;
+    models?: Partial<Record<ProjectAIModel, unknown>>;
+  };
+
+  if (record.version !== 1) {
+    warn('Unsupported AI runtime config version, using defaults.');
+    return fallback;
+  }
+
+  if (!record.models || typeof record.models !== 'object') {
+    warn('Missing AI runtime config models object, using defaults.');
+    return fallback;
+  }
+
+  return {
+    version: 1,
+    models: {
+      'gpt-5.4': sanitizeModelConfig('gpt-5.4', record.models['gpt-5.4'], warn),
+      'gpt-5.4-mini': sanitizeModelConfig('gpt-5.4-mini', record.models['gpt-5.4-mini'], warn),
+      'gpt-5': sanitizeModelConfig('gpt-5', record.models['gpt-5'], warn),
+      'gpt-5-mini': sanitizeModelConfig('gpt-5-mini', record.models['gpt-5-mini'], warn),
+    },
+  };
+}
+
+export class DefaultAIRuntimeConfigProvider implements AIRuntimeConfigProvider {
+  private readonly config = createDefaultAIRuntimeConfig();
+
+  public async getModelConfig(model: ProjectAIModel): Promise<AiModelRuntimeConfig> {
+    return cloneModelRuntimeConfig(this.config.models[model]);
+  }
+}
+
+export class AIRuntimeConfigService implements AIRuntimeConfigProvider {
+  private cachedConfig: AiRuntimeConfig | null = null;
+
+  constructor(
+    private readonly filePath: string,
+    private readonly logger: Pick<Console, 'warn'> = console,
+  ) {}
+
+  public async initialize(): Promise<AiRuntimeConfig> {
+    const config = await this.loadOrCreateConfig();
+    this.cachedConfig = config;
+    return config;
+  }
+
+  public async getModelConfig(model: ProjectAIModel): Promise<AiModelRuntimeConfig> {
+    const config = this.cachedConfig ?? (await this.initialize());
+    return cloneModelRuntimeConfig(config.models[model]);
+  }
+
+  private async loadOrCreateConfig(): Promise<AiRuntimeConfig> {
+    let rawContent: string;
+    try {
+      rawContent = await readFile(this.filePath, 'utf8');
+    } catch (error) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as NodeJS.ErrnoException).code === 'ENOENT'
+      ) {
+        const config = createDefaultAIRuntimeConfig();
+        await mkdir(dirname(this.filePath), { recursive: true });
+        await writeFile(this.filePath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+        return config;
+      }
+      throw error;
+    }
+
+    try {
+      return sanitizeAIRuntimeConfig(JSON.parse(rawContent), (message) =>
+        this.logger.warn(`[AI Runtime Config] ${message}`),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`[AI Runtime Config] Failed to parse config file: ${message}`);
+      return createDefaultAIRuntimeConfig();
+    }
+  }
+}

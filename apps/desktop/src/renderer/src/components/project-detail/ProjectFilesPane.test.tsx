@@ -37,12 +37,10 @@ function createAIControllerMock(overrides?: Partial<ProjectAIController>): {
 } {
   const startAITranslateFile = vi.fn().mockResolvedValue(undefined);
   const ai = {
-    modelDraft: 'gpt-4o',
+    modelDraft: 'gpt-5.4-mini',
     setModelDraft: vi.fn(),
     promptDraft: '',
     setPromptDraft: vi.fn(),
-    temperatureDraft: '0.2',
-    setTemperatureDraft: vi.fn(),
     promptSavedAt: null,
     savingPrompt: false,
     testSource: '',
@@ -58,7 +56,6 @@ function createAIControllerMock(overrides?: Partial<ProjectAIController>): {
     showTestDetails: false,
     setShowTestDetails: vi.fn(),
     hasUnsavedPromptChanges: false,
-    hasInvalidTemperature: false,
     hasTestDetails: false,
     savePrompt: vi.fn().mockResolvedValue(undefined),
     testPrompt: vi.fn().mockResolvedValue(undefined),

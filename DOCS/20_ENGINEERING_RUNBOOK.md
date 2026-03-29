@@ -16,7 +16,7 @@ Read before coding, before opening PRs, and whenever gate/test failures occur.
 
 ## Last Updated
 
-2026-03-24
+2026-03-29
 
 ## Owner
 
@@ -52,6 +52,30 @@ Packaging boundary:
 2. `npm run pack:mac` must run on macOS only.
 3. Do not rely on cross-platform packaging for release signoff.
 
+Desktop validation commands:
+
+```bash
+npm run test:e2e:smoke --workspace=apps/desktop
+npm run test:e2e --workspace=apps/desktop
+```
+
+## Validation Ladder
+
+Use this escalation path unless the task explicitly needs a later step first:
+
+1. Start app on current host: `npm ci` -> `npm run rebuild:electron` -> `npm run dev`
+2. Run unit/integration baseline: `npm test`
+3. Run repo quality gate: `npm run gate:check`
+4. Run desktop smoke validation: `npm run test:e2e:smoke --workspace=apps/desktop`
+5. Run broader desktop regression if needed: `npm run test:e2e --workspace=apps/desktop`
+6. Run platform-native packaging signoff: `npm run pack:win` on Windows or `npm run pack:mac` on macOS
+
+Interpretation:
+
+- `npm run gate:check` is the default cross-platform confidence check and should happen before guessing at pack failures.
+- `npm run test:e2e:smoke --workspace=apps/desktop` is the fastest desktop behavior check when renderer/editor interactions changed.
+- `npm run pack` is host-local packaging only; native release validation still belongs to `pack:win` or `pack:mac`.
+
 ## Gates and Checks
 
 Primary command:
@@ -68,6 +92,11 @@ Current `gate:check` chain:
 4. `npm run gate:file-size`
 5. `npm run lint`
 6. `npm run gate:smoke:large-file`
+
+CI in plain language:
+
+- Pull requests and pushes validate `npm ci` -> `npm run rebuild:electron` -> `npm run gate:check` on both `macos-latest` and `windows-latest`.
+- Platform packaging is smoke-checked only on native hosts via manual/workflow-dispatch pack jobs; CI does not treat this as cross-platform pack equivalence.
 
 ## Required Test Policy
 
@@ -124,6 +153,12 @@ CI matrix:
 2. `windows-latest`: `npm ci` -> `npm run rebuild:electron` -> `npm run gate:check`
 3. Nightly/manual smoke pack job runs platform-native pack commands only.
 
+Desktop validation entrypoint:
+
+1. Start with `npm run test:e2e:smoke --workspace=apps/desktop` for behavior regressions in editor/renderer flows.
+2. Escalate to `npm run test:e2e --workspace=apps/desktop` only when smoke coverage is insufficient or multiple desktop flows changed.
+3. Keep pack validation last; packaging failures are not the first debugging step for ordinary UI/test regressions.
+
 ### `gate:arch` failed
 
 1. Compare changed callsites with guardrail definitions.
@@ -152,6 +187,12 @@ CI matrix:
 1. Verify Node/npm versions match `package.json` `volta` pins.
 2. Run `npm run rebuild:electron` to rebind native module ABI.
 3. Confirm platform-native packaging command (`pack:win` or `pack:mac`) is used.
+
+### Desktop e2e/smoke issues
+
+1. Re-run `npm run test:e2e:smoke --workspace=apps/desktop` before full e2e to confirm the failure reproduces in the smallest desktop path.
+2. If smoke passes but broader coverage is still needed, run `npm run test:e2e --workspace=apps/desktop`.
+3. Treat desktop e2e failures separately from packaging failures; do not jump to `pack:win` or `pack:mac` unless the problem is installer/build specific.
 
 ### Worktree dependency link issues
 

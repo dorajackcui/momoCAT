@@ -54,10 +54,28 @@ npm run pack:mac
 npm run pack:win
 ```
 
+说明：
+
+- `npm run pack` 只会在当前宿主平台执行桌面打包，适合本机构建验证
+- 交付前的平台验收请使用平台原生命令：Windows 用 `npm run pack:win`，macOS 用 `npm run pack:mac`
+
 ### 测试
 
 ```bash
 npm test
+```
+
+桌面行为验证：
+
+```bash
+# 桌面 smoke 验证（优先用于编辑器/交互行为回归）
+npm run test:e2e:smoke --workspace=apps/desktop
+
+# 完整桌面 e2e
+npm run test:e2e --workspace=apps/desktop
+
+# 跨平台基线质量门
+npm run gate:check
 ```
 
 ## Win + Mac 双环境开发约定
@@ -66,6 +84,14 @@ npm test
 - 原生模块重建统一为：`npm run rebuild:electron`（已兼容 zsh / PowerShell）
 - Windows 仅在 Windows 机器上验收 `.exe`；macOS 仅在 macOS 机器上验收 `.dmg`
 - 跨平台质量门由 GitHub Actions 矩阵（`macos-latest` + `windows-latest`）执行
+
+## 平台命令边界
+
+- 双平台通用入口：`npm ci`、`npm run rebuild:electron`、`npm run dev`、`npm test`、`npm run build`、`npm run gate:check`
+- 桌面行为测试入口：`npm run test:e2e:smoke --workspace=apps/desktop`，需要完整桌面回归时再运行 `npm run test:e2e --workspace=apps/desktop`
+- `npm run pack` 是“当前机器打当前平台包”，不是 Win/mac 交叉验收命令
+- Windows 打包验收只用 `npm run pack:win`
+- macOS 打包验收只用 `npm run pack:mac`
 
 ## 项目结构（简版）
 

@@ -200,7 +200,6 @@ export interface DesktopApi {
   updateProjectAISettings: (
     projectId: number,
     aiPrompt: string | null,
-    aiTemperature: number | null,
     aiModel: ProjectAIModel | null,
   ) => Promise<void>;
   updateProjectQASettings: (projectId: number, qaSettings: ProjectQASettings) => Promise<void>;

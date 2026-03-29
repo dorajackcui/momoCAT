@@ -29,7 +29,7 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
         </div>
         <Button
           onClick={() => void ai.savePrompt()}
-          disabled={ai.savingPrompt || !ai.hasUnsavedPromptChanges || ai.hasInvalidTemperature}
+          disabled={ai.savingPrompt || !ai.hasUnsavedPromptChanges}
           size="sm"
           variant={ai.hasUnsavedPromptChanges ? 'primary' : 'soft'}
           className={!ai.hasUnsavedPromptChanges ? '!bg-success !text-success-contrast' : ''}
@@ -56,30 +56,6 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
             </option>
           ))}
         </Select>
-      </div>
-      <div className="mb-3">
-        <label className="block text-xs font-bold text-text-faint uppercase tracking-wider mb-1">
-          Temperature
-        </label>
-        <Input
-          type="number"
-          min={0}
-          max={2}
-          step={0.1}
-          value={ai.temperatureDraft}
-          onChange={(event) => ai.setTemperatureDraft(event.target.value)}
-          placeholder="0.2"
-          tone={ai.hasInvalidTemperature ? 'danger' : 'default'}
-          className="w-40"
-        />
-        <p className="mt-1 text-[11px] text-text-muted">
-          Range `0` to `2`. Lower is more deterministic. Default is `0.2`.
-        </p>
-        {ai.hasInvalidTemperature && (
-          <Notice tone="danger" className="mt-2 text-[11px]">
-            Please enter a valid number from `0` to `2`.
-          </Notice>
-        )}
       </div>
       <Textarea
         value={ai.promptDraft}

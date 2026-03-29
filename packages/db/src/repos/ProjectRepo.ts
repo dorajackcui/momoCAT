@@ -124,14 +124,13 @@ export class ProjectRepo {
   public updateProjectAISettings(
     projectId: number,
     aiPrompt: string | null,
-    aiTemperature: number | null,
     aiModel: ProjectAIModel | null,
   ) {
     this.db
       .prepare(
-        "UPDATE projects SET aiPrompt = ?, aiTemperature = ?, aiModel = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?"
+        "UPDATE projects SET aiPrompt = ?, aiModel = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?"
       )
-      .run(aiPrompt, aiTemperature, aiModel, projectId);
+      .run(aiPrompt, aiModel, projectId);
   }
 
   public updateProjectQASettings(projectId: number, qaSettings: ProjectQASettings) {

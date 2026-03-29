@@ -1,6 +1,11 @@
 import type { Segment } from '@cat/core/models';
 import type { AIBatchMode, AIBatchTargetScope } from '../../../../shared/ipc';
-import type { AITransport, ProjectRepository, SegmentRepository } from '../../ports';
+import type {
+  AIRuntimeConfigProvider,
+  AITransport,
+  ProjectRepository,
+  SegmentRepository,
+} from '../../ports';
 import { SegmentService } from '../../SegmentService';
 import { resolveTranslationPromptReferences } from './promptReferences';
 import type { PromptReferenceResolvers, TranslationPromptReferences } from './types';
@@ -37,6 +42,7 @@ export class AITranslationOrchestrator {
     private readonly segmentRepo: SegmentRepository,
     private readonly segmentService: SegmentService,
     private readonly transport: AITransport,
+    private readonly aiRuntimeConfigProvider: AIRuntimeConfigProvider,
     private readonly settingsService: AISettingsService,
     private readonly textTranslator: AITextTranslator,
     private readonly segmentPagingIterator: SegmentPagingIterator,
@@ -59,7 +65,7 @@ export class AITranslationOrchestrator {
     }
 
     const model = this.textTranslator.resolveModel(options?.model, project.aiModel);
-    const temperature = this.textTranslator.resolveTemperature(project.aiTemperature);
+    const runtimeConfig = await this.aiRuntimeConfigProvider.getModelConfig(model);
     const targetScope = resolveBatchTargetScope(options?.targetScope);
 
     if ((project.projectType || 'translation') === 'translation' && options?.mode === 'dialogue') {
@@ -68,7 +74,7 @@ export class AITranslationOrchestrator {
         project,
         apiKey,
         model,
-        temperature,
+        runtimeConfig,
         targetScope,
         transport: this.transport,
         tagValidator: this.tagValidator,
@@ -88,7 +94,7 @@ export class AITranslationOrchestrator {
       project,
       apiKey,
       model,
-      temperature,
+      runtimeConfig,
       targetScope,
       segmentPagingIterator: this.segmentPagingIterator,
       textTranslator: this.textTranslator,
@@ -134,6 +140,7 @@ export class AITranslationOrchestrator {
     return runTestTranslation(projectId, sourceText, contextText, {
       projectRepo: this.projectRepo,
       settingsService: this.settingsService,
+      aiRuntimeConfigProvider: this.aiRuntimeConfigProvider,
       textTranslator: this.textTranslator,
     });
   }
@@ -144,6 +151,7 @@ export class AITranslationOrchestrator {
       segmentRepo: this.segmentRepo,
       segmentService: this.segmentService,
       settingsService: this.settingsService,
+      aiRuntimeConfigProvider: this.aiRuntimeConfigProvider,
       textTranslator: this.textTranslator,
       resolveTranslationPromptReferences: (projectId, segment) =>
         this.resolveTranslationPromptReferences(projectId, segment),

@@ -7,6 +7,7 @@ import { CATDatabase, UnsupportedDatabaseSchemaError } from '@cat/db';
 import { ProjectService } from './services/ProjectService';
 import { JobManager } from './JobManager';
 import { IPC_CHANNELS } from '../shared/ipcChannels';
+import { AIRuntimeConfigService } from './services/modules/ai/AIRuntimeConfigService';
 import { registerProjectHandlers } from './ipc/projectHandlers';
 import { registerTMHandlers } from './ipc/tmHandlers';
 import { registerTBHandlers } from './ipc/tbHandlers';
@@ -110,6 +111,7 @@ app.whenReady().then(async () => {
   const dbPath = join(userDataPath, 'cat_v1.db');
   const projectsDir = join(userDataPath, 'projects');
   const proxyEnvPath = join(userDataPath, 'proxy.env');
+  const aiRuntimeConfigPath = join(userDataPath, 'ai-runtime.json');
   const fallbackProxyEnvPath = join(app.getAppPath(), 'proxy.env');
 
   try {
@@ -145,7 +147,12 @@ app.whenReady().then(async () => {
     }
     throw err;
   }
-  const projectService = new ProjectService(db, projectsDir, dbPath);
+  const aiRuntimeConfigService = new AIRuntimeConfigService(aiRuntimeConfigPath);
+  await aiRuntimeConfigService.initialize();
+
+  const projectService = new ProjectService(db, projectsDir, dbPath, {
+    aiRuntimeConfigProvider: aiRuntimeConfigService,
+  });
   const jobManager = new JobManager();
 
   registerProjectHandlers({ ipcMain, projectService });

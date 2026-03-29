@@ -1,11 +1,7 @@
 export {
-  DEFAULT_AI_TEMPERATURE,
   buildAITestMeta,
   deriveProjectAIFlags,
-  formatTemperature,
   normalizeProjectAIModel,
-  normalizeTemperatureValue,
-  parseTemperatureInput,
 } from './ai/aiSettingsHelpers';
 
 export { upsertTrackedJobFromProgress, upsertTrackedJobOnStart } from './ai/aiJobTracker';

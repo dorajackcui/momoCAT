@@ -3,7 +3,7 @@ import type { Project } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
 import { parseEditorTextToTokens, serializeTokensToEditorText } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
-import { AITransport } from '../../ports';
+import type { AiModelRuntimeConfig, AITransport } from '../../ports';
 import { buildAIDialogueUserPrompt, buildAISystemPrompt } from '../ai-prompts';
 import type { DialoguePromptPreviousGroup } from '../ai-prompts/types';
 import type {
@@ -26,7 +26,7 @@ interface TranslateDialogueUnitParams {
   project: Project;
   apiKey: string;
   model: string;
-  temperature: number;
+  runtimeConfig: AiModelRuntimeConfig;
   unit: DialogueTranslationUnit;
   previousGroup?: DialoguePromptPreviousGroup;
   transport: AITransport;
@@ -139,10 +139,10 @@ export async function translateDialogueUnit(
       validationFeedback,
     });
 
-    const response = await params.transport.chatCompletions({
+    const response = await params.transport.createResponse({
       apiKey: params.apiKey,
       model: params.model,
-      temperature: params.temperature,
+      reasoningEffort: params.runtimeConfig.reasoningEffort,
       systemPrompt,
       userPrompt,
     });

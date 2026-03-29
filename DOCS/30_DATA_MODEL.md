@@ -11,7 +11,7 @@ Read before changing schema, repositories, or SQL-level behavior.
 - Repositories: `packages/db/src/repos/*.ts`
 
 ## Last Updated
-2026-03-24
+2026-03-30
 
 ## Owner
 Core maintainers of `simple-cat-tool`
@@ -38,6 +38,11 @@ Key fields:
 - `projects.qaSettingsJson`
 - `segments.qaIssuesJson`
 - segment token/json payload columns and status/hash keys
+
+AI runtime config:
+- Runtime model tuning is stored outside SQLite in `userData/ai-runtime.json`
+- Development path resolves to `.cat_data/ai-runtime.json`
+- The runtime config currently stores per-model `reasoningEffort` for `gpt-5.4`, `gpt-5.4-mini`, `gpt-5`, and `gpt-5-mini`
 
 ### TM layer
 - `tms`
@@ -68,6 +73,7 @@ Key fields:
    - `segments.qaIssuesJson`
    - TM/TB mounting and search tables (`tms`, `project_tms`, `tm_entries`, `tm_fts`, `term_bases`, `project_term_bases`, `tb_entries`)
    - `app_settings`
+4. `projects.aiTemperature` is a legacy compatibility column. The app no longer reads it as the runtime source of truth and no longer exposes it in the UI.
 
 ## Change Protocol
 1. Update the canonical schema definition in `packages/db/src/currentSchema.ts`.

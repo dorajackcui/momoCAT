@@ -44,12 +44,11 @@ export function createProjectApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<
       ipcRenderer.invoke(IPC_CHANNELS.project.updatePrompt, projectId, aiPrompt) as ReturnType<
         DesktopApi['updateProjectPrompt']
       >,
-    updateProjectAISettings: (projectId, aiPrompt, aiTemperature, aiModel) =>
+    updateProjectAISettings: (projectId, aiPrompt, aiModel) =>
       ipcRenderer.invoke(
         IPC_CHANNELS.project.updateAISettings,
         projectId,
         aiPrompt,
-        aiTemperature,
         aiModel,
       ) as ReturnType<DesktopApi['updateProjectAISettings']>,
     updateProjectQASettings: (projectId, qaSettings) =>

@@ -6,6 +6,7 @@ import type {
   ProxySettingsInput,
 } from '../../../shared/ipc';
 import type {
+  AIRuntimeConfigProvider,
   AITransport,
   ProjectRepository,
   SegmentRepository,
@@ -14,6 +15,7 @@ import type {
 import type { ProxySettingsApplier } from '../proxy/ProxySettingsManager';
 import { ProxySettingsManager } from '../proxy/ProxySettingsManager';
 import { SegmentService } from '../SegmentService';
+import { DefaultAIRuntimeConfigProvider } from './ai/AIRuntimeConfigService';
 import { AISettingsService } from './ai/AISettingsService';
 import { AITextTranslator } from './ai/AITextTranslator';
 import { AITranslationOrchestrator } from './ai/AITranslationOrchestrator';
@@ -33,6 +35,7 @@ export class AIModule {
     segmentService: SegmentService,
     transport: AITransport,
     proxySettingsManager: ProxySettingsApplier = new ProxySettingsManager(),
+    aiRuntimeConfigProvider: AIRuntimeConfigProvider = new DefaultAIRuntimeConfigProvider(),
     promptReferenceResolvers: PromptReferenceResolvers = {},
   ) {
     const tagValidator = new TagValidator();
@@ -48,6 +51,7 @@ export class AIModule {
       segmentRepo,
       segmentService,
       transport,
+      aiRuntimeConfigProvider,
       this.settingsService,
       textTranslator,
       segmentPagingIterator,

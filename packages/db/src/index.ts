@@ -121,13 +121,11 @@ export class CATDatabase {
   public updateProjectAISettings(
     projectId: number,
     aiPrompt: string | null,
-    aiTemperature: number | null,
     aiModel: ProjectAIModel | null,
   ) {
     this.projectRepo.updateProjectAISettings(
       projectId,
       aiPrompt,
-      aiTemperature,
       aiModel,
     );
   }

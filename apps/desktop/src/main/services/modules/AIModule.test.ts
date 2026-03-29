@@ -83,10 +83,10 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: '你好世界',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
@@ -151,10 +151,10 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: '你好世界',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
@@ -212,10 +212,10 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: '新译文',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
@@ -290,7 +290,7 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: JSON.stringify({
           translations: [
             { id: 'dialogue-overwrite-1', text: '你好' },
@@ -298,7 +298,7 @@ describe('AIModule.aiTranslateFile', () => {
           ],
         }),
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
@@ -352,10 +352,10 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: '你好世界',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
@@ -363,7 +363,7 @@ describe('AIModule.aiTranslateFile', () => {
 
     await module.aiTranslateFile(1);
 
-    const userPrompt = (transport.chatCompletions as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    const userPrompt = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0]
       .userPrompt;
     expect(userPrompt).toContain('Context: UI button label');
   });
@@ -398,10 +398,10 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: '你好世界',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
@@ -430,12 +430,15 @@ describe('AIModule.aiTranslateFile', () => {
       segmentService,
       transport,
       undefined,
+      {
+        getModelConfig: vi.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
+      },
       { tmService, tbService },
     );
 
     await module.aiTranslateFile(1);
 
-    const userPrompt = (transport.chatCompletions as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    const userPrompt = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0]
       .userPrompt;
     expect(userPrompt).toContain('TM Reference (best match):');
     expect(userPrompt).toContain('- Similarity: 100% | TM: Main TM');
@@ -476,10 +479,10 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: '你好世界',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
@@ -505,12 +508,15 @@ describe('AIModule.aiTranslateFile', () => {
       segmentService,
       transport,
       undefined,
+      {
+        getModelConfig: vi.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
+      },
       { tmService, tbService },
     );
 
     await module.aiTranslateFile(1);
 
-    const userPrompt = (transport.chatCompletions as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    const userPrompt = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0]
       .userPrompt;
     expect(userPrompt).toContain('- t1 => v1');
     expect(userPrompt).toContain('- t5 => v5');
@@ -551,10 +557,10 @@ describe('AIModule.aiTranslateFile', () => {
       } as unknown as SegmentService;
       const transport = {
         testConnection: vi.fn().mockResolvedValue({ ok: true }),
-        chatCompletions: vi.fn().mockResolvedValue({
+        createResponse: vi.fn().mockResolvedValue({
           content: '处理结果',
           status: 200,
-          endpoint: '/v1/chat/completions',
+          endpoint: '/v1/responses',
         }),
       } as unknown as AITransport;
 
@@ -565,6 +571,9 @@ describe('AIModule.aiTranslateFile', () => {
         segmentService,
         transport,
         undefined,
+        {
+          getModelConfig: vi.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
+        },
         { tmService, tbService },
       );
       await module.aiTranslateFile(1);
@@ -608,10 +617,10 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: '你好世界',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
@@ -630,6 +639,9 @@ describe('AIModule.aiTranslateFile', () => {
         segmentService,
         transport,
         undefined,
+        {
+          getModelConfig: vi.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
+        },
         { tmService, tbService },
       );
       const result = await module.aiTranslateFile(1);
@@ -637,7 +649,7 @@ describe('AIModule.aiTranslateFile', () => {
       expect(result.translated).toBe(1);
       expect(result.failed).toBe(0);
       expect(segmentService.updateSegment).toHaveBeenCalledTimes(1);
-      const userPrompt = (transport.chatCompletions as ReturnType<typeof vi.fn>).mock.calls[0][0]
+      const userPrompt = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0]
         .userPrompt;
       expect(userPrompt).not.toContain('TM Reference (best match):');
       expect(userPrompt).not.toContain('Terminology References (hit terms):');
@@ -683,17 +695,17 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: '你好世界',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
     const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
     await module.aiTranslateFile(1);
 
-    const request = (transport.chatCompletions as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(request.model).toBe('gpt-5-mini');
   });
 
@@ -728,18 +740,18 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: '你好世界',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
     const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
-    await module.aiTranslateFile(1, { model: 'gpt-5.2' });
+    await module.aiTranslateFile(1, { model: 'gpt-5.4' });
 
-    const request = (transport.chatCompletions as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(request.model).toBe('gpt-5.2');
+    const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(request.model).toBe('gpt-5.4');
   });
 
   it('falls back to default model when both request and project model are invalid', async () => {
@@ -773,17 +785,17 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: '你好世界',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
     const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
     await module.aiTranslateFile(1, { model: 'unsupported-request-model' });
 
-    const request = (transport.chatCompletions as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(request.model).toBe(DEFAULT_PROJECT_AI_MODEL);
   });
 
@@ -822,10 +834,10 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: '你好世界',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
@@ -833,7 +845,7 @@ describe('AIModule.aiTranslateFile', () => {
 
     await module.aiTranslateFile(1);
 
-    const userPrompt = (transport.chatCompletions as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    const userPrompt = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0]
       .userPrompt;
     expect(userPrompt).not.toContain('Context:');
   });
@@ -869,10 +881,10 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: 'Existing translation text',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
@@ -880,7 +892,7 @@ describe('AIModule.aiTranslateFile', () => {
 
     await module.aiTranslateFile(1);
 
-    const systemPrompt = (transport.chatCompletions as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    const systemPrompt = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0]
       .systemPrompt;
     expect(systemPrompt).toContain('Original text language: en. Translation text language: zh.');
     expect(systemPrompt).toContain('Review only for terminology and fluency. Keep style concise.');
@@ -917,10 +929,10 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: 'Already good text',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
@@ -971,17 +983,17 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: 'positive',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
     const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
     await module.aiTranslateFile(1);
 
-    const request = (transport.chatCompletions as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(request.systemPrompt).toBe('Classify the input and output only one label.');
     expect(request.userPrompt).toContain('Input:');
     expect(request.userPrompt).toContain('Input text');
@@ -1024,10 +1036,10 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: 'Same text',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
@@ -1051,7 +1063,7 @@ describe('AIModule.aiTranslateFile', () => {
         projectType: 'custom',
         aiPrompt: 'Process text',
         aiTemperature: 0.2,
-        aiModel: 'gpt-5.2',
+        aiModel: 'gpt-5.4',
       }),
     } as unknown as ProjectRepository;
 
@@ -1069,18 +1081,18 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: 'processed',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
     const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
     await module.aiTestTranslate(11, 'Input text', 'Additional context');
 
-    const request = (transport.chatCompletions as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(request.model).toBe('gpt-5.2');
+    const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(request.model).toBe('gpt-5.4');
     expect(request.userPrompt).toContain('Input:');
     expect(request.userPrompt).toContain('Input text');
     expect(request.userPrompt).toContain('Context: Additional context');
@@ -1120,18 +1132,18 @@ describe('AIModule.aiTranslateFile', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi
+      createResponse: vi
         .fn()
         .mockResolvedValueOnce({
           content:
             '{"translations":[{"id":"dlg-a1","text":"你好"},{"id":"dlg-a2","text":"你好吗？"}]}',
           status: 200,
-          endpoint: '/v1/chat/completions',
+          endpoint: '/v1/responses',
         })
         .mockResolvedValueOnce({
           content: '{"translations":[{"id":"dlg-b1","text":"我很好。"}]}',
           status: 200,
-          endpoint: '/v1/chat/completions',
+          endpoint: '/v1/responses',
         }),
     } as unknown as AITransport;
 
@@ -1144,7 +1156,7 @@ describe('AIModule.aiTranslateFile', () => {
     const firstUpdate = (segmentService.updateSegmentsAtomically as ReturnType<typeof vi.fn>).mock
       .calls[0][0];
     expect(firstUpdate).toHaveLength(2);
-    const secondPrompt = (transport.chatCompletions as ReturnType<typeof vi.fn>).mock.calls[1][0]
+    const secondPrompt = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[1][0]
       .userPrompt;
     expect(secondPrompt).toContain('Previous Dialogue Group (for consistency):');
     expect(secondPrompt).toContain('speaker: Alice');
@@ -1186,10 +1198,10 @@ describe('AIModule.aiTranslateFile', () => {
     const responses = ['not-json', 'still-not-json', 'again-not-json', '第一句', '第二句'];
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockImplementation(async () => ({
+      createResponse: vi.fn().mockImplementation(async () => ({
         content: responses.shift() ?? '默认译文',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       })),
     } as unknown as AITransport;
 
@@ -1236,7 +1248,7 @@ describe('AIModule.aiTranslateFile', () => {
     const deferred = createDeferred<{ content: string; status: number; endpoint: string }>();
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockImplementation(() => deferred.promise),
+      createResponse: vi.fn().mockImplementation(() => deferred.promise),
     } as unknown as AITransport;
 
     const progressEvents: Array<{ current: number; total: number; message?: string }> = [];
@@ -1253,7 +1265,7 @@ describe('AIModule.aiTranslateFile', () => {
       content:
         '{"translations":[{"id":"dlg-progress-1","text":"第一句"},{"id":"dlg-progress-2","text":"第二句"}]}',
       status: 200,
-      endpoint: '/v1/chat/completions',
+      endpoint: '/v1/responses',
     });
     await task;
 
@@ -1305,18 +1317,18 @@ describe('AIModule.aiTranslateFile', () => {
     const fallbackSecond = createDeferred<{ content: string; status: number; endpoint: string }>();
     type TransportResponse = { content: string; status: number; endpoint: string };
     const queue: Array<Promise<TransportResponse> | TransportResponse> = [
-      Promise.resolve({ content: 'not-json', status: 200, endpoint: '/v1/chat/completions' }),
-      Promise.resolve({ content: 'still-not-json', status: 200, endpoint: '/v1/chat/completions' }),
-      Promise.resolve({ content: 'again-not-json', status: 200, endpoint: '/v1/chat/completions' }),
+      Promise.resolve({ content: 'not-json', status: 200, endpoint: '/v1/responses' }),
+      Promise.resolve({ content: 'still-not-json', status: 200, endpoint: '/v1/responses' }),
+      Promise.resolve({ content: 'again-not-json', status: 200, endpoint: '/v1/responses' }),
       fallbackFirst.promise,
       fallbackSecond.promise,
     ];
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockImplementation(async () => {
+      createResponse: vi.fn().mockImplementation(async () => {
         const next = queue.shift();
         if (!next) {
-          return { content: '默认译文', status: 200, endpoint: '/v1/chat/completions' };
+          return { content: '默认译文', status: 200, endpoint: '/v1/responses' };
         }
         return next;
       }),
@@ -1333,11 +1345,11 @@ describe('AIModule.aiTranslateFile', () => {
     await Promise.resolve();
     expect(progressEvents).toHaveLength(0);
 
-    fallbackFirst.resolve({ content: '第一句', status: 200, endpoint: '/v1/chat/completions' });
+    fallbackFirst.resolve({ content: '第一句', status: 200, endpoint: '/v1/responses' });
     await new Promise((resolve) => setTimeout(resolve, 80));
     expect(progressEvents.map((event) => event.current)).toEqual([1]);
 
-    fallbackSecond.resolve({ content: '第二句', status: 200, endpoint: '/v1/chat/completions' });
+    fallbackSecond.resolve({ content: '第二句', status: 200, endpoint: '/v1/responses' });
     await task;
     expect(progressEvents.map((event) => event.current)).toEqual([1, 2]);
     expect(progressEvents[1].message).toContain('segment 2 of 2');
@@ -1379,10 +1391,10 @@ describe('AIModule.aiTranslateSegment', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: '你好世界',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
@@ -1408,6 +1420,9 @@ describe('AIModule.aiTranslateSegment', () => {
       segmentService,
       transport,
       undefined,
+      {
+        getModelConfig: vi.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
+      },
       { tmService, tbService },
     );
 
@@ -1419,7 +1434,7 @@ describe('AIModule.aiTranslateSegment', () => {
       expect.any(Array),
       'translated',
     );
-    const request = (transport.chatCompletions as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(request.userPrompt).toContain('Context: UI button label');
     expect(request.userPrompt).toContain('TM Reference (best match):');
     expect(request.userPrompt).toContain('Terminology References (hit terms):');
@@ -1459,10 +1474,10 @@ describe('AIModule.aiTranslateSegment', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: 'Review this text',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
@@ -1513,10 +1528,10 @@ describe('AIModule.aiRefineSegment', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: '你好，世界',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
@@ -1542,6 +1557,9 @@ describe('AIModule.aiRefineSegment', () => {
       segmentService,
       transport,
       undefined,
+      {
+        getModelConfig: vi.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
+      },
       { tmService, tbService },
     );
 
@@ -1553,7 +1571,7 @@ describe('AIModule.aiRefineSegment', () => {
       expect.any(Array),
       'translated',
     );
-    const request = (transport.chatCompletions as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(request.userPrompt).toContain('Context: UI button label');
     expect(request.userPrompt).toContain('Current Translation:');
     expect(request.userPrompt).toContain('你好世界');
@@ -1597,10 +1615,10 @@ describe('AIModule.aiRefineSegment', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockResolvedValue({
+      createResponse: vi.fn().mockResolvedValue({
         content: '修改后译文',
         status: 200,
-        endpoint: '/v1/chat/completions',
+        endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
@@ -1648,7 +1666,7 @@ describe('AIModule.aiRefineSegment', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn(),
+      createResponse: vi.fn(),
     } as unknown as AITransport;
 
     const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
@@ -1656,7 +1674,7 @@ describe('AIModule.aiRefineSegment', () => {
     await expect(module.aiRefineSegment('refine-empty-inst-1', '   ')).rejects.toThrow(
       'Refinement instruction is empty',
     );
-    expect(transport.chatCompletions).not.toHaveBeenCalled();
+    expect(transport.createResponse).not.toHaveBeenCalled();
     expect(segmentService.updateSegment).not.toHaveBeenCalled();
   });
 
@@ -1693,7 +1711,7 @@ describe('AIModule.aiRefineSegment', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn(),
+      createResponse: vi.fn(),
     } as unknown as AITransport;
 
     const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
@@ -1701,7 +1719,7 @@ describe('AIModule.aiRefineSegment', () => {
     await expect(
       module.aiRefineSegment('refine-empty-target-1', 'Make it shorter'),
     ).rejects.toThrow('Target segment is empty');
-    expect(transport.chatCompletions).not.toHaveBeenCalled();
+    expect(transport.createResponse).not.toHaveBeenCalled();
     expect(segmentService.updateSegment).not.toHaveBeenCalled();
   });
 });
@@ -1742,7 +1760,7 @@ describe('AIModule.segmentAIOperationLock', () => {
     const pending = createDeferred<{ content: string; status: number; endpoint: string }>();
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi.fn().mockImplementation(() => pending.promise),
+      createResponse: vi.fn().mockImplementation(() => pending.promise),
     } as unknown as AITransport;
 
     const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
@@ -1753,7 +1771,7 @@ describe('AIModule.segmentAIOperationLock', () => {
       'AI request already in progress for this segment',
     );
 
-    pending.resolve({ content: '你好，世界', status: 200, endpoint: '/v1/chat/completions' });
+    pending.resolve({ content: '你好，世界', status: 200, endpoint: '/v1/responses' });
     await firstCall;
     expect(segmentService.updateSegment).toHaveBeenCalledTimes(1);
   });
@@ -1792,13 +1810,13 @@ describe('AIModule.segmentAIOperationLock', () => {
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
-      chatCompletions: vi
+      createResponse: vi
         .fn()
         .mockRejectedValueOnce(new Error('temporary upstream error'))
         .mockResolvedValueOnce({
           content: '你好，世界',
           status: 200,
-          endpoint: '/v1/chat/completions',
+          endpoint: '/v1/responses',
         }),
     } as unknown as AITransport;
 

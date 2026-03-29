@@ -5,8 +5,6 @@ import type { AIBatchMode, AIBatchTargetScope, JobProgressEvent } from '../../..
 export interface ProjectAIFlagsInput {
   promptDraft: string;
   savedPromptValue: string;
-  temperatureDraft: string;
-  savedTemperatureValue: string;
   modelDraft: ProjectAIModel;
   savedModelValue: ProjectAIModel;
   testMeta: string | null;
@@ -18,10 +16,7 @@ export interface ProjectAIFlagsInput {
 export interface ProjectAIFlags {
   normalizedPromptDraft: string;
   normalizedSavedPrompt: string;
-  normalizedTemperatureDraft: number | null;
-  normalizedSavedTemperature: number | null;
   hasUnsavedPromptChanges: boolean;
-  hasInvalidTemperature: boolean;
   hasTestDetails: boolean;
 }
 
@@ -48,8 +43,6 @@ export interface ProjectAIController {
   setModelDraft: Dispatch<SetStateAction<ProjectAIModel>>;
   promptDraft: string;
   setPromptDraft: Dispatch<SetStateAction<string>>;
-  temperatureDraft: string;
-  setTemperatureDraft: Dispatch<SetStateAction<string>>;
   promptSavedAt: string | null;
   savingPrompt: boolean;
   testSource: string;
@@ -65,7 +58,6 @@ export interface ProjectAIController {
   showTestDetails: boolean;
   setShowTestDetails: Dispatch<SetStateAction<boolean>>;
   hasUnsavedPromptChanges: boolean;
-  hasInvalidTemperature: boolean;
   hasTestDetails: boolean;
   savePrompt: () => Promise<void>;
   testPrompt: () => Promise<void>;

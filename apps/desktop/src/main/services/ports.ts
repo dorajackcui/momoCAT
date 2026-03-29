@@ -47,7 +47,6 @@ export interface ProjectRepository {
   updateProjectAISettings(
     projectId: number,
     aiPrompt: string | null,
-    aiTemperature: number | null,
     aiModel: ProjectAIModel | null,
   ): void;
   updateProjectQASettings(projectId: number, qaSettings: ProjectQASettings): void;
@@ -128,6 +127,16 @@ export interface SettingsRepository {
   setSetting(key: string, value: string | null): void;
 }
 
+export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+export interface AiModelRuntimeConfig {
+  reasoningEffort: ReasoningEffort;
+}
+
+export interface AIRuntimeConfigProvider {
+  getModelConfig(model: ProjectAIModel): Promise<AiModelRuntimeConfig>;
+}
+
 export interface TransactionManager {
   runInTransaction<T>(fn: () => T): T;
 }
@@ -170,10 +179,10 @@ export type ProgressEmitter = (payload: ProgressPayload) => void;
 
 export interface AITransport {
   testConnection(apiKey: string): Promise<{ ok: true }>;
-  chatCompletions(params: {
+  createResponse(params: {
     apiKey: string;
     model: string;
-    temperature: number;
+    reasoningEffort: ReasoningEffort;
     systemPrompt: string;
     userPrompt: string;
   }): Promise<{

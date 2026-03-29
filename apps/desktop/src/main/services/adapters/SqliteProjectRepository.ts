@@ -29,10 +29,9 @@ export class SqliteProjectRepository implements ProjectRepository {
   updateProjectAISettings(
     projectId: number,
     aiPrompt: string | null,
-    aiTemperature: number | null,
     aiModel: ProjectAIModel | null,
   ): void {
-    this.db.updateProjectAISettings(projectId, aiPrompt, aiTemperature, aiModel);
+    this.db.updateProjectAISettings(projectId, aiPrompt, aiModel);
   }
 
   updateProjectQASettings(projectId: number, qaSettings: ProjectQASettings): void {

@@ -9,7 +9,7 @@ import { TagValidator } from '@cat/core/qa';
 import { parseEditorTextToTokens } from '@cat/core/tag';
 import { buildAISystemPrompt, buildAIUserPrompt, normalizeProjectType } from '../ai-prompts';
 import type { PromptTBReference, PromptTMReference } from '../ai-prompts/types';
-import type { AITransport } from '../../ports';
+import type { AITransport, ReasoningEffort } from '../../ports';
 
 export interface TranslateDebugMeta {
   requestId?: string;
@@ -25,7 +25,7 @@ export interface TranslateSegmentParams {
   model: string;
   projectPrompt?: string;
   projectType?: ProjectType;
-  temperature?: number;
+  reasoningEffort?: ReasoningEffort;
   srcLang: string;
   tgtLang: string;
   sourceTokens: Token[];
@@ -43,7 +43,7 @@ interface TranslateTextParams {
   model: string;
   projectPrompt?: string;
   projectType?: ProjectType;
-  temperature?: number;
+  reasoningEffort?: ReasoningEffort;
   srcLang: string;
   tgtLang: string;
   sourceText: string;
@@ -63,14 +63,6 @@ export class AITextTranslator {
     private readonly transport: AITransport,
     private readonly tagValidator: TagValidator,
   ) {}
-
-  public resolveTemperature(value: number | null | undefined): number {
-    if (typeof value !== 'number' || Number.isNaN(value)) {
-      return 0.2;
-    }
-
-    return Math.max(0, Math.min(2, value));
-  }
 
   public resolveModel(model?: string | null, projectModel?: ProjectAIModel | null): ProjectAIModel {
     if (isProjectAIModel(model)) {
@@ -95,7 +87,7 @@ export class AITextTranslator {
         model: params.model,
         projectPrompt: params.projectPrompt,
         projectType: normalizedType,
-        temperature: params.temperature,
+        reasoningEffort: params.reasoningEffort,
         srcLang: params.srcLang,
         tgtLang: params.tgtLang,
         sourceText: params.sourceText,
@@ -166,10 +158,10 @@ export class AITextTranslator {
       params.debug.model = params.model;
     }
 
-    const response = await this.transport.chatCompletions({
+    const response = await this.transport.createResponse({
       apiKey: params.apiKey,
       model: params.model,
-      temperature: this.resolveTemperature(params.temperature),
+      reasoningEffort: params.reasoningEffort ?? 'medium',
       systemPrompt,
       userPrompt,
     });

@@ -23,7 +23,7 @@ describe("CATDatabase", () => {
     expect(project?.srcLang).toBe("en-US");
     expect(project?.tgtLang).toBe("zh-CN");
     expect(project?.projectType).toBe("translation");
-    expect(project?.aiModel).toBe("gpt-4o");
+    expect(project?.aiModel).toBe("gpt-5.4-mini");
   });
 
   it("should persist review project type", () => {
@@ -64,13 +64,11 @@ describe("CATDatabase", () => {
     db.updateProjectAISettings(
       projectId,
       "Keep product names untranslated.",
-      0.7,
       "gpt-5-mini",
     );
 
     const project = db.getProject(projectId);
     expect(project?.aiPrompt).toBe("Keep product names untranslated.");
-    expect(project?.aiTemperature).toBe(0.7);
     expect(project?.aiModel).toBe("gpt-5-mini");
   });
 

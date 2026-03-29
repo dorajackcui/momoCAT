@@ -11,6 +11,7 @@ import { TMService } from './TMService';
 import { SegmentService } from './SegmentService';
 import { TBService } from './TBService';
 import {
+  AIRuntimeConfigProvider,
   AITransport,
   SegmentsUpdatedPayload,
   SpreadsheetGateway,
@@ -44,6 +45,7 @@ interface ProjectServiceDependencies {
   tbService?: TBService;
   segmentService?: SegmentService;
   aiTransport?: AITransport;
+  aiRuntimeConfigProvider?: AIRuntimeConfigProvider;
   projectModule?: ProjectFileModule;
   tmModule?: TMModule;
   tbModule?: TBModule;
@@ -113,6 +115,7 @@ export class ProjectService {
     this.tbModule = deps.tbModule ?? new TBModule(tbRepo, tx, tbService, emitProgress);
 
     const aiTransport = deps.aiTransport ?? new OpenAITransport();
+    const aiRuntimeConfigProvider = deps.aiRuntimeConfigProvider;
     this.aiModule =
       deps.aiModule ??
       new AIModule(
@@ -122,6 +125,7 @@ export class ProjectService {
         this.segmentService,
         aiTransport,
         new ProxySettingsManager(),
+        aiRuntimeConfigProvider,
         {
           tmService,
           tbService,
@@ -172,10 +176,9 @@ export class ProjectService {
   public updateProjectAISettings(
     projectId: number,
     aiPrompt: string | null,
-    aiTemperature: number | null,
     aiModel: ProjectAIModel | null,
   ) {
-    this.projectModule.updateProjectAISettings(projectId, aiPrompt, aiTemperature, aiModel);
+    this.projectModule.updateProjectAISettings(projectId, aiPrompt, aiModel);
   }
 
   public updateProjectQASettings(projectId: number, qaSettings: ProjectQASettings) {

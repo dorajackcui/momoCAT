@@ -75,10 +75,9 @@ export class ProjectFileModule {
   public updateProjectAISettings(
     projectId: number,
     aiPrompt: string | null,
-    aiTemperature: number | null,
     aiModel: ProjectAIModel | null,
   ) {
-    this.projectRepo.updateProjectAISettings(projectId, aiPrompt, aiTemperature, aiModel);
+    this.projectRepo.updateProjectAISettings(projectId, aiPrompt, aiModel);
   }
 
   public updateProjectQASettings(projectId: number, qaSettings: ProjectQASettings) {

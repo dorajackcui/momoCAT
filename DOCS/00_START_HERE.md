@@ -16,7 +16,7 @@ Read first for every new task, new session, or handoff.
 
 ## Last Updated
 
-2026-03-24
+2026-03-29
 
 ## Owner
 
@@ -45,6 +45,32 @@ Package validation by target OS:
 1. Windows: `npm run pack:win`
 2. macOS: `npm run pack:mac`
 
+## Platform Command Matrix
+
+Run from repo root `simple-cat-tool`.
+
+| Task | When to use | Command | Platform | Expected result |
+| --- | --- | --- | --- | --- |
+| Start local development | First boot or manual app verification | `npm ci` -> `npm run rebuild:electron` -> `npm run dev` | Windows + macOS | Electron app starts with native module rebuilt for current host |
+| Run unit/integration baseline | Any code change before deeper validation | `npm test` | Windows + macOS | Vitest suites pass |
+| Run repo quality gate | Default cross-platform baseline before pack guesses | `npm run gate:check` | Windows + macOS | Typecheck + guardrails + lint + smoke gate pass |
+| Run desktop smoke e2e | UI/editor behavior changed, need fastest desktop confidence | `npm run test:e2e:smoke --workspace=apps/desktop` | Windows + macOS | Smoke Playwright suite passes against built desktop app |
+| Run full desktop e2e | Smoke is not enough or broader desktop regression coverage is needed | `npm run test:e2e --workspace=apps/desktop` | Windows + macOS | Full Playwright suite passes |
+| Validate Windows packaging | Need native Windows installer artifact validation | `npm run pack:win` | Windows only | `.exe` packaging flow completes on Windows host |
+| Validate macOS packaging | Need native macOS installer artifact validation | `npm run pack:mac` | macOS only | `.dmg` packaging flow completes on macOS host |
+
+Notes:
+
+- `npm run pack` only packages for the current host platform; do not treat it as Win/mac release signoff.
+- CI covers `npm ci` -> `npm run rebuild:electron` -> `npm run gate:check` on both Windows and macOS, but platform packaging still requires native hosts.
+
+## Agent Guardrails
+
+1. Start with `npm run gate:check` for cross-platform baseline validation; do not guess packaging commands first.
+2. Use `npm run test:e2e:smoke --workspace=apps/desktop` before full e2e when you need desktop behavior confidence quickly.
+3. Never mix `pack:win` and `pack:mac` across hosts; packaging validation is platform-native only.
+4. If Windows/macOS commands behave differently, run `npm run rebuild:electron` before deeper debugging.
+
 ## If Task Is X, Open Y
 
 | Task type                            | Open first                                                     |
@@ -63,6 +89,7 @@ Run from repo root `simple-cat-tool`.
 
 ```bash
 npm run gate:check
+npm run test:e2e:smoke --workspace=apps/desktop
 ```
 
 Targeted tests (run when touching corresponding areas):

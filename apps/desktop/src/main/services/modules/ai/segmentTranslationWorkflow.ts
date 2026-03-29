@@ -1,7 +1,7 @@
 import { type Segment, type SegmentStatus } from '@cat/core/models';
 import { serializeTokensToEditorText } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
-import type { ProjectRepository, SegmentRepository } from '../../ports';
+import type { AIRuntimeConfigProvider, ProjectRepository, SegmentRepository } from '../../ports';
 import { SegmentService } from '../../SegmentService';
 import { buildAIUserPrompt, buildAISystemPrompt, normalizeProjectType } from '../ai-prompts';
 import { AISettingsService } from './AISettingsService';
@@ -13,6 +13,7 @@ interface SegmentWorkflowDeps {
   segmentRepo: SegmentRepository;
   segmentService: SegmentService;
   settingsService: AISettingsService;
+  aiRuntimeConfigProvider: AIRuntimeConfigProvider;
   textTranslator: AITextTranslator;
   resolveTranslationPromptReferences: (
     projectId: number,
@@ -62,7 +63,7 @@ export async function runSegmentTranslation(
     const projectType = project.projectType || 'translation';
     const aiStatus: SegmentStatus = projectType === 'review' ? 'reviewed' : 'translated';
     const model = deps.textTranslator.resolveModel(options?.model, project.aiModel);
-    const temperature = deps.textTranslator.resolveTemperature(project.aiTemperature);
+    const runtimeConfig = await deps.aiRuntimeConfigProvider.getModelConfig(model);
     const promptReferences =
       projectType === 'translation'
         ? await deps.resolveTranslationPromptReferences(file.projectId, segment)
@@ -73,7 +74,7 @@ export async function runSegmentTranslation(
       model,
       projectPrompt: project.aiPrompt || '',
       projectType,
-      temperature,
+      reasoningEffort: runtimeConfig.reasoningEffort,
       srcLang: project.srcLang,
       tgtLang: project.tgtLang,
       sourceTokens: segment.sourceTokens,
@@ -139,7 +140,7 @@ export async function runSegmentRefinement(
     const projectType = project.projectType || 'translation';
     const aiStatus: SegmentStatus = projectType === 'review' ? 'reviewed' : 'translated';
     const model = deps.textTranslator.resolveModel(options?.model, project.aiModel);
-    const temperature = deps.textTranslator.resolveTemperature(project.aiTemperature);
+    const runtimeConfig = await deps.aiRuntimeConfigProvider.getModelConfig(model);
     const promptReferences =
       projectType === 'translation'
         ? await deps.resolveTranslationPromptReferences(file.projectId, segment)
@@ -150,7 +151,7 @@ export async function runSegmentRefinement(
       model,
       projectPrompt: project.aiPrompt || '',
       projectType,
-      temperature,
+      reasoningEffort: runtimeConfig.reasoningEffort,
       srcLang: project.srcLang,
       tgtLang: project.tgtLang,
       sourceTokens: segment.sourceTokens,
@@ -173,7 +174,10 @@ export async function runTestTranslation(
   projectId: number,
   sourceText: string,
   contextText: string | undefined,
-  deps: Pick<SegmentWorkflowDeps, 'projectRepo' | 'settingsService' | 'textTranslator'>,
+  deps: Pick<
+    SegmentWorkflowDeps,
+    'projectRepo' | 'settingsService' | 'aiRuntimeConfigProvider' | 'textTranslator'
+  >,
 ): Promise<{
   ok: boolean;
   error?: string;
@@ -196,7 +200,7 @@ export async function runTestTranslation(
   }
 
   const model = deps.textTranslator.resolveModel(project.aiModel);
-  const temperature = deps.textTranslator.resolveTemperature(project.aiTemperature);
+  const runtimeConfig = await deps.aiRuntimeConfigProvider.getModelConfig(model);
   const source = sourceText.trim();
   const context = contextText?.trim() ?? '';
   const promptUsed = buildAISystemPrompt(project.projectType || 'translation', {
@@ -218,7 +222,7 @@ export async function runTestTranslation(
       model,
       projectPrompt: project.aiPrompt || '',
       projectType: project.projectType || 'translation',
-      temperature,
+      reasoningEffort: runtimeConfig.reasoningEffort,
       srcLang: project.srcLang,
       tgtLang: project.tgtLang,
       sourceText: source,
@@ -268,6 +272,7 @@ export function buildSegmentWorkflowDeps(params: {
   segmentRepo: SegmentRepository;
   segmentService: SegmentService;
   settingsService: AISettingsService;
+  aiRuntimeConfigProvider: AIRuntimeConfigProvider;
   textTranslator: AITextTranslator;
   resolveTranslationPromptReferences: (
     projectId: number,
@@ -279,6 +284,7 @@ export function buildSegmentWorkflowDeps(params: {
     segmentRepo: params.segmentRepo,
     segmentService: params.segmentService,
     settingsService: params.settingsService,
+    aiRuntimeConfigProvider: params.aiRuntimeConfigProvider,
     textTranslator: params.textTranslator,
     resolveTranslationPromptReferences: params.resolveTranslationPromptReferences,
   };

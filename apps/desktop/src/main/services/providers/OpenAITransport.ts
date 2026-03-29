@@ -1,5 +1,45 @@
 import { AITransport } from '../ports';
 
+function extractResponseText(data: unknown): string | null {
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+
+  const record = data as {
+    output_text?: unknown;
+    output?: Array<{
+      type?: unknown;
+      content?: Array<{
+        type?: unknown;
+        text?: unknown;
+      }>;
+    }>;
+  };
+
+  if (typeof record.output_text === 'string' && record.output_text.trim()) {
+    return record.output_text;
+  }
+
+  for (const item of record.output ?? []) {
+    if (item?.type !== 'message' || !Array.isArray(item.content)) {
+      continue;
+    }
+
+    const textParts = item.content
+      .filter(
+        (part): part is { type: 'output_text'; text: string } =>
+          part?.type === 'output_text' && typeof part.text === 'string',
+      )
+      .map((part) => part.text);
+
+    if (textParts.length > 0) {
+      return textParts.join('\n');
+    }
+  }
+
+  return null;
+}
+
 export class OpenAITransport implements AITransport {
   private getProxyHint(): string {
     const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.ALL_PROXY;
@@ -28,10 +68,10 @@ export class OpenAITransport implements AITransport {
     return { ok: true };
   }
 
-  public async chatCompletions(params: {
+  public async createResponse(params: {
     apiKey: string;
     model: string;
-    temperature: number;
+    reasoningEffort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
     systemPrompt: string;
     userPrompt: string;
   }): Promise<{
@@ -41,7 +81,7 @@ export class OpenAITransport implements AITransport {
     endpoint: string;
     rawResponseText?: string;
   }> {
-    const endpoint = 'https://api.openai.com/v1/chat/completions';
+    const endpoint = 'https://api.openai.com/v1/responses';
     let response: Response;
     try {
       response = await fetch(endpoint, {
@@ -52,10 +92,23 @@ export class OpenAITransport implements AITransport {
         },
         body: JSON.stringify({
           model: params.model,
-          temperature: params.temperature,
-          messages: [
-            { role: 'system', content: params.systemPrompt },
-            { role: 'user', content: params.userPrompt },
+          reasoning: {
+            effort: params.reasoningEffort,
+          },
+          text: {
+            format: {
+              type: 'text',
+            },
+          },
+          input: [
+            {
+              role: 'system',
+              content: [{ type: 'input_text', text: params.systemPrompt }],
+            },
+            {
+              role: 'user',
+              content: [{ type: 'input_text', text: params.userPrompt }],
+            },
           ],
         }),
       });
@@ -76,14 +129,14 @@ export class OpenAITransport implements AITransport {
       throw new Error(`OpenAI request failed: ${response.status} ${rawBody}`);
     }
 
-    let data: { choices?: Array<{ message?: { content?: unknown } }> };
+    let data: unknown;
     try {
-      data = JSON.parse(rawBody) as { choices?: Array<{ message?: { content?: unknown } }> };
+      data = JSON.parse(rawBody) as unknown;
     } catch {
       throw new Error(`OpenAI response is not valid JSON: ${rawBody}`);
     }
 
-    const content = data?.choices?.[0]?.message?.content;
+    const content = extractResponseText(data);
     if (!content || typeof content !== 'string') {
       throw new Error('OpenAI response missing content');
     }

@@ -46,13 +46,8 @@ export function registerProjectHandlers({ ipcMain, projectService }: MainHandler
     { ipcMain, projectService },
     IPC_CHANNELS.project.updateAISettings,
     (_event, ...args) => {
-      const [projectId, aiPrompt, aiTemperature, aiModel] = args as [
-        number,
-        string | null,
-        number | null,
-        ProjectAIModel | null,
-      ];
-      return projectService.updateProjectAISettings(projectId, aiPrompt, aiTemperature, aiModel);
+      const [projectId, aiPrompt, aiModel] = args as [number, string | null, ProjectAIModel | null];
+      return projectService.updateProjectAISettings(projectId, aiPrompt, aiModel);
     },
   );
 

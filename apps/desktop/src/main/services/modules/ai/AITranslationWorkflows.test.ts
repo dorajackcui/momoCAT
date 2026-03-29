@@ -45,7 +45,7 @@ function createProject(overrides?: Partial<Project>): Project {
     projectType: 'translation',
     aiPrompt: '',
     aiTemperature: 0.2,
-    aiModel: 'gpt-4o',
+    aiModel: 'gpt-5.4-mini',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides,
@@ -94,8 +94,8 @@ describe('AI translation workflows', () => {
       projectId: 11,
       project: createProject(),
       apiKey: 'test-key',
-      model: 'gpt-4o',
-      temperature: 0.2,
+      model: 'gpt-5.4-mini',
+      runtimeConfig: { reasoningEffort: 'medium' },
       targetScope: 'overwrite-non-confirmed',
       segmentPagingIterator: segmentPagingIterator as never,
       textTranslator: textTranslator as never,
@@ -144,8 +144,8 @@ describe('AI translation workflows', () => {
       projectId: 11,
       project: createProject(),
       apiKey: 'test-key',
-      model: 'gpt-4o',
-      temperature: 0.2,
+      model: 'gpt-5.4-mini',
+      runtimeConfig: { reasoningEffort: 'medium' },
       targetScope: 'blank-only',
       segmentPagingIterator: segmentPagingIterator as never,
       textTranslator: textTranslator as never,
@@ -176,7 +176,7 @@ describe('AI translation workflows', () => {
     };
 
     const transport = {
-      chatCompletions: vi.fn().mockRejectedValue(new Error('group translation failed')),
+      createResponse: vi.fn().mockRejectedValue(new Error('group translation failed')),
     };
 
     const segmentService = {
@@ -192,8 +192,8 @@ describe('AI translation workflows', () => {
       fileId: 10,
       project: createProject(),
       apiKey: 'test-key',
-      model: 'gpt-4o',
-      temperature: 0.2,
+      model: 'gpt-5.4-mini',
+      runtimeConfig: { reasoningEffort: 'medium' },
       targetScope: 'overwrite-non-confirmed',
       transport: transport as never,
       tagValidator: new TagValidator(),

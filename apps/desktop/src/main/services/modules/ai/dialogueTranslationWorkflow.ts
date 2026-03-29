@@ -2,7 +2,7 @@ import type { Project } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
 import { serializeTokensToEditorText } from '@cat/core/tag';
 import type { AIBatchTargetScope } from '../../../../shared/ipc';
-import type { AITransport } from '../../ports';
+import type { AiModelRuntimeConfig, AITransport } from '../../ports';
 import { SegmentService } from '../../SegmentService';
 import { getAIProgressVerb } from '../ai-prompts';
 import { buildDialogueUnits, translateDialogueUnit } from './dialogueTranslation';
@@ -20,7 +20,7 @@ export interface DialogueFileTranslationParams {
   project: Project;
   apiKey: string;
   model: string;
-  temperature: number;
+  runtimeConfig: AiModelRuntimeConfig;
   targetScope: AIBatchTargetScope;
   transport: AITransport;
   tagValidator: TagValidator;
@@ -61,7 +61,7 @@ export async function runDialogueFileTranslation(
         project: params.project,
         apiKey: params.apiKey,
         model: params.model,
-        temperature: params.temperature,
+        runtimeConfig: params.runtimeConfig,
         unit,
         previousGroup,
         transport: params.transport,
@@ -101,7 +101,7 @@ export async function runDialogueFileTranslation(
               model: params.model,
               projectPrompt: params.project.aiPrompt || '',
               projectType: 'translation',
-              temperature: params.temperature,
+              runtimeConfig: params.runtimeConfig,
               srcLang: params.project.srcLang,
               tgtLang: params.project.tgtLang,
             },

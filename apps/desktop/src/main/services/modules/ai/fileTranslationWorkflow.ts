@@ -3,6 +3,7 @@ import type { Project, ProjectType } from '@cat/core/project';
 import { serializeTokensToEditorText } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { AIBatchTargetScope } from '../../../../shared/ipc';
+import type { AiModelRuntimeConfig } from '../../ports';
 import { SegmentService } from '../../SegmentService';
 import { getAIProgressVerb } from '../ai-prompts';
 import type { TranslationPromptReferences } from './types';
@@ -17,7 +18,7 @@ export interface TranslateBatchSegmentParams {
   model: string;
   projectPrompt: string;
   projectType: ProjectType;
-  temperature: number;
+  runtimeConfig: AiModelRuntimeConfig;
   srcLang: string;
   tgtLang: string;
 }
@@ -28,7 +29,7 @@ export interface StandardFileTranslationParams {
   project: Project;
   apiKey: string;
   model: string;
-  temperature: number;
+  runtimeConfig: AiModelRuntimeConfig;
   targetScope: AIBatchTargetScope;
   segmentPagingIterator: SegmentPagingIterator;
   textTranslator: AITextTranslator;
@@ -67,7 +68,7 @@ export async function translateBatchSegment(
     model: params.model,
     projectPrompt: params.projectPrompt,
     projectType: params.projectType,
-    temperature: params.temperature,
+    reasoningEffort: params.runtimeConfig.reasoningEffort,
     srcLang: params.srcLang,
     tgtLang: params.tgtLang,
     sourceTokens: params.segment.sourceTokens,
@@ -112,7 +113,7 @@ export async function runStandardFileTranslation(
           model: params.model,
           projectPrompt: params.project.aiPrompt || '',
           projectType: params.project.projectType || 'translation',
-          temperature: params.temperature,
+          runtimeConfig: params.runtimeConfig,
           srcLang: params.project.srcLang,
           tgtLang: params.project.tgtLang,
         },
