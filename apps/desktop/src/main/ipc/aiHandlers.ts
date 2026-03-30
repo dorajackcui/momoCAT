@@ -30,6 +30,37 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     projectService.clearAIKey(),
   );
 
+  registerHandle({ ipcMain, projectService, jobManager }, IPC_CHANNELS.ai.listProviders, () =>
+    projectService.listAIProviders(),
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.ai.testProvider,
+    (_event, ...args) => {
+      const [input] = args as [Parameters<typeof projectService.testAIProvider>[0]];
+      return projectService.testAIProvider(input);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.ai.addProvider,
+    (_event, ...args) => {
+      const [input] = args as [Parameters<typeof projectService.addAIProvider>[0]];
+      return projectService.addAIProvider(input);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.ai.deleteProvider,
+    (_event, ...args) => {
+      const [providerId] = args as [string];
+      return projectService.deleteAIProvider(providerId);
+    },
+  );
+
   registerHandle({ ipcMain, projectService, jobManager }, IPC_CHANNELS.ai.getProxySettings, () =>
     projectService.getProxySettings(),
   );

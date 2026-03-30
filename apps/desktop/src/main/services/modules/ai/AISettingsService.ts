@@ -69,7 +69,12 @@ export class AISettingsService {
     if (!key) {
       throw new Error('API key is not set');
     }
-    return this.transport.testConnection(key);
+    await this.transport.testConnection({
+      apiKey: key,
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-5.4-mini',
+    });
+    return { ok: true };
   }
 
   public getStoredApiKey(): string | undefined {

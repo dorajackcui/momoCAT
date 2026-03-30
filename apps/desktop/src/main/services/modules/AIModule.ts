@@ -1,9 +1,13 @@
 import { TagValidator } from '@cat/core/qa';
 import type {
+  AddAIProviderInput,
   AIBatchMode,
+  AIProviderSummary,
+  AITestProviderResult,
   AIBatchTargetScope,
   ProxySettings,
   ProxySettingsInput,
+  TestAIProviderInput,
 } from '../../../shared/ipc';
 import type {
   AIRuntimeConfigProvider,
@@ -16,6 +20,7 @@ import type { ProxySettingsApplier } from '../proxy/ProxySettingsManager';
 import { ProxySettingsManager } from '../proxy/ProxySettingsManager';
 import { SegmentService } from '../SegmentService';
 import { DefaultAIRuntimeConfigProvider } from './ai/AIRuntimeConfigService';
+import { AIProviderCatalogService } from './ai/AIProviderCatalogService';
 import { AISettingsService } from './ai/AISettingsService';
 import { AITextTranslator } from './ai/AITextTranslator';
 import { AITranslationOrchestrator } from './ai/AITranslationOrchestrator';
@@ -26,7 +31,9 @@ export class AIModule {
   private static readonly SEGMENT_PAGE_SIZE = 1000;
 
   private readonly settingsService: AISettingsService;
+  private readonly providerCatalogService: AIProviderCatalogService;
   private readonly translationOrchestrator: AITranslationOrchestrator;
+  private readonly projectRepo: ProjectRepository;
 
   constructor(
     projectRepo: ProjectRepository,
@@ -38,6 +45,7 @@ export class AIModule {
     aiRuntimeConfigProvider: AIRuntimeConfigProvider = new DefaultAIRuntimeConfigProvider(),
     promptReferenceResolvers: PromptReferenceResolvers = {},
   ) {
+    this.projectRepo = projectRepo;
     const tagValidator = new TagValidator();
     const textTranslator = new AITextTranslator(transport, tagValidator);
     const segmentPagingIterator = new SegmentPagingIterator(
@@ -46,13 +54,14 @@ export class AIModule {
     );
 
     this.settingsService = new AISettingsService(settingsRepo, transport, proxySettingsManager);
+    this.providerCatalogService = new AIProviderCatalogService(settingsRepo, transport);
     this.translationOrchestrator = new AITranslationOrchestrator(
       projectRepo,
       segmentRepo,
       segmentService,
       transport,
       aiRuntimeConfigProvider,
-      this.settingsService,
+      this.providerCatalogService,
       textTranslator,
       segmentPagingIterator,
       promptReferenceResolvers,
@@ -69,6 +78,25 @@ export class AIModule {
 
   public clearAIKey(): void {
     this.settingsService.clearAIKey();
+  }
+
+  public listAIProviders(): AIProviderSummary[] {
+    return this.providerCatalogService.listProviders();
+  }
+
+  public async testAIProvider(input: TestAIProviderInput): Promise<AITestProviderResult> {
+    return this.providerCatalogService.testProvider(input);
+  }
+
+  public addAIProvider(input: AddAIProviderInput): AIProviderSummary {
+    return this.providerCatalogService.addProvider(input);
+  }
+
+  public deleteAIProvider(providerId: string): void {
+    const isInUse = this.projectRepo
+      .listProjects()
+      .some((project) => project.aiModel === providerId);
+    this.providerCatalogService.deleteProvider(providerId, isInUse);
   }
 
   public getProxySettings(): ProxySettings {

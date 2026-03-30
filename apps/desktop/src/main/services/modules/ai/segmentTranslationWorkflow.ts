@@ -4,7 +4,7 @@ import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { AIRuntimeConfigProvider, ProjectRepository, SegmentRepository } from '../../ports';
 import { SegmentService } from '../../SegmentService';
 import { buildAIUserPrompt, buildAISystemPrompt, normalizeProjectType } from '../ai-prompts';
-import { AISettingsService } from './AISettingsService';
+import { AIProviderCatalogService } from './AIProviderCatalogService';
 import { AITextTranslator, TranslateDebugMeta } from './AITextTranslator';
 import type { TranslationPromptReferences } from './types';
 
@@ -12,7 +12,7 @@ interface SegmentWorkflowDeps {
   projectRepo: ProjectRepository;
   segmentRepo: SegmentRepository;
   segmentService: SegmentService;
-  settingsService: AISettingsService;
+  providerCatalogService: AIProviderCatalogService;
   aiRuntimeConfigProvider: AIRuntimeConfigProvider;
   textTranslator: AITextTranslator;
   resolveTranslationPromptReferences: (
@@ -45,10 +45,9 @@ export async function runSegmentTranslation(
     const project = deps.projectRepo.getProject(file.projectId);
     if (!project) throw new Error('Project not found');
 
-    const apiKey = deps.settingsService.getStoredApiKey();
-    if (!apiKey) {
-      throw new Error('AI API key is not configured');
-    }
+    const { provider, apiKey } = deps.providerCatalogService.resolveProviderConfig(
+      options?.model ?? project.aiModel,
+    );
 
     const sourceText = serializeTokensToDisplayText(segment.sourceTokens);
     if (!sourceText.trim()) {
@@ -62,8 +61,7 @@ export async function runSegmentTranslation(
     const context = segment.meta?.context ? String(segment.meta.context).trim() : '';
     const projectType = project.projectType || 'translation';
     const aiStatus: SegmentStatus = projectType === 'review' ? 'reviewed' : 'translated';
-    const model = deps.textTranslator.resolveModel(options?.model, project.aiModel);
-    const runtimeConfig = await deps.aiRuntimeConfigProvider.getModelConfig(model);
+    const runtimeConfig = await deps.aiRuntimeConfigProvider.getModelConfig(provider.model);
     const promptReferences =
       projectType === 'translation'
         ? await deps.resolveTranslationPromptReferences(file.projectId, segment)
@@ -71,7 +69,8 @@ export async function runSegmentTranslation(
 
     const targetTokens = await deps.textTranslator.translateSegment({
       apiKey,
-      model,
+      baseUrl: provider.baseUrl,
+      model: provider.model,
       projectPrompt: project.aiPrompt || '',
       projectType,
       reasoningEffort: runtimeConfig.reasoningEffort,
@@ -108,10 +107,9 @@ export async function runSegmentRefinement(
     const project = deps.projectRepo.getProject(file.projectId);
     if (!project) throw new Error('Project not found');
 
-    const apiKey = deps.settingsService.getStoredApiKey();
-    if (!apiKey) {
-      throw new Error('AI API key is not configured');
-    }
+    const { provider, apiKey } = deps.providerCatalogService.resolveProviderConfig(
+      options?.model ?? project.aiModel,
+    );
 
     const refinementInstruction = instruction.trim();
     if (!refinementInstruction) {
@@ -139,8 +137,7 @@ export async function runSegmentRefinement(
     const context = segment.meta?.context ? String(segment.meta.context).trim() : '';
     const projectType = project.projectType || 'translation';
     const aiStatus: SegmentStatus = projectType === 'review' ? 'reviewed' : 'translated';
-    const model = deps.textTranslator.resolveModel(options?.model, project.aiModel);
-    const runtimeConfig = await deps.aiRuntimeConfigProvider.getModelConfig(model);
+    const runtimeConfig = await deps.aiRuntimeConfigProvider.getModelConfig(provider.model);
     const promptReferences =
       projectType === 'translation'
         ? await deps.resolveTranslationPromptReferences(file.projectId, segment)
@@ -148,7 +145,8 @@ export async function runSegmentRefinement(
 
     const targetTokens = await deps.textTranslator.translateSegment({
       apiKey,
-      model,
+      baseUrl: provider.baseUrl,
+      model: provider.model,
       projectPrompt: project.aiPrompt || '',
       projectType,
       reasoningEffort: runtimeConfig.reasoningEffort,
@@ -176,7 +174,7 @@ export async function runTestTranslation(
   contextText: string | undefined,
   deps: Pick<
     SegmentWorkflowDeps,
-    'projectRepo' | 'settingsService' | 'aiRuntimeConfigProvider' | 'textTranslator'
+    'projectRepo' | 'providerCatalogService' | 'aiRuntimeConfigProvider' | 'textTranslator'
   >,
 ): Promise<{
   ok: boolean;
@@ -194,13 +192,8 @@ export async function runTestTranslation(
   const project = deps.projectRepo.getProject(projectId);
   if (!project) throw new Error('Project not found');
 
-  const apiKey = deps.settingsService.getStoredApiKey();
-  if (!apiKey) {
-    throw new Error('AI API key is not configured');
-  }
-
-  const model = deps.textTranslator.resolveModel(project.aiModel);
-  const runtimeConfig = await deps.aiRuntimeConfigProvider.getModelConfig(model);
+  const { provider, apiKey } = deps.providerCatalogService.resolveProviderConfig(project.aiModel);
+  const runtimeConfig = await deps.aiRuntimeConfigProvider.getModelConfig(provider.model);
   const source = sourceText.trim();
   const context = contextText?.trim() ?? '';
   const promptUsed = buildAISystemPrompt(project.projectType || 'translation', {
@@ -219,7 +212,8 @@ export async function runTestTranslation(
   try {
     const translatedText = await deps.textTranslator.translateText({
       apiKey,
-      model,
+      baseUrl: provider.baseUrl,
+      model: provider.model,
       projectPrompt: project.aiPrompt || '',
       projectType: project.projectType || 'translation',
       reasoningEffort: runtimeConfig.reasoningEffort,
@@ -271,7 +265,7 @@ export function buildSegmentWorkflowDeps(params: {
   projectRepo: ProjectRepository;
   segmentRepo: SegmentRepository;
   segmentService: SegmentService;
-  settingsService: AISettingsService;
+  providerCatalogService: AIProviderCatalogService;
   aiRuntimeConfigProvider: AIRuntimeConfigProvider;
   textTranslator: AITextTranslator;
   resolveTranslationPromptReferences: (
@@ -283,7 +277,7 @@ export function buildSegmentWorkflowDeps(params: {
     projectRepo: params.projectRepo,
     segmentRepo: params.segmentRepo,
     segmentService: params.segmentService,
-    settingsService: params.settingsService,
+    providerCatalogService: params.providerCatalogService,
     aiRuntimeConfigProvider: params.aiRuntimeConfigProvider,
     textTranslator: params.textTranslator,
     resolveTranslationPromptReferences: params.resolveTranslationPromptReferences,

@@ -2,9 +2,10 @@ import Database from 'better-sqlite3';
 import {
   DEFAULT_PROJECT_QA_SETTINGS,
   Project,
-  ProjectAIModel,
   ProjectQASettings,
   ProjectType,
+  normalizeProjectAIModel,
+  type ProjectAIModel,
 } from '@cat/core/project';
 import { randomUUID } from 'crypto';
 import type { FileSegmentStatusStats, ProjectFileRecord } from '../types';
@@ -73,6 +74,7 @@ export class ProjectRepo {
 
     return {
       ...rest,
+      aiModel: normalizeProjectAIModel(rest.aiModel),
       qaSettings,
     };
   }

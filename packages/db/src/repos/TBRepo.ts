@@ -125,7 +125,7 @@ export class TBRepo {
     const placeholders = mountedTbIds.map(() => '?').join(',');
     const limit = Math.max(1, Math.min(options?.limit ?? 200, 500));
     const ftsQuery = fragments
-      .map((fragment) => `"${this.escapeFtsFragment(fragment)}"`)
+      .map((fragment: string) => `"${this.escapeFtsFragment(fragment)}"`)
       .join(' OR ');
 
     const rows = this.db

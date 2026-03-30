@@ -19,6 +19,7 @@ export interface DialogueFileTranslationParams {
   fileId: number;
   project: Project;
   apiKey: string;
+  baseUrl: string;
   model: string;
   runtimeConfig: AiModelRuntimeConfig;
   targetScope: AIBatchTargetScope;
@@ -60,6 +61,7 @@ export async function runDialogueFileTranslation(
         projectId: params.project.id,
         project: params.project,
         apiKey: params.apiKey,
+        baseUrl: params.baseUrl,
         model: params.model,
         runtimeConfig: params.runtimeConfig,
         unit,
@@ -98,6 +100,7 @@ export async function runDialogueFileTranslation(
               projectId: params.project.id,
               segment: draft.segment,
               apiKey: params.apiKey,
+              baseUrl: params.baseUrl,
               model: params.model,
               projectPrompt: params.project.aiPrompt || '',
               projectType: 'translation',

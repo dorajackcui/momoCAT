@@ -1,5 +1,6 @@
 import type { Segment, SegmentStatus, TBMatch, TMEntry, Token } from '@cat/core/models';
 import type {
+  BuiltinOpenAIProviderId as CoreBuiltinOpenAIProviderId,
   FileQaReport,
   Project,
   ProjectAIModel as CoreProjectAIModel,
@@ -18,6 +19,7 @@ import type {
 export type TMType = DbTMType;
 export type ProjectType = CoreProjectType;
 export type ProjectAIModel = CoreProjectAIModel;
+export type BuiltinOpenAIProviderId = CoreBuiltinOpenAIProviderId;
 
 export interface ImportOptions {
   hasHeader: boolean;
@@ -116,6 +118,39 @@ export interface AISettings {
   apiKeyLast4?: string;
 }
 
+export type AIProviderKind = 'builtin' | 'custom';
+export type AIProviderProtocol = 'chat-completions';
+
+export interface AIProviderSummary {
+  id: string;
+  name: string;
+  baseUrl: string;
+  model: string;
+  protocol: AIProviderProtocol;
+  kind: AIProviderKind;
+  apiKeyLast4?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TestAIProviderInput {
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+export interface AddAIProviderInput extends TestAIProviderInput {}
+
+export interface AITestProviderResult {
+  ok: boolean;
+  error?: string;
+  status?: number;
+  endpoint?: string;
+  model?: string;
+  rawResponseText?: string;
+}
+
 export type ProxyMode = 'off' | 'system' | 'custom';
 
 export interface ProxySettings {
@@ -200,7 +235,7 @@ export interface DesktopApi {
   updateProjectAISettings: (
     projectId: number,
     aiPrompt: string | null,
-    aiModel: ProjectAIModel | null,
+    aiProviderId: ProjectAIModel | null,
   ) => Promise<void>;
   updateProjectQASettings: (projectId: number, qaSettings: ProjectQASettings) => Promise<void>;
   getProjectFiles: (projectId: number) => Promise<ProjectFileRecord[]>;
@@ -260,6 +295,10 @@ export interface DesktopApi {
   getAISettings: () => Promise<AISettings>;
   setAIKey: (apiKey: string) => Promise<void>;
   clearAIKey: () => Promise<void>;
+  listAIProviders: () => Promise<AIProviderSummary[]>;
+  testAIProvider: (input: TestAIProviderInput) => Promise<AITestProviderResult>;
+  addAIProvider: (input: AddAIProviderInput) => Promise<AIProviderSummary>;
+  deleteAIProvider: (providerId: string) => Promise<void>;
   getProxySettings: () => Promise<ProxySettings>;
   setProxySettings: (settings: ProxySettingsInput) => Promise<ProxySettings>;
   testAIConnection: (apiKey?: string) => Promise<{ ok: true }>;

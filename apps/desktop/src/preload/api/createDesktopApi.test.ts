@@ -16,6 +16,20 @@ describe('createDesktopApi smoke', () => {
     await api.listTMs();
     await api.listTBs();
     await api.getAISettings();
+    await api.listAIProviders();
+    await api.testAIProvider({
+      name: 'Demo Provider',
+      baseUrl: 'https://example.com/v1',
+      apiKey: 'secret',
+      model: 'gpt-demo',
+    });
+    await api.addAIProvider({
+      name: 'Demo Provider',
+      baseUrl: 'https://example.com/v1',
+      apiKey: 'secret',
+      model: 'gpt-demo',
+    });
+    await api.deleteAIProvider('custom:demo');
     await api.getProxySettings();
     await api.setProxySettings({ mode: 'off' });
     await api.aiTranslateSegment('seg-1');
@@ -27,6 +41,20 @@ describe('createDesktopApi smoke', () => {
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tm.list, undefined);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tb.list);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.getSettings);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.listProviders);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.testProvider, {
+      name: 'Demo Provider',
+      baseUrl: 'https://example.com/v1',
+      apiKey: 'secret',
+      model: 'gpt-demo',
+    });
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.addProvider, {
+      name: 'Demo Provider',
+      baseUrl: 'https://example.com/v1',
+      apiKey: 'secret',
+      model: 'gpt-demo',
+    });
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.deleteProvider, 'custom:demo');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.getProxySettings);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.setProxySettings, { mode: 'off' });
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.translateSegment, 'seg-1');

@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ProjectAIModel, ProjectType } from '@cat/core/project';
-import type { AIBatchMode, AIBatchTargetScope, JobProgressEvent } from '../../../../../shared/ipc';
+import type { Project, ProjectAIModel, ProjectType } from '@cat/core/project';
+import type {
+  AIBatchMode,
+  AIBatchTargetScope,
+  AIProviderSummary,
+  JobProgressEvent,
+} from '../../../../../shared/ipc';
 import { apiClient } from '../../../services/apiClient';
+import { AI_PROVIDERS_CHANGED_EVENT } from '../../../services/aiProviderEvents';
 import { feedbackService } from '../../../services/feedbackService';
 import {
   DEFAULT_PROJECT_AI_MODEL,
   buildAITestMeta,
   deriveProjectAIFlags,
-  normalizeProjectAIModel,
+  normalizeProjectAIProviderSelection,
 } from './aiSettingsHelpers';
 import { upsertTrackedJobFromProgress, upsertTrackedJobOnStart } from './aiJobTracker';
 import type {
@@ -69,6 +75,7 @@ export function useProjectAI({
 }: UseProjectAIParams): ProjectAIController {
   const [promptDraft, setPromptDraft] = useState('');
   const [savedPromptValue, setSavedPromptValue] = useState('');
+  const [providerOptions, setProviderOptions] = useState<AIProviderSummary[]>([]);
   const [modelDraft, setModelDraft] = useState<ProjectAIModel>(DEFAULT_PROJECT_AI_MODEL);
   const [savedModelValue, setSavedModelValue] = useState<ProjectAIModel>(DEFAULT_PROJECT_AI_MODEL);
   const [promptSavedAt, setPromptSavedAt] = useState<string | null>(null);
@@ -85,16 +92,34 @@ export function useProjectAI({
   const [aiJobs, setAiJobs] = useState<Record<string, TrackedAIJob>>({});
   const [fileJobIndex, setFileJobIndex] = useState<Record<number, string>>({});
 
+  const loadProviders = useCallback(async () => {
+    try {
+      const providers = await apiClient.listAIProviders();
+      setProviderOptions(providers);
+    } catch {
+      setProviderOptions([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadProviders();
+    const handleProvidersChanged = () => {
+      void loadProviders();
+    };
+    window.addEventListener(AI_PROVIDERS_CHANGED_EVENT, handleProvidersChanged);
+    return () => window.removeEventListener(AI_PROVIDERS_CHANGED_EVENT, handleProvidersChanged);
+  }, [loadProviders]);
+
   useEffect(() => {
     if (!project) return;
     const promptValue = project.aiPrompt || '';
-    const modelValue = normalizeProjectAIModel(project.aiModel);
+    const modelValue = normalizeProjectAIProviderSelection(project.aiModel, providerOptions);
 
     setPromptDraft(promptValue);
     setSavedPromptValue(promptValue);
     setModelDraft(modelValue);
     setSavedModelValue(modelValue);
-  }, [project]);
+  }, [project, providerOptions]);
 
   useEffect(() => {
     const unsubscribe = apiClient.onJobProgress((progress: JobProgressEvent) => {
@@ -143,7 +168,7 @@ export function useProjectAI({
       await runMutation(async () => {
         const promptValue = normalizedPromptDraft.length > 0 ? normalizedPromptDraft : null;
         await apiClient.updateProjectAISettings(project.id, promptValue, modelDraft);
-        setProject((prev) => {
+        setProject((prev: Project | null) => {
           if (!prev) return prev;
           return {
             ...prev,
@@ -259,6 +284,7 @@ export function useProjectAI({
 
   return useMemo(
     () => ({
+      providerOptions,
       modelDraft,
       setModelDraft,
       promptDraft,
@@ -288,6 +314,7 @@ export function useProjectAI({
       getFileJob,
       hasTestDetails,
       hasUnsavedPromptChanges,
+      providerOptions,
       modelDraft,
       promptDraft,
       promptSavedAt,

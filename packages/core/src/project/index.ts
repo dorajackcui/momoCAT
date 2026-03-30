@@ -1,10 +1,16 @@
 import type { QaSeverity } from '../models';
 export {
+  BUILTIN_OPENAI_PROVIDER_MODELS,
   DEFAULT_PROJECT_AI_MODEL,
+  getBuiltinOpenAIProviderModel,
+  isBuiltinProjectAIModel,
+  isLegacyProjectAIModel,
   PROJECT_AI_MODELS,
   PROJECT_AI_MODEL_SET,
   isProjectAIModel,
   normalizeProjectAIModel,
+  toBuiltinProviderId,
+  type BuiltinOpenAIProviderId,
   type ProjectAIModel,
 } from './aiModelRegistry';
 import type { ProjectAIModel } from './aiModelRegistry';

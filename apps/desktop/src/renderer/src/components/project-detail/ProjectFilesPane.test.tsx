@@ -37,7 +37,20 @@ function createAIControllerMock(overrides?: Partial<ProjectAIController>): {
 } {
   const startAITranslateFile = vi.fn().mockResolvedValue(undefined);
   const ai = {
-    modelDraft: 'gpt-5.4-mini',
+    providerOptions: [
+      {
+        id: 'builtin:openai:gpt-5.4-mini',
+        name: 'OpenAI / gpt-5.4-mini',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-5.4-mini',
+        protocol: 'chat-completions',
+        kind: 'builtin',
+        apiKeyLast4: '1234',
+        createdAt: '1970-01-01T00:00:00.000Z',
+        updatedAt: '1970-01-01T00:00:00.000Z',
+      },
+    ],
+    modelDraft: 'builtin:openai:gpt-5.4-mini',
     setModelDraft: vi.fn(),
     promptDraft: '',
     setPromptDraft: vi.fn(),

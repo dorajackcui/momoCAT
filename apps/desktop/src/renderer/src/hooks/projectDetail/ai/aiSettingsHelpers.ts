@@ -2,11 +2,22 @@ import {
   DEFAULT_PROJECT_AI_MODEL,
   normalizeProjectAIModel as normalizeProjectAIModelCore,
 } from '@cat/core/project';
+import type { AIProviderSummary } from '../../../../../shared/ipc';
 import type { AITestMetaInput, ProjectAIFlags, ProjectAIFlagsInput } from './types';
 
 export { DEFAULT_PROJECT_AI_MODEL };
 
 export const normalizeProjectAIModel = normalizeProjectAIModelCore;
+
+export function normalizeProjectAIProviderSelection(
+  value: string | null | undefined,
+  providers: AIProviderSummary[],
+): string {
+  const normalized = normalizeProjectAIModelCore(value);
+  return providers.some((provider) => provider.id === normalized)
+    ? normalized
+    : DEFAULT_PROJECT_AI_MODEL;
+}
 
 export function deriveProjectAIFlags(input: ProjectAIFlagsInput): ProjectAIFlags {
   const normalizedPromptDraft = input.promptDraft.trim();

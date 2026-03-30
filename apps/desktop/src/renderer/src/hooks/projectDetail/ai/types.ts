@@ -1,6 +1,11 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type { Project, ProjectAIModel } from '@cat/core/project';
-import type { AIBatchMode, AIBatchTargetScope, JobProgressEvent } from '../../../../../shared/ipc';
+import type {
+  AIBatchMode,
+  AIBatchTargetScope,
+  AIProviderSummary,
+  JobProgressEvent,
+} from '../../../../../shared/ipc';
 
 export interface ProjectAIFlagsInput {
   promptDraft: string;
@@ -39,6 +44,7 @@ export interface StartAITranslateFileOptions {
 }
 
 export interface ProjectAIController {
+  providerOptions: AIProviderSummary[];
   modelDraft: ProjectAIModel;
   setModelDraft: Dispatch<SetStateAction<ProjectAIModel>>;
   promptDraft: string;

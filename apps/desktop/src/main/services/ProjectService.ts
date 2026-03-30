@@ -17,7 +17,7 @@ import {
   SpreadsheetGateway,
   SpreadsheetPreviewData,
 } from './ports';
-import { OpenAITransport } from './providers/OpenAITransport';
+import { AIProviderTransport } from './providers/AIProviderTransport';
 import { ProjectFileModule } from './modules/ProjectFileModule';
 import { TMModule } from './modules/TMModule';
 import { TBModule } from './modules/TBModule';
@@ -30,12 +30,16 @@ import { SqliteSettingsRepository } from './adapters/SqliteSettingsRepository';
 import { SqliteTransactionManager } from './adapters/SqliteTransactionManager';
 import { ProxySettingsManager } from './proxy/ProxySettingsManager';
 import type {
+  AddAIProviderInput,
   AIBatchMode,
+  AIProviderSummary,
+  AITestProviderResult,
   AIBatchTargetScope,
   ImportOptions,
   ProxySettings,
   ProxySettingsInput,
   TBImportOptions,
+  TestAIProviderInput,
   TMImportOptions,
 } from '../../shared/ipc';
 
@@ -114,7 +118,7 @@ export class ProjectService {
       );
     this.tbModule = deps.tbModule ?? new TBModule(tbRepo, tx, tbService, emitProgress);
 
-    const aiTransport = deps.aiTransport ?? new OpenAITransport();
+    const aiTransport = deps.aiTransport ?? new AIProviderTransport();
     const aiRuntimeConfigProvider = deps.aiRuntimeConfigProvider;
     this.aiModule =
       deps.aiModule ??
@@ -176,9 +180,9 @@ export class ProjectService {
   public updateProjectAISettings(
     projectId: number,
     aiPrompt: string | null,
-    aiModel: ProjectAIModel | null,
+    aiProviderId: ProjectAIModel | null,
   ) {
-    this.projectModule.updateProjectAISettings(projectId, aiPrompt, aiModel);
+    this.projectModule.updateProjectAISettings(projectId, aiPrompt, aiProviderId);
   }
 
   public updateProjectQASettings(projectId: number, qaSettings: ProjectQASettings) {
@@ -360,6 +364,22 @@ export class ProjectService {
 
   public clearAIKey() {
     return this.aiModule.clearAIKey();
+  }
+
+  public listAIProviders(): AIProviderSummary[] {
+    return this.aiModule.listAIProviders();
+  }
+
+  public async testAIProvider(input: TestAIProviderInput): Promise<AITestProviderResult> {
+    return this.aiModule.testAIProvider(input);
+  }
+
+  public addAIProvider(input: AddAIProviderInput): AIProviderSummary {
+    return this.aiModule.addAIProvider(input);
+  }
+
+  public deleteAIProvider(providerId: string) {
+    return this.aiModule.deleteAIProvider(providerId);
   }
 
   public getProxySettings(): ProxySettings {

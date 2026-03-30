@@ -134,7 +134,7 @@ export interface AiModelRuntimeConfig {
 }
 
 export interface AIRuntimeConfigProvider {
-  getModelConfig(model: ProjectAIModel): Promise<AiModelRuntimeConfig>;
+  getModelConfig(model: string): Promise<AiModelRuntimeConfig>;
 }
 
 export interface TransactionManager {
@@ -178,9 +178,19 @@ export interface SegmentsUpdatedPayload {
 export type ProgressEmitter = (payload: ProgressPayload) => void;
 
 export interface AITransport {
-  testConnection(apiKey: string): Promise<{ ok: true }>;
+  testConnection(params: {
+    apiKey: string;
+    baseUrl: string;
+    model: string;
+  }): Promise<{
+    ok: true;
+    status: number;
+    endpoint: string;
+    rawResponseText?: string;
+  }>;
   createResponse(params: {
     apiKey: string;
+    baseUrl: string;
     model: string;
     reasoningEffort: ReasoningEffort;
     systemPrompt: string;

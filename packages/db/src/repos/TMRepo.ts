@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import type { TMEntry } from '@cat/core/models';
+import type { TMEntry, Token } from '@cat/core/models';
 import { randomUUID } from 'crypto';
 import type { MountedTMRecord, TMEntryRow, TMRecord, TMType } from '../types';
 
@@ -77,8 +77,8 @@ export class TMRepo {
       entry.usageCount
     );
 
-    const srcText = entry.sourceTokens.map((token) => token.content).join('');
-    const tgtText = entry.targetTokens.map((token) => token.content).join('');
+    const srcText = entry.sourceTokens.map((token: Token) => token.content).join('');
+    const tgtText = entry.targetTokens.map((token: Token) => token.content).join('');
 
     this.stmtDeleteTMFtsByEntryId.run(entry.id);
     this.stmtInsertTMFts.run(entry.tmId, srcText, tgtText, entry.id);

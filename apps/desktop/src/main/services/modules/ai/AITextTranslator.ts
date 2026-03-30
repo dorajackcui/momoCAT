@@ -1,9 +1,4 @@
-import {
-  DEFAULT_PROJECT_AI_MODEL,
-  isProjectAIModel,
-  type ProjectAIModel,
-  type ProjectType,
-} from '@cat/core/project';
+import { type ProjectType } from '@cat/core/project';
 import type { Token } from '@cat/core/models';
 import { TagValidator } from '@cat/core/qa';
 import { parseEditorTextToTokens } from '@cat/core/tag';
@@ -22,6 +17,7 @@ export interface TranslateDebugMeta {
 
 export interface TranslateSegmentParams {
   apiKey: string;
+  baseUrl: string;
   model: string;
   projectPrompt?: string;
   projectType?: ProjectType;
@@ -40,6 +36,7 @@ export interface TranslateSegmentParams {
 
 interface TranslateTextParams {
   apiKey: string;
+  baseUrl: string;
   model: string;
   projectPrompt?: string;
   projectType?: ProjectType;
@@ -64,18 +61,6 @@ export class AITextTranslator {
     private readonly tagValidator: TagValidator,
   ) {}
 
-  public resolveModel(model?: string | null, projectModel?: ProjectAIModel | null): ProjectAIModel {
-    if (isProjectAIModel(model)) {
-      return model;
-    }
-
-    if (isProjectAIModel(projectModel)) {
-      return projectModel;
-    }
-
-    return DEFAULT_PROJECT_AI_MODEL;
-  }
-
   public async translateSegment(params: TranslateSegmentParams): Promise<Token[]> {
     const maxAttempts = 3;
     let validationFeedback: string | undefined;
@@ -84,6 +69,7 @@ export class AITextTranslator {
       const normalizedType = normalizeProjectType(params.projectType);
       const translatedText = await this.translateText({
         apiKey: params.apiKey,
+        baseUrl: params.baseUrl,
         model: params.model,
         projectPrompt: params.projectPrompt,
         projectType: normalizedType,
@@ -160,6 +146,7 @@ export class AITextTranslator {
 
     const response = await this.transport.createResponse({
       apiKey: params.apiKey,
+      baseUrl: params.baseUrl,
       model: params.model,
       reasoningEffort: params.reasoningEffort ?? 'medium',
       systemPrompt,
@@ -176,7 +163,7 @@ export class AITextTranslator {
 
     const trimmed = response.content.trim();
     if (!trimmed) {
-      throw new Error('OpenAI response was empty');
+      throw new Error('AI provider response was empty');
     }
 
     const unchangedAgainstSource = trimmed === params.sourceText.trim();

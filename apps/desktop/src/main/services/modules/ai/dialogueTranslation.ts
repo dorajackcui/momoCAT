@@ -25,6 +25,7 @@ interface TranslateDialogueUnitParams {
   projectId: number;
   project: Project;
   apiKey: string;
+  baseUrl: string;
   model: string;
   runtimeConfig: AiModelRuntimeConfig;
   unit: DialogueTranslationUnit;
@@ -141,6 +142,7 @@ export async function translateDialogueUnit(
 
     const response = await params.transport.createResponse({
       apiKey: params.apiKey,
+      baseUrl: params.baseUrl,
       model: params.model,
       reasoningEffort: params.runtimeConfig.reasoningEffort,
       systemPrompt,
@@ -148,7 +150,7 @@ export async function translateDialogueUnit(
     });
     const content = response.content.trim();
     if (!content) {
-      throw new Error('OpenAI response was empty');
+      throw new Error('AI provider response was empty');
     }
 
     try {

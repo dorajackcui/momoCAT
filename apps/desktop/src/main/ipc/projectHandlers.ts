@@ -1,4 +1,4 @@
-import type { ProjectAIModel, ProjectQASettings, ProjectType } from '@cat/core/project';
+import type { ProjectQASettings, ProjectType } from '@cat/core/project';
 import type { SegmentStatus, Token } from '@cat/core/models';
 import type { ImportOptions } from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
@@ -46,8 +46,8 @@ export function registerProjectHandlers({ ipcMain, projectService }: MainHandler
     { ipcMain, projectService },
     IPC_CHANNELS.project.updateAISettings,
     (_event, ...args) => {
-      const [projectId, aiPrompt, aiModel] = args as [number, string | null, ProjectAIModel | null];
-      return projectService.updateProjectAISettings(projectId, aiPrompt, aiModel);
+      const [projectId, aiPrompt, aiProviderId] = args as [number, string | null, string | null];
+      return projectService.updateProjectAISettings(projectId, aiPrompt, aiProviderId);
     },
   );
 

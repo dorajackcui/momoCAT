@@ -16,8 +16,8 @@ describe('useProjectAI behavior helpers', () => {
     const clean = deriveProjectAIFlags({
       promptDraft: '  Keep style  ',
       savedPromptValue: 'Keep style',
-      modelDraft: 'gpt-5.4-mini',
-      savedModelValue: 'gpt-5.4-mini',
+      modelDraft: 'builtin:openai:gpt-5.4-mini',
+      savedModelValue: 'builtin:openai:gpt-5.4-mini',
       testMeta: null,
       testUserMessage: null,
       testPromptUsed: null,
@@ -28,8 +28,8 @@ describe('useProjectAI behavior helpers', () => {
     const dirty = deriveProjectAIFlags({
       promptDraft: 'Keep style updated',
       savedPromptValue: 'Keep style',
-      modelDraft: 'gpt-5.4-mini',
-      savedModelValue: 'gpt-5.4-mini',
+      modelDraft: 'builtin:openai:gpt-5.4-mini',
+      savedModelValue: 'builtin:openai:gpt-5.4-mini',
       testMeta: null,
       testUserMessage: null,
       testPromptUsed: null,
@@ -42,8 +42,8 @@ describe('useProjectAI behavior helpers', () => {
     const flags = deriveProjectAIFlags({
       promptDraft: 'prompt',
       savedPromptValue: 'prompt',
-      modelDraft: 'gpt-5.4-mini',
-      savedModelValue: 'gpt-5.4-mini',
+      modelDraft: 'builtin:openai:gpt-5.4-mini',
+      savedModelValue: 'builtin:openai:gpt-5.4-mini',
       testMeta: null,
       testUserMessage: 'message',
       testPromptUsed: null,
@@ -58,8 +58,8 @@ describe('useProjectAI behavior helpers', () => {
     const flags = deriveProjectAIFlags({
       promptDraft: 'prompt',
       savedPromptValue: 'prompt',
-      modelDraft: 'gpt-5',
-      savedModelValue: 'gpt-5.4-mini',
+      modelDraft: 'builtin:openai:gpt-5',
+      savedModelValue: 'builtin:openai:gpt-5.4-mini',
       testMeta: null,
       testUserMessage: null,
       testPromptUsed: null,
@@ -74,19 +74,19 @@ describe('useProjectAI behavior helpers', () => {
       status: 200,
       requestId: 'req_123',
       model: 'gpt-5-mini',
-      endpoint: '/v1/responses',
+      endpoint: '/v1/chat/completions',
       ok: false,
     });
 
     expect(meta).toBe(
-      'status: 200 • requestId: req_123 • model: gpt-5-mini • endpoint: /v1/responses • ok: false',
+      'status: 200 • requestId: req_123 • model: gpt-5-mini • endpoint: /v1/chat/completions • ok: false',
     );
   });
 
-  it('normalizes unsupported project ai model to default', () => {
-    expect(normalizeProjectAIModel('gpt-5-mini')).toBe('gpt-5-mini');
-    expect(normalizeProjectAIModel('gpt-unknown')).toBe('gpt-5.4-mini');
-    expect(normalizeProjectAIModel(null)).toBe('gpt-5.4-mini');
+  it('normalizes legacy project ai values and preserves custom provider ids', () => {
+    expect(normalizeProjectAIModel('gpt-5-mini')).toBe('builtin:openai:gpt-5-mini');
+    expect(normalizeProjectAIModel('custom:provider:demo')).toBe('custom:provider:demo');
+    expect(normalizeProjectAIModel(null)).toBe('builtin:openai:gpt-5.4-mini');
   });
 
   it('upserts unknown job progress with fallback file id', () => {

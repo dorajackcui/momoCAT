@@ -1,4 +1,3 @@
-import { PROJECT_AI_MODELS } from '@cat/core/project';
 import type { ProjectType } from '@cat/core/project';
 import { ProjectAIController } from '../../hooks/projectDetail/useProjectAI';
 import { Badge, Button, Card, Input, Notice, Select, Textarea } from '../ui';
@@ -46,13 +45,14 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
           Model
         </label>
         <Select
+          aria-label="AI Provider"
           value={ai.modelDraft}
           onChange={(event) => ai.setModelDraft(event.target.value as typeof ai.modelDraft)}
           className="w-52"
         >
-          {PROJECT_AI_MODELS.map((model) => (
-            <option key={model} value={model}>
-              {model}
+          {ai.providerOptions.map((provider) => (
+            <option key={provider.id} value={provider.id}>
+              {provider.name}
             </option>
           ))}
         </Select>
@@ -189,9 +189,9 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
             )}
             {ai.testRawResponse && (
               <div className="mt-2">
-                <div className="text-[10px] font-bold text-text-faint uppercase tracking-wider mb-1">
-                  Raw OpenAI Response
-                </div>
+                  <div className="text-[10px] font-bold text-text-faint uppercase tracking-wider mb-1">
+                  Raw Provider Response
+                  </div>
                 <Card
                   variant="surface"
                   className="text-[10px] text-text-muted px-3 py-2 whitespace-pre-wrap max-h-40 overflow-auto"

@@ -15,6 +15,7 @@ export interface TranslateBatchSegmentParams {
   projectId: number;
   segment: Segment;
   apiKey: string;
+  baseUrl: string;
   model: string;
   projectPrompt: string;
   projectType: ProjectType;
@@ -28,6 +29,7 @@ export interface StandardFileTranslationParams {
   projectId: number;
   project: Project;
   apiKey: string;
+  baseUrl: string;
   model: string;
   runtimeConfig: AiModelRuntimeConfig;
   targetScope: AIBatchTargetScope;
@@ -65,6 +67,7 @@ export async function translateBatchSegment(
 
   return deps.textTranslator.translateSegment({
     apiKey: params.apiKey,
+    baseUrl: params.baseUrl,
     model: params.model,
     projectPrompt: params.projectPrompt,
     projectType: params.projectType,
@@ -110,6 +113,7 @@ export async function runStandardFileTranslation(
           projectId: params.projectId,
           segment,
           apiKey: params.apiKey,
+          baseUrl: params.baseUrl,
           model: params.model,
           projectPrompt: params.project.aiPrompt || '',
           projectType: params.project.projectType || 'translation',

@@ -9,7 +9,7 @@ import type {
 import { SegmentService } from '../../SegmentService';
 import { resolveTranslationPromptReferences } from './promptReferences';
 import type { PromptReferenceResolvers, TranslationPromptReferences } from './types';
-import { AISettingsService } from './AISettingsService';
+import { AIProviderCatalogService } from './AIProviderCatalogService';
 import { AITextTranslator } from './AITextTranslator';
 import { SegmentPagingIterator } from './SegmentPagingIterator';
 import { resolveBatchTargetScope } from './translationTargetScope';
@@ -43,7 +43,7 @@ export class AITranslationOrchestrator {
     private readonly segmentService: SegmentService,
     private readonly transport: AITransport,
     private readonly aiRuntimeConfigProvider: AIRuntimeConfigProvider,
-    private readonly settingsService: AISettingsService,
+    private readonly providerCatalogService: AIProviderCatalogService,
     private readonly textTranslator: AITextTranslator,
     private readonly segmentPagingIterator: SegmentPagingIterator,
     private readonly promptReferenceResolvers: PromptReferenceResolvers = {},
@@ -59,13 +59,10 @@ export class AITranslationOrchestrator {
     const project = this.projectRepo.getProject(file.projectId);
     if (!project) throw new Error('Project not found');
 
-    const apiKey = this.settingsService.getStoredApiKey();
-    if (!apiKey) {
-      throw new Error('AI API key is not configured');
-    }
-
-    const model = this.textTranslator.resolveModel(options?.model, project.aiModel);
-    const runtimeConfig = await this.aiRuntimeConfigProvider.getModelConfig(model);
+    const { provider, apiKey } = this.providerCatalogService.resolveProviderConfig(
+      options?.model ?? project.aiModel,
+    );
+    const runtimeConfig = await this.aiRuntimeConfigProvider.getModelConfig(provider.model);
     const targetScope = resolveBatchTargetScope(options?.targetScope);
 
     if ((project.projectType || 'translation') === 'translation' && options?.mode === 'dialogue') {
@@ -73,7 +70,8 @@ export class AITranslationOrchestrator {
         fileId,
         project,
         apiKey,
-        model,
+        baseUrl: provider.baseUrl,
+        model: provider.model,
         runtimeConfig,
         targetScope,
         transport: this.transport,
@@ -93,7 +91,8 @@ export class AITranslationOrchestrator {
       projectId: file.projectId,
       project,
       apiKey,
-      model,
+      baseUrl: provider.baseUrl,
+      model: provider.model,
       runtimeConfig,
       targetScope,
       segmentPagingIterator: this.segmentPagingIterator,
@@ -139,7 +138,7 @@ export class AITranslationOrchestrator {
   public async aiTestTranslate(projectId: number, sourceText: string, contextText?: string) {
     return runTestTranslation(projectId, sourceText, contextText, {
       projectRepo: this.projectRepo,
-      settingsService: this.settingsService,
+      providerCatalogService: this.providerCatalogService,
       aiRuntimeConfigProvider: this.aiRuntimeConfigProvider,
       textTranslator: this.textTranslator,
     });
@@ -150,7 +149,7 @@ export class AITranslationOrchestrator {
       projectRepo: this.projectRepo,
       segmentRepo: this.segmentRepo,
       segmentService: this.segmentService,
-      settingsService: this.settingsService,
+      providerCatalogService: this.providerCatalogService,
       aiRuntimeConfigProvider: this.aiRuntimeConfigProvider,
       textTranslator: this.textTranslator,
       resolveTranslationPromptReferences: (projectId, segment) =>
