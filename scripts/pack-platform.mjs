@@ -3,6 +3,13 @@
 import { spawnSync } from 'node:child_process';
 import process from 'node:process';
 
+function spawnCommandSync(command, args, options = {}) {
+  return spawnSync(command, args, {
+    ...options,
+    shell: process.platform === 'win32'
+  });
+}
+
 function usage() {
   console.log(`Usage:
   node scripts/pack-platform.mjs --platform <win|mac> [--dry-run]
@@ -76,7 +83,7 @@ function main() {
     return;
   }
 
-  const result = spawnSync(npmCmd, npmArgs, {
+  const result = spawnCommandSync(npmCmd, npmArgs, {
     stdio: 'inherit'
   });
 

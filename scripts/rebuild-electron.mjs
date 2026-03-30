@@ -3,6 +3,13 @@
 import { spawnSync } from 'node:child_process';
 import process from 'node:process';
 
+function spawnCommandSync(command, args, options = {}) {
+  return spawnSync(command, args, {
+    ...options,
+    shell: process.platform === 'win32'
+  });
+}
+
 const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const args = ['electron-rebuild', '-v', '28.3.3', '-f', '-w', 'better-sqlite3', ...process.argv.slice(2)];
 const cwd = process.cwd();
@@ -12,7 +19,7 @@ if (process.platform === 'win32' && !env.USERPROFILE) {
   env.USERPROFILE = cwd;
 }
 
-const result = spawnSync(npxCmd, args, {
+const result = spawnCommandSync(npxCmd, args, {
   cwd,
   env,
   stdio: 'inherit'

@@ -45,6 +45,10 @@ Package validation by target OS:
 1. Windows: `npm run pack:win`
 2. macOS: `npm run pack:mac`
 
+Windows note:
+
+- Packaging and Electron rebuild scripts invoke `npm`/`npx` through the Windows shell to avoid `.cmd` spawn failures such as `spawnSync npm.cmd EINVAL` in some PowerShell/Volta setups.
+
 ## Platform Command Matrix
 
 Run from repo root `simple-cat-tool`.

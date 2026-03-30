@@ -187,6 +187,7 @@ Desktop validation entrypoint:
 1. Verify Node/npm versions match `package.json` `volta` pins.
 2. Run `npm run rebuild:electron` to rebind native module ABI.
 3. Confirm platform-native packaging command (`pack:win` or `pack:mac`) is used.
+4. On Windows, repo scripts intentionally launch `npm`/`npx` through the shell because direct `.cmd` spawning can fail with `spawnSync ... EINVAL` in some PowerShell/Volta environments.
 
 ### Desktop e2e/smoke issues
 
