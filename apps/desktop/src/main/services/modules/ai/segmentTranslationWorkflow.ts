@@ -68,6 +68,7 @@ export async function runSegmentTranslation(
         : {};
 
     const targetTokens = await deps.textTranslator.translateSegment({
+      segmentId: segment.segmentId,
       apiKey,
       baseUrl: provider.baseUrl,
       model: provider.model,
@@ -144,6 +145,7 @@ export async function runSegmentRefinement(
         : {};
 
     const targetTokens = await deps.textTranslator.translateSegment({
+      segmentId: segment.segmentId,
       apiKey,
       baseUrl: provider.baseUrl,
       model: provider.model,
@@ -223,6 +225,7 @@ export async function runTestTranslation(
       context,
       debug,
       allowUnchanged: true,
+      promptDebugFlow: 'test',
     });
 
     const unchanged =

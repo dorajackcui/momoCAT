@@ -127,18 +127,18 @@ describe('TMService.findMatches', () => {
   });
 
   it('matches near-identical CJK sentence when one character differs at the beginning', async () => {
-    const source = '老三是怎么成为遗忘者聚落的领袖的？';
+    const source = '乙组是怎么成为临时项目的负责人的？';
     const service = createService({
       mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
       concordanceEntries: [
         createConcordanceEntry('tm-main', {
           srcHash: 'near-hash',
-          sourceText: '老大是怎么成为遗忘者聚落的领袖的？',
+          sourceText: '甲组是怎么成为临时项目的负责人的？',
           usageCount: 1,
         }),
         createConcordanceEntry('tm-main', {
           srcHash: 'noise-hash',
-          sourceText: '今天遗忘者聚落天气怎么样？',
+          sourceText: '今天临时项目进度怎么样？',
           usageCount: 20,
         }),
       ],
@@ -156,18 +156,18 @@ describe('TMService.findMatches', () => {
   });
 
   it('matches near-identical CJK sentence when pronoun differs at tail position', async () => {
-    const source = '小绵菊从种下到长大是需要时间的，没关系，我等你们！';
+    const source = '这份样本从录入到完成是需要时间的，没关系，我等你们！';
     const service = createService({
       mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
       concordanceEntries: [
         createConcordanceEntry('tm-main', {
           srcHash: 'near-hash',
-          sourceText: '小绵菊从种下到长大是需要时间的，没关系，我等你！',
+          sourceText: '这份样本从录入到完成是需要时间的，没关系，我等你！',
           usageCount: 1,
         }),
         createConcordanceEntry('tm-main', {
           srcHash: 'noise-hash',
-          sourceText: '没关系，我们有办法。',
+          sourceText: '没关系，我们还有其他方案。',
           usageCount: 10,
         }),
       ],

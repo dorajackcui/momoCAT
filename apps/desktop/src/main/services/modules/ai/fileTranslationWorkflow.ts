@@ -66,6 +66,7 @@ export async function translateBatchSegment(
       : {};
 
   return deps.textTranslator.translateSegment({
+    segmentId: params.segment.segmentId,
     apiKey: params.apiKey,
     baseUrl: params.baseUrl,
     model: params.model,

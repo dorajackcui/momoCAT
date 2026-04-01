@@ -34,7 +34,7 @@ export class TBService {
       searchEntries.length > 0
         ? fullEntries.filter(
             (entry) =>
-              entry.srcNorm.length < 3 &&
+              entry.srcNorm.length <= 3 &&
               !searchEntries.some((candidate) => candidate.id === entry.id),
           )
         : [];

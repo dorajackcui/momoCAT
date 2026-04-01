@@ -334,4 +334,47 @@ describe('TBService', () => {
       expect.arrayContaining(['设置页面', '设置']),
     );
   });
+  it('supplements FTS candidates with 3-character Chinese terms from the full mounted scan', async () => {
+    const entries = [
+      {
+        id: 'tb-name',
+        tbId: 'tb-name-base',
+        srcTerm: '示例项',
+        tgtTerm: 'Generic Name',
+        srcNorm: '示例项',
+        note: null,
+        createdAt: '',
+        updatedAt: '',
+        usageCount: 1,
+        tbName: 'Name TB',
+        priority: 2,
+      },
+    ];
+    const service = createServiceWithEntries(entries, {
+      srcLang: 'zh-CN',
+      searchEntries: [
+        {
+          id: 'tb-title',
+          tbId: 'tb-title-base',
+          srcTerm: '通用标题',
+          tgtTerm: 'Generic Title',
+          srcNorm: '通用标题',
+          note: null,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 1,
+          tbName: 'Title TB',
+          priority: 1,
+        },
+      ],
+    });
+
+    const matches = await service.findMatches(
+      1,
+      buildSegment('完成任务后可获得限定称号【示例项·通用标题】'),
+    );
+    expect(matches.map((match) => match.srcTerm)).toEqual(
+      expect.arrayContaining(['示例项', '通用标题']),
+    );
+  });
 });

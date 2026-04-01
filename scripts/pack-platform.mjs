@@ -73,7 +73,7 @@ function main() {
   }
 
   const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const npmArgs = ['run', 'pack', '--workspace=apps/desktop'];
+  const npmArgs = ['run', 'pack'];
   if (passThroughArgs.length > 0) {
     npmArgs.push('--', ...passThroughArgs);
   }

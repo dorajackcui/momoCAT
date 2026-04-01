@@ -51,6 +51,7 @@ Packaging boundary:
 1. `npm run pack:win` must run on Windows only.
 2. `npm run pack:mac` must run on macOS only.
 3. Do not rely on cross-platform packaging for release signoff.
+4. Use the repo packaging entrypoints instead of calling `electron-builder` directly so native rebuild + renderer build happen before packaging.
 
 Desktop validation commands:
 

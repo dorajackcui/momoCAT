@@ -48,6 +48,8 @@ Package validation by target OS:
 Windows note:
 
 - Packaging and Electron rebuild scripts invoke `npm`/`npx` through the Windows shell to avoid `.cmd` spawn failures such as `spawnSync npm.cmd EINVAL` in some PowerShell/Volta setups.
+- Packaging entrypoints rebuild native modules and refresh the production renderer bundle before `electron-builder` runs, so release validation does not rely on stale `out/` artifacts.
+- To print AI `systemPrompt` and `userPrompt` in the main-process console during development, set `CAT_AI_DEBUG_PROMPTS=1` before `npm run dev`, or add it to `apps/desktop/proxy.env` / `.cat_data/proxy.env`. Leave it unset for normal work.
 
 ## Platform Command Matrix
 

@@ -566,7 +566,7 @@ describe("CATDatabase", () => {
           srcHash: `noise-hash-${i}`,
           matchKey: `noise-${i}`,
           tagsSignature: "",
-          sourceTokens: [{ type: "text", content: `没关系，这是一条噪声语料 ${i}` }],
+          sourceTokens: [{ type: "text", content: `这是一个无关样本 ${i}` }],
           targetTokens: [{ type: "text", content: `Bruit ${i}` }],
           usageCount: 1,
         } as any);
@@ -581,7 +581,7 @@ describe("CATDatabase", () => {
         sourceTokens: [
           {
             type: "text",
-            content: "小绵菊从种下到长大是需要时间的，没关系，我等你！",
+            content: "这份样本从录入到完成是需要时间的，没关系，我等你！",
           },
         ],
         targetTokens: [
@@ -596,7 +596,7 @@ describe("CATDatabase", () => {
 
       const results = db.searchConcordance(
         projectId,
-        "小绵菊从种下到长大是需要时间的 OR 没关系 OR 我等你们",
+        "这份样本从录入到完成是需要时间的 OR 没关系 OR 我等你们",
       );
       expect(results).toHaveLength(10);
       expect(results[0].srcHash).toBe("target-hash");
@@ -614,12 +614,12 @@ describe("CATDatabase", () => {
         srcHash: "cjk-substring-hash",
         matchKey: "cjk-substring",
         tagsSignature: "",
-        sourceTokens: [{ type: "text", content: "老大是怎么成为遗忘者聚落的领袖的？" }],
-        targetTokens: [{ type: "text", content: "Comment est-il devenu le chef du camp des Oublies ?" }],
+        sourceTokens: [{ type: "text", content: "甲组是怎么成为临时项目的负责人的？" }],
+        targetTokens: [{ type: "text", content: "Comment l'equipe A est-elle devenue responsable du projet temporaire ?" }],
         usageCount: 1,
       } as any);
 
-      const results = db.searchConcordance(projectId, "是怎么成为遗忘者聚落的领袖的？");
+      const results = db.searchConcordance(projectId, "是怎么成为临时项目的负责人的？");
       expect(results.length).toBeLessThanOrEqual(10);
       expect(results.some((row) => row.srcHash === "cjk-substring-hash")).toBe(true);
     });
@@ -635,12 +635,12 @@ describe("CATDatabase", () => {
         srcHash: "cjk-near-hash",
         matchKey: "cjk-near",
         tagsSignature: "",
-        sourceTokens: [{ type: "text", content: "老大是怎么成为遗忘者聚落的领袖的？" }],
-        targetTokens: [{ type: "text", content: "Comment est-il devenu le chef du camp des Oublies ?" }],
+        sourceTokens: [{ type: "text", content: "甲组是怎么成为临时项目的负责人的？" }],
+        targetTokens: [{ type: "text", content: "Comment l'equipe A est-elle devenue responsable du projet temporaire ?" }],
         usageCount: 1,
       } as any);
 
-      const results = db.searchConcordance(projectId, "老三是怎么成为遗忘者聚落的领袖的？");
+      const results = db.searchConcordance(projectId, "乙组是怎么成为临时项目的负责人的？");
       expect(results.length).toBeLessThanOrEqual(10);
       expect(results.some((row) => row.srcHash === "cjk-near-hash")).toBe(true);
     });

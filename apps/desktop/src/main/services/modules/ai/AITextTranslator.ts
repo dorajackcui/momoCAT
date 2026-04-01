@@ -5,6 +5,7 @@ import { parseEditorTextToTokens } from '@cat/core/tag';
 import { buildAISystemPrompt, buildAIUserPrompt, normalizeProjectType } from '../ai-prompts';
 import type { PromptTBReference, PromptTMReference } from '../ai-prompts/types';
 import type { AITransport, ReasoningEffort } from '../../ports';
+import { logAIPromptDebug } from './promptDebug';
 
 export interface TranslateDebugMeta {
   requestId?: string;
@@ -16,6 +17,7 @@ export interface TranslateDebugMeta {
 }
 
 export interface TranslateSegmentParams {
+  segmentId?: string;
   apiKey: string;
   baseUrl: string;
   model: string;
@@ -53,6 +55,8 @@ interface TranslateTextParams {
   validationFeedback?: string;
   debug?: TranslateDebugMeta;
   allowUnchanged?: boolean;
+  promptDebugFlow?: 'segment' | 'refine' | 'test';
+  promptDebugAttempt?: number;
 }
 
 export class AITextTranslator {
@@ -85,6 +89,9 @@ export class AITextTranslator {
         tbReferences: params.tbReferences,
         validationFeedback,
         allowUnchanged: normalizedType === 'review' || normalizedType === 'custom',
+        promptDebugFlow: params.refinementInstruction ? 'refine' : 'segment',
+        promptDebugSegmentId: params.segmentId,
+        promptDebugAttempt: attempt,
       });
 
       const targetTokens = parseEditorTextToTokens(translatedText, params.sourceTokens);
@@ -138,6 +145,16 @@ export class AITextTranslator {
       tmReference: params.tmReference,
       tbReferences: params.tbReferences,
       validationFeedback: params.validationFeedback,
+    });
+
+    logAIPromptDebug({
+      flow: params.promptDebugFlow ?? 'test',
+      model: params.model,
+      reasoningEffort: params.reasoningEffort ?? 'medium',
+      systemPrompt,
+      userPrompt,
+      attempt: params.promptDebugAttempt,
+      segmentId: params.promptDebugSegmentId,
     });
 
     if (params.debug) {

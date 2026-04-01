@@ -41,6 +41,17 @@ describe('AIProviderTransport', () => {
       'https://example.com/v1/chat/completions',
       expect.objectContaining({
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          Authorization: 'Bearer secret',
+        },
+        body: JSON.stringify({
+          model: 'gpt-demo',
+          messages: [
+            { role: 'system', content: 'system' },
+            { role: 'user', content: 'user' },
+          ],
+        }),
       }),
     );
   });

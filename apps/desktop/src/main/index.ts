@@ -8,6 +8,11 @@ import { ProjectService } from './services/ProjectService';
 import { JobManager } from './JobManager';
 import { IPC_CHANNELS } from '../shared/ipcChannels';
 import { AIRuntimeConfigService } from './services/modules/ai/AIRuntimeConfigService';
+import {
+  AI_PROMPT_DEBUG_ENV,
+  AI_PROMPT_DEBUG_FILE_ENV,
+  isAIPromptDebugEnabled,
+} from './services/modules/ai/promptDebug';
 import { registerProjectHandlers } from './ipc/projectHandlers';
 import { registerTMHandlers } from './ipc/tmHandlers';
 import { registerTBHandlers } from './ipc/tbHandlers';
@@ -125,6 +130,13 @@ app.whenReady().then(async () => {
   console.log('DB Path:', dbPath);
   await loadProxyEnvFromFile(proxyEnvPath);
   await loadProxyEnvFromFile(fallbackProxyEnvPath);
+  if (isAIPromptDebugEnabled()) {
+    if (!process.env[AI_PROMPT_DEBUG_FILE_ENV]) {
+      process.env[AI_PROMPT_DEBUG_FILE_ENV] = join(userDataPath, 'ai_prompt_debug.log');
+    }
+    console.log(`[AIPromptDebug] Enabled via ${AI_PROMPT_DEBUG_ENV}`);
+    console.log(`[AIPromptDebug] UTF-8 prompt log: ${process.env[AI_PROMPT_DEBUG_FILE_ENV]}`);
+  }
   setupProxy();
 
   let db: CATDatabase;

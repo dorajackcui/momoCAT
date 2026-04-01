@@ -106,7 +106,7 @@ describe("Editor Tag Marker Conversion", () => {
   it("serializes nameless closing tags as paired-end markers", () => {
     const sourceWithNamelessClosingTag = [
       { type: "tag", content: "<Yellow>" },
-      { type: "text", content: "化万相" },
+      { type: "text", content: "示例文本" },
       { type: "tag", content: "</>" },
     ];
     const targetTokens = [

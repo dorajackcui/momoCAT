@@ -2,6 +2,8 @@ import type { Segment } from '@cat/core/models';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { PromptReferenceResolvers, TranslationPromptReferences } from './types';
 
+const MAX_TB_PROMPT_REFERENCES = 100;
+
 interface ResolveTranslationPromptReferencesParams {
   projectId: number;
   segment: Segment;
@@ -43,7 +45,7 @@ export async function resolveTranslationPromptReferences(
         params.segment,
       );
       if (tbMatches.length > 0) {
-        references.tbReferences = tbMatches.slice(0, 5).map((match) => ({
+        references.tbReferences = tbMatches.slice(0, MAX_TB_PROMPT_REFERENCES).map((match) => ({
           srcTerm: match.srcTerm,
           tgtTerm: match.tgtTerm,
           note: match.note ?? null,

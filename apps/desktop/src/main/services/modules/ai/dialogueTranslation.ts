@@ -13,6 +13,7 @@ import type {
   SegmentUpdateDraft,
   TranslationPromptReferences,
 } from './types';
+import { logAIPromptDebug } from './promptDebug';
 
 interface BuildDialogueUnitsParams {
   segments: Iterable<Segment>;
@@ -138,6 +139,16 @@ export async function translateDialogueUnit(
       segments: promptSegments,
       previousGroup: params.previousGroup,
       validationFeedback,
+    });
+
+    logAIPromptDebug({
+      flow: 'dialogue',
+      model: params.model,
+      reasoningEffort: params.runtimeConfig.reasoningEffort,
+      systemPrompt,
+      userPrompt,
+      attempt,
+      segmentIds: expectedIds,
     });
 
     const response = await params.transport.createResponse({

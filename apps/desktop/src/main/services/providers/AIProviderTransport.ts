@@ -123,7 +123,7 @@ export class AIProviderTransport implements AITransport {
       response = await fetch(endpoint, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json; charset=utf-8',
           Authorization: `Bearer ${params.apiKey}`,
         },
         body: JSON.stringify({
