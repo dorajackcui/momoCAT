@@ -189,9 +189,8 @@ describe('TBService', () => {
     ]);
 
     const matches = await service.findMatches(1, buildSegment('Warmth Amid Winter'));
-    expect(matches).toHaveLength(2);
+    expect(matches).toHaveLength(1);
     expect(matches[0].srcTerm).toBe('Amid Winter');
-    expect(matches[1].srcTerm).toBe('Winter');
   });
 
   it('deduplicates by normalized source term and keeps higher-priority mounted term base entry', async () => {
@@ -294,23 +293,46 @@ describe('TBService', () => {
     );
   });
 
-  it('supplements FTS candidates with short terms from the full mounted scan', async () => {
-    const entries = [
-      {
-        id: 'tb-short',
-        tbId: 'tb-short-base',
-        srcTerm: '设置',
-        tgtTerm: 'settings',
-        srcNorm: '设置',
-        note: null,
-        createdAt: '',
-        updatedAt: '',
-        usageCount: 1,
-        tbName: 'Short TB',
-        priority: 2,
-      },
-    ];
-    const service = createServiceWithEntries(entries, {
+  it('matches both long and short blind-spot terms from repo candidates without service-level补扫', async () => {
+    const service = createServiceWithEntries([], {
+      srcLang: 'zh-CN',
+      searchEntries: [
+        {
+          id: 'tb-long-visible',
+          tbId: 'tb-visible',
+          srcTerm: '设置页面',
+          tgtTerm: 'settings page',
+          srcNorm: '设置页面',
+          note: null,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 1,
+          tbName: 'Visible TB',
+          priority: 1,
+        },
+        {
+          id: 'tb-short-visible',
+          tbId: 'tb-visible',
+          srcTerm: 'AI',
+          tgtTerm: 'artificial intelligence',
+          srcNorm: 'ai',
+          note: null,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 1,
+          tbName: 'Visible TB',
+          priority: 2,
+        },
+      ],
+    });
+
+    const matches = await service.findMatches(1, buildSegment('请打开设置页面，并检查 AI 配置。'));
+
+    expect(matches.map((match) => match.srcTerm)).toEqual(['设置页面', 'AI']);
+  });
+
+  it('prefers the longer overlapping term when the shorter one is fully nested inside it', async () => {
+    const service = createServiceWithEntries([], {
       srcLang: 'zh-CN',
       searchEntries: [
         {
@@ -326,55 +348,105 @@ describe('TBService', () => {
           tbName: 'Long TB',
           priority: 1,
         },
-      ],
-    });
-
-    const matches = await service.findMatches(1, buildSegment('请打开设置页面。'));
-    expect(matches.map((match) => match.srcTerm)).toEqual(
-      expect.arrayContaining(['设置页面', '设置']),
-    );
-  });
-  it('supplements FTS candidates with 3-character Chinese terms from the full mounted scan', async () => {
-    const entries = [
-      {
-        id: 'tb-name',
-        tbId: 'tb-name-base',
-        srcTerm: '示例项',
-        tgtTerm: 'Generic Name',
-        srcNorm: '示例项',
-        note: null,
-        createdAt: '',
-        updatedAt: '',
-        usageCount: 1,
-        tbName: 'Name TB',
-        priority: 2,
-      },
-    ];
-    const service = createServiceWithEntries(entries, {
-      srcLang: 'zh-CN',
-      searchEntries: [
         {
-          id: 'tb-title',
-          tbId: 'tb-title-base',
-          srcTerm: '通用标题',
-          tgtTerm: 'Generic Title',
-          srcNorm: '通用标题',
+          id: 'tb-short',
+          tbId: 'tb-short-base',
+          srcTerm: '设置',
+          tgtTerm: 'settings',
+          srcNorm: '设置',
           note: null,
           createdAt: '',
           updatedAt: '',
           usageCount: 1,
-          tbName: 'Title TB',
-          priority: 1,
+          tbName: 'Short TB',
+          priority: 2,
         },
       ],
     });
 
+    const matches = await service.findMatches(1, buildSegment('请打开设置页面。'));
+    expect(matches.map((match) => match.srcTerm)).toEqual(['设置页面']);
+  });
+
+  it('prefers the longer overlapping Chinese term over the nested shorter term', async () => {
+    const service = createServiceWithEntries([
+      {
+        id: 'tb-overlap-long',
+        tbId: 'tb-overlap',
+        srcTerm: '残宵莲烬',
+        tgtTerm: 'long-term',
+        srcNorm: '残宵莲烬',
+        note: null,
+        createdAt: '',
+        updatedAt: '',
+        usageCount: 1,
+        tbName: 'Overlap TB',
+        priority: 1,
+      },
+      {
+        id: 'tb-overlap-short',
+        tbId: 'tb-overlap',
+        srcTerm: '残宵',
+        tgtTerm: 'short-term',
+        srcNorm: '残宵',
+        note: null,
+        createdAt: '',
+        updatedAt: '',
+        usageCount: 1,
+        tbName: 'Overlap TB',
+        priority: 2,
+      },
+    ], {
+      srcLang: 'zh-CN',
+    });
+
+    const matches = await service.findMatches(1, buildSegment('这个技能是残宵莲烬。'));
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0].srcTerm).toBe('残宵莲烬');
+  });
+
+  it('keeps the shorter term when it also appears outside the longer overlapping span', async () => {
+    const service = createServiceWithEntries([
+      {
+        id: 'tb-overlap-long-2',
+        tbId: 'tb-overlap-2',
+        srcTerm: '残宵莲烬',
+        tgtTerm: 'long-term',
+        srcNorm: '残宵莲烬',
+        note: null,
+        createdAt: '',
+        updatedAt: '',
+        usageCount: 1,
+        tbName: 'Overlap TB',
+        priority: 1,
+      },
+      {
+        id: 'tb-overlap-short-2',
+        tbId: 'tb-overlap-2',
+        srcTerm: '残宵',
+        tgtTerm: 'short-term',
+        srcNorm: '残宵',
+        note: null,
+        createdAt: '',
+        updatedAt: '',
+        usageCount: 1,
+        tbName: 'Overlap TB',
+        priority: 2,
+      },
+    ], {
+      srcLang: 'zh-CN',
+    });
+
     const matches = await service.findMatches(
       1,
-      buildSegment('完成任务后可获得限定称号【示例项·通用标题】'),
+      buildSegment('残宵会强化这个技能，而最终技能是残宵莲烬。'),
     );
-    expect(matches.map((match) => match.srcTerm)).toEqual(
-      expect.arrayContaining(['示例项', '通用标题']),
-    );
+
+    expect(matches).toHaveLength(2);
+    expect(matches[0].srcTerm).toBe('残宵莲烬');
+    expect(matches[1].srcTerm).toBe('残宵');
+    expect(matches[1].positions).toHaveLength(1);
+    expect(matches[1].positions[0].start).toBe(0);
   });
 });

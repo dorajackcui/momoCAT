@@ -1,10 +1,11 @@
 import Database from 'better-sqlite3';
 import type { TBEntry } from '@cat/core/models';
-import { buildTermSearchFragments, normalizeTermForLookup } from '@cat/core/text';
+import { buildTermSearchPlan, normalizeTermForLookup } from '@cat/core/text';
 import { randomUUID } from 'crypto';
 import type { MountedTBRecord, ProjectTermEntryRecord, TBRecord } from '../types';
 
 type TBEntryDbRow = TBEntry;
+const EXACT_CJK_BATCH_SIZE = 200;
 
 export class TBRepo {
   private stmtDeleteTbFtsByEntryId: Database.Statement;
@@ -116,35 +117,27 @@ export class TBRepo {
     const mountedTbIds = this.getProjectMountedTermBases(projectId).map((tb) => tb.id);
     if (mountedTbIds.length === 0) return [];
 
-    const fragments = buildTermSearchFragments(sourceText, {
+    const searchPlan = buildTermSearchPlan(sourceText, {
       locale: options?.srcLang,
-      maxFragments: 12,
+      maxFragments: 36,
     });
-    if (fragments.length === 0) return [];
+    if (searchPlan.ftsFragments.length === 0 && searchPlan.exactLookupTerms.length === 0) return [];
 
-    const placeholders = mountedTbIds.map(() => '?').join(',');
     const limit = Math.max(1, Math.min(options?.limit ?? 200, 500));
-    const ftsQuery = fragments
-      .map((fragment: string) => `"${this.escapeFtsFragment(fragment)}"`)
-      .join(' OR ');
+    const ftsCandidates =
+      searchPlan.ftsFragments.length > 0
+        ? this.searchProjectTermEntriesByFts(projectId, mountedTbIds, searchPlan.ftsFragments, limit)
+        : [];
+    const exactCandidates =
+      searchPlan.exactLookupTerms.length > 0
+        ? this.searchProjectTermEntriesByExactSourceNorm(
+            projectId,
+            mountedTbIds,
+            searchPlan.exactLookupTerms,
+          )
+        : [];
 
-    const rows = this.db
-      .prepare(`
-      SELECT tb_entries.*, term_bases.name as tbName, project_term_bases.priority
-      FROM tb_fts
-      JOIN tb_entries ON tb_fts.tbEntryId = tb_entries.id
-      JOIN term_bases ON tb_entries.tbId = term_bases.id
-      JOIN project_term_bases ON project_term_bases.tbId = term_bases.id
-      WHERE project_term_bases.projectId = ?
-        AND project_term_bases.isEnabled = 1
-        AND tb_fts.tbId IN (${placeholders})
-        AND tb_fts MATCH ?
-      ORDER BY project_term_bases.priority ASC, length(tb_entries.srcTerm) DESC, tb_entries.usageCount DESC
-      LIMIT ${limit}
-    `)
-      .all(projectId, ...mountedTbIds, ftsQuery) as ProjectTermEntryRecord[];
-
-    return rows.map((row) => ({ ...row }));
+    return this.mergeSearchCandidates(limit, ftsCandidates, exactCandidates);
   }
 
   public insertTBEntryIfAbsentBySrcTerm(params: {
@@ -254,6 +247,92 @@ export class TBRepo {
 
   private normalizeTerm(value: string, locale?: string): string {
     return normalizeTermForLookup(value, { locale });
+  }
+
+  private searchProjectTermEntriesByFts(
+    projectId: number,
+    mountedTbIds: string[],
+    ftsFragments: string[],
+    limit: number,
+  ): ProjectTermEntryRecord[] {
+    const placeholders = mountedTbIds.map(() => '?').join(',');
+    const ftsQuery = ftsFragments
+      .map((fragment) => `"${this.escapeFtsFragment(fragment)}"`)
+      .join(' OR ');
+
+    const rows = this.db
+      .prepare(`
+      SELECT tb_entries.*, term_bases.name as tbName, project_term_bases.priority
+      FROM tb_fts
+      JOIN tb_entries ON tb_fts.tbEntryId = tb_entries.id
+      JOIN term_bases ON tb_entries.tbId = term_bases.id
+      JOIN project_term_bases ON project_term_bases.tbId = term_bases.id
+      WHERE project_term_bases.projectId = ?
+        AND project_term_bases.isEnabled = 1
+        AND tb_fts.tbId IN (${placeholders})
+        AND tb_fts MATCH ?
+      ORDER BY project_term_bases.priority ASC, length(tb_entries.srcTerm) DESC, tb_entries.usageCount DESC
+      LIMIT ${limit}
+    `)
+      .all(projectId, ...mountedTbIds, ftsQuery) as ProjectTermEntryRecord[];
+
+    return rows.map((row) => ({ ...row }));
+  }
+
+  private searchProjectTermEntriesByExactSourceNorm(
+    projectId: number,
+    mountedTbIds: string[],
+    exactLookupTerms: string[],
+  ): ProjectTermEntryRecord[] {
+    const rows: ProjectTermEntryRecord[] = [];
+
+    for (let start = 0; start < exactLookupTerms.length; start += EXACT_CJK_BATCH_SIZE) {
+      const batch = exactLookupTerms.slice(start, start + EXACT_CJK_BATCH_SIZE);
+      if (batch.length === 0) continue;
+
+      const tbPlaceholders = mountedTbIds.map(() => '?').join(',');
+      const termPlaceholders = batch.map(() => '?').join(',');
+      const batchRows = this.db
+        .prepare(`
+        SELECT tb_entries.*, term_bases.name as tbName, project_term_bases.priority
+        FROM project_term_bases
+        JOIN term_bases ON project_term_bases.tbId = term_bases.id
+        JOIN tb_entries ON tb_entries.tbId = term_bases.id
+        WHERE project_term_bases.projectId = ?
+          AND project_term_bases.isEnabled = 1
+          AND tb_entries.tbId IN (${tbPlaceholders})
+          AND tb_entries.srcNorm IN (${termPlaceholders})
+        ORDER BY project_term_bases.priority ASC, length(tb_entries.srcTerm) DESC, tb_entries.usageCount DESC
+      `)
+        .all(projectId, ...mountedTbIds, ...batch) as ProjectTermEntryRecord[];
+
+      rows.push(...batchRows.map((row) => ({ ...row })));
+    }
+
+    return rows;
+  }
+
+  private mergeSearchCandidates(
+    limit: number,
+    ...groups: ProjectTermEntryRecord[][]
+  ): Array<TBEntry & { tbName: string; priority: number }> {
+    const merged = new Map<string, ProjectTermEntryRecord>();
+
+    for (const group of groups) {
+      for (const row of group) {
+        if (!merged.has(row.id)) {
+          merged.set(row.id, row);
+        }
+      }
+    }
+
+    return Array.from(merged.values())
+      .sort((a, b) => {
+        if (a.priority !== b.priority) return a.priority - b.priority;
+        if (b.srcTerm.length !== a.srcTerm.length) return b.srcTerm.length - a.srcTerm.length;
+        return b.usageCount - a.usageCount;
+      })
+      .slice(0, limit);
   }
 
   private escapeFtsFragment(value: string): string {

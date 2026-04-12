@@ -20,6 +20,10 @@ Deferred:
 - explicit per-language variant tables
 - sidecar NLP services
 
+Note:
+
+- when FTS candidate retrieval is introduced, short-term blind spots should be handled in the retrieval protocol itself via exact lookup, not by reintroducing service-layer short-term补扫
+
 ## Step Plan
 
 1. Add design artifacts under `design/`.

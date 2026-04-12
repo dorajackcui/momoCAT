@@ -70,6 +70,7 @@ Purpose:
 - use `trigram` for CJK-heavy recall
 - use `unicode61` for general multilingual token recall
 - optionally use `porter` only for English candidate retrieval
+- add exact source-norm lookup for FTS blind spots such as single-character CJK terms and short non-CJK or mixed-script tokens
 
 FTS remains a candidate retrieval layer, not the final acceptance rule.
 

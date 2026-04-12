@@ -1,5 +1,9 @@
 import type { Segment, TBEntry, TBMatch } from '@cat/core/models';
-import { findTermPositionsInText, serializeTokensToSearchText } from '@cat/core/text';
+import {
+  findTermPositionsInText,
+  serializeTokensToSearchText,
+  suppressNestedTermMatches,
+} from '@cat/core/text';
 import { ProjectRepository, TBRepository } from './ports';
 
 type ProjectTBEntry = TBEntry & {
@@ -29,16 +33,10 @@ export class TBService {
       srcLang: project.srcLang,
       limit: TBService.TB_CANDIDATE_LIMIT,
     }) as ProjectTBEntry[];
-    const fullEntries = this.db.listProjectTermEntries(projectId) as ProjectTBEntry[];
-    const shortEntries =
+    const entries =
       searchEntries.length > 0
-        ? fullEntries.filter(
-            (entry) =>
-              entry.srcNorm.length <= 3 &&
-              !searchEntries.some((candidate) => candidate.id === entry.id),
-          )
-        : [];
-    const entries = searchEntries.length > 0 ? [...searchEntries, ...shortEntries] : fullEntries;
+        ? searchEntries
+        : (this.db.listProjectTermEntries(projectId) as ProjectTBEntry[]);
     if (entries.length === 0) return [];
 
     const matches: TBMatch[] = [];
@@ -58,9 +56,11 @@ export class TBService {
       seenSrcNorm.add(entry.srcNorm);
     }
 
-    return matches.sort((a, b) => {
-      if (b.srcTerm.length !== a.srcTerm.length) return b.srcTerm.length - a.srcTerm.length;
-      return a.priority - b.priority;
-    });
+    return suppressNestedTermMatches(
+      matches.sort((a, b) => {
+        if (b.srcTerm.length !== a.srcTerm.length) return b.srcTerm.length - a.srcTerm.length;
+        return a.priority - b.priority;
+      }),
+    );
   }
 }

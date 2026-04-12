@@ -786,5 +786,166 @@ describe("CATDatabase", () => {
         expect.arrayContaining(["设置页面", "API key"]),
       );
     });
+
+    it("should recall short non-cjk exact terms alongside longer FTS matches", () => {
+      const projectId = db.createProject("TB Search Short Exact", "zh-CN", "en-US");
+      const tbId = db.createTermBase("Short Exact TB", "zh-CN", "en-US");
+      db.mountTermBaseToProject(projectId, tbId, 1);
+
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-short-exact-long",
+        tbId,
+        srcLang: "zh-CN",
+        srcTerm: "设置页面",
+        tgtTerm: "settings page",
+      });
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-short-exact-ai",
+        tbId,
+        srcLang: "zh-CN",
+        srcTerm: "AI",
+        tgtTerm: "artificial intelligence",
+      });
+
+      const results = db.searchProjectTermEntries(
+        projectId,
+        "请先打开设置页面，然后检查 AI 配置。",
+        {
+          srcLang: "zh-CN",
+          limit: 10,
+        },
+      );
+
+      expect(results.map((row) => row.srcTerm)).toEqual(
+        expect.arrayContaining(["设置页面", "AI"]),
+      );
+    });
+
+    it("should recall 3-character Chinese terms from long source text", () => {
+      const projectId = db.createProject("TB Search Long CJK", "zh-CN", "en-US");
+      const tbId = db.createTermBase("Long CJK TB", "zh-CN", "en-US");
+      db.mountTermBaseToProject(projectId, tbId, 1);
+
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-long-zh-3",
+        tbId,
+        srcLang: "zh-CN",
+        srcTerm: "领奖台",
+        tgtTerm: "podium",
+      });
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-long-zh-4",
+        tbId,
+        srcLang: "zh-CN",
+        srcTerm: "闭幕式",
+        tgtTerm: "closing ceremony",
+      });
+
+      const results = db.searchProjectTermEntries(
+        projectId,
+        "赛事公告说明领奖台区域将在闭幕式开始前开放，获奖名单与奖章组会同时完成终审流程。",
+        {
+          srcLang: "zh-CN",
+          limit: 20,
+        },
+      );
+
+      expect(results.map((row) => row.srcTerm)).toEqual(
+        expect.arrayContaining(["领奖台", "闭幕式"]),
+      );
+    });
+
+    it("should recall short CJK exact matches even when mounted TB has more than 5000 rows", () => {
+      const projectId = db.createProject("TB Short CJK Fallback", "zh-CN", "en-US");
+      const tbId = db.createTermBase("Large TB", "zh-CN", "en-US");
+      db.mountTermBaseToProject(projectId, tbId, 1);
+
+      for (let index = 0; index < 5200; index += 1) {
+        db.insertTBEntryIfAbsentBySrcTerm({
+          id: `tb-large-${index}`,
+          tbId,
+          srcLang: "zh-CN",
+          srcTerm: `大型术语条目${String(index).padStart(4, "0")}`,
+          tgtTerm: `large-term-${index}`,
+        });
+      }
+
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-short-cjk-hit",
+        tbId,
+        srcLang: "zh-CN",
+        srcTerm: "领奖台",
+        tgtTerm: "podium",
+      });
+
+      const results = db.searchProjectTermEntries(
+        projectId,
+        "在赛季总决赛的最终通告里，主办方确认领奖台区域将在闭幕仪式开始前再次开放给获奖选手和彩排人员。",
+        {
+          srcLang: "zh-CN",
+          limit: 20,
+        },
+      );
+
+      expect(results.map((row) => row.srcTerm)).toContain("领奖台");
+    });
+
+    it("should recall single-character CJK terms alongside longer candidates", () => {
+      const projectId = db.createProject("TB Search Single CJK", "zh-CN", "en-US");
+      const tbId = db.createTermBase("Single CJK TB", "zh-CN", "en-US");
+      db.mountTermBaseToProject(projectId, tbId, 1);
+
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-single-cjk-char",
+        tbId,
+        srcLang: "zh-CN",
+        srcTerm: "奖",
+        tgtTerm: "award",
+      });
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-single-cjk-long",
+        tbId,
+        srcLang: "zh-CN",
+        srcTerm: "领奖台",
+        tgtTerm: "podium",
+      });
+
+      const results = db.searchProjectTermEntries(
+        projectId,
+        "请前往领奖台领取奖章。",
+        {
+          srcLang: "zh-CN",
+          limit: 10,
+        },
+      );
+
+      expect(results.map((row) => row.srcTerm)).toEqual(
+        expect.arrayContaining(["奖", "领奖台"]),
+      );
+    });
+
+    it("should reapply the requested limit after merging exact lookup candidates", () => {
+      const projectId = db.createProject("TB Search Exact Limit", "zh-CN", "en-US");
+      const tbId = db.createTermBase("Exact Limit TB", "zh-CN", "en-US");
+      db.mountTermBaseToProject(projectId, tbId, 1);
+
+      for (const term of ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛"]) {
+        db.insertTBEntryIfAbsentBySrcTerm({
+          id: `tb-exact-limit-${term}`,
+          tbId,
+          srcLang: "zh-CN",
+          srcTerm: term,
+          tgtTerm: `term-${term}`,
+        });
+      }
+
+      const results = db.searchProjectTermEntries(projectId, "甲乙丙丁戊己庚辛", {
+        srcLang: "zh-CN",
+        limit: 3,
+      });
+
+      expect(results).toHaveLength(3);
+      expect(results.every((row) => row.srcTerm.length === 1)).toBe(true);
+    });
   });
 });
