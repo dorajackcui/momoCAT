@@ -1,11 +1,11 @@
 import type { Segment, SegmentStatus, Token } from '@cat/core/models';
-import type { TBService } from '../../TBService';
-import type { TMService } from '../../TMService';
 import type {
   DialoguePromptPreviousGroup,
   PromptTBReference,
   PromptTMReference,
-} from '../ai-prompts/types';
+} from '@cat/core/project';
+import type { TBService } from '../../TBService';
+import type { TMService } from '../../TMService';
 
 export interface PromptReferenceResolvers {
   tmService?: Pick<TMService, 'findMatches'>;

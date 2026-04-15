@@ -1,9 +1,14 @@
-import { type ProjectType } from '@cat/core/project';
+import {
+  buildAISystemPrompt,
+  buildAIUserPrompt,
+  normalizeProjectType,
+  type ProjectType,
+  type PromptTBReference,
+  type PromptTMReference,
+} from '@cat/core/project';
 import type { Token } from '@cat/core/models';
 import { TagValidator } from '@cat/core/qa';
 import { parseEditorTextToTokens } from '@cat/core/tag';
-import { buildAISystemPrompt, buildAIUserPrompt, normalizeProjectType } from '../ai-prompts';
-import type { PromptTBReference, PromptTMReference } from '../ai-prompts/types';
 import type { AITransport, ReasoningEffort } from '../../ports';
 import { logAIPromptDebug } from './promptDebug';
 
@@ -57,6 +62,7 @@ interface TranslateTextParams {
   allowUnchanged?: boolean;
   promptDebugFlow?: 'segment' | 'refine' | 'test';
   promptDebugAttempt?: number;
+  promptDebugSegmentId?: string;
 }
 
 export class AITextTranslator {

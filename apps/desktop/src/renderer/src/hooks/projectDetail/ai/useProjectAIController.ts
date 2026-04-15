@@ -12,6 +12,7 @@ import { feedbackService } from '../../../services/feedbackService';
 import {
   DEFAULT_PROJECT_AI_MODEL,
   buildAITestMeta,
+  buildProjectAISystemPromptPreview,
   deriveProjectAIFlags,
   normalizeProjectAIProviderSelection,
 } from './aiSettingsHelpers';
@@ -153,6 +154,17 @@ export function useProjectAI({
   const normalizedSavedPrompt = aiFlags.normalizedSavedPrompt;
   const hasUnsavedPromptChanges = aiFlags.hasUnsavedPromptChanges;
   const hasTestDetails = aiFlags.hasTestDetails;
+  const effectiveSystemPromptPreview = useMemo(() => {
+    if (!project) {
+      return '';
+    }
+    return buildProjectAISystemPromptPreview({
+      projectType: project.projectType,
+      srcLang: project.srcLang,
+      tgtLang: project.tgtLang,
+      promptDraft: normalizedSavedPrompt,
+    });
+  }, [normalizedSavedPrompt, project]);
 
   const savePrompt = useCallback(async () => {
     if (!project) return;
@@ -287,6 +299,7 @@ export function useProjectAI({
       providerOptions,
       modelDraft,
       setModelDraft,
+      effectiveSystemPromptPreview,
       promptDraft,
       setPromptDraft,
       promptSavedAt,
@@ -316,6 +329,7 @@ export function useProjectAI({
       hasUnsavedPromptChanges,
       providerOptions,
       modelDraft,
+      effectiveSystemPromptPreview,
       promptDraft,
       promptSavedAt,
       savePrompt,

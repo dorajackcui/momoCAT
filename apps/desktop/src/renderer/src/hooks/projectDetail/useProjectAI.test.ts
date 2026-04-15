@@ -5,6 +5,7 @@ vi.mock('../../services/apiClient', () => ({
 }));
 import {
   buildAITestMeta,
+  buildProjectAISystemPromptPreview,
   deriveProjectAIFlags,
   normalizeProjectAIModel,
   upsertTrackedJobFromProgress,
@@ -67,6 +68,25 @@ describe('useProjectAI behavior helpers', () => {
     });
 
     expect(flags.hasUnsavedPromptChanges).toBe(true);
+  });
+
+  it('builds effective system prompt previews from the current draft', () => {
+    const translationPreview = buildProjectAISystemPromptPreview({
+      projectType: 'translation',
+      srcLang: 'en',
+      tgtLang: 'zh',
+      promptDraft: ' Use concise style. ',
+    });
+    const customPreview = buildProjectAISystemPromptPreview({
+      projectType: 'custom',
+      srcLang: 'en',
+      tgtLang: 'zh',
+      promptDraft: '',
+    });
+
+    expect(translationPreview).toContain('Use concise style.');
+    expect(translationPreview).toContain('Translate from en to zh.');
+    expect(customPreview).toContain('You are a precise text processing assistant.');
   });
 
   it('builds deterministic AI test meta text', () => {

@@ -1,5 +1,6 @@
 export {
   buildAITestMeta,
+  buildProjectAISystemPromptPreview,
   deriveProjectAIFlags,
   normalizeProjectAIModel,
 } from './ai/aiSettingsHelpers';

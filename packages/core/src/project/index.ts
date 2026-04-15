@@ -89,3 +89,19 @@ export const DEFAULT_PROJECT_QA_SETTINGS: ProjectQASettings = {
   enabledRuleIds: ['tag-integrity', 'terminology-consistency'],
   instantQaOnConfirm: true,
 };
+
+export {
+  buildAIDialogueUserPrompt,
+  buildAISystemPrompt,
+  buildAIUserPrompt,
+  normalizeProjectType,
+} from './aiPromptTemplates';
+export type {
+  DialoguePromptPreviousGroup,
+  DialoguePromptSegment,
+  DialogueUserPromptBuildParams,
+  PromptTBReference,
+  PromptTMReference,
+  SystemPromptBuildParams,
+  UserPromptBuildParams,
+} from './aiPromptTypes';

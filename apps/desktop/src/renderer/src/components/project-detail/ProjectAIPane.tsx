@@ -41,6 +41,24 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
         </Button>
       </div>
       <div className="mb-3">
+        <label
+          htmlFor="project-ai-effective-prompt"
+          className="block text-xs font-bold text-text-faint uppercase tracking-wider mb-1"
+        >
+          Prompt
+        </label>
+        <Textarea
+          id="project-ai-effective-prompt"
+          value={ai.effectiveSystemPromptPreview}
+          readOnly
+          rows={7}
+          className="!bg-muted/35 text-[11px] leading-5 whitespace-pre-wrap"
+        />
+        <p className="mt-2 text-[11px] text-text-muted">
+          This is the saved system prompt used at runtime. It updates after you save AI settings.
+        </p>
+      </div>
+      <div className="mb-3">
         <label className="block text-xs font-bold text-text-faint uppercase tracking-wider mb-1">
           Model
         </label>
@@ -57,25 +75,34 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
           ))}
         </Select>
       </div>
-      <Textarea
-        value={ai.promptDraft}
-        onChange={(event) => ai.setPromptDraft(event.target.value)}
-        rows={4}
-        placeholder={
-          isReviewProject
-            ? 'Optional. Add project-specific review instructions (accuracy, fluency, style, severity rules).'
+      <div className="mb-3">
+        <label
+          htmlFor="project-ai-custom-prompt"
+          className="block text-xs font-bold text-text-faint uppercase tracking-wider mb-1"
+        >
+          Custom Prompt
+        </label>
+        <Textarea
+          id="project-ai-custom-prompt"
+          value={ai.promptDraft}
+          onChange={(event) => ai.setPromptDraft(event.target.value)}
+          rows={4}
+          placeholder={
+            isReviewProject
+              ? 'Optional. Add project-specific review instructions (accuracy, fluency, style, severity rules).'
+              : isCustomProject
+                ? 'Optional. Override the default system prompt with full custom processing instructions.'
+                : 'Optional. Add project-specific translation instructions (tone, terminology, style).'
+          }
+        />
+        <p className="mt-2 text-[11px] text-text-muted">
+          {isReviewProject
+            ? 'Saved custom prompt is appended to the default AI review rules.'
             : isCustomProject
-              ? 'Required. Define full custom processing instructions for input/context/output.'
-              : 'Optional. Add project-specific translation instructions (tone, terminology, style).'
-        }
-      />
-      <p className="mt-2 text-[11px] text-text-muted">
-        {isReviewProject
-          ? 'This prompt will be appended to the default AI review rules.'
-          : isCustomProject
-            ? 'This prompt is used as the full custom system prompt.'
-            : 'This prompt will be appended to the default translation rules.'}
-      </p>
+              ? 'Saved custom prompt overrides the default system prompt.'
+              : 'Saved custom prompt is appended to the default translation rules.'}
+        </p>
+      </div>
       <div className="mt-4 pt-4 border-t border-border">
         <label className="block text-xs font-bold text-text-faint uppercase tracking-wider mb-1">
           {isReviewProject ? 'Test Text' : isCustomProject ? 'Test Input' : 'Test Source'}

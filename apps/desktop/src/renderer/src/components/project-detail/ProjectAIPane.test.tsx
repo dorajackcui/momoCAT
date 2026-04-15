@@ -32,6 +32,8 @@ function createController(overrides?: Partial<ProjectAIController>): ProjectAICo
     ],
     modelDraft: 'builtin:openai:gpt-5.4-mini',
     setModelDraft: vi.fn(),
+    effectiveSystemPromptPreview:
+      'You are a professional translator.\nTranslate from en to zh.\nReturn only the translated text.',
     promptDraft: '',
     setPromptDraft: vi.fn(),
     promptSavedAt: null,
@@ -59,6 +61,22 @@ function createController(overrides?: Partial<ProjectAIController>): ProjectAICo
 }
 
 describe('ProjectAIPane', () => {
+  it('renders a read-only effective prompt preview and editable custom prompt', () => {
+    const controller = createController({
+      promptDraft: 'Use concise style.',
+    });
+    render(<ProjectAIPane ai={controller} />);
+
+    expect(screen.getByLabelText('Prompt')).toHaveValue(
+      'You are a professional translator.\nTranslate from en to zh.\nReturn only the translated text.',
+    );
+    expect(screen.getByLabelText('Prompt')).toHaveAttribute('readonly');
+    expect(screen.getByLabelText('Custom Prompt')).toHaveValue('Use concise style.');
+    expect(
+      screen.getByText('This is the saved system prompt used at runtime. It updates after you save AI settings.'),
+    ).toBeInTheDocument();
+  });
+
   it('renders builtin and custom providers in the provider select', () => {
     const controller = createController();
     render(<ProjectAIPane ai={controller} />);
@@ -76,5 +94,19 @@ describe('ProjectAIPane', () => {
     });
 
     expect(controller.setModelDraft).toHaveBeenCalledWith('custom:demo');
+  });
+
+  it('shows custom project override copy in the custom prompt section', () => {
+    const controller = createController();
+    render(<ProjectAIPane ai={controller} projectType="custom" />);
+
+    expect(
+      screen.getByPlaceholderText(
+        'Optional. Override the default system prompt with full custom processing instructions.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Saved custom prompt overrides the default system prompt.'),
+    ).toBeInTheDocument();
   });
 });

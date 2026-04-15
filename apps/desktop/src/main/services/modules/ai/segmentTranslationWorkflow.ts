@@ -1,9 +1,9 @@
 import { type Segment, type SegmentStatus } from '@cat/core/models';
+import { buildAIUserPrompt, buildAISystemPrompt, normalizeProjectType } from '@cat/core/project';
 import { serializeTokensToEditorText } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { AIRuntimeConfigProvider, ProjectRepository, SegmentRepository } from '../../ports';
 import { SegmentService } from '../../SegmentService';
-import { buildAIUserPrompt, buildAISystemPrompt, normalizeProjectType } from '../ai-prompts';
 import { AIProviderCatalogService } from './AIProviderCatalogService';
 import { AITextTranslator, TranslateDebugMeta } from './AITextTranslator';
 import type { TranslationPromptReferences } from './types';

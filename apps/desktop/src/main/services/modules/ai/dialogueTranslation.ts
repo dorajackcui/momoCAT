@@ -1,11 +1,14 @@
 import { type Segment, type Token } from '@cat/core/models';
-import type { Project } from '@cat/core/project';
+import {
+  buildAIDialogueUserPrompt,
+  buildAISystemPrompt,
+  type DialoguePromptPreviousGroup,
+  type Project,
+} from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
 import { parseEditorTextToTokens, serializeTokensToEditorText } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { AiModelRuntimeConfig, AITransport } from '../../ports';
-import { buildAIDialogueUserPrompt, buildAISystemPrompt } from '../ai-prompts';
-import type { DialoguePromptPreviousGroup } from '../ai-prompts/types';
 import type {
   DialogueSegmentDraft,
   DialogueTranslationResult,

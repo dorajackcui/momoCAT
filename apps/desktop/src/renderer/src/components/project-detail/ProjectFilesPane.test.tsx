@@ -52,6 +52,7 @@ function createAIControllerMock(overrides?: Partial<ProjectAIController>): {
     ],
     modelDraft: 'builtin:openai:gpt-5.4-mini',
     setModelDraft: vi.fn(),
+    effectiveSystemPromptPreview: 'You are a professional translator.',
     promptDraft: '',
     setPromptDraft: vi.fn(),
     promptSavedAt: null,

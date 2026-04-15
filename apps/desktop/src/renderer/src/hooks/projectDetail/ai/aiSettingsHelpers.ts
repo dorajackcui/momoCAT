@@ -1,6 +1,9 @@
 import {
   DEFAULT_PROJECT_AI_MODEL,
+  buildAISystemPrompt,
   normalizeProjectAIModel as normalizeProjectAIModelCore,
+  normalizeProjectType,
+  type ProjectType,
 } from '@cat/core/project';
 import type { AIProviderSummary } from '../../../../../shared/ipc';
 import type { AITestMetaInput, ProjectAIFlags, ProjectAIFlagsInput } from './types';
@@ -33,6 +36,19 @@ export function deriveProjectAIFlags(input: ProjectAIFlagsInput): ProjectAIFlags
       input.testMeta || input.testUserMessage || input.testPromptUsed || input.testRawResponse,
     ),
   };
+}
+
+export function buildProjectAISystemPromptPreview(input: {
+  projectType?: ProjectType;
+  srcLang: string;
+  tgtLang: string;
+  promptDraft: string;
+}): string {
+  return buildAISystemPrompt(normalizeProjectType(input.projectType), {
+    srcLang: input.srcLang,
+    tgtLang: input.tgtLang,
+    projectPrompt: input.promptDraft.trim(),
+  });
 }
 
 export function buildAITestMeta(input: AITestMetaInput): string {
