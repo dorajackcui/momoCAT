@@ -1,7 +1,6 @@
 import { type Segment, type Token } from '@cat/core/models';
 import {
-  buildAIDialogueUserPrompt,
-  buildAISystemPrompt,
+  buildAIDialoguePromptBundle,
   type DialoguePromptPreviousGroup,
   type Project,
 } from '@cat/core/project';
@@ -125,20 +124,15 @@ export async function translateDialogueUnit(
     });
   }
 
-  const systemPrompt = buildAISystemPrompt('translation', {
-    srcLang: params.project.srcLang,
-    tgtLang: params.project.tgtLang,
-    projectPrompt: params.project.aiPrompt || '',
-  });
-
   const expectedIds = params.unit.segments.map((segment) => segment.segment.segmentId);
   const maxAttempts = 3;
   let validationFeedback: string | undefined;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const userPrompt = buildAIDialogueUserPrompt({
+    const promptBundle = buildAIDialoguePromptBundle({
       srcLang: params.project.srcLang,
       tgtLang: params.project.tgtLang,
+      projectPrompt: params.project.aiPrompt || '',
       segments: promptSegments,
       previousGroup: params.previousGroup,
       validationFeedback,
@@ -148,8 +142,8 @@ export async function translateDialogueUnit(
       flow: 'dialogue',
       model: params.model,
       reasoningEffort: params.runtimeConfig.reasoningEffort,
-      systemPrompt,
-      userPrompt,
+      systemPrompt: promptBundle.systemPrompt,
+      userPrompt: promptBundle.userPrompt,
       attempt,
       segmentIds: expectedIds,
     });
@@ -159,8 +153,8 @@ export async function translateDialogueUnit(
       baseUrl: params.baseUrl,
       model: params.model,
       reasoningEffort: params.runtimeConfig.reasoningEffort,
-      systemPrompt,
-      userPrompt,
+      systemPrompt: promptBundle.systemPrompt,
+      userPrompt: promptBundle.userPrompt,
     });
     const content = response.content.trim();
     if (!content) {

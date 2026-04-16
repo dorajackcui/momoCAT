@@ -15,7 +15,7 @@ Read before modifying module boundaries, cross-layer contracts, or multi-subsyst
 
 ## Last Updated
 
-2026-03-25
+2026-04-16
 
 ## Owner
 
@@ -78,7 +78,7 @@ Internal dependency direction:
 - `translationTargetScope` (blank-only / overwrite-non-confirmed scope rules)
 - `AITextTranslator`
 - `SegmentPagingIterator`
-- dialogue/prompt helpers under `services/modules/ai/*`
+- dialogue helpers under `services/modules/ai/*`
 
 ### TM internal services
 
@@ -93,6 +93,7 @@ Internal dependency direction:
 - Use `@cat/core/tag` for tag parsing, markers, display, and signatures.
 - Use `@cat/core/text` for linguistic text serialization and term matching.
 - Use `@cat/core/qa` for QA evaluation and `TagValidator`.
+- Use `@cat/core/project` as the single source of truth for AI prompt builders; desktop main should consume it rather than keep local prompt template copies.
 - Keep root `@cat/core` as a compatibility barrel only; repo code should import from a slice entrypoint instead.
 
 ### Editor domain split (renderer)

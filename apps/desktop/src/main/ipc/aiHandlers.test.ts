@@ -73,4 +73,48 @@ describe('ai handlers', () => {
       expect.objectContaining({ status: 'completed' }),
     );
   });
+
+  it('passes ai test translate results through without synthesizing fallback prompts', async () => {
+    const { handlers, ipcMain } = createIpcMainStub();
+    const projectService = {
+      getAISettings: vi.fn(),
+      setAIKey: vi.fn(),
+      clearAIKey: vi.fn(),
+      listAIProviders: vi.fn(),
+      testAIProvider: vi.fn(),
+      addAIProvider: vi.fn(),
+      deleteAIProvider: vi.fn(),
+      getProxySettings: vi.fn(),
+      setProxySettings: vi.fn(),
+      testAIConnection: vi.fn(),
+      aiTranslateSegment: vi.fn(),
+      aiRefineSegment: vi.fn(),
+      aiTranslateFile: vi.fn(),
+      aiTestTranslate: vi.fn().mockResolvedValue({
+        ok: false,
+        error: 'transport failed',
+        systemPrompt: 'system prompt',
+        userPrompt: 'user prompt',
+        translatedText: '',
+      }),
+    };
+
+    registerAIHandlers({
+      ipcMain,
+      projectService: projectService as never,
+      jobManager: { startJob: vi.fn(), updateProgress: vi.fn() } as never,
+    });
+
+    const handler = handlers.get(IPC_CHANNELS.ai.testTranslate);
+    expect(handler).toBeDefined();
+
+    await expect(handler?.({}, 11, 'Input', 'Context')).resolves.toEqual({
+      ok: false,
+      error: 'transport failed',
+      systemPrompt: 'system prompt',
+      userPrompt: 'user prompt',
+      translatedText: '',
+    });
+    expect(projectService.aiTestTranslate).toHaveBeenCalledWith(11, 'Input', 'Context');
+  });
 });

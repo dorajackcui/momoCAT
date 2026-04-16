@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Segment } from '@cat/core/models';
-import { DEFAULT_PROJECT_AI_MODEL } from '@cat/core/project';
+import { DEFAULT_PROJECT_AI_MODEL, getBuiltinOpenAIProviderModel } from '@cat/core/project';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import { AIModule } from './AIModule';
 import { AITransport, ProjectRepository, SegmentRepository, SettingsRepository } from '../ports';
@@ -801,7 +801,7 @@ describe('AIModule.aiTranslateFile', () => {
     await module.aiTranslateFile(1, { model: 'unsupported-request-model' });
 
     const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(request.model).toBe(DEFAULT_PROJECT_AI_MODEL);
+    expect(request.model).toBe(getBuiltinOpenAIProviderModel(DEFAULT_PROJECT_AI_MODEL));
   });
 
   it('omits context field in user prompt when imported context is missing', async () => {
@@ -1059,7 +1059,7 @@ describe('AIModule.aiTranslateFile', () => {
     );
   });
 
-  it('includes tester context in aiTestTranslate user prompt', async () => {
+  it('returns the actual tester system/user prompts from aiTestTranslate', async () => {
     const projectRepo = {
       getProject: vi.fn().mockReturnValue({
         id: 11,
@@ -1094,13 +1094,107 @@ describe('AIModule.aiTranslateFile', () => {
     } as unknown as AITransport;
 
     const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
-    await module.aiTestTranslate(11, 'Input text', 'Additional context');
+    const result = await module.aiTestTranslate(11, 'Input text', 'Additional context');
 
     const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(result.ok).toBe(true);
+    expect(result.systemPrompt).toBe(request.systemPrompt);
+    expect(result.userPrompt).toBe(request.userPrompt);
+    expect(result.translatedText).toBe('processed');
     expect(request.model).toBe('gpt-5.4');
     expect(request.userPrompt).toContain('Input:');
     expect(request.userPrompt).toContain('Input text');
     expect(request.userPrompt).toContain('Context: Additional context');
+  });
+
+  it('returns the actual tester system/user prompts when aiTestTranslate transport fails', async () => {
+    const projectRepo = {
+      getProject: vi.fn().mockReturnValue({
+        id: 11,
+        srcLang: 'en',
+        tgtLang: 'zh',
+        projectType: 'translation',
+        aiPrompt: 'Use concise style.',
+        aiTemperature: 0.2,
+        aiModel: 'gpt-5.4',
+      }),
+    } as unknown as ProjectRepository;
+
+    const segmentRepo = {
+      getSegmentsPage: vi.fn().mockReturnValue([]),
+    } as unknown as SegmentRepository;
+
+    const settingsRepo = {
+      getSetting: vi.fn().mockReturnValue('test-api-key'),
+    } as unknown as SettingsRepository;
+
+    const segmentService = {
+      updateSegment: vi.fn().mockResolvedValue(undefined),
+    } as unknown as SegmentService;
+
+    const transport = {
+      testConnection: vi.fn().mockResolvedValue({ ok: true }),
+      createResponse: vi.fn().mockRejectedValue(new Error('transport failed')),
+    } as unknown as AITransport;
+
+    const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
+    const result = await module.aiTestTranslate(11, 'Input text', 'Additional context');
+
+    const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'transport failed',
+      translatedText: '',
+      systemPrompt: request.systemPrompt,
+      userPrompt: request.userPrompt,
+    });
+  });
+
+  it('returns tester prompts when aiTestTranslate rejects unchanged translation output', async () => {
+    const projectRepo = {
+      getProject: vi.fn().mockReturnValue({
+        id: 11,
+        srcLang: 'en',
+        tgtLang: 'zh',
+        projectType: 'translation',
+        aiPrompt: '',
+        aiTemperature: 0.2,
+        aiModel: 'gpt-5.4',
+      }),
+    } as unknown as ProjectRepository;
+
+    const segmentRepo = {
+      getSegmentsPage: vi.fn().mockReturnValue([]),
+    } as unknown as SegmentRepository;
+
+    const settingsRepo = {
+      getSetting: vi.fn().mockReturnValue('test-api-key'),
+    } as unknown as SettingsRepository;
+
+    const segmentService = {
+      updateSegment: vi.fn().mockResolvedValue(undefined),
+    } as unknown as SegmentService;
+
+    const transport = {
+      testConnection: vi.fn().mockResolvedValue({ ok: true }),
+      createResponse: vi.fn().mockResolvedValue({
+        content: 'Input text',
+        status: 200,
+        endpoint: '/v1/responses',
+      }),
+    } as unknown as AITransport;
+
+    const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
+    const result = await module.aiTestTranslate(11, 'Input text', 'Additional context');
+
+    const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'Model returned source unchanged: Input text',
+      translatedText: 'Input text',
+      systemPrompt: request.systemPrompt,
+      userPrompt: request.userPrompt,
+    });
   });
 
   it('groups consecutive speaker segments and injects previous dialogue group context', async () => {

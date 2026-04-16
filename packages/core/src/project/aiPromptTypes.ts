@@ -29,6 +29,27 @@ export interface UserPromptBuildParams {
   tbReferences?: PromptTBReference[];
 }
 
+export interface TextPromptBundleBuildParams {
+  srcLang: string;
+  tgtLang: string;
+  projectPrompt?: string;
+  sourceText: string;
+  sourceTagPreservedText?: string;
+  context?: string;
+  currentTranslationPayload?: string;
+  refinementInstruction?: string;
+  validationFeedback?: string;
+  tmReference?: PromptTMReference;
+  tbReferences?: PromptTBReference[];
+}
+
+export interface TextPromptBundle {
+  systemPrompt: string;
+  userPrompt: string;
+  hasProtectedMarkers: boolean;
+  sourcePayload: string;
+}
+
 export interface DialoguePromptSegment {
   id: string;
   speaker: string;
@@ -49,4 +70,13 @@ export interface DialogueUserPromptBuildParams {
   segments: DialoguePromptSegment[];
   previousGroup?: DialoguePromptPreviousGroup;
   validationFeedback?: string;
+}
+
+export interface DialoguePromptBundleBuildParams extends DialogueUserPromptBuildParams {
+  projectPrompt?: string;
+}
+
+export interface DialoguePromptBundle {
+  systemPrompt: string;
+  userPrompt: string;
 }

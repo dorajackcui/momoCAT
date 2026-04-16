@@ -33,7 +33,7 @@ function createController(overrides?: Partial<ProjectAIController>): ProjectAICo
     modelDraft: 'builtin:openai:gpt-5.4-mini',
     setModelDraft: vi.fn(),
     effectiveSystemPromptPreview:
-      'You are a professional translator.\nTranslate from en to zh.\nReturn only the translated text.',
+      'You are a professional translator.\n\nFrom en to zh. Output in zh ONLY.\nKeep all protected markers exactly as they appear, including forms such as {1>, <2}, {3}\nPreserve all escape sequences exactly as they appear, including \\n and \\r.\nReturn only the translated text, without quotes or extra commentary',
     promptDraft: '',
     setPromptDraft: vi.fn(),
     promptSavedAt: null,
@@ -43,8 +43,8 @@ function createController(overrides?: Partial<ProjectAIController>): ProjectAICo
     testContext: '',
     setTestContext: vi.fn(),
     testResult: null,
-    testPromptUsed: null,
-    testUserMessage: null,
+    testSystemPrompt: null,
+    testUserPrompt: null,
     testMeta: null,
     testError: null,
     testRawResponse: null,
@@ -68,7 +68,7 @@ describe('ProjectAIPane', () => {
     render(<ProjectAIPane ai={controller} />);
 
     expect(screen.getByLabelText('Prompt')).toHaveValue(
-      'You are a professional translator.\nTranslate from en to zh.\nReturn only the translated text.',
+      'You are a professional translator.\n\nFrom en to zh. Output in zh ONLY.\nKeep all protected markers exactly as they appear, including forms such as {1>, <2}, {3}\nPreserve all escape sequences exactly as they appear, including \\n and \\r.\nReturn only the translated text, without quotes or extra commentary',
     );
     expect(screen.getByLabelText('Prompt')).toHaveAttribute('readonly');
     expect(screen.getByLabelText('Custom Prompt')).toHaveValue('Use concise style.');

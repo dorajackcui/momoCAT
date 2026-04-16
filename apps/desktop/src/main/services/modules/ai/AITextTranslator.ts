@@ -1,6 +1,5 @@
 import {
-  buildAISystemPrompt,
-  buildAIUserPrompt,
+  buildAITextPromptBundle,
   normalizeProjectType,
   type ProjectType,
   type PromptTBReference,
@@ -13,6 +12,8 @@ import type { AITransport, ReasoningEffort } from '../../ports';
 import { logAIPromptDebug } from './promptDebug';
 
 export interface TranslateDebugMeta {
+  systemPrompt?: string;
+  userPrompt?: string;
   requestId?: string;
   status?: number;
   endpoint?: string;
@@ -129,22 +130,12 @@ export class AITextTranslator {
 
   public async translateText(params: TranslateTextParams): Promise<string> {
     const normalizedType = normalizeProjectType(params.projectType);
-    const systemPrompt = buildAISystemPrompt(normalizedType, {
+    const promptBundle = buildAITextPromptBundle(normalizedType, {
       srcLang: params.srcLang,
       tgtLang: params.tgtLang,
       projectPrompt: params.projectPrompt,
-    });
-    const hasProtectedMarkers =
-      typeof params.sourceTagPreservedText === 'string' &&
-      params.sourceTagPreservedText.length > 0 &&
-      params.sourceTagPreservedText !== params.sourceText;
-    const sourcePayload = hasProtectedMarkers
-      ? (params.sourceTagPreservedText ?? params.sourceText)
-      : params.sourceText;
-    const userPrompt = buildAIUserPrompt(normalizedType, {
-      srcLang: params.srcLang,
-      sourcePayload,
-      hasProtectedMarkers,
+      sourceText: params.sourceText,
+      sourceTagPreservedText: params.sourceTagPreservedText,
       context: params.context,
       currentTranslationPayload: params.currentTranslationPayload,
       refinementInstruction: params.refinementInstruction,
@@ -153,27 +144,29 @@ export class AITextTranslator {
       validationFeedback: params.validationFeedback,
     });
 
+    if (params.debug) {
+      params.debug.model = params.model;
+      params.debug.systemPrompt = promptBundle.systemPrompt;
+      params.debug.userPrompt = promptBundle.userPrompt;
+    }
+
     logAIPromptDebug({
       flow: params.promptDebugFlow ?? 'test',
       model: params.model,
       reasoningEffort: params.reasoningEffort ?? 'medium',
-      systemPrompt,
-      userPrompt,
+      systemPrompt: promptBundle.systemPrompt,
+      userPrompt: promptBundle.userPrompt,
       attempt: params.promptDebugAttempt,
       segmentId: params.promptDebugSegmentId,
     });
-
-    if (params.debug) {
-      params.debug.model = params.model;
-    }
 
     const response = await this.transport.createResponse({
       apiKey: params.apiKey,
       baseUrl: params.baseUrl,
       model: params.model,
       reasoningEffort: params.reasoningEffort ?? 'medium',
-      systemPrompt,
-      userPrompt,
+      systemPrompt: promptBundle.systemPrompt,
+      userPrompt: promptBundle.userPrompt,
     });
 
     if (params.debug) {
@@ -190,7 +183,7 @@ export class AITextTranslator {
     }
 
     const unchangedAgainstSource = trimmed === params.sourceText.trim();
-    const unchangedAgainstPayload = trimmed === sourcePayload.trim();
+    const unchangedAgainstPayload = trimmed === promptBundle.sourcePayload.trim();
     const allowUnchanged =
       Boolean(params.allowUnchanged) || normalizedType === 'review' || normalizedType === 'custom';
     if (

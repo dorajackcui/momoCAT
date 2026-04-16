@@ -55,15 +55,15 @@ Windows note:
 
 Run from repo root `simple-cat-tool`.
 
-| Task | When to use | Command | Platform | Expected result |
-| --- | --- | --- | --- | --- |
-| Start local development | First boot or manual app verification | `npm ci` -> `npm run rebuild:electron` -> `npm run dev` | Windows + macOS | Electron app starts with native module rebuilt for current host |
-| Run unit/integration baseline | Any code change before deeper validation | `npm test` | Windows + macOS | Vitest suites pass |
-| Run repo quality gate | Default cross-platform baseline before pack guesses | `npm run gate:check` | Windows + macOS | Typecheck + guardrails + lint + smoke gate pass |
-| Run desktop smoke e2e | UI/editor behavior changed, need fastest desktop confidence | `npm run test:e2e:smoke --workspace=apps/desktop` | Windows + macOS | Smoke Playwright suite passes against built desktop app |
-| Run full desktop e2e | Smoke is not enough or broader desktop regression coverage is needed | `npm run test:e2e --workspace=apps/desktop` | Windows + macOS | Full Playwright suite passes |
-| Validate Windows packaging | Need native Windows installer artifact validation | `npm run pack:win` | Windows only | `.exe` packaging flow completes on Windows host |
-| Validate macOS packaging | Need native macOS installer artifact validation | `npm run pack:mac` | macOS only | `.dmg` packaging flow completes on macOS host |
+| Task                          | When to use                                                          | Command                                                 | Platform        | Expected result                                                 |
+| ----------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------- | --------------- | --------------------------------------------------------------- |
+| Start local development       | First boot or manual app verification                                | `npm ci` -> `npm run rebuild:electron` -> `npm run dev` | Windows + macOS | Electron app starts with native module rebuilt for current host |
+| Run unit/integration baseline | Any code change before deeper validation                             | `npm test`                                              | Windows + macOS | Vitest suites pass                                              |
+| Run repo quality gate         | Default cross-platform baseline before pack guesses                  | `npm run gate:check`                                    | Windows + macOS | Typecheck + guardrails + lint + smoke gate pass                 |
+| Run desktop smoke e2e         | UI/editor behavior changed, need fastest desktop confidence          | `npm run test:e2e:smoke --workspace=apps/desktop`       | Windows + macOS | Smoke Playwright suite passes against built desktop app         |
+| Run full desktop e2e          | Smoke is not enough or broader desktop regression coverage is needed | `npm run test:e2e --workspace=apps/desktop`             | Windows + macOS | Full Playwright suite passes                                    |
+| Validate Windows packaging    | Need native Windows installer artifact validation                    | `npm run pack:win`                                      | Windows only    | `.exe` packaging flow completes on Windows host                 |
+| Validate macOS packaging      | Need native macOS installer artifact validation                      | `npm run pack:mac`                                      | macOS only      | `.dmg` packaging flow completes on macOS host                   |
 
 Notes:
 
@@ -129,6 +129,7 @@ npx vitest run packages/core/src/TagManager.test.ts
 - Main process root: `apps/desktop/src/main`
 - Shared IPC contract: `apps/desktop/src/shared/ipc.ts`
 - Core package: `packages/core/src`
+- AI prompt templates: `packages/core/src/project/prompts`
 - DB package: `packages/db/src`
 
 ## Documentation Rules

@@ -4,7 +4,7 @@ import { serializeTokensToEditorText } from '@cat/core/tag';
 import type { AIBatchTargetScope } from '../../../../shared/ipc';
 import type { AiModelRuntimeConfig, AITransport } from '../../ports';
 import { SegmentService } from '../../SegmentService';
-import { getAIProgressVerb } from '../ai-prompts';
+import { getAIProgressVerb } from './aiProgressVerb';
 import { buildDialogueUnits, translateDialogueUnit } from './dialogueTranslation';
 import { SegmentPagingIterator } from './SegmentPagingIterator';
 import type { TranslationPromptReferences } from './types';

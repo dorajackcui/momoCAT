@@ -13,8 +13,8 @@ export interface ProjectAIFlagsInput {
   modelDraft: ProjectAIModel;
   savedModelValue: ProjectAIModel;
   testMeta: string | null;
-  testUserMessage: string | null;
-  testPromptUsed: string | null;
+  testUserPrompt: string | null;
+  testSystemPrompt: string | null;
   testRawResponse: string | null;
 }
 
@@ -57,8 +57,8 @@ export interface ProjectAIController {
   testContext: string;
   setTestContext: Dispatch<SetStateAction<string>>;
   testResult: string | null;
-  testPromptUsed: string | null;
-  testUserMessage: string | null;
+  testSystemPrompt: string | null;
+  testUserPrompt: string | null;
   testMeta: string | null;
   testError: string | null;
   testRawResponse: string | null;

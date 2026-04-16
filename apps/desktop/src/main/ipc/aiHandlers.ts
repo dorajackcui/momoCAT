@@ -143,26 +143,9 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
   registerHandle(
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.ai.testTranslate,
-    async (_event, ...args) => {
+    (_event, ...args) => {
       const [projectId, sourceText, contextText] = args as [number, string, string | undefined];
-      try {
-        return await projectService.aiTestTranslate(projectId, sourceText, contextText);
-      } catch (error) {
-        return {
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-          promptUsed: '',
-          userMessage: sourceText
-            ? [
-                `Source:\n${sourceText}`,
-                contextText?.trim() ? `Context: ${contextText.trim()}` : '',
-              ]
-                .filter(Boolean)
-                .join('\n\n')
-            : '',
-          translatedText: '',
-        };
-      }
+      return projectService.aiTestTranslate(projectId, sourceText, contextText);
     },
   );
 }

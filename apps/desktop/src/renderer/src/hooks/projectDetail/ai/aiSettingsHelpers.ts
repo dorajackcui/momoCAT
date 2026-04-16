@@ -33,7 +33,7 @@ export function deriveProjectAIFlags(input: ProjectAIFlagsInput): ProjectAIFlags
     hasUnsavedPromptChanges:
       normalizedPromptDraft !== normalizedSavedPrompt || hasUnsavedModelChanges,
     hasTestDetails: Boolean(
-      input.testMeta || input.testUserMessage || input.testPromptUsed || input.testRawResponse,
+      input.testMeta || input.testUserPrompt || input.testSystemPrompt || input.testRawResponse,
     ),
   };
 }

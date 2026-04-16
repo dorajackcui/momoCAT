@@ -167,8 +167,8 @@ export interface ProxySettingsInput {
 export interface AITestTranslateResult {
   ok: boolean;
   error?: string;
-  promptUsed: string;
-  userMessage: string;
+  systemPrompt: string;
+  userPrompt: string;
   translatedText: string;
   requestId?: string;
   status?: number;

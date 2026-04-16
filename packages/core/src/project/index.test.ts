@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 import {
   BUILTIN_OPENAI_PROVIDER_MODELS,
   DEFAULT_PROJECT_AI_MODEL,
+  buildAIDialoguePromptBundle,
   buildAIDialogueUserPrompt,
   buildAISystemPrompt,
+  buildAITextPromptBundle,
   buildAIUserPrompt,
   getBuiltinOpenAIProviderModel,
   isBuiltinProjectAIModel,
@@ -11,120 +13,360 @@ import {
   PROJECT_AI_MODELS,
   isProjectAIModel,
   normalizeProjectAIModel,
-} from './index';
+} from "./index";
 
-describe('Project AI Model Registry', () => {
-  it('validates normalized project ai provider ids', () => {
-    expect(isBuiltinProjectAIModel('builtin:openai:gpt-5-mini')).toBe(true);
-    expect(isLegacyProjectAIModel('gpt-5-mini')).toBe(true);
-    expect(isProjectAIModel('custom:provider:demo')).toBe(true);
+describe("Project AI Model Registry", () => {
+  it("validates normalized project ai provider ids", () => {
+    expect(isBuiltinProjectAIModel("builtin:openai:gpt-5-mini")).toBe(true);
+    expect(isLegacyProjectAIModel("gpt-5-mini")).toBe(true);
+    expect(isProjectAIModel("custom:provider:demo")).toBe(true);
     expect(isProjectAIModel(null)).toBe(false);
   });
 
-  it('normalizes legacy values and preserves custom provider ids', () => {
-    expect(normalizeProjectAIModel('gpt-5-mini')).toBe('builtin:openai:gpt-5-mini');
-    expect(normalizeProjectAIModel('custom:provider:demo')).toBe('custom:provider:demo');
+  it("normalizes legacy values and preserves custom provider ids", () => {
+    expect(normalizeProjectAIModel("gpt-5-mini")).toBe(
+      "builtin:openai:gpt-5-mini",
+    );
+    expect(normalizeProjectAIModel("custom:provider:demo")).toBe(
+      "custom:provider:demo",
+    );
     expect(normalizeProjectAIModel(undefined)).toBe(DEFAULT_PROJECT_AI_MODEL);
   });
 
-  it('keeps default provider inside supported builtins', () => {
+  it("keeps default provider inside supported builtins", () => {
     expect(PROJECT_AI_MODELS.includes(DEFAULT_PROJECT_AI_MODEL)).toBe(true);
   });
 
-  it('maps builtin provider ids back to concrete model names', () => {
-    expect(getBuiltinOpenAIProviderModel(DEFAULT_PROJECT_AI_MODEL)).toBe('gpt-5.4-mini');
-    expect(getBuiltinOpenAIProviderModel('custom:provider:demo')).toBeUndefined();
-    expect(BUILTIN_OPENAI_PROVIDER_MODELS['builtin:openai:gpt-5']).toBe('gpt-5');
+  it("maps builtin provider ids back to concrete model names", () => {
+    expect(getBuiltinOpenAIProviderModel(DEFAULT_PROJECT_AI_MODEL)).toBe(
+      "gpt-5.4-mini",
+    );
+    expect(
+      getBuiltinOpenAIProviderModel("custom:provider:demo"),
+    ).toBeUndefined();
+    expect(BUILTIN_OPENAI_PROVIDER_MODELS["builtin:openai:gpt-5"]).toBe(
+      "gpt-5",
+    );
+  });
+});
+
+describe("Project AI Prompt Templates", () => {
+  it("builds default translation system prompt when no custom prompt is provided", () => {
+    const prompt = buildAISystemPrompt("translation", {
+      srcLang: "en",
+      tgtLang: "zh",
+      projectPrompt: "",
+    });
+
+    expect(prompt).toContain("You are a professional translator.");
+    expect(prompt).toContain("From en to zh. Output in zh ONLY.");
+    expect(prompt).toContain(
+      "Keep all protected markers exactly as they appear, including forms such as {1>, <2}, {3}",
+    );
+    expect(prompt).toContain(
+      "Preserve all escape sequences exactly as they appear, including \\n and \\r.",
+    );
   });
 
-  it('builds default translation system prompt when no custom prompt is provided', () => {
-    const prompt = buildAISystemPrompt('translation', {
-      srcLang: 'en',
-      tgtLang: 'zh',
-      projectPrompt: '',
+  it("builds default review system prompt when no custom prompt is provided", () => {
+    const prompt = buildAISystemPrompt("review", {
+      srcLang: "en",
+      tgtLang: "zh",
+      projectPrompt: "",
     });
 
-    expect(prompt).toContain('You are a professional translator.');
-    expect(prompt).toContain('Translate from en to zh.');
+    expect(prompt).toContain("You are a professional reviewer.");
+    expect(prompt).toContain(
+      "Review and improve the provided zh text, using en as source language.",
+    );
   });
 
-  it('builds default review system prompt when no custom prompt is provided', () => {
-    const prompt = buildAISystemPrompt('review', {
-      srcLang: 'en',
-      tgtLang: 'zh',
-      projectPrompt: '',
+  it("builds default custom system prompt when no custom prompt is provided", () => {
+    const prompt = buildAISystemPrompt("custom", {
+      srcLang: "en",
+      tgtLang: "zh",
+      projectPrompt: "",
     });
 
-    expect(prompt).toContain('You are a professional reviewer.');
-    expect(prompt).toContain('Review and improve the provided zh text, using en as source language.');
+    expect(prompt).toContain("You are a precise text processing assistant.");
+    expect(prompt).toContain("Follow the user-provided instruction exactly.");
   });
 
-  it('builds default custom system prompt when no custom prompt is provided', () => {
-    const prompt = buildAISystemPrompt('custom', {
-      srcLang: 'en',
-      tgtLang: 'zh',
-      projectPrompt: '',
+  it("keeps translation and review prompt extension semantics, and custom override semantics", () => {
+    const translationPrompt = buildAISystemPrompt("translation", {
+      srcLang: "en",
+      tgtLang: "zh",
+      projectPrompt: "Use concise style.",
+    });
+    const reviewPrompt = buildAISystemPrompt("review", {
+      srcLang: "en",
+      tgtLang: "zh",
+      projectPrompt: "Fix terminology only.",
+    });
+    const customPrompt = buildAISystemPrompt("custom", {
+      srcLang: "en",
+      tgtLang: "zh",
+      projectPrompt: "Classify sentiment as positive/negative.",
     });
 
-    expect(prompt).toContain('You are a precise text processing assistant.');
-    expect(prompt).toContain('Follow the user-provided instruction exactly.');
+    expect(translationPrompt).toContain("Use concise style.");
+    expect(translationPrompt).toContain("From en to zh. Output in zh ONLY.");
+    expect(reviewPrompt).toContain(
+      "Original text language: en. Translation text language: zh.",
+    );
+    expect(reviewPrompt).toContain("Fix terminology only.");
+    expect(customPrompt).toBe("Classify sentiment as positive/negative.");
   });
 
-  it('keeps translation and review prompt extension semantics, and custom override semantics', () => {
-    const translationPrompt = buildAISystemPrompt('translation', {
-      srcLang: 'en',
-      tgtLang: 'zh',
-      projectPrompt: 'Use concise style.',
-    });
-    const reviewPrompt = buildAISystemPrompt('review', {
-      srcLang: 'en',
-      tgtLang: 'zh',
-      projectPrompt: 'Fix terminology only.',
-    });
-    const customPrompt = buildAISystemPrompt('custom', {
-      srcLang: 'en',
-      tgtLang: 'zh',
-      projectPrompt: 'Classify sentiment as positive/negative.',
-    });
-
-    expect(translationPrompt).toContain('Use concise style.');
-    expect(translationPrompt).toContain('Translate from en to zh.');
-    expect(reviewPrompt).toContain('Original text language: en. Translation text language: zh.');
-    expect(reviewPrompt).toContain('Fix terminology only.');
-    expect(customPrompt).toBe('Classify sentiment as positive/negative.');
-  });
-
-  it('builds translation and dialogue user prompts with context and references', () => {
-    const translationPrompt = buildAIUserPrompt('translation', {
-      srcLang: 'en',
-      sourcePayload: 'Hello world',
+  it("builds translation user prompt with context and references", () => {
+    const prompt = buildAIUserPrompt("translation", {
+      srcLang: "en",
+      sourcePayload: "Hello world",
       hasProtectedMarkers: false,
-      context: 'UI label',
+      context: "UI label",
       tmReference: {
         similarity: 98,
-        tmName: 'Main TM',
-        sourceText: 'Hello world',
-        targetText: '你好世界',
+        tmName: "Main TM",
+        sourceText: "Hello world",
+        targetText: "Hello world target",
       },
-      tbReferences: [{ srcTerm: 'world', tgtTerm: '世界', note: 'prefer noun form' }],
+      tbReferences: [
+        { srcTerm: "world", tgtTerm: "world target", note: "prefer noun form" },
+      ],
     });
-    const dialoguePrompt = buildAIDialogueUserPrompt({
-      srcLang: 'en',
-      tgtLang: 'zh',
-      segments: [{ id: 'seg-1', speaker: 'Alice', sourcePayload: 'Hello there' }],
+
+    expect(prompt).toContain("Source (en):");
+    expect(prompt).toContain("Context: UI label");
+    expect(prompt).toContain("TM Reference (best match):");
+    expect(prompt).toContain("- Similarity: 98% | TM: Main TM");
+    expect(prompt).toContain("- Source: Hello world");
+    expect(prompt).toContain("- Target: Hello world target");
+    expect(prompt).toContain("Terminology References (hit terms):");
+    expect(prompt).toContain(
+      "- world => world target (note: prefer noun form)",
+    );
+  });
+
+  it("does not include TM/TB sections when translation references are absent", () => {
+    const prompt = buildAIUserPrompt("translation", {
+      srcLang: "en",
+      sourcePayload: "Hello world",
+      hasProtectedMarkers: false,
+      context: "UI label",
+    });
+
+    expect(prompt).not.toContain("TM Reference (best match):");
+    expect(prompt).not.toContain("Terminology References (hit terms):");
+  });
+
+  it("does not include context line for translation user prompt when context is empty", () => {
+    const prompt = buildAIUserPrompt("translation", {
+      srcLang: "en",
+      sourcePayload: "Hello world",
+      hasProtectedMarkers: false,
+      context: "   ",
+    });
+
+    expect(prompt).toContain("Source (en):");
+    expect(prompt).not.toContain("Context:");
+  });
+
+  it("builds translation user prompt with refinement instruction and current translation", () => {
+    const prompt = buildAIUserPrompt("translation", {
+      srcLang: "en",
+      sourcePayload: "Hello world",
+      hasProtectedMarkers: false,
+      context: "UI label",
+      currentTranslationPayload: "Current translation",
+      refinementInstruction: "Make tone more concise",
+    });
+
+    expect(prompt).toContain("Current Translation:");
+    expect(prompt).toContain("Current translation");
+    expect(prompt).toContain("Refinement Instruction:");
+    expect(prompt).toContain("Make tone more concise");
+  });
+
+  it("does not include refinement section when only one refinement field is present", () => {
+    const prompt = buildAIUserPrompt("translation", {
+      srcLang: "en",
+      sourcePayload: "Hello world",
+      hasProtectedMarkers: false,
+      currentTranslationPayload: "Current translation",
+    });
+
+    expect(prompt).not.toContain("Current Translation:");
+    expect(prompt).not.toContain("Refinement Instruction:");
+  });
+
+  it("builds review user prompt with validation feedback", () => {
+    const prompt = buildAIUserPrompt("review", {
+      srcLang: "en",
+      sourcePayload: "Translated text",
+      hasProtectedMarkers: false,
+      context: "",
+      validationFeedback: "Missing marker {1}",
+    });
+
+    expect(prompt).toContain("Source (en):");
+    expect(prompt).toContain("Context:");
+    expect(prompt).toContain("Validation feedback from previous attempt:");
+    expect(prompt).toContain("Missing marker {1}");
+  });
+
+  it("builds custom user prompt with input header", () => {
+    const prompt = buildAIUserPrompt("custom", {
+      srcLang: "en",
+      sourcePayload: "Process this text",
+      hasProtectedMarkers: false,
+      context: "context text",
+    });
+
+    expect(prompt).toContain("Input:");
+    expect(prompt).toContain("Context: context text");
+  });
+
+  it("does not include context line for custom user prompt when context is empty", () => {
+    const prompt = buildAIUserPrompt("custom", {
+      srcLang: "en",
+      sourcePayload: "Process this text",
+      hasProtectedMarkers: false,
+      context: "   ",
+    });
+
+    expect(prompt).toContain("Input:");
+    expect(prompt).not.toContain("Context:");
+  });
+
+  it("builds dialogue translation user prompt with previous group and json contract", () => {
+    const prompt = buildAIDialogueUserPrompt({
+      srcLang: "en",
+      tgtLang: "zh",
+      segments: [
+        {
+          id: "seg-1",
+          speaker: "Alice",
+          sourcePayload: "Hello there",
+        },
+        {
+          id: "seg-2",
+          speaker: "Alice",
+          sourcePayload: "How are you?",
+        },
+      ],
       previousGroup: {
-        speaker: 'Bob',
-        sourceText: 'Good morning',
-        targetText: '早上好',
+        speaker: "Bob",
+        sourceText: "Good morning",
+        targetText: "Good morning target",
       },
     });
 
-    expect(translationPrompt).toContain('Source (en):');
-    expect(translationPrompt).toContain('Context: UI label');
-    expect(translationPrompt).toContain('TM Reference (best match):');
-    expect(translationPrompt).toContain('- world => 世界 (note: prefer noun form)');
-    expect(dialoguePrompt).toContain('Return strict JSON only');
-    expect(dialoguePrompt).toContain('Previous Dialogue Group (for consistency):');
-    expect(dialoguePrompt).toContain('speaker: Bob');
+    expect(prompt).toContain("Return strict JSON only");
+    expect(prompt).toContain(
+      '{"translations":[{"id":"<segment-id>","text":"<translated-text>"}]}',
+    );
+    expect(prompt).toContain("id: seg-1");
+    expect(prompt).toContain("speaker: Alice");
+    expect(prompt).toContain("Previous Dialogue Group (for consistency):");
+    expect(prompt).toContain("speaker: Bob");
+    expect(prompt).toContain("target:");
+    expect(prompt).toContain("Good morning target");
+  });
+
+  it("builds text prompt bundles from the same canonical rules as legacy builders", () => {
+    const bundle = buildAITextPromptBundle("translation", {
+      srcLang: "en",
+      tgtLang: "zh",
+      projectPrompt: "Use concise style.",
+      sourceText: "Save\\nFile",
+      sourceTagPreservedText: "{1>}Save\\nFile<2}",
+      context: "Toolbar label",
+      currentTranslationPayload: "Current target text",
+      refinementInstruction: "Shorten slightly",
+      validationFeedback: "Keep markers unchanged",
+      tmReference: {
+        similarity: 100,
+        tmName: "Main TM",
+        sourceText: "Save file",
+        targetText: "Current target text",
+      },
+      tbReferences: [{ srcTerm: "Save", tgtTerm: "Save target term" }],
+    });
+
+    expect(bundle.hasProtectedMarkers).toBe(true);
+    expect(bundle.sourcePayload).toBe("{1>}Save\\nFile<2}");
+    expect(bundle.systemPrompt).toBe(
+      buildAISystemPrompt("translation", {
+        srcLang: "en",
+        tgtLang: "zh",
+        projectPrompt: "Use concise style.",
+      }),
+    );
+    expect(bundle.userPrompt).toBe(
+      buildAIUserPrompt("translation", {
+        srcLang: "en",
+        sourcePayload: "{1>}Save\\nFile<2}",
+        hasProtectedMarkers: true,
+        context: "Toolbar label",
+        currentTranslationPayload: "Current target text",
+        refinementInstruction: "Shorten slightly",
+        validationFeedback: "Keep markers unchanged",
+        tmReference: {
+          similarity: 100,
+          tmName: "Main TM",
+          sourceText: "Save file",
+          targetText: "Current target text",
+        },
+        tbReferences: [{ srcTerm: "Save", tgtTerm: "Save target term" }],
+      }),
+    );
+  });
+
+  it("keeps plain source text in text prompt bundles when no protected markers are present", () => {
+    const bundle = buildAITextPromptBundle("custom", {
+      srcLang: "en",
+      tgtLang: "zh",
+      projectPrompt: "",
+      sourceText: "Process this text",
+      sourceTagPreservedText: "Process this text",
+      context: "Context text",
+    });
+
+    expect(bundle.hasProtectedMarkers).toBe(false);
+    expect(bundle.sourcePayload).toBe("Process this text");
+    expect(bundle.userPrompt).toContain("Input:");
+    expect(bundle.userPrompt).toContain("Process this text");
+  });
+
+  it("builds dialogue prompt bundles from the same canonical rules as legacy builders", () => {
+    const params = {
+      srcLang: "en",
+      tgtLang: "zh",
+      projectPrompt: "Keep speaker tone stable.",
+      segments: [
+        {
+          id: "seg-1",
+          speaker: "Alice",
+          sourcePayload: "Hello there",
+        },
+      ],
+      previousGroup: {
+        speaker: "Bob",
+        sourceText: "Good morning",
+        targetText: "Good morning target",
+      },
+      validationFeedback: "Return strict JSON only.",
+    };
+
+    const bundle = buildAIDialoguePromptBundle(params);
+
+    expect(bundle.systemPrompt).toBe(
+      buildAISystemPrompt("translation", {
+        srcLang: "en",
+        tgtLang: "zh",
+        projectPrompt: "Keep speaker tone stable.",
+      }),
+    );
+    expect(bundle.userPrompt).toBe(buildAIDialogueUserPrompt(params));
   });
 });

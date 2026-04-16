@@ -91,17 +91,23 @@ export const DEFAULT_PROJECT_QA_SETTINGS: ProjectQASettings = {
 };
 
 export {
+  buildAIDialoguePromptBundle,
   buildAIDialogueUserPrompt,
   buildAISystemPrompt,
+  buildAITextPromptBundle,
   buildAIUserPrompt,
   normalizeProjectType,
 } from './aiPromptTemplates';
 export type {
+  DialoguePromptBundle,
+  DialoguePromptBundleBuildParams,
   DialoguePromptPreviousGroup,
   DialoguePromptSegment,
   DialogueUserPromptBuildParams,
   PromptTBReference,
   PromptTMReference,
   SystemPromptBuildParams,
+  TextPromptBundle,
+  TextPromptBundleBuildParams,
   UserPromptBuildParams,
 } from './aiPromptTypes';

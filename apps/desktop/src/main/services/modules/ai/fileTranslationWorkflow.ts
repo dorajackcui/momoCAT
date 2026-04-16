@@ -5,7 +5,7 @@ import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { AIBatchTargetScope } from '../../../../shared/ipc';
 import type { AiModelRuntimeConfig } from '../../ports';
 import { SegmentService } from '../../SegmentService';
-import { getAIProgressVerb } from '../ai-prompts';
+import { getAIProgressVerb } from './aiProgressVerb';
 import type { TranslationPromptReferences } from './types';
 import { SegmentPagingIterator } from './SegmentPagingIterator';
 import { AITextTranslator } from './AITextTranslator';

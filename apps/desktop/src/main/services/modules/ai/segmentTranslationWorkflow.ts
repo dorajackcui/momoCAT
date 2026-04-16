@@ -1,5 +1,4 @@
 import { type Segment, type SegmentStatus } from '@cat/core/models';
-import { buildAIUserPrompt, buildAISystemPrompt, normalizeProjectType } from '@cat/core/project';
 import { serializeTokensToEditorText } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { AIRuntimeConfigProvider, ProjectRepository, SegmentRepository } from '../../ports';
@@ -181,8 +180,8 @@ export async function runTestTranslation(
 ): Promise<{
   ok: boolean;
   error?: string;
-  promptUsed: string;
-  userMessage: string;
+  systemPrompt: string;
+  userPrompt: string;
   translatedText: string;
   requestId?: string;
   status?: number;
@@ -192,26 +191,23 @@ export async function runTestTranslation(
   responseContent?: string;
 }> {
   const project = deps.projectRepo.getProject(projectId);
-  if (!project) throw new Error('Project not found');
+  if (!project) {
+    return {
+      ok: false,
+      error: 'Project not found',
+      systemPrompt: '',
+      userPrompt: '',
+      translatedText: '',
+    };
+  }
 
-  const { provider, apiKey } = deps.providerCatalogService.resolveProviderConfig(project.aiModel);
-  const runtimeConfig = await deps.aiRuntimeConfigProvider.getModelConfig(provider.model);
   const source = sourceText.trim();
   const context = contextText?.trim() ?? '';
-  const promptUsed = buildAISystemPrompt(project.projectType || 'translation', {
-    srcLang: project.srcLang,
-    tgtLang: project.tgtLang,
-    projectPrompt: project.aiPrompt || '',
-  });
-  const userMessage = buildAIUserPrompt(normalizeProjectType(project.projectType), {
-    srcLang: project.srcLang,
-    sourcePayload: source,
-    hasProtectedMarkers: false,
-    context,
-  });
   const debug: TranslateDebugMeta = {};
 
   try {
+    const { provider, apiKey } = deps.providerCatalogService.resolveProviderConfig(project.aiModel);
+    const runtimeConfig = await deps.aiRuntimeConfigProvider.getModelConfig(provider.model);
     const translatedText = await deps.textTranslator.translateText({
       apiKey,
       baseUrl: provider.baseUrl,
@@ -237,8 +233,8 @@ export async function runTestTranslation(
     return {
       ok: !unchanged,
       error: unchanged ? `Model returned source unchanged: ${translatedText}` : undefined,
-      promptUsed,
-      userMessage,
+      systemPrompt: debug.systemPrompt ?? '',
+      userPrompt: debug.userPrompt ?? '',
       translatedText,
       requestId: debug.requestId,
       status: debug.status,
@@ -251,8 +247,8 @@ export async function runTestTranslation(
     return {
       ok: false,
       error: error instanceof Error ? error.message : String(error),
-      promptUsed,
-      userMessage,
+      systemPrompt: debug.systemPrompt ?? '',
+      userPrompt: debug.userPrompt ?? '',
       translatedText: '',
       requestId: debug.requestId,
       status: debug.status,

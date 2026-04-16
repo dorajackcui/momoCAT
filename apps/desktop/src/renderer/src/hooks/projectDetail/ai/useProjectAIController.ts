@@ -84,8 +84,8 @@ export function useProjectAI({
   const [testSource, setTestSource] = useState('');
   const [testContext, setTestContext] = useState('');
   const [testResult, setTestResult] = useState<string | null>(null);
-  const [testPromptUsed, setTestPromptUsed] = useState<string | null>(null);
-  const [testUserMessage, setTestUserMessage] = useState<string | null>(null);
+  const [testSystemPrompt, setTestSystemPrompt] = useState<string | null>(null);
+  const [testUserPrompt, setTestUserPrompt] = useState<string | null>(null);
   const [testMeta, setTestMeta] = useState<string | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
   const [testRawResponse, setTestRawResponse] = useState<string | null>(null);
@@ -146,8 +146,8 @@ export function useProjectAI({
     modelDraft,
     savedModelValue,
     testMeta,
-    testUserMessage,
-    testPromptUsed,
+    testUserPrompt,
+    testSystemPrompt,
     testRawResponse,
   });
   const normalizedPromptDraft = aiFlags.normalizedPromptDraft;
@@ -219,8 +219,8 @@ export function useProjectAI({
       setTestError(null);
       setTestResult(null);
       setTestMeta(null);
-      setTestPromptUsed(null);
-      setTestUserMessage(null);
+      setTestSystemPrompt(null);
+      setTestUserPrompt(null);
       setTestRawResponse(null);
 
       const result = await apiClient.aiTestTranslate(
@@ -229,8 +229,8 @@ export function useProjectAI({
         testContext.trim() || undefined,
       );
       setTestResult(result.translatedText || null);
-      setTestPromptUsed(result.promptUsed);
-      setTestUserMessage(result.userMessage);
+      setTestSystemPrompt(result.systemPrompt);
+      setTestUserPrompt(result.userPrompt);
       setTestError(result.error || null);
       setTestRawResponse(result.rawResponseText || null);
 
@@ -309,8 +309,8 @@ export function useProjectAI({
       testContext,
       setTestContext,
       testResult,
-      testPromptUsed,
-      testUserMessage,
+      testSystemPrompt,
+      testUserPrompt,
       testMeta,
       testError,
       testRawResponse,
@@ -340,11 +340,11 @@ export function useProjectAI({
       testError,
       testMeta,
       testPrompt,
-      testPromptUsed,
+      testSystemPrompt,
       testRawResponse,
       testResult,
       testSource,
-      testUserMessage,
+      testUserPrompt,
     ],
   );
 }

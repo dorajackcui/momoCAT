@@ -188,20 +188,20 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
                 </Card>
               </div>
             )}
-            {ai.testUserMessage && (
+            {ai.testUserPrompt && (
               <div className="mt-2">
                 <div className="text-[10px] font-bold text-text-faint uppercase tracking-wider mb-1">
-                  User Message
+                  User Prompt
                 </div>
                 <Card
                   variant="surface"
                   className="text-[10px] text-text-muted px-3 py-2 whitespace-pre-wrap"
                 >
-                  {ai.testUserMessage}
+                  {ai.testUserPrompt}
                 </Card>
               </div>
             )}
-            {ai.testPromptUsed && (
+            {ai.testSystemPrompt && (
               <div className="mt-2">
                 <div className="text-[10px] font-bold text-text-faint uppercase tracking-wider mb-1">
                   System Prompt
@@ -210,7 +210,7 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
                   variant="surface"
                   className="text-[10px] text-text-muted px-3 py-2 whitespace-pre-wrap"
                 >
-                  {ai.testPromptUsed}
+                  {ai.testSystemPrompt}
                 </Card>
               </div>
             )}

@@ -20,8 +20,8 @@ describe('useProjectAI behavior helpers', () => {
       modelDraft: 'builtin:openai:gpt-5.4-mini',
       savedModelValue: 'builtin:openai:gpt-5.4-mini',
       testMeta: null,
-      testUserMessage: null,
-      testPromptUsed: null,
+      testUserPrompt: null,
+      testSystemPrompt: null,
       testRawResponse: null,
     });
     expect(clean.hasUnsavedPromptChanges).toBe(false);
@@ -32,8 +32,8 @@ describe('useProjectAI behavior helpers', () => {
       modelDraft: 'builtin:openai:gpt-5.4-mini',
       savedModelValue: 'builtin:openai:gpt-5.4-mini',
       testMeta: null,
-      testUserMessage: null,
-      testPromptUsed: null,
+      testUserPrompt: null,
+      testSystemPrompt: null,
       testRawResponse: null,
     });
     expect(dirty.hasUnsavedPromptChanges).toBe(true);
@@ -46,8 +46,8 @@ describe('useProjectAI behavior helpers', () => {
       modelDraft: 'builtin:openai:gpt-5.4-mini',
       savedModelValue: 'builtin:openai:gpt-5.4-mini',
       testMeta: null,
-      testUserMessage: 'message',
-      testPromptUsed: null,
+      testUserPrompt: 'message',
+      testSystemPrompt: null,
       testRawResponse: null,
     });
 
@@ -62,8 +62,8 @@ describe('useProjectAI behavior helpers', () => {
       modelDraft: 'builtin:openai:gpt-5',
       savedModelValue: 'builtin:openai:gpt-5.4-mini',
       testMeta: null,
-      testUserMessage: null,
-      testPromptUsed: null,
+      testUserPrompt: null,
+      testSystemPrompt: null,
       testRawResponse: null,
     });
 
@@ -85,7 +85,7 @@ describe('useProjectAI behavior helpers', () => {
     });
 
     expect(translationPreview).toContain('Use concise style.');
-    expect(translationPreview).toContain('Translate from en to zh.');
+    expect(translationPreview).toContain('From en to zh. Output in zh ONLY.');
     expect(customPreview).toContain('You are a precise text processing assistant.');
   });
 
