@@ -121,6 +121,7 @@ export async function translateDialogueUnit(
       sourcePayload: draft.sourcePayload,
       tmReference: references.tmReference,
       tmReferences: references.tmReferences,
+      concordanceReferences: references.concordanceReferences,
       tbReferences: references.tbReferences,
     });
   }

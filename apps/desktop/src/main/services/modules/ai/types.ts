@@ -1,6 +1,7 @@
 import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import type {
   DialoguePromptPreviousGroup,
+  PromptConcordanceReference,
   PromptTBReference,
   PromptTMReference,
 } from '@cat/core/project';
@@ -15,6 +16,7 @@ export interface PromptReferenceResolvers {
 export interface TranslationPromptReferences {
   tmReference?: PromptTMReference;
   tmReferences?: PromptTMReference[];
+  concordanceReferences?: PromptConcordanceReference[];
   tbReferences?: PromptTBReference[];
 }
 

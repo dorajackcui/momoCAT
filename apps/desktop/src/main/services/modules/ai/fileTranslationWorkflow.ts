@@ -81,6 +81,7 @@ export async function translateBatchSegment(
     context,
     tmReference: promptReferences.tmReference,
     tmReferences: promptReferences.tmReferences,
+    concordanceReferences: promptReferences.concordanceReferences,
     tbReferences: promptReferences.tbReferences,
   });
 }

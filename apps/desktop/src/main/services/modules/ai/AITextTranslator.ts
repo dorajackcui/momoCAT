@@ -1,6 +1,7 @@
 import {
   buildAITextPromptBundle,
   normalizeProjectType,
+  type PromptConcordanceReference,
   type ProjectType,
   type PromptTBReference,
   type PromptTMReference,
@@ -40,6 +41,7 @@ export interface TranslateSegmentParams {
   refinementInstruction?: string;
   tmReference?: PromptTMReference;
   tmReferences?: PromptTMReference[];
+  concordanceReferences?: PromptConcordanceReference[];
   tbReferences?: PromptTBReference[];
 }
 
@@ -59,6 +61,7 @@ interface TranslateTextParams {
   refinementInstruction?: string;
   tmReference?: PromptTMReference;
   tmReferences?: PromptTMReference[];
+  concordanceReferences?: PromptConcordanceReference[];
   tbReferences?: PromptTBReference[];
   validationFeedback?: string;
   debug?: TranslateDebugMeta;
@@ -96,6 +99,7 @@ export class AITextTranslator {
         refinementInstruction: params.refinementInstruction,
         tmReference: params.tmReference,
         tmReferences: params.tmReferences,
+        concordanceReferences: params.concordanceReferences,
         tbReferences: params.tbReferences,
         validationFeedback,
         allowUnchanged: normalizedType === 'review' || normalizedType === 'custom',
@@ -144,6 +148,7 @@ export class AITextTranslator {
       refinementInstruction: params.refinementInstruction,
       tmReference: params.tmReference,
       tmReferences: params.tmReferences,
+      concordanceReferences: params.concordanceReferences,
       tbReferences: params.tbReferences,
       validationFeedback: params.validationFeedback,
     });

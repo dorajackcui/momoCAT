@@ -422,6 +422,7 @@ describe('AIModule.aiTranslateFile', () => {
     const tmService = {
       findMatches: vi.fn().mockResolvedValue([
         {
+          kind: 'tm',
           similarity: 100,
           tmName: 'Main TM',
           sourceTokens: [{ type: 'text', content: 'Hello world' }],
@@ -465,6 +466,103 @@ describe('AIModule.aiTranslateFile', () => {
     expect(tbService.findMatches).toHaveBeenCalledTimes(1);
   });
 
+  it('injects concordance matches separately from TM references in translation user prompt', async () => {
+    const segments: Segment[] = [
+      createSegment({
+        segmentId: 'concordance-ref-1',
+        sourceText: '麦浪农场',
+      }),
+    ];
+
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({ id: 1, projectId: 11, name: 'demo.xlsx' }),
+      getProject: vi.fn().mockReturnValue({
+        id: 11,
+        srcLang: 'zh-CN',
+        tgtLang: 'fr-FR',
+        aiPrompt: '',
+        aiTemperature: 0.2,
+      }),
+    } as unknown as ProjectRepository;
+
+    const segmentRepo = {
+      getSegmentsPage: vi.fn().mockReturnValue(segments),
+    } as unknown as SegmentRepository;
+
+    const settingsRepo = {
+      getSetting: vi.fn().mockReturnValue('test-api-key'),
+    } as unknown as SettingsRepository;
+
+    const segmentService = {
+      updateSegment: vi.fn().mockResolvedValue(undefined),
+    } as unknown as SegmentService;
+
+    const transport = {
+      testConnection: vi.fn().mockResolvedValue({ ok: true }),
+      createResponse: vi.fn().mockResolvedValue({
+        content: 'Contexte cible',
+        status: 200,
+        endpoint: '/v1/responses',
+      }),
+    } as unknown as AITransport;
+
+    const tmService = {
+      findMatches: vi.fn().mockResolvedValue([
+        {
+          id: 'concordance-1',
+          projectId: 1,
+          srcLang: 'zh-CN',
+          tgtLang: 'fr-FR',
+          srcHash: 'context-hash',
+          matchKey: 'context',
+          tagsSignature: '',
+          sourceTokens: [
+            {
+              type: 'text',
+              content:
+                '据说，叫“麦浪农场”这个名字，是为了纪念一位艺术家在这里画下名作《麦与浪》。',
+            },
+          ],
+          targetTokens: [{ type: 'text', content: 'Contexte cible' }],
+          usageCount: 1,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          kind: 'concordance',
+          rank: 73,
+          tmName: 'Main TM',
+          tmType: 'main',
+          matchedSourceText: '麦浪农场',
+          sourceCoverage: 100,
+          entryCoverage: 10,
+        },
+      ]),
+    } as unknown as Pick<TMService, 'findMatches'>;
+
+    const tbService = {
+      findMatches: vi.fn().mockResolvedValue([]),
+    } as unknown as Pick<TBService, 'findMatches'>;
+
+    const module = new AIModule(
+      projectRepo,
+      segmentRepo,
+      settingsRepo,
+      segmentService,
+      transport,
+      undefined,
+      {
+        getModelConfig: vi.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
+      },
+      { tmService, tbService },
+    );
+
+    await module.aiTranslateFile(1);
+
+    const userPrompt = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0]
+      .userPrompt;
+    expect(userPrompt).toContain('Concordance Suggestions:');
+    expect(userPrompt).not.toContain('Similarity: 73%');
+  });
+
   it('keeps only top 3 TM references in translation prompt', async () => {
     const segments: Segment[] = [createSegment({ segmentId: 'tm-top-3', sourceText: 'Hello world' })];
 
@@ -503,24 +601,28 @@ describe('AIModule.aiTranslateFile', () => {
     const tmService = {
       findMatches: vi.fn().mockResolvedValue([
         {
+          kind: 'tm',
           similarity: 100,
           tmName: 'Main TM',
           sourceTokens: [{ type: 'text', content: 'Hello world' }],
           targetTokens: [{ type: 'text', content: 'Target one' }],
         },
         {
+          kind: 'tm',
           similarity: 92,
           tmName: 'Main TM',
           sourceTokens: [{ type: 'text', content: 'Hello there' }],
           targetTokens: [{ type: 'text', content: 'Target two' }],
         },
         {
+          kind: 'tm',
           similarity: 88,
           tmName: 'Project TM',
           sourceTokens: [{ type: 'text', content: 'World hello' }],
           targetTokens: [{ type: 'text', content: 'Target three' }],
         },
         {
+          kind: 'tm',
           similarity: 77,
           tmName: 'Overflow TM',
           sourceTokens: [{ type: 'text', content: 'Overflow source' }],
@@ -1661,6 +1763,7 @@ describe('AIModule.aiTranslateSegment', () => {
     const tmService = {
       findMatches: vi.fn().mockResolvedValue([
         {
+          kind: 'tm',
           similarity: 99,
           tmName: 'Main TM',
           sourceTokens: [{ type: 'text', content: 'Hello world' }],
@@ -1798,6 +1901,7 @@ describe('AIModule.aiRefineSegment', () => {
     const tmService = {
       findMatches: vi.fn().mockResolvedValue([
         {
+          kind: 'tm',
           similarity: 99,
           tmName: 'Main TM',
           sourceTokens: [{ type: 'text', content: 'Hello world' }],

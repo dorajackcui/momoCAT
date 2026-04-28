@@ -3,6 +3,7 @@ import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { PromptReferenceResolvers, TranslationPromptReferences } from './types';
 
 const MAX_TM_PROMPT_REFERENCES = 3;
+const MAX_CONCORDANCE_PROMPT_REFERENCES = 3;
 const MAX_TB_PROMPT_REFERENCES = 100;
 
 interface ResolveTranslationPromptReferencesParams {
@@ -22,14 +23,30 @@ export async function resolveTranslationPromptReferences(
         params.projectId,
         params.segment,
       );
-      if (tmMatches.length > 0) {
-        references.tmReferences = tmMatches.slice(0, MAX_TM_PROMPT_REFERENCES).map((match) => ({
-          similarity: match.similarity,
-          tmName: match.tmName,
-          sourceText: serializeTokensToDisplayText(match.sourceTokens),
-          targetText: serializeTokensToDisplayText(match.targetTokens),
-        }));
+      const standardTmMatches = tmMatches.filter((match) => match.kind === 'tm');
+      const concordanceMatches = tmMatches.filter((match) => match.kind === 'concordance');
+
+      if (standardTmMatches.length > 0) {
+        references.tmReferences = standardTmMatches
+          .slice(0, MAX_TM_PROMPT_REFERENCES)
+          .map((match) => ({
+            similarity: match.similarity,
+            tmName: match.tmName,
+            sourceText: serializeTokensToDisplayText(match.sourceTokens),
+            targetText: serializeTokensToDisplayText(match.targetTokens),
+          }));
         references.tmReference = references.tmReferences[0];
+      }
+
+      if (concordanceMatches.length > 0) {
+        references.concordanceReferences = concordanceMatches
+          .slice(0, MAX_CONCORDANCE_PROMPT_REFERENCES)
+          .map((match) => ({
+            tmName: match.tmName,
+            matchedSourceText: match.matchedSourceText,
+            sourceText: serializeTokensToDisplayText(match.sourceTokens),
+            targetText: serializeTokensToDisplayText(match.targetTokens),
+          }));
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

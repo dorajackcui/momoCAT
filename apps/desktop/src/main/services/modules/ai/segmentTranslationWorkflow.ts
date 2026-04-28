@@ -82,6 +82,7 @@ export async function runSegmentTranslation(
       context,
       tmReference: promptReferences.tmReference,
       tmReferences: promptReferences.tmReferences,
+      concordanceReferences: promptReferences.concordanceReferences,
       tbReferences: promptReferences.tbReferences,
     });
 
@@ -162,6 +163,7 @@ export async function runSegmentRefinement(
       refinementInstruction,
       tmReference: promptReferences.tmReference,
       tmReferences: promptReferences.tmReferences,
+      concordanceReferences: promptReferences.concordanceReferences,
       tbReferences: promptReferences.tbReferences,
     });
 
