@@ -4,10 +4,34 @@ import { randomUUID } from 'crypto';
 import { distance } from 'fastest-levenshtein';
 import { ProjectRepository, TMRepository } from './ports';
 
-export interface TMMatch extends TMEntry {
-  similarity: number;
+export type TMMatchKind = 'tm' | 'concordance';
+
+export interface TMMatchBase extends TMEntry {
+  kind: TMMatchKind;
+  rank: number;
   tmName: string;
   tmType: 'working' | 'main';
+}
+
+export interface StandardTMMatch extends TMMatchBase {
+  kind: 'tm';
+  similarity: number;
+}
+
+export interface ConcordanceTMMatch extends TMMatchBase {
+  kind: 'concordance';
+  matchedSourceText: string;
+  sourceCoverage: number;
+  entryCoverage: number;
+}
+
+export type TMMatch = StandardTMMatch | ConcordanceTMMatch;
+
+interface LocalOverlapResult {
+  score: number;
+  matchedSourceText: string;
+  sourceCoverage: number;
+  entryCoverage: number;
 }
 
 export class TMService {
@@ -87,7 +111,9 @@ export class TMService {
       if (match) {
         results.push({
           ...match,
+          kind: 'tm',
           similarity: 100,
+          rank: 100,
           tmName: tm.name,
           tmType: tm.type,
         });
@@ -112,24 +138,26 @@ export class TMService {
         const candTextOnly = serializeTokensToTextOnly(cand.sourceTokens);
         const candNormalized = this.normalizeForSimilarity(candTextOnly);
 
-        let similarity = 0;
+        let standardSimilarity = 0;
+        let localOverlap: LocalOverlapResult = {
+          score: 0,
+          matchedSourceText: '',
+          sourceCoverage: 0,
+          entryCoverage: 0,
+        };
 
         // Logic A: Text is identical, but Tags are different
         if (sourceNormalized === candNormalized) {
-          similarity = 99; // Penalty for tag mismatch
+          standardSimilarity = 99; // Penalty for tag mismatch
         } else {
-          const localOverlapSimilarity = this.computeLocalOverlapSimilarity(
-            sourceNormalized,
-            candNormalized,
-          );
+          localOverlap = this.computeLocalOverlapSimilarity(sourceNormalized, candNormalized);
           const maxPossibleByLength = this.computeMaxLengthBound(sourceNormalized, candNormalized);
-          let weightedSimilarity = 0;
 
           if (maxPossibleByLength >= TMService.MIN_SIMILARITY) {
             const levSimilarity = this.computeLevenshteinSimilarity(sourceNormalized, candNormalized);
             const diceSimilarity = this.computeDiceSimilarity(sourceNormalized, candNormalized);
             const bonus = this.computeSimilarityBonus(sourceNormalized, candNormalized);
-            weightedSimilarity = Math.min(
+            standardSimilarity = Math.min(
               99,
               Math.round(
                 levSimilarity * TMService.LEVENSHTEIN_WEIGHT +
@@ -138,27 +166,43 @@ export class TMService {
               ),
             );
           }
-
-          similarity = Math.max(weightedSimilarity, localOverlapSimilarity);
         }
 
-        if (similarity >= TMService.MIN_SIMILARITY) {
-          const tm = mountedTMs.find((t) => t.id === cand.tmId);
+        const tm = mountedTMs.find((t) => t.id === cand.tmId);
+        const baseMatch = {
+          ...cand,
+          tmName: tm?.name || 'Unknown TM',
+          tmType: tm?.type || 'main',
+        } as const;
+
+        if (standardSimilarity >= TMService.MIN_SIMILARITY) {
           results.push({
-            ...cand,
-            similarity,
-            tmName: tm?.name || 'Unknown TM',
-            tmType: tm?.type || 'main',
+            ...baseMatch,
+            kind: 'tm',
+            similarity: standardSimilarity,
+            rank: standardSimilarity,
+          });
+          seenHashes.add(cand.srcHash);
+          continue;
+        }
+
+        if (localOverlap.score >= TMService.MIN_SIMILARITY) {
+          results.push({
+            ...baseMatch,
+            kind: 'concordance',
+            rank: localOverlap.score,
+            matchedSourceText: localOverlap.matchedSourceText,
+            sourceCoverage: localOverlap.sourceCoverage,
+            entryCoverage: localOverlap.entryCoverage,
           });
           seenHashes.add(cand.srcHash);
         }
       }
     }
 
-    // Sort by similarity desc, then by usageCount desc
     return results
       .sort((a, b) => {
-        if (b.similarity !== a.similarity) return b.similarity - a.similarity;
+        if (b.rank !== a.rank) return b.rank - a.rank;
         return b.usageCount - a.usageCount;
       })
       .slice(0, TMService.TM_MATCH_RESULT_LIMIT);
@@ -234,16 +278,20 @@ export class TMService {
     return bonus;
   }
 
-  private computeLocalOverlapSimilarity(a: string, b: string): number {
+  private computeLocalOverlapSimilarity(a: string, b: string): LocalOverlapResult {
     const longest = this.findLongestCommonSubstring(a, b);
-    const overlapLength = longest.length;
-    if (overlapLength < 2) return 0;
+    const overlapLength = Array.from(longest).length;
+    if (overlapLength < 2) {
+      return { score: 0, matchedSourceText: '', sourceCoverage: 0, entryCoverage: 0 };
+    }
 
     const aLength = Array.from(a).length;
     const bLength = Array.from(b).length;
     const shorterLength = Math.min(aLength, bLength);
     const longerLength = Math.max(aLength, bLength);
-    if (shorterLength === 0 || longerLength === 0) return 0;
+    if (shorterLength === 0 || longerLength === 0) {
+      return { score: 0, matchedSourceText: '', sourceCoverage: 0, entryCoverage: 0 };
+    }
 
     const shorterCoverage = overlapLength / shorterLength;
     const longerCoverage = overlapLength / longerLength;
@@ -258,7 +306,12 @@ export class TMService {
       score = Math.max(score, 50);
     }
 
-    return Math.min(99, score);
+    return {
+      score: Math.min(99, score),
+      matchedSourceText: longest,
+      sourceCoverage: Math.round((overlapLength / aLength) * 100),
+      entryCoverage: Math.round((overlapLength / bLength) * 100),
+    };
   }
 
   private findLongestCommonSubstring(a: string, b: string): string {

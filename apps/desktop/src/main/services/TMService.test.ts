@@ -253,6 +253,57 @@ describe('TMService.findMatches', () => {
     expect(matches[0].similarity).toBe(99);
   });
 
+  it('classifies short source inside a longer TM source as concordance instead of percentage TM', async () => {
+    const service = createService({
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      concordanceEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'wheat-farm-context',
+          sourceText:
+            '据说，叫“麦浪农场”这个名字，是为了纪念一位艺术家在这里画下名作《麦与浪》。',
+          targetText:
+            'On dit que le nom "Ferme des vagues de ble" rend hommage a une oeuvre peinte ici.',
+        }),
+      ],
+    });
+
+    const matches = await service.findMatches(1, createSegment('麦浪农场', 'source-hash'));
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      kind: 'concordance',
+      rank: expect.any(Number),
+      matchedSourceText: '麦浪农场',
+      sourceCoverage: 100,
+      tmName: 'Main TM',
+    });
+    expect(matches[0]).not.toHaveProperty('similarity');
+    expect(matches[0].entryCoverage).toBeLessThan(50);
+  });
+
+  it('keeps whole-segment fuzzy candidates as TM matches when weighted similarity qualifies', async () => {
+    const source = 'Translation memory scoring example';
+    const service = createService({
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      concordanceEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'fuzzy-almost-exact',
+          sourceText: 'Translation memory scoring examplex',
+          usageCount: 3,
+        }),
+      ],
+    });
+
+    const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      kind: 'tm',
+      similarity: 99,
+      rank: 99,
+    });
+  });
+
   it('matches short CJK item names by strong local overlap', async () => {
     const source = '织云木种子';
     const service = createService({
@@ -274,7 +325,11 @@ describe('TMService.findMatches', () => {
       'soft-pink-cloudwood',
       'green-cloudwood',
     ]);
-    expect(matches[0].similarity).toBeGreaterThanOrEqual(50);
+    expect(matches[0]).toMatchObject({
+      kind: 'concordance',
+      rank: expect.any(Number),
+    });
+    expect(matches[0].rank).toBeGreaterThanOrEqual(50);
   });
 
   it('matches delimiter-separated CJK item names by either side of the name', async () => {
@@ -295,8 +350,10 @@ describe('TMService.findMatches', () => {
 
     const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
     expect(matches.map((match) => match.srcHash)).toEqual(['sunny-icing', 'remote-dream']);
-    expect(matches[0].similarity).toBeGreaterThan(matches[1].similarity);
-    expect(matches[1].similarity).toBeGreaterThanOrEqual(50);
+    expect(matches[0]).toMatchObject({ kind: 'tm' });
+    expect(matches[1]).toMatchObject({ kind: 'concordance' });
+    expect(matches[0].rank).toBeGreaterThan(matches[1].rank);
+    expect(matches[1].rank).toBeGreaterThanOrEqual(50);
   });
 
   it('matches a short CJK component inside a longer delimiter-separated entry', async () => {
@@ -312,7 +369,8 @@ describe('TMService.findMatches', () => {
 
     const matches = await service.findMatches(1, createSegment('困梦', 'source-hash'));
     expect(matches.map((match) => match.srcHash)).toEqual(['remote-dream']);
-    expect(matches[0].similarity).toBeGreaterThanOrEqual(50);
+    expect(matches[0]).toMatchObject({ kind: 'concordance' });
+    expect(matches[0].rank).toBeGreaterThanOrEqual(50);
   });
 
   it('does not promote sparse CJK local overlap to the minimum threshold', async () => {

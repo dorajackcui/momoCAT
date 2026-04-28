@@ -73,11 +73,28 @@ export type MountedTB = DbMountedTBRecord & {
   stats: { entryCount: number };
 };
 
-export interface TMMatch extends TMEntry {
-  similarity: number;
+export type TMMatchKind = 'tm' | 'concordance';
+
+export interface TMMatchBase extends TMEntry {
+  kind: TMMatchKind;
+  rank: number;
   tmName: string;
   tmType: TMType;
 }
+
+export interface StandardTMMatch extends TMMatchBase {
+  kind: 'tm';
+  similarity: number;
+}
+
+export interface ConcordanceTMMatch extends TMMatchBase {
+  kind: 'concordance';
+  matchedSourceText: string;
+  sourceCoverage: number;
+  entryCoverage: number;
+}
+
+export type TMMatch = StandardTMMatch | ConcordanceTMMatch;
 
 export interface TMConcordanceEntry extends TMEntry {
   tmId: string;
