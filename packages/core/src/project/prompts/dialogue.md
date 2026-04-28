@@ -55,7 +55,7 @@ Dialogue Segments:
 ## tm-header
 
 ```text
-   TM Reference (best match):
+   TM References (top matches):
 ```
 
 ## tm-entry-summary

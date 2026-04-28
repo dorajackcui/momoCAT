@@ -120,6 +120,7 @@ export async function translateDialogueUnit(
       speaker: draft.speaker || 'Unknown',
       sourcePayload: draft.sourcePayload,
       tmReference: references.tmReference,
+      tmReferences: references.tmReferences,
       tbReferences: references.tbReferences,
     });
   }

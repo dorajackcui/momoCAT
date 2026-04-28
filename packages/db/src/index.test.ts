@@ -644,6 +644,99 @@ describe("CATDatabase", () => {
       expect(results.length).toBeLessThanOrEqual(10);
       expect(results.some((row) => row.srcHash === "cjk-near-hash")).toBe(true);
     });
+
+    it("should find short CJK item names by overlapping fragments", () => {
+      const projectId = db.createProject("Concordance CJK Item Fragments", "zh", "fr");
+      const mainTmId = db.createTM("Main Item Names", "zh", "fr", "main");
+      db.mountTMToProject(projectId, mainTmId, 10, "read");
+
+      db.upsertTMEntry({
+        id: "soft-pink-cloudwood-entry",
+        tmId: mainTmId,
+        srcHash: "soft-pink-cloudwood",
+        matchKey: "soft-pink-cloudwood",
+        tagsSignature: "",
+        sourceTokens: [{ type: "text", content: "柔粉织云木" }],
+        targetTokens: [{ type: "text", content: "Bois nuageux rose doux" }],
+        usageCount: 1,
+      } as any);
+
+      db.upsertTMEntry({
+        id: "green-cloudwood-entry",
+        tmId: mainTmId,
+        srcHash: "green-cloudwood",
+        matchKey: "green-cloudwood",
+        tagsSignature: "",
+        sourceTokens: [{ type: "text", content: "岚绿织云木" }],
+        targetTokens: [{ type: "text", content: "Bois nuageux vert brume" }],
+        usageCount: 1,
+      } as any);
+
+      const cloudwoodResults = db.searchConcordance(projectId, "织云木种子");
+      expect(cloudwoodResults.map((row) => row.srcHash)).toEqual(
+        expect.arrayContaining(["soft-pink-cloudwood", "green-cloudwood"]),
+      );
+
+      db.upsertTMEntry({
+        id: "sunny-icing-entry",
+        tmId: mainTmId,
+        srcHash: "sunny-icing",
+        matchKey: "sunny-icing",
+        tagsSignature: "",
+        sourceTokens: [{ type: "text", content: "晴日裱花" }],
+        targetTokens: [{ type: "text", content: "Glacage jour clair" }],
+        usageCount: 1,
+      } as any);
+
+      db.upsertTMEntry({
+        id: "remote-dream-entry",
+        tmId: mainTmId,
+        srcHash: "remote-dream",
+        matchKey: "remote-dream",
+        tagsSignature: "",
+        sourceTokens: [{ type: "text", content: "遥梦花笺·困梦" }],
+        targetTokens: [{ type: "text", content: "Papier de reve lointain" }],
+        usageCount: 1,
+      } as any);
+
+      const dreamResults = db.searchConcordance(projectId, "晴日裱花·困梦");
+      expect(dreamResults.map((row) => row.srcHash)).toEqual(
+        expect.arrayContaining(["sunny-icing", "remote-dream"]),
+      );
+    });
+
+    it("should not let single-character CJK fallback crowd out multi-character fragment matches", () => {
+      const projectId = db.createProject("Concordance CJK Single Char Noise", "zh", "fr");
+      const mainTmId = db.createTM("Main Single Char Noise", "zh", "fr", "main");
+      db.mountTMToProject(projectId, mainTmId, 10, "read");
+
+      for (let index = 0; index < 10; index += 1) {
+        db.upsertTMEntry({
+          id: `single-char-noise-${index}`,
+          tmId: mainTmId,
+          srcHash: `single-char-noise-${index}`,
+          matchKey: `single-char-noise-${index}`,
+          tagsSignature: "",
+          sourceTokens: [{ type: "text", content: `晴噪音${index}` }],
+          targetTokens: [{ type: "text", content: `Bruit ${index}` }],
+          usageCount: 100 + index,
+        } as any);
+      }
+
+      db.upsertTMEntry({
+        id: "late-fragment-entry",
+        tmId: mainTmId,
+        srcHash: "late-fragment",
+        matchKey: "late-fragment",
+        tagsSignature: "",
+        sourceTokens: [{ type: "text", content: "困梦" }],
+        targetTokens: [{ type: "text", content: "Reve trouble" }],
+        usageCount: 1,
+      } as any);
+
+      const results = db.searchConcordance(projectId, "晴日裱花琉璃霜雪困梦");
+      expect(results.map((row) => row.srcHash)).toContain("late-fragment");
+    });
   });
 
   describe("Term Base System (v10)", () => {

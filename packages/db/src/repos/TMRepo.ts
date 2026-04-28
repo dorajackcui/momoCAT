@@ -194,8 +194,10 @@ export class TMRepo {
     // If FTS candidates are insufficient, fall back to bounded LIKE fragments so
     // near-identical CJK variants and substring queries can still surface candidates.
     if (mergedRows.length < maxResults) {
-      const likeFragments = this.buildLikeFallbackFragments(query);
-      if (likeFragments.length > 0) {
+      const fallbackFragments = this.buildLikeFallbackFragments(query);
+      const appendLikeRows = (likeFragments: string[]) => {
+        if (likeFragments.length === 0 || mergedRows.length >= maxResults) return;
+
         const remaining = maxResults - mergedRows.length;
         const likeClauses = likeFragments
           .map(() => '(tm_fts.srcText LIKE ? ESCAPE \'/\' OR tm_fts.tgtText LIKE ? ESCAPE \'/\')')
@@ -222,7 +224,10 @@ export class TMRepo {
           mergedRows.push(row);
           if (mergedRows.length >= maxResults) break;
         }
-      }
+      };
+
+      appendLikeRows(fallbackFragments.primary);
+      appendLikeRows(fallbackFragments.secondary);
     }
 
     return mergedRows.map((row) => ({
@@ -232,7 +237,7 @@ export class TMRepo {
     }));
   }
 
-  private buildLikeFallbackFragments(query: string): string[] {
+  private buildLikeFallbackFragments(query: string): { primary: string[]; secondary: string[] } {
     const terms = query
       .replace(/["()]/g, ' ')
       .replace(/\b(?:AND|OR|NOT)\b/gi, ' ')
@@ -241,30 +246,80 @@ export class TMRepo {
       .map((term) => term.trim())
       .filter((term) => term.length >= 2);
 
-    const fragments = new Set<string>();
+    const primaryFragments = new Set<string>();
+    const secondaryFragments = new Set<string>();
+    const cjkWindowFragments: string[] = [];
     for (const term of terms) {
-      fragments.add(term);
+      primaryFragments.add(term);
+
+      if (this.isCjkHeavyTerm(term) && term.length >= 3) {
+        for (const fragment of this.buildCjkAnchorFragments(term)) {
+          primaryFragments.add(fragment);
+        }
+        for (const fragment of this.buildCjkWindowFragments(term)) {
+          cjkWindowFragments.push(fragment);
+        }
+      }
 
       if (this.isLongCjkTerm(term)) {
+        secondaryFragments.add(term.slice(0, 1));
+
         const windowSize = Math.min(10, Math.max(5, Math.floor(term.length * 0.55)));
         const maxStart = term.length - windowSize;
         const startPositions = new Set([0, 1, Math.floor(maxStart / 2), maxStart]);
         for (const start of startPositions) {
           if (start < 0 || start > maxStart) continue;
-          fragments.add(term.slice(start, start + windowSize));
+          primaryFragments.add(term.slice(start, start + windowSize));
         }
       }
     }
 
-    return Array.from(fragments)
-      .filter((fragment) => fragment.length >= 2)
-      .slice(0, 12);
+    for (const fragment of cjkWindowFragments) {
+      primaryFragments.add(fragment);
+    }
+
+    return {
+      primary: Array.from(primaryFragments)
+        .filter((fragment) => fragment.length >= 2)
+        .slice(0, 12),
+      secondary: Array.from(secondaryFragments)
+        .filter((fragment) => fragment.length >= 1 && this.isCjkHeavyTerm(fragment))
+        .slice(0, 4),
+    };
+  }
+
+  private buildCjkAnchorFragments(term: string): string[] {
+    const fragments: string[] = [];
+    const windowSizes = [4, 3, 2].filter((size) => size < term.length);
+
+    for (const size of windowSizes) {
+      fragments.push(term.slice(0, size), term.slice(-size));
+    }
+
+    return fragments;
+  }
+
+  private buildCjkWindowFragments(term: string): string[] {
+    const fragments: string[] = [];
+    const windowSizes = [4, 3, 2].filter((size) => size < term.length);
+
+    for (const size of windowSizes) {
+      for (let start = 0; start <= term.length - size; start += 1) {
+        fragments.push(term.slice(start, start + size));
+      }
+    }
+
+    return fragments;
+  }
+
+  private isCjkHeavyTerm(term: string): boolean {
+    const cjkChars = term.match(/[\u4e00-\u9fa5]/g)?.length ?? 0;
+    return cjkChars / term.length >= 0.7;
   }
 
   private isLongCjkTerm(term: string): boolean {
     if (term.length < 8) return false;
-    const cjkChars = term.match(/[\u4e00-\u9fa5]/g)?.length ?? 0;
-    return cjkChars / term.length >= 0.7;
+    return this.isCjkHeavyTerm(term);
   }
 
   private escapeLikePattern(value: string): string {

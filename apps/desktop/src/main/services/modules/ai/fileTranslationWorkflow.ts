@@ -80,6 +80,7 @@ export async function translateBatchSegment(
     sourceTagPreservedText,
     context,
     tmReference: promptReferences.tmReference,
+    tmReferences: promptReferences.tmReferences,
     tbReferences: promptReferences.tbReferences,
   });
 }

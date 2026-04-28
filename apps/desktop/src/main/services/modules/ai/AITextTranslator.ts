@@ -39,6 +39,7 @@ export interface TranslateSegmentParams {
   currentTranslationPayload?: string;
   refinementInstruction?: string;
   tmReference?: PromptTMReference;
+  tmReferences?: PromptTMReference[];
   tbReferences?: PromptTBReference[];
 }
 
@@ -57,6 +58,7 @@ interface TranslateTextParams {
   currentTranslationPayload?: string;
   refinementInstruction?: string;
   tmReference?: PromptTMReference;
+  tmReferences?: PromptTMReference[];
   tbReferences?: PromptTBReference[];
   validationFeedback?: string;
   debug?: TranslateDebugMeta;
@@ -93,6 +95,7 @@ export class AITextTranslator {
         currentTranslationPayload: params.currentTranslationPayload,
         refinementInstruction: params.refinementInstruction,
         tmReference: params.tmReference,
+        tmReferences: params.tmReferences,
         tbReferences: params.tbReferences,
         validationFeedback,
         allowUnchanged: normalizedType === 'review' || normalizedType === 'custom',
@@ -140,6 +143,7 @@ export class AITextTranslator {
       currentTranslationPayload: params.currentTranslationPayload,
       refinementInstruction: params.refinementInstruction,
       tmReference: params.tmReference,
+      tmReferences: params.tmReferences,
       tbReferences: params.tbReferences,
       validationFeedback: params.validationFeedback,
     });

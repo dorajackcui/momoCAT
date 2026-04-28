@@ -2,6 +2,7 @@ import type { Segment } from '@cat/core/models';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { PromptReferenceResolvers, TranslationPromptReferences } from './types';
 
+const MAX_TM_PROMPT_REFERENCES = 3;
 const MAX_TB_PROMPT_REFERENCES = 100;
 
 interface ResolveTranslationPromptReferencesParams {
@@ -21,14 +22,14 @@ export async function resolveTranslationPromptReferences(
         params.projectId,
         params.segment,
       );
-      const bestMatch = tmMatches[0];
-      if (bestMatch) {
-        references.tmReference = {
-          similarity: bestMatch.similarity,
-          tmName: bestMatch.tmName,
-          sourceText: serializeTokensToDisplayText(bestMatch.sourceTokens),
-          targetText: serializeTokensToDisplayText(bestMatch.targetTokens),
-        };
+      if (tmMatches.length > 0) {
+        references.tmReferences = tmMatches.slice(0, MAX_TM_PROMPT_REFERENCES).map((match) => ({
+          similarity: match.similarity,
+          tmName: match.tmName,
+          sourceText: serializeTokensToDisplayText(match.sourceTokens),
+          targetText: serializeTokensToDisplayText(match.targetTokens),
+        }));
+        references.tmReference = references.tmReferences[0];
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

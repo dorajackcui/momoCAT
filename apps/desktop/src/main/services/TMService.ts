@@ -12,7 +12,7 @@ export interface TMMatch extends TMEntry {
 
 export class TMService {
   private static readonly TM_MATCH_RESULT_LIMIT = 10;
-  private static readonly MIN_SIMILARITY = 70;
+  private static readonly MIN_SIMILARITY = 50;
   private static readonly LEVENSHTEIN_WEIGHT = 0.75;
   private static readonly DICE_WEIGHT = 0.25;
 
@@ -118,22 +118,28 @@ export class TMService {
         if (sourceNormalized === candNormalized) {
           similarity = 99; // Penalty for tag mismatch
         } else {
+          const localOverlapSimilarity = this.computeLocalOverlapSimilarity(
+            sourceNormalized,
+            candNormalized,
+          );
           const maxPossibleByLength = this.computeMaxLengthBound(sourceNormalized, candNormalized);
-          if (maxPossibleByLength < TMService.MIN_SIMILARITY) {
-            continue;
+          let weightedSimilarity = 0;
+
+          if (maxPossibleByLength >= TMService.MIN_SIMILARITY) {
+            const levSimilarity = this.computeLevenshteinSimilarity(sourceNormalized, candNormalized);
+            const diceSimilarity = this.computeDiceSimilarity(sourceNormalized, candNormalized);
+            const bonus = this.computeSimilarityBonus(sourceNormalized, candNormalized);
+            weightedSimilarity = Math.min(
+              99,
+              Math.round(
+                levSimilarity * TMService.LEVENSHTEIN_WEIGHT +
+                  diceSimilarity * TMService.DICE_WEIGHT +
+                  bonus,
+              ),
+            );
           }
 
-          const levSimilarity = this.computeLevenshteinSimilarity(sourceNormalized, candNormalized);
-          const diceSimilarity = this.computeDiceSimilarity(sourceNormalized, candNormalized);
-          const bonus = this.computeSimilarityBonus(sourceNormalized, candNormalized);
-          similarity = Math.min(
-            99,
-            Math.round(
-              levSimilarity * TMService.LEVENSHTEIN_WEIGHT +
-                diceSimilarity * TMService.DICE_WEIGHT +
-                bonus,
-            ),
-          );
+          similarity = Math.max(weightedSimilarity, localOverlapSimilarity);
         }
 
         if (similarity >= TMService.MIN_SIMILARITY) {
@@ -227,4 +233,69 @@ export class TMService {
 
     return bonus;
   }
+
+  private computeLocalOverlapSimilarity(a: string, b: string): number {
+    const longest = this.findLongestCommonSubstring(a, b);
+    const overlapLength = longest.length;
+    if (overlapLength < 2) return 0;
+
+    const aLength = Array.from(a).length;
+    const bLength = Array.from(b).length;
+    const shorterLength = Math.min(aLength, bLength);
+    const longerLength = Math.max(aLength, bLength);
+    if (shorterLength === 0 || longerLength === 0) return 0;
+
+    const shorterCoverage = overlapLength / shorterLength;
+    const longerCoverage = overlapLength / longerLength;
+    let score = Math.round(shorterCoverage * 70 + longerCoverage * 30);
+    const hasSharedComponent = this.hasSharedCjkComponent(a, b);
+
+    if (!hasSharedComponent && longerCoverage < 0.45) {
+      score = Math.min(score, TMService.MIN_SIMILARITY - 1);
+    }
+
+    if (hasSharedComponent) {
+      score = Math.max(score, 50);
+    }
+
+    return Math.min(99, score);
+  }
+
+  private findLongestCommonSubstring(a: string, b: string): string {
+    const aChars = Array.from(a);
+    const bChars = Array.from(b);
+    let previous = new Array(bChars.length + 1).fill(0);
+    let bestLength = 0;
+    let bestEnd = 0;
+
+    for (let i = 1; i <= aChars.length; i += 1) {
+      const current = new Array(bChars.length + 1).fill(0);
+      for (let j = 1; j <= bChars.length; j += 1) {
+        if (aChars[i - 1] !== bChars[j - 1]) continue;
+
+        current[j] = previous[j - 1] + 1;
+        if (current[j] > bestLength) {
+          bestLength = current[j];
+          bestEnd = i;
+        }
+      }
+      previous = current;
+    }
+
+    return aChars.slice(bestEnd - bestLength, bestEnd).join('');
+  }
+
+  private hasSharedCjkComponent(a: string, b: string): boolean {
+    const aComponents = this.extractCjkComponents(a);
+    const bComponents = new Set(this.extractCjkComponents(b));
+    return aComponents.some((component) => bComponents.has(component));
+  }
+
+  private extractCjkComponents(text: string): string[] {
+    return text
+      .split(/[^\u4e00-\u9fa5]+/g)
+      .map((component) => component.trim())
+      .filter((component) => component.length >= 2);
+  }
+
 }

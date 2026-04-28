@@ -14,6 +14,7 @@ export interface PromptReferenceResolvers {
 
 export interface TranslationPromptReferences {
   tmReference?: PromptTMReference;
+  tmReferences?: PromptTMReference[];
   tbReferences?: PromptTBReference[];
 }
 

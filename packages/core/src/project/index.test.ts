@@ -137,7 +137,7 @@ describe("Project AI Prompt Templates", () => {
 
     expect(prompt).toContain("Source (en):");
     expect(prompt).toContain("Context: UI label");
-    expect(prompt).toContain("TM Reference (best match):");
+    expect(prompt).toContain("TM References (top matches):");
     expect(prompt).toContain("- Similarity: 98% | TM: Main TM");
     expect(prompt).toContain("- Source: Hello world");
     expect(prompt).toContain("- Target: Hello world target");
@@ -145,6 +145,42 @@ describe("Project AI Prompt Templates", () => {
     expect(prompt).toContain(
       "- world => world target (note: prefer noun form)",
     );
+  });
+
+  it("builds translation user prompt with top TM references", () => {
+    const prompt = buildAIUserPrompt("translation", {
+      srcLang: "en",
+      sourcePayload: "Hello world",
+      hasProtectedMarkers: false,
+      tmReferences: [
+        {
+          similarity: 100,
+          tmName: "Main TM",
+          sourceText: "Hello world",
+          targetText: "你好世界",
+        },
+        {
+          similarity: 92,
+          tmName: "Main TM",
+          sourceText: "Hello there",
+          targetText: "你好呀",
+        },
+        {
+          similarity: 88,
+          tmName: "Project TM",
+          sourceText: "World hello",
+          targetText: "世界你好",
+        },
+      ],
+    });
+
+    expect(prompt).toContain("TM References (top matches):");
+    expect(prompt).toContain("- Similarity: 100% | TM: Main TM");
+    expect(prompt).toContain("- Target: 你好世界");
+    expect(prompt).toContain("- Similarity: 92% | TM: Main TM");
+    expect(prompt).toContain("- Target: 你好呀");
+    expect(prompt).toContain("- Similarity: 88% | TM: Project TM");
+    expect(prompt).toContain("- Target: 世界你好");
   });
 
   it("does not include TM/TB sections when translation references are absent", () => {
@@ -155,7 +191,7 @@ describe("Project AI Prompt Templates", () => {
       context: "UI label",
     });
 
-    expect(prompt).not.toContain("TM Reference (best match):");
+    expect(prompt).not.toContain("TM References (top matches):");
     expect(prompt).not.toContain("Terminology References (hit terms):");
   });
 

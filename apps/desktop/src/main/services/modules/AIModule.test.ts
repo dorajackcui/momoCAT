@@ -454,7 +454,7 @@ describe('AIModule.aiTranslateFile', () => {
 
     const userPrompt = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0]
       .userPrompt;
-    expect(userPrompt).toContain('TM Reference (best match):');
+    expect(userPrompt).toContain('TM References (top matches):');
     expect(userPrompt).toContain('- Similarity: 100% | TM: Main TM');
     expect(userPrompt).toContain('- Source: Hello world');
     expect(userPrompt).toContain('- Target: 你好世界');
@@ -463,6 +463,99 @@ describe('AIModule.aiTranslateFile', () => {
     expect(userPrompt).toContain('- hello => 你好 (note: prefer short form)');
     expect(tmService.findMatches).toHaveBeenCalledTimes(1);
     expect(tbService.findMatches).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps only top 3 TM references in translation prompt', async () => {
+    const segments: Segment[] = [createSegment({ segmentId: 'tm-top-3', sourceText: 'Hello world' })];
+
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({ id: 1, projectId: 11, name: 'demo.xlsx' }),
+      getProject: vi.fn().mockReturnValue({
+        id: 11,
+        srcLang: 'en',
+        tgtLang: 'zh',
+        aiPrompt: '',
+        aiTemperature: 0.2,
+      }),
+    } as unknown as ProjectRepository;
+
+    const segmentRepo = {
+      getSegmentsPage: vi.fn().mockReturnValue(segments),
+    } as unknown as SegmentRepository;
+
+    const settingsRepo = {
+      getSetting: vi.fn().mockReturnValue('test-api-key'),
+    } as unknown as SettingsRepository;
+
+    const segmentService = {
+      updateSegment: vi.fn().mockResolvedValue(undefined),
+    } as unknown as SegmentService;
+
+    const transport = {
+      testConnection: vi.fn().mockResolvedValue({ ok: true }),
+      createResponse: vi.fn().mockResolvedValue({
+        content: 'translated',
+        status: 200,
+        endpoint: '/v1/responses',
+      }),
+    } as unknown as AITransport;
+
+    const tmService = {
+      findMatches: vi.fn().mockResolvedValue([
+        {
+          similarity: 100,
+          tmName: 'Main TM',
+          sourceTokens: [{ type: 'text', content: 'Hello world' }],
+          targetTokens: [{ type: 'text', content: 'Target one' }],
+        },
+        {
+          similarity: 92,
+          tmName: 'Main TM',
+          sourceTokens: [{ type: 'text', content: 'Hello there' }],
+          targetTokens: [{ type: 'text', content: 'Target two' }],
+        },
+        {
+          similarity: 88,
+          tmName: 'Project TM',
+          sourceTokens: [{ type: 'text', content: 'World hello' }],
+          targetTokens: [{ type: 'text', content: 'Target three' }],
+        },
+        {
+          similarity: 77,
+          tmName: 'Overflow TM',
+          sourceTokens: [{ type: 'text', content: 'Overflow source' }],
+          targetTokens: [{ type: 'text', content: 'Overflow target' }],
+        },
+      ]),
+    } as unknown as Pick<TMService, 'findMatches'>;
+
+    const tbService = {
+      findMatches: vi.fn().mockResolvedValue([]),
+    } as unknown as Pick<TBService, 'findMatches'>;
+
+    const module = new AIModule(
+      projectRepo,
+      segmentRepo,
+      settingsRepo,
+      segmentService,
+      transport,
+      undefined,
+      {
+        getModelConfig: vi.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
+      },
+      { tmService, tbService },
+    );
+
+    await module.aiTranslateFile(1);
+
+    const userPrompt = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0]
+      .userPrompt;
+    expect(userPrompt).toContain('TM References (top matches):');
+    expect(userPrompt).toContain('- Target: Target one');
+    expect(userPrompt).toContain('- Target: Target two');
+    expect(userPrompt).toContain('- Target: Target three');
+    expect(userPrompt).not.toContain('Overflow source');
+    expect(userPrompt).not.toContain('Overflow target');
   });
 
   it('keeps only top 100 TB references in translation prompt', async () => {
@@ -656,7 +749,7 @@ describe('AIModule.aiTranslateFile', () => {
       expect(segmentService.updateSegment).toHaveBeenCalledTimes(1);
       const userPrompt = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0]
         .userPrompt;
-      expect(userPrompt).not.toContain('TM Reference (best match):');
+      expect(userPrompt).not.toContain('TM References (top matches):');
       expect(userPrompt).not.toContain('Terminology References (hit terms):');
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Failed to resolve TM reference for segment ref-fail-1'),
@@ -1603,7 +1696,7 @@ describe('AIModule.aiTranslateSegment', () => {
     );
     const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(request.userPrompt).toContain('Context: UI button label');
-    expect(request.userPrompt).toContain('TM Reference (best match):');
+    expect(request.userPrompt).toContain('TM References (top matches):');
     expect(request.userPrompt).toContain('Terminology References (hit terms):');
   });
 
@@ -1744,7 +1837,7 @@ describe('AIModule.aiRefineSegment', () => {
     expect(request.userPrompt).toContain('你好世界');
     expect(request.userPrompt).toContain('Refinement Instruction:');
     expect(request.userPrompt).toContain('Make the tone concise');
-    expect(request.userPrompt).toContain('TM Reference (best match):');
+    expect(request.userPrompt).toContain('TM References (top matches):');
     expect(request.userPrompt).toContain('Terminology References (hit terms):');
   });
 

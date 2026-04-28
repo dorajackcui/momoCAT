@@ -26,6 +26,7 @@ export interface UserPromptBuildParams {
   refinementInstruction?: string;
   validationFeedback?: string;
   tmReference?: PromptTMReference;
+  tmReferences?: PromptTMReference[];
   tbReferences?: PromptTBReference[];
 }
 
@@ -40,6 +41,7 @@ export interface TextPromptBundleBuildParams {
   refinementInstruction?: string;
   validationFeedback?: string;
   tmReference?: PromptTMReference;
+  tmReferences?: PromptTMReference[];
   tbReferences?: PromptTBReference[];
 }
 
@@ -55,6 +57,7 @@ export interface DialoguePromptSegment {
   speaker: string;
   sourcePayload: string;
   tmReference?: PromptTMReference;
+  tmReferences?: PromptTMReference[];
   tbReferences?: PromptTBReference[];
 }
 

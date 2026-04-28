@@ -252,4 +252,82 @@ describe('TMService.findMatches', () => {
     expect(matches[0].srcHash).toBe('fuzzy-almost-exact');
     expect(matches[0].similarity).toBe(99);
   });
+
+  it('matches short CJK item names by strong local overlap', async () => {
+    const source = '织云木种子';
+    const service = createService({
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      concordanceEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'soft-pink-cloudwood',
+          sourceText: '柔粉织云木',
+        }),
+        createConcordanceEntry('tm-main', {
+          srcHash: 'green-cloudwood',
+          sourceText: '岚绿织云木',
+        }),
+      ],
+    });
+
+    const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
+    expect(matches.map((match) => match.srcHash)).toEqual([
+      'soft-pink-cloudwood',
+      'green-cloudwood',
+    ]);
+    expect(matches[0].similarity).toBeGreaterThanOrEqual(50);
+  });
+
+  it('matches delimiter-separated CJK item names by either side of the name', async () => {
+    const source = '晴日裱花·困梦';
+    const service = createService({
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      concordanceEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'sunny-icing',
+          sourceText: '晴日裱花',
+        }),
+        createConcordanceEntry('tm-main', {
+          srcHash: 'remote-dream',
+          sourceText: '遥梦花笺·困梦',
+        }),
+      ],
+    });
+
+    const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
+    expect(matches.map((match) => match.srcHash)).toEqual(['sunny-icing', 'remote-dream']);
+    expect(matches[0].similarity).toBeGreaterThan(matches[1].similarity);
+    expect(matches[1].similarity).toBeGreaterThanOrEqual(50);
+  });
+
+  it('matches a short CJK component inside a longer delimiter-separated entry', async () => {
+    const service = createService({
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      concordanceEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'remote-dream',
+          sourceText: '遥梦花笺·困梦',
+        }),
+      ],
+    });
+
+    const matches = await service.findMatches(1, createSegment('困梦', 'source-hash'));
+    expect(matches.map((match) => match.srcHash)).toEqual(['remote-dream']);
+    expect(matches[0].similarity).toBeGreaterThanOrEqual(50);
+  });
+
+  it('does not promote sparse CJK local overlap to the minimum threshold', async () => {
+    const source = '织云木种子';
+    const service = createService({
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      concordanceEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'long-weak-overlap',
+          sourceText: '远古织云木机关碎片',
+        }),
+      ],
+    });
+
+    const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
+    expect(matches).toHaveLength(0);
+  });
 });

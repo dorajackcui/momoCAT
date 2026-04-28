@@ -1,6 +1,7 @@
 import type {
   DialoguePromptBundleBuildParams,
   DialogueUserPromptBuildParams,
+  PromptTMReference,
   SystemPromptBuildParams,
   TextPromptBundleBuildParams,
   UserPromptBuildParams,
@@ -116,21 +117,26 @@ function buildTranslationUserPrompt(params: UserPromptBuildParams): string {
     );
   }
 
-  if (params.tmReference) {
-    userParts.push(
-      "",
-      TRANSLATION_PROMPTS.tmHeader,
-      renderTemplate(TRANSLATION_PROMPTS.tmEntrySummary, {
-        similarity: params.tmReference.similarity,
-        tmName: params.tmReference.tmName,
-      }),
-      renderTemplate(TRANSLATION_PROMPTS.tmEntrySource, {
-        sourceText: params.tmReference.sourceText,
-      }),
-      renderTemplate(TRANSLATION_PROMPTS.tmEntryTarget, {
-        targetText: params.tmReference.targetText,
-      }),
-    );
+  const tmReferences = normalizeTMReferences(
+    params.tmReferences,
+    params.tmReference,
+  );
+  if (tmReferences.length > 0) {
+    userParts.push("", TRANSLATION_PROMPTS.tmHeader);
+    for (const reference of tmReferences) {
+      userParts.push(
+        renderTemplate(TRANSLATION_PROMPTS.tmEntrySummary, {
+          similarity: reference.similarity,
+          tmName: reference.tmName,
+        }),
+        renderTemplate(TRANSLATION_PROMPTS.tmEntrySource, {
+          sourceText: reference.sourceText,
+        }),
+        renderTemplate(TRANSLATION_PROMPTS.tmEntryTarget, {
+          targetText: reference.targetText,
+        }),
+      );
+    }
   }
 
   if (params.tbReferences && params.tbReferences.length > 0) {
@@ -265,20 +271,26 @@ function buildDialogueTranslationUserPrompt(
       segment.sourcePayload,
     );
 
-    if (segment.tmReference) {
-      userParts.push(
-        DIALOGUE_PROMPTS.tmHeader,
-        renderTemplate(DIALOGUE_PROMPTS.tmEntrySummary, {
-          similarity: segment.tmReference.similarity,
-          tmName: segment.tmReference.tmName,
-        }),
-        renderTemplate(DIALOGUE_PROMPTS.tmEntrySource, {
-          sourceText: segment.tmReference.sourceText,
-        }),
-        renderTemplate(DIALOGUE_PROMPTS.tmEntryTarget, {
-          targetText: segment.tmReference.targetText,
-        }),
-      );
+    const tmReferences = normalizeTMReferences(
+      segment.tmReferences,
+      segment.tmReference,
+    );
+    if (tmReferences.length > 0) {
+      userParts.push(DIALOGUE_PROMPTS.tmHeader);
+      for (const reference of tmReferences) {
+        userParts.push(
+          renderTemplate(DIALOGUE_PROMPTS.tmEntrySummary, {
+            similarity: reference.similarity,
+            tmName: reference.tmName,
+          }),
+          renderTemplate(DIALOGUE_PROMPTS.tmEntrySource, {
+            sourceText: reference.sourceText,
+          }),
+          renderTemplate(DIALOGUE_PROMPTS.tmEntryTarget, {
+            targetText: reference.targetText,
+          }),
+        );
+      }
     }
 
     if (segment.tbReferences && segment.tbReferences.length > 0) {
@@ -419,11 +431,20 @@ export function buildAITextPromptBundle(
       refinementInstruction: params.refinementInstruction,
       validationFeedback: params.validationFeedback,
       tmReference: params.tmReference,
+      tmReferences: params.tmReferences,
       tbReferences: params.tbReferences,
     }),
     hasProtectedMarkers,
     sourcePayload,
   };
+}
+
+function normalizeTMReferences(
+  tmReferences?: PromptTMReference[],
+  tmReference?: PromptTMReference,
+): PromptTMReference[] {
+  if (tmReferences && tmReferences.length > 0) return tmReferences;
+  return tmReference ? [tmReference] : [];
 }
 
 export function buildAIDialoguePromptBundle(

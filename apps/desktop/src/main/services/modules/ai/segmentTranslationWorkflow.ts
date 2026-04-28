@@ -81,6 +81,7 @@ export async function runSegmentTranslation(
       sourceTagPreservedText,
       context,
       tmReference: promptReferences.tmReference,
+      tmReferences: promptReferences.tmReferences,
       tbReferences: promptReferences.tbReferences,
     });
 
@@ -160,6 +161,7 @@ export async function runSegmentRefinement(
       currentTranslationPayload: currentTranslationTagPreservedText,
       refinementInstruction,
       tmReference: promptReferences.tmReference,
+      tmReferences: promptReferences.tmReferences,
       tbReferences: promptReferences.tbReferences,
     });
 
