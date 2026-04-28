@@ -121,17 +121,13 @@ export class TMService {
       }
     }
 
-    // 2. Fuzzy matching using FTS as a candidate filter
-    // Split on CJK/non-CJK boundaries so numbers don't fuse with surrounding
-    // ideographs into a single FTS token (unicode61 treats digits and CJK as
-    // separate token classes, so "\u6d88\u8017380\u4e2a" becomes [\u6d88\u8017][380][\u4e2a]).
     const query = sourceTextOnly
       .replace(/[^\w\s\u4e00-\u9fa5]/g, ' ')
       .replace(/([\u4e00-\u9fa5])(\d)/g, '$1 $2')
       .replace(/(\d)([\u4e00-\u9fa5])/g, '$1 $2')
       .split(/\s+/)
       .filter((w) => w.length >= 2 && !/^\d+$/.test(w))
-      .join(' OR ');
+      .join(' ');
 
     if (query) {
       const tmIds = mountedTMs.map((tm) => tm.id);
