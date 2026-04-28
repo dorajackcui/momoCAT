@@ -61,6 +61,30 @@ TM References (top matches):
 - Target: {{targetText}}
 ```
 
+## concordance-header
+
+```text
+Concordance Suggestions:
+```
+
+## concordance-entry-summary
+
+```text
+- Match: {{matchedSourceText}} | TM: {{tmName}}
+```
+
+## concordance-entry-source
+
+```text
+- TM Source: {{sourceText}}
+```
+
+## concordance-entry-target
+
+```text
+- TM Target: {{targetText}}
+```
+
 ## tb-header
 
 ```text

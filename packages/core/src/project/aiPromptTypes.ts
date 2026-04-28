@@ -11,6 +11,13 @@ export interface PromptTMReference {
   targetText: string;
 }
 
+export interface PromptConcordanceReference {
+  tmName: string;
+  matchedSourceText: string;
+  sourceText: string;
+  targetText: string;
+}
+
 export interface PromptTBReference {
   srcTerm: string;
   tgtTerm: string;
@@ -27,6 +34,7 @@ export interface UserPromptBuildParams {
   validationFeedback?: string;
   tmReference?: PromptTMReference;
   tmReferences?: PromptTMReference[];
+  concordanceReferences?: PromptConcordanceReference[];
   tbReferences?: PromptTBReference[];
 }
 
@@ -42,6 +50,7 @@ export interface TextPromptBundleBuildParams {
   validationFeedback?: string;
   tmReference?: PromptTMReference;
   tmReferences?: PromptTMReference[];
+  concordanceReferences?: PromptConcordanceReference[];
   tbReferences?: PromptTBReference[];
 }
 
@@ -58,6 +67,7 @@ export interface DialoguePromptSegment {
   sourcePayload: string;
   tmReference?: PromptTMReference;
   tmReferences?: PromptTMReference[];
+  concordanceReferences?: PromptConcordanceReference[];
   tbReferences?: PromptTBReference[];
 }
 

@@ -183,6 +183,28 @@ describe("Project AI Prompt Templates", () => {
     expect(prompt).toContain("- Target: 世界你好");
   });
 
+  it("renders concordance suggestions separately from TM similarity references", () => {
+    const prompt = buildAITextPromptBundle("translation", {
+      srcLang: "zh-CN",
+      tgtLang: "fr-FR",
+      sourceText: "麦浪农场",
+      concordanceReferences: [
+        {
+          tmName: "Main TM",
+          matchedSourceText: "麦浪农场",
+          sourceText:
+            "据说，叫“麦浪农场”这个名字，是为了纪念一位艺术家在这里画下名作《麦与浪》。",
+          targetText:
+            'On dit que le nom "Ferme des vagues de ble" rend hommage a une oeuvre peinte ici.',
+        },
+      ],
+    });
+
+    expect(prompt.userPrompt).toContain("Concordance Suggestions:");
+    expect(prompt.userPrompt).toContain("Match: 麦浪农场 | TM: Main TM");
+    expect(prompt.userPrompt).not.toContain("Similarity: 73%");
+  });
+
   it("does not include TM/TB sections when translation references are absent", () => {
     const prompt = buildAIUserPrompt("translation", {
       srcLang: "en",

@@ -139,6 +139,24 @@ function buildTranslationUserPrompt(params: UserPromptBuildParams): string {
     }
   }
 
+  if (params.concordanceReferences && params.concordanceReferences.length > 0) {
+    userParts.push("", TRANSLATION_PROMPTS.concordanceHeader);
+    for (const reference of params.concordanceReferences) {
+      userParts.push(
+        renderTemplate(TRANSLATION_PROMPTS.concordanceEntrySummary, {
+          matchedSourceText: reference.matchedSourceText,
+          tmName: reference.tmName,
+        }),
+        renderTemplate(TRANSLATION_PROMPTS.concordanceEntrySource, {
+          sourceText: reference.sourceText,
+        }),
+        renderTemplate(TRANSLATION_PROMPTS.concordanceEntryTarget, {
+          targetText: reference.targetText,
+        }),
+      );
+    }
+  }
+
   if (params.tbReferences && params.tbReferences.length > 0) {
     userParts.push("", TRANSLATION_PROMPTS.tbHeader);
     for (const reference of params.tbReferences) {
@@ -293,6 +311,27 @@ function buildDialogueTranslationUserPrompt(
       }
     }
 
+    if (
+      segment.concordanceReferences &&
+      segment.concordanceReferences.length > 0
+    ) {
+      userParts.push(DIALOGUE_PROMPTS.concordanceHeader);
+      for (const reference of segment.concordanceReferences) {
+        userParts.push(
+          renderTemplate(DIALOGUE_PROMPTS.concordanceEntrySummary, {
+            matchedSourceText: reference.matchedSourceText,
+            tmName: reference.tmName,
+          }),
+          renderTemplate(DIALOGUE_PROMPTS.concordanceEntrySource, {
+            sourceText: reference.sourceText,
+          }),
+          renderTemplate(DIALOGUE_PROMPTS.concordanceEntryTarget, {
+            targetText: reference.targetText,
+          }),
+        );
+      }
+    }
+
     if (segment.tbReferences && segment.tbReferences.length > 0) {
       userParts.push(DIALOGUE_PROMPTS.tbHeader);
       for (const reference of segment.tbReferences) {
@@ -432,6 +471,7 @@ export function buildAITextPromptBundle(
       validationFeedback: params.validationFeedback,
       tmReference: params.tmReference,
       tmReferences: params.tmReferences,
+      concordanceReferences: params.concordanceReferences,
       tbReferences: params.tbReferences,
     }),
     hasProtectedMarkers,
