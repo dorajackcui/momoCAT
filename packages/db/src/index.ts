@@ -361,8 +361,8 @@ export class CATDatabase {
     return this.tmRepo.getProjectMountedTMs(projectId);
   }
 
-  public searchConcordance(projectId: number, query: string): TMEntryRow[] {
-    return this.tmRepo.searchConcordance(projectId, query);
+  public searchConcordance(projectId: number, query: string, tmIds?: string[]): TMEntryRow[] {
+    return this.tmRepo.searchConcordance(projectId, query, tmIds);
   }
 
   public listTMs(type?: TMType): TMRecord[] {

@@ -165,14 +165,14 @@ export class TMRepo {
       .all(projectId) as MountedTMRecord[];
   }
 
-  public searchConcordance(projectId: number, query: string): TMEntryRow[] {
+  public searchConcordance(projectId: number, query: string, tmIds?: string[]): TMEntryRow[] {
     const maxResults = 10;
-    const tmIds = this.getProjectMountedTMs(projectId).map((tm) => tm.id);
-    if (tmIds.length === 0) {
+    const resolvedTmIds = tmIds ?? this.getProjectMountedTMs(projectId).map((tm) => tm.id);
+    if (resolvedTmIds.length === 0) {
       return [];
     }
 
-    const placeholders = tmIds.map(() => '?').join(',');
+    const placeholders = resolvedTmIds.map(() => '?').join(',');
     const cleanQuery = query.replace(/"/g, '""');
     const ftsQuery = `(srcText:(${cleanQuery}) OR tgtText:(${cleanQuery}))`;
 
@@ -185,7 +185,7 @@ export class TMRepo {
       ORDER BY bm25(tm_fts) ASC
       LIMIT ${maxResults}
     `)
-      .all(...tmIds, ftsQuery) as TMEntryDbRow[];
+      .all(...resolvedTmIds, ftsQuery) as TMEntryDbRow[];
 
     const mergedRows = [...rows];
     const seenIds = new Set(rows.map((row) => row.id));
@@ -193,8 +193,11 @@ export class TMRepo {
     // unicode61 tokenizer treats contiguous CJK text as a single token in many cases.
     // If FTS candidates are insufficient, fall back to bounded LIKE fragments so
     // near-identical CJK variants and substring queries can still surface candidates.
+    // Fragments are split into length tiers (long >= 4 chars, short < 4) so that
+    // short high-frequency fragments cannot crowd out precise longer matches.
     if (mergedRows.length < maxResults) {
-      const fallbackFragments = this.buildLikeFallbackFragments(query);
+      const fragments = this.buildLikeFallbackFragments(query);
+
       const appendLikeRows = (likeFragments: string[]) => {
         if (likeFragments.length === 0 || mergedRows.length >= maxResults) return;
 
@@ -216,7 +219,7 @@ export class TMRepo {
           ORDER BY tm_entries.usageCount DESC, tm_entries.updatedAt DESC
           LIMIT ${remaining}
         `)
-          .all(...tmIds, ...likeParams) as TMEntryDbRow[];
+          .all(...resolvedTmIds, ...likeParams) as TMEntryDbRow[];
 
         for (const row of likeRows) {
           if (seenIds.has(row.id)) continue;
@@ -226,8 +229,10 @@ export class TMRepo {
         }
       };
 
-      appendLikeRows(fallbackFragments.primary);
-      appendLikeRows(fallbackFragments.secondary);
+      const longFragments = fragments.filter((f) => f.length >= 4);
+      const shortFragments = fragments.filter((f) => f.length < 4);
+      appendLikeRows(longFragments);
+      appendLikeRows(shortFragments);
     }
 
     return mergedRows.map((row) => ({
@@ -237,7 +242,7 @@ export class TMRepo {
     }));
   }
 
-  private buildLikeFallbackFragments(query: string): { primary: string[]; secondary: string[] } {
+  private buildLikeFallbackFragments(query: string): string[] {
     const terms = query
       .replace(/["()]/g, ' ')
       .replace(/\b(?:AND|OR|NOT)\b/gi, ' ')
@@ -247,8 +252,6 @@ export class TMRepo {
       .filter((term) => term.length >= 2);
 
     const primaryFragments = new Set<string>();
-    const secondaryFragments = new Set<string>();
-    const cjkWindowFragments: string[] = [];
     for (const term of terms) {
       primaryFragments.add(term);
 
@@ -256,14 +259,9 @@ export class TMRepo {
         for (const fragment of this.buildCjkAnchorFragments(term)) {
           primaryFragments.add(fragment);
         }
-        for (const fragment of this.buildCjkWindowFragments(term)) {
-          cjkWindowFragments.push(fragment);
-        }
       }
 
       if (this.isLongCjkTerm(term)) {
-        secondaryFragments.add(term.slice(0, 1));
-
         const windowSize = Math.min(10, Math.max(5, Math.floor(term.length * 0.55)));
         const maxStart = term.length - windowSize;
         const startPositions = new Set([0, 1, Math.floor(maxStart / 2), maxStart]);
@@ -274,18 +272,10 @@ export class TMRepo {
       }
     }
 
-    for (const fragment of cjkWindowFragments) {
-      primaryFragments.add(fragment);
-    }
-
-    return {
-      primary: Array.from(primaryFragments)
-        .filter((fragment) => fragment.length >= 2)
-        .slice(0, 12),
-      secondary: Array.from(secondaryFragments)
-        .filter((fragment) => fragment.length >= 1 && this.isCjkHeavyTerm(fragment))
-        .slice(0, 4),
-    };
+    return Array.from(primaryFragments)
+      .filter((fragment) => fragment.length >= 2)
+      .sort((a, b) => b.length - a.length)
+      .slice(0, 12);
   }
 
   private buildCjkAnchorFragments(term: string): string[] {
@@ -294,19 +284,6 @@ export class TMRepo {
 
     for (const size of windowSizes) {
       fragments.push(term.slice(0, size), term.slice(-size));
-    }
-
-    return fragments;
-  }
-
-  private buildCjkWindowFragments(term: string): string[] {
-    const fragments: string[] = [];
-    const windowSizes = [4, 3, 2].filter((size) => size < term.length);
-
-    for (const size of windowSizes) {
-      for (let start = 0; start <= term.length - size; start += 1) {
-        fragments.push(term.slice(start, start + size));
-      }
     }
 
     return fragments;

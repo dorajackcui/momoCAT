@@ -75,7 +75,7 @@ export interface TMRepository {
   insertTMFts(tmId: string, srcText: string, tgtText: string, tmEntryId: string): void;
   replaceTMFts(tmId: string, srcText: string, tgtText: string, tmEntryId: string): void;
   findTMEntryByHash(tmId: string, srcHash: string): TMEntry | undefined;
-  searchConcordance(projectId: number, query: string): TMEntryWithTmId[];
+  searchConcordance(projectId: number, query: string, tmIds?: string[]): TMEntryWithTmId[];
 
   listTMs(type?: TMType): TMRecord[];
   createTM(name: string, srcLang: string, tgtLang: string, type: TMType): string;

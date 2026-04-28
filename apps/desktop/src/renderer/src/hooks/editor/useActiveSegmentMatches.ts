@@ -24,12 +24,17 @@ export function useActiveSegmentMatches({
   const [activeMatches, setActiveMatches] = useState<TMMatch[]>([]);
   const [activeTerms, setActiveTerms] = useState<TBMatch[]>([]);
   const matchRequestSeqRef = useRef(0);
+  const matchCacheRef = useRef(new Map<string, TMMatch[]>());
   const termRequestSeqRef = useRef(0);
   const segmentsRef = useRef(segments);
 
   useEffect(() => {
     segmentsRef.current = segments;
   }, [segments]);
+
+  useEffect(() => {
+    matchCacheRef.current.clear();
+  }, [projectId]);
 
   useEffect(() => {
     if (!activeSegmentId || projectId === null) {
@@ -47,6 +52,14 @@ export function useActiveSegmentMatches({
       return;
     }
 
+    const cached = matchCacheRef.current.get(segment.srcHash);
+    if (cached) {
+      matchRequestSeqRef.current += 1;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setActiveMatches(cached);
+      return;
+    }
+
     let cancelled = false;
     const requestSeq = ++matchRequestSeqRef.current;
     const timer = setTimeout(() => {
@@ -54,6 +67,7 @@ export function useActiveSegmentMatches({
         try {
           const matches = await apiClient.getMatches(projectId, segment);
           if (cancelled || requestSeq !== matchRequestSeqRef.current) return;
+          matchCacheRef.current.set(segment.srcHash, matches || []);
           setActiveMatches(matches || []);
         } catch (error) {
           if (cancelled || requestSeq !== matchRequestSeqRef.current) return;

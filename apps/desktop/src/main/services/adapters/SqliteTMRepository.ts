@@ -25,8 +25,8 @@ export class SqliteTMRepository implements TMRepository {
     return this.db.findTMEntryByHash(tmId, srcHash);
   }
 
-  searchConcordance(projectId: number, query: string): Array<TMEntry & { tmId: string }> {
-    return this.db.searchConcordance(projectId, query) as Array<TMEntry & { tmId: string }>;
+  searchConcordance(projectId: number, query: string, tmIds?: string[]): Array<TMEntry & { tmId: string }> {
+    return this.db.searchConcordance(projectId, query, tmIds) as Array<TMEntry & { tmId: string }>;
   }
 
   listTMs(type?: 'working' | 'main'): TMRecord[] {

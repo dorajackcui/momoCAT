@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { TBMatch, TMEntry, Token } from '@cat/core/models';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 
@@ -92,7 +92,10 @@ export const TMPanel: React.FC<TMPanelProps> = ({ matches, termMatches, onApply,
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const combined = buildCombinedMatches(matches, termMatches, TM_RENDER_LIMIT);
+  const combined = useMemo(
+    () => buildCombinedMatches(matches, termMatches, TM_RENDER_LIMIT),
+    [matches, termMatches],
+  );
 
   if (combined.length === 0) {
     return (

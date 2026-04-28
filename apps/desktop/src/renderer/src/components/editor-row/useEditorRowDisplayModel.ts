@@ -1,4 +1,5 @@
 import type { Segment } from '@cat/core/models';
+import { useMemo } from 'react';
 import { buildHighlightChunks, EditorMatchMode } from '../editorFilterUtils';
 import {
   hasRefinableTargetText,
@@ -140,7 +141,20 @@ export function buildEditorRowDisplayModel({
 export function useEditorRowDisplayModel(
   params: UseEditorRowDisplayModelParams,
 ): EditorRowDisplayModel {
-  return buildEditorRowDisplayModel(params);
+  return useMemo(
+    () => buildEditorRowDisplayModel(params),
+    [
+      params.segmentStatus,
+      params.qaIssues,
+      params.isActive,
+      params.draftText,
+      params.sourceEditorText,
+      params.sourceTagsCount,
+      params.sourceHighlightQuery,
+      params.highlightMode,
+      params.showNonPrintingSymbols,
+    ],
+  );
 }
 
 export type {
