@@ -104,6 +104,7 @@ export type {
   DialoguePromptPreviousGroup,
   DialoguePromptSegment,
   DialogueUserPromptBuildParams,
+  PromptConcordanceReference,
   PromptTBReference,
   PromptTMReference,
   SystemPromptBuildParams,
