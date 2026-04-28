@@ -218,7 +218,8 @@ function createCurrentSchema(db: Database.Database): void {
         tmId UNINDEXED,
         srcText,
         tgtText,
-        tmEntryId UNINDEXED
+        tmEntryId UNINDEXED,
+        tokenize='trigram'
       );
 
       CREATE TABLE term_bases (
