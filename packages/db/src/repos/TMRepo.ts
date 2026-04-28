@@ -173,130 +173,78 @@ export class TMRepo {
     }
 
     const placeholders = resolvedTmIds.map(() => '?').join(',');
-    const cleanQuery = query.replace(/"/g, '""');
-    const ftsQuery = `(srcText:(${cleanQuery}) OR tgtText:(${cleanQuery}))`;
 
-    const rows = this.db
-      .prepare(`
-      SELECT tm_entries.*
-      FROM tm_fts
-      JOIN tm_entries ON tm_fts.tmEntryId = tm_entries.id
-      WHERE tm_fts.tmId IN (${placeholders}) AND tm_fts MATCH ?
-      ORDER BY bm25(tm_fts) ASC
-      LIMIT ${maxResults}
-    `)
-      .all(...resolvedTmIds, ftsQuery) as TMEntryDbRow[];
+    const terms = this.extractSearchTerms(query);
+    const ftsTerms = terms.filter((t) => t.length >= 3);
+    const shortTerms = terms.filter((t) => t.length >= 2 && t.length < 3);
 
-    const mergedRows = [...rows];
-    const seenIds = new Set(rows.map((row) => row.id));
+    const mergedRows: TMEntryDbRow[] = [];
+    const seenIds = new Set<string>();
 
-    // unicode61 tokenizer treats contiguous CJK text as a single token in many cases.
-    // If FTS candidates are insufficient, fall back to bounded LIKE fragments so
-    // near-identical CJK variants and substring queries can still surface candidates.
-    // Fragments are split into length tiers (long >= 4 chars, short < 4) so that
-    // short high-frequency fragments cannot crowd out precise longer matches.
-    if (mergedRows.length < maxResults) {
-      const fragments = this.buildLikeFallbackFragments(query);
+    if (ftsTerms.length > 0) {
+      const ftsQuery = ftsTerms.map((t) => `"${t.replace(/"/g, '""')}"`).join(' OR ');
 
-      const appendLikeRows = (likeFragments: string[]) => {
-        if (likeFragments.length === 0 || mergedRows.length >= maxResults) return;
+      const rows = this.db
+        .prepare(`
+        SELECT tm_entries.*
+        FROM tm_fts
+        JOIN tm_entries ON tm_fts.tmEntryId = tm_entries.id
+        WHERE tm_fts.tmId IN (${placeholders}) AND tm_fts MATCH ?
+        ORDER BY rank
+        LIMIT ${maxResults}
+      `)
+        .all(...resolvedTmIds, ftsQuery) as TMEntryDbRow[];
 
-        const remaining = maxResults - mergedRows.length;
-        const likeClauses = likeFragments
-          .map(() => '(tm_fts.srcText LIKE ? ESCAPE \'/\' OR tm_fts.tgtText LIKE ? ESCAPE \'/\')')
-          .join(' OR ');
-        const likeParams = likeFragments.flatMap((fragment) => {
-          const escaped = `%${this.escapeLikePattern(fragment)}%`;
-          return [escaped, escaped] as const;
-        });
+      for (const row of rows) {
+        seenIds.add(row.id);
+        mergedRows.push(row);
+      }
+    }
 
-        const likeRows = this.db
-          .prepare(`
-          SELECT tm_entries.*
-          FROM tm_fts
-          JOIN tm_entries ON tm_fts.tmEntryId = tm_entries.id
-          WHERE tm_fts.tmId IN (${placeholders}) AND (${likeClauses})
-          ORDER BY tm_entries.usageCount DESC, tm_entries.updatedAt DESC
-          LIMIT ${remaining}
-        `)
-          .all(...resolvedTmIds, ...likeParams) as TMEntryDbRow[];
+    if (mergedRows.length < maxResults && shortTerms.length > 0) {
+      const remaining = maxResults - mergedRows.length;
+      const likeClauses = shortTerms
+        .map(() => '(tm_fts.srcText LIKE ? ESCAPE \'/\' OR tm_fts.tgtText LIKE ? ESCAPE \'/\')')
+        .join(' OR ');
+      const likeParams = shortTerms.flatMap((term) => {
+        const escaped = `%${this.escapeLikePattern(term)}%`;
+        return [escaped, escaped] as const;
+      });
 
-        for (const row of likeRows) {
-          if (seenIds.has(row.id)) continue;
-          seenIds.add(row.id);
-          mergedRows.push(row);
-          if (mergedRows.length >= maxResults) break;
-        }
-      };
+      const likeRows = this.db
+        .prepare(`
+        SELECT tm_entries.*
+        FROM tm_fts
+        JOIN tm_entries ON tm_fts.tmEntryId = tm_entries.id
+        WHERE tm_fts.tmId IN (${placeholders}) AND (${likeClauses})
+        ORDER BY tm_entries.usageCount DESC, tm_entries.updatedAt DESC
+        LIMIT ${remaining}
+      `)
+        .all(...resolvedTmIds, ...likeParams) as TMEntryDbRow[];
 
-      const longFragments = fragments.filter((f) => f.length >= 4);
-      const shortFragments = fragments.filter((f) => f.length < 4);
-      appendLikeRows(longFragments);
-      appendLikeRows(shortFragments);
+      for (const row of likeRows) {
+        if (seenIds.has(row.id)) continue;
+        seenIds.add(row.id);
+        mergedRows.push(row);
+        if (mergedRows.length >= maxResults) break;
+      }
     }
 
     return mergedRows.map((row) => ({
       ...row,
       sourceTokens: JSON.parse(row.sourceTokensJson),
-      targetTokens: JSON.parse(row.targetTokensJson)
+      targetTokens: JSON.parse(row.targetTokensJson),
     }));
   }
 
-  private buildLikeFallbackFragments(query: string): string[] {
-    const terms = query
+  private extractSearchTerms(query: string): string[] {
+    return query
       .replace(/["()]/g, ' ')
       .replace(/\b(?:AND|OR|NOT)\b/gi, ' ')
       .replace(/[^\w\s\u4e00-\u9fa5]/g, ' ')
       .split(/\s+/)
-      .map((term) => term.trim())
-      .filter((term) => term.length >= 2);
-
-    const primaryFragments = new Set<string>();
-    for (const term of terms) {
-      primaryFragments.add(term);
-
-      if (this.isCjkHeavyTerm(term) && term.length >= 3) {
-        for (const fragment of this.buildCjkAnchorFragments(term)) {
-          primaryFragments.add(fragment);
-        }
-      }
-
-      if (this.isLongCjkTerm(term)) {
-        const windowSize = Math.min(10, Math.max(5, Math.floor(term.length * 0.55)));
-        const maxStart = term.length - windowSize;
-        const startPositions = new Set([0, 1, Math.floor(maxStart / 2), maxStart]);
-        for (const start of startPositions) {
-          if (start < 0 || start > maxStart) continue;
-          primaryFragments.add(term.slice(start, start + windowSize));
-        }
-      }
-    }
-
-    return Array.from(primaryFragments)
-      .filter((fragment) => fragment.length >= 2)
-      .sort((a, b) => b.length - a.length)
-      .slice(0, 12);
-  }
-
-  private buildCjkAnchorFragments(term: string): string[] {
-    const fragments: string[] = [];
-    const windowSizes = [4, 3, 2].filter((size) => size < term.length);
-
-    for (const size of windowSizes) {
-      fragments.push(term.slice(0, size), term.slice(-size));
-    }
-
-    return fragments;
-  }
-
-  private isCjkHeavyTerm(term: string): boolean {
-    const cjkChars = term.match(/[\u4e00-\u9fa5]/g)?.length ?? 0;
-    return cjkChars / term.length >= 0.7;
-  }
-
-  private isLongCjkTerm(term: string): boolean {
-    if (term.length < 8) return false;
-    return this.isCjkHeavyTerm(term);
+      .map((t) => t.trim())
+      .filter((t) => t.length >= 2);
   }
 
   private escapeLikePattern(value: string): string {
