@@ -18,9 +18,36 @@ function createTMMatch(index: number, similarity: number): TMMatch {
     usageCount: index + 1,
     createdAt: now,
     updatedAt: now,
+    kind: 'tm',
+    rank: similarity,
     similarity,
     tmName: 'Main TM',
     tmType: 'main',
+  };
+}
+
+function createConcordanceMatch(index: number, rank: number): TMMatch {
+  const now = new Date().toISOString();
+  return {
+    id: `concordance-${index}`,
+    projectId: 1,
+    srcLang: 'zh-CN',
+    tgtLang: 'fr-FR',
+    srcHash: `concordance-hash-${index}`,
+    matchKey: `concordance-key-${index}`,
+    tagsSignature: '',
+    sourceTokens: [{ type: 'text', content: `context-source-${index}` }],
+    targetTokens: [{ type: 'text', content: `context-target-${index}` }],
+    usageCount: index + 1,
+    createdAt: now,
+    updatedAt: now,
+    kind: 'concordance',
+    rank,
+    tmName: 'Main TM',
+    tmType: 'main',
+    matchedSourceText: '麦浪农场',
+    sourceCoverage: 100,
+    entryCoverage: 10,
   };
 }
 
@@ -62,5 +89,16 @@ describe('buildCombinedMatches', () => {
 
     expect(tmItems).toHaveLength(5);
     expect(tbItems).toHaveLength(2);
+  });
+
+  it('sorts concordance suggestions by rank without requiring similarity', () => {
+    const matches = [createTMMatch(1, 80), createConcordanceMatch(2, 90)];
+    const combined = buildCombinedMatches(matches, [], 5);
+
+    expect(combined[0].payload).toMatchObject({
+      kind: 'concordance',
+      rank: 90,
+    });
+    expect(combined[0].payload).not.toHaveProperty('similarity');
   });
 });

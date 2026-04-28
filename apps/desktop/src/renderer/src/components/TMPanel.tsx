@@ -2,11 +2,28 @@ import React, { useState } from 'react';
 import type { TBMatch, TMEntry, Token } from '@cat/core/models';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 
-export interface TMMatch extends TMEntry {
-  similarity: number;
+export type TMMatchKind = 'tm' | 'concordance';
+
+export interface TMMatchBase extends TMEntry {
+  kind: TMMatchKind;
+  rank: number;
   tmName: string;
   tmType: 'working' | 'main';
 }
+
+export interface StandardTMMatch extends TMMatchBase {
+  kind: 'tm';
+  similarity: number;
+}
+
+export interface ConcordanceTMMatch extends TMMatchBase {
+  kind: 'concordance';
+  matchedSourceText: string;
+  sourceCoverage: number;
+  entryCoverage: number;
+}
+
+export type TMMatch = StandardTMMatch | ConcordanceTMMatch;
 
 interface TMPanelProps {
   matches: TMMatch[];
@@ -41,7 +58,7 @@ export function buildCombinedMatches(
   return [
     ...(matches || []).slice(0, tmRenderLimit).map((match, idx) => ({
       kind: 'tm' as const,
-      rank: match.similarity,
+      rank: match.rank,
       id: `tm-${match.id}-${idx}`,
       sourceText: serializeTokensToDisplayText(match.sourceTokens),
       targetText: serializeTokensToDisplayText(match.targetTokens),
@@ -99,18 +116,26 @@ export const TMPanel: React.FC<TMPanelProps> = ({ matches, termMatches, onApply,
           const tmMatch = isTM ? (match as TMMatch) : null;
           const tbMatch = !isTM ? (match as TBMatch) : null;
           const tmLabel = isTM
-            ? tmMatch!.tmType === 'working'
-              ? 'Working TM'
-              : `Main TM: ${tmMatch!.tmName}`
+            ? tmMatch!.kind === 'concordance'
+              ? `Concordance: ${tmMatch!.tmName}`
+              : tmMatch!.tmType === 'working'
+                ? 'Working TM'
+                : `Main TM: ${tmMatch!.tmName}`
             : `Term Base: ${tbMatch!.tbName}`;
           const scoreBg = isTM
-            ? tmMatch!.similarity >= 95
-              ? 'bg-success'
-              : tmMatch!.similarity >= 85
-                ? 'bg-brand'
-                : 'bg-warning'
+            ? tmMatch!.kind === 'concordance'
+              ? 'bg-warning'
+              : tmMatch!.similarity >= 95
+                ? 'bg-success'
+                : tmMatch!.similarity >= 85
+                  ? 'bg-brand'
+                  : 'bg-warning'
             : 'bg-warning';
-          const scoreText = isTM ? String(tmMatch!.similarity) : 'TB';
+          const scoreText = isTM
+            ? tmMatch!.kind === 'concordance'
+              ? 'C'
+              : String(tmMatch!.similarity)
+            : 'TB';
           const key = item.id;
           const sourceText = item.sourceText;
           const targetText = item.targetText;
