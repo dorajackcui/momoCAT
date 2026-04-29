@@ -441,4 +441,66 @@ describe('TMModule.batchMatchFileWithTM', () => {
 
     expect(eventSpy).not.toHaveBeenCalled();
   });
+
+  it('finds CJK recall candidates through TMModule.findMatches', async () => {
+    let db: CATDatabase | undefined;
+    try {
+      db = new CATDatabase(':memory:');
+      const projectId = db.createProject('CJK Recall Project', 'zh', 'fr');
+      const mainTmId = db.createTM('Main CJK Recall', 'zh', 'fr', 'main');
+      db.mountTMToProject(projectId, mainTmId, 10, 'read');
+
+      const now = new Date().toISOString();
+      const entryId = db.upsertTMEntryBySrcHash({
+        id: 'pillar-entry',
+        tmId: mainTmId,
+        projectId: 0,
+        srcLang: 'zh',
+        tgtLang: 'fr',
+        srcHash: 'pillar-hash',
+        matchKey: '风荷立柱',
+        tagsSignature: '',
+        sourceTokens: [{ type: 'text', content: '风荷立柱' }],
+        targetTokens: [{ type: 'text', content: 'Colonne lotus venteux' }],
+        createdAt: now,
+        updatedAt: now,
+        usageCount: 1,
+      });
+      db.replaceTMFts(mainTmId, '风荷立柱', 'Colonne lotus venteux', entryId);
+
+      const projectRepo = new SqliteProjectRepository(db);
+      const segmentRepo = new SqliteSegmentRepository(db);
+      const tmRepo = new SqliteTMRepository(db);
+      const tx = new SqliteTransactionManager(db);
+      const tmService = new TMService(projectRepo, tmRepo);
+      const segmentService = new SegmentService(segmentRepo, tmService, tx);
+      const module = new TMModule(
+        projectRepo,
+        segmentRepo,
+        tmRepo,
+        tx,
+        tmService,
+        segmentService,
+        ':memory:',
+        vi.fn(),
+      );
+
+      const matches = await module.findMatches(projectId, {
+        segmentId: 'active-cjk',
+        fileId: 1,
+        orderIndex: 0,
+        sourceTokens: [{ type: 'text', content: '风荷立柱设计图' }],
+        targetTokens: [],
+        status: 'new',
+        tagsSignature: '',
+        matchKey: '风荷立柱设计图',
+        srcHash: 'active-cjk-hash',
+        meta: { updatedAt: now },
+      });
+
+      expect(matches.map((match) => match.srcHash)).toContain('pillar-hash');
+    } finally {
+      db?.close();
+    }
+  });
 });
