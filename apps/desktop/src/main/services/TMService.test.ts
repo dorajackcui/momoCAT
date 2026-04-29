@@ -79,6 +79,8 @@ function createService(params: {
   mountedTMs: Array<{ id: string; name: string; type: 'working' | 'main' }>;
   exactMatchByHash?: Record<string, TMEntry | undefined>;
   concordanceEntries?: Array<TMEntry & { tmId: string }>;
+  recallEntries?: Array<TMEntry & { tmId: string }>;
+  searchTMRecallCandidates?: ReturnType<typeof vi.fn>;
 }): TMService {
   const projectRepo = {
     getProject: vi.fn().mockReturnValue({
@@ -103,6 +105,9 @@ function createService(params: {
       .fn()
       .mockImplementation((_: string, srcHash: string) => params.exactMatchByHash?.[srcHash]),
     searchConcordance: vi.fn().mockReturnValue(params.concordanceEntries ?? []),
+    searchTMRecallCandidates:
+      params.searchTMRecallCandidates ??
+      vi.fn().mockReturnValue(params.recallEntries ?? params.concordanceEntries ?? []),
   } as unknown as TMRepository;
 
   return new TMService(projectRepo, tmRepo);
@@ -124,6 +129,28 @@ describe('TMService.findMatches', () => {
 
     const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
     expect(matches.length).toBe(10);
+  });
+
+  it('uses source-scoped recall candidates for fuzzy matching', async () => {
+    const source = '风荷立柱设计图';
+    const searchTMRecallCandidates = vi.fn().mockReturnValue([
+      createConcordanceEntry('tm-main', {
+        srcHash: 'pillar-drawing-hash',
+        sourceText: '风荷立柱',
+      }),
+    ]);
+    const service = createService({
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      searchTMRecallCandidates,
+    });
+
+    const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
+
+    expect(searchTMRecallCandidates).toHaveBeenCalledWith(1, source, ['tm-main'], {
+      scope: 'source',
+      limit: 50,
+    });
+    expect(matches.map((match) => match.srcHash)).toContain('pillar-drawing-hash');
   });
 
   it('matches near-identical CJK sentence when one character differs at the beginning', async () => {

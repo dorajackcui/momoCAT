@@ -121,71 +121,66 @@ export class TMService {
       }
     }
 
-    const query = sourceTextOnly
-      .replace(/[^\w\s\u4e00-\u9fa5]/g, ' ')
-      .replace(/([\u4e00-\u9fa5])(\d)/g, '$1 $2')
-      .replace(/(\d)([\u4e00-\u9fa5])/g, '$1 $2')
-      .split(/\s+/)
-      .filter((w) => w.length >= 2 && !/^\d+$/.test(w))
-      .join(' ');
+    const tmIds = mountedTMs.map((tm) => tm.id);
+    const candidates = this.tmRepo.searchTMRecallCandidates(
+      projectId,
+      sourceTextOnly,
+      tmIds,
+      { scope: 'source', limit: 50 },
+    );
 
-    if (query) {
-      const tmIds = mountedTMs.map((tm) => tm.id);
-      const candidates = this.tmRepo.searchConcordance(projectId, query, tmIds);
+    for (const cand of candidates) {
+      if (seenHashes.has(cand.srcHash)) continue;
 
-      for (const cand of candidates) {
-        if (seenHashes.has(cand.srcHash)) continue;
+      const candTextOnly = serializeTokensToTextOnly(cand.sourceTokens);
+      const candNormalized = this.normalizeForSimilarity(candTextOnly);
 
-        const candTextOnly = serializeTokensToTextOnly(cand.sourceTokens);
-        const candNormalized = this.normalizeForSimilarity(candTextOnly);
+      let standardSimilarity = 0;
+      let localOverlap: LocalOverlapResult = {
+        score: 0,
+        matchedSourceText: '',
+        sourceCoverage: 0,
+        entryCoverage: 0,
+      };
 
-        let standardSimilarity = 0;
-        let localOverlap: LocalOverlapResult = {
-          score: 0,
-          matchedSourceText: '',
-          sourceCoverage: 0,
-          entryCoverage: 0,
-        };
+      if (sourceNormalized === candNormalized) {
+        standardSimilarity = 99;
+      } else {
+        localOverlap = this.computeLocalOverlapSimilarity(sourceNormalized, candNormalized);
+        const maxPossibleByLength = this.computeMaxLengthBound(sourceNormalized, candNormalized);
 
-        // Logic A: Text is identical, but Tags are different
-        if (sourceNormalized === candNormalized) {
-          standardSimilarity = 99; // Penalty for tag mismatch
-        } else {
-          localOverlap = this.computeLocalOverlapSimilarity(sourceNormalized, candNormalized);
-          const maxPossibleByLength = this.computeMaxLengthBound(sourceNormalized, candNormalized);
-
-          if (maxPossibleByLength >= TMService.MIN_SIMILARITY) {
-            const levSimilarity = this.computeLevenshteinSimilarity(sourceNormalized, candNormalized);
-            const diceSimilarity = this.computeDiceSimilarity(sourceNormalized, candNormalized);
-            const bonus = this.computeSimilarityBonus(sourceNormalized, candNormalized);
-            standardSimilarity = Math.min(
-              99,
-              Math.round(
-                levSimilarity * TMService.LEVENSHTEIN_WEIGHT +
-                  diceSimilarity * TMService.DICE_WEIGHT +
-                  bonus,
-              ),
-            );
-          }
+        if (maxPossibleByLength >= TMService.MIN_SIMILARITY) {
+          const levSimilarity = this.computeLevenshteinSimilarity(sourceNormalized, candNormalized);
+          const diceSimilarity = this.computeDiceSimilarity(sourceNormalized, candNormalized);
+          const bonus = this.computeSimilarityBonus(sourceNormalized, candNormalized);
+          standardSimilarity = Math.min(
+            99,
+            Math.round(
+              levSimilarity * TMService.LEVENSHTEIN_WEIGHT +
+                diceSimilarity * TMService.DICE_WEIGHT +
+                bonus,
+            ),
+          );
         }
+      }
 
-        const tm = mountedTMs.find((t) => t.id === cand.tmId);
-        const baseMatch = {
-          ...cand,
-          tmName: tm?.name || 'Unknown TM',
-          tmType: tm?.type || 'main',
-        } as const;
+      const tm = mountedTMs.find((t) => t.id === cand.tmId);
+      const baseMatch = {
+        ...cand,
+        tmName: tm?.name || 'Unknown TM',
+        tmType: tm?.type || 'main',
+      } as const;
 
-        if (standardSimilarity >= TMService.MIN_SIMILARITY) {
-          results.push({
-            ...baseMatch,
-            kind: 'tm',
-            similarity: standardSimilarity,
-            rank: standardSimilarity,
-          });
-          seenHashes.add(cand.srcHash);
-          continue;
-        }
+      if (standardSimilarity >= TMService.MIN_SIMILARITY) {
+        results.push({
+          ...baseMatch,
+          kind: 'tm',
+          similarity: standardSimilarity,
+          rank: standardSimilarity,
+        });
+        seenHashes.add(cand.srcHash);
+        continue;
+      }
 
         if (localOverlap.score >= TMService.MIN_SIMILARITY) {
           results.push({
@@ -197,7 +192,6 @@ export class TMService {
             entryCoverage: localOverlap.entryCoverage,
           });
           seenHashes.add(cand.srcHash);
-        }
       }
     }
 
