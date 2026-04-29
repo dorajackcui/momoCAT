@@ -6,6 +6,7 @@ import type {
   ProjectFileRecord as DbProjectFileRecord,
   TBRecord as DbTBRecord,
   TMRecord as DbTMRecord,
+  TMRecallOptions as DbTMRecallOptions,
   TMType as DbTMType,
 } from '../../../../../packages/db/src/types';
 import type {
@@ -15,6 +16,7 @@ import type {
 } from '../../shared/ipc';
 
 export type TMType = DbTMType;
+export type TMRecallOptions = DbTMRecallOptions;
 export type SpreadsheetPreviewData = SharedSpreadsheetPreviewData;
 
 export type ProjectRecord = Project;
@@ -76,6 +78,12 @@ export interface TMRepository {
   replaceTMFts(tmId: string, srcText: string, tgtText: string, tmEntryId: string): void;
   findTMEntryByHash(tmId: string, srcHash: string): TMEntry | undefined;
   searchConcordance(projectId: number, query: string, tmIds?: string[]): TMEntryWithTmId[];
+  searchTMRecallCandidates(
+    projectId: number,
+    sourceText: string,
+    tmIds?: string[],
+    options?: TMRecallOptions,
+  ): TMEntryWithTmId[];
 
   listTMs(type?: TMType): TMRecord[];
   createTM(name: string, srcLang: string, tgtLang: string, type: TMType): string;

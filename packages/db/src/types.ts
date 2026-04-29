@@ -38,6 +38,13 @@ export interface TMEntryRow extends TMEntry {
   tmId: string;
 }
 
+export type TMRecallScope = 'source' | 'source-and-target';
+
+export interface TMRecallOptions {
+  scope?: TMRecallScope;
+  limit?: number;
+}
+
 export interface TBRecord {
   id: string;
   name: string;

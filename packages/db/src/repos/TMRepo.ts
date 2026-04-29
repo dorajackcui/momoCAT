@@ -1,7 +1,13 @@
 import Database from 'better-sqlite3';
 import type { TMEntry, Token } from '@cat/core/models';
 import { randomUUID } from 'crypto';
-import type { MountedTMRecord, TMEntryRow, TMRecord, TMType } from '../types';
+import type {
+  MountedTMRecord,
+  TMEntryRow,
+  TMRecallOptions,
+  TMRecord,
+  TMType,
+} from '../types';
 
 type TMEntryDbRow = Omit<TMEntryRow, 'sourceTokens' | 'targetTokens'> & {
   sourceTokensJson: string;
@@ -163,6 +169,16 @@ export class TMRepo {
       ORDER BY project_tms.priority ASC
     `)
       .all(projectId) as MountedTMRecord[];
+  }
+
+  public searchTMRecallCandidates(
+    projectId: number,
+    sourceText: string,
+    tmIds?: string[],
+    options: TMRecallOptions = {},
+  ): TMEntryRow[] {
+    const limit = options.limit ?? 50;
+    return this.searchConcordance(projectId, sourceText, tmIds).slice(0, limit);
   }
 
   public searchConcordance(projectId: number, query: string, tmIds?: string[]): TMEntryRow[] {

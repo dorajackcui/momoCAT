@@ -22,6 +22,7 @@ import {
   TBRecord,
   TMEntryRow,
   TMRecord,
+  TMRecallOptions,
   TMType,
 } from "./types";
 
@@ -359,6 +360,15 @@ export class CATDatabase {
 
   public getProjectMountedTMs(projectId: number): MountedTMRecord[] {
     return this.tmRepo.getProjectMountedTMs(projectId);
+  }
+
+  public searchTMRecallCandidates(
+    projectId: number,
+    sourceText: string,
+    tmIds?: string[],
+    options?: TMRecallOptions,
+  ): TMEntryRow[] {
+    return this.tmRepo.searchTMRecallCandidates(projectId, sourceText, tmIds, options);
   }
 
   public searchConcordance(projectId: number, query: string, tmIds?: string[]): TMEntryRow[] {
