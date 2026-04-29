@@ -57,6 +57,7 @@
       "runInTransaction",
       "searchProjectTermEntries",
       "searchConcordance",
+      "searchTMRecallCandidates",
       "setSetting",
       "unmountTMFromProject",
       "unmountTermBaseFromProject",
