@@ -42,7 +42,7 @@ const sourceNormalized = normalizeForSimilarity(sourceTextOnly);
 | 原始 sourceTokens | serializeTokensToTextOnly |
 |---|---|
 | `{1>微风绿野河畔<2}的{1>追逐奇想星挑战<2}总是失败……` | `微风绿野河畔的追逐奇想星挑战总是失败……` |
-| `风荷立柱��计图` | `风荷立柱设计图` |
+| `风荷立柱设计图` | `风荷立柱设计图` |
 
 ### Step 2 — 100% Hash 精确匹配
 
@@ -57,82 +57,36 @@ for (const tm of mountedTMs) {
 
 命中后记入 `seenHashes`，后续模糊搜索跳过相同 hash。
 
-### Step 3 — 构建 FTS 查询字符串
+### Step 3 — 召回候选 TM 条目
+
+`TMService.findMatches()` 调用：
 
 ```typescript
-const query = sourceTextOnly
-  .replace(/[^\w\s\u4e00-\u9fa5]/g, ' ')       // 去除标点（保留 CJK 和 \w）
-  .replace(/([\u4e00-\u9fa5])(\d)/g, '$1 $2')  // CJK/数字边界插入空格
-  .replace(/(\d)([\u4e00-\u9fa5])/g, '$1 $2')  // 数字/CJK 边界插入空格
-  .split(/\s+/)                                 // 按空格拆词
-  .filter((w) => w.length >= 2 && !/^\d+$/.test(w)) // 去除单字和纯数字
-  .join(' ');                                   // 空格拼接
+tmRepo.searchTMRecallCandidates(projectId, sourceTextOnly, tmIds, {
+  scope: 'source',
+  limit: 50,
+});
 ```
 
-示例：
+这一层只负责召回候选，不决定 `kind: 'tm'` 或 `kind: 'concordance'`。
 
-| 输入 | 输出 query |
-|---|---|
-| `风荷立柱设计图` | `风荷立柱设计图` (单一 term) |
-| `消耗380个金币` | `消耗 380 个金币` → filter → `���耗 个金币` |
-| `Translation memory test` | `Translation memory test` |
+### Step 4 — CJK-aware recall plan
 
-> **注意**：纯 CJK 文本无空格分隔，整段成为一个 term。这会导致 FTS 搜索过于严格（精确子串匹配），是已知的可优化点。
+`TMRepo.searchTMRecallCandidates()` 将 source 构造成分层查询计划：
 
-### Step 4 — searchConcordance
+| Tier | 内容 | 用途 |
+|---|---|---|
+| exact terms | 清洗后的完整 term | 保留当前精确 phrase 行为 |
+| primary CJK fragments | 最多 16 个 4-6 字 CJK 片段 | 召回 `风荷立柱设计图` -> `风荷立柱` 这类短条目 |
+| secondary CJK fragments | 最多 12 个 3 字片段 | primary 不足时补召回 |
+| short CJK fallback | 最多 4 个 2 字 term，最多 10 行 LIKE fallback | 兜底短词，不作为主路径 |
 
-`TMRepo.searchConcordance(projectId, query, tmIds)` — [TMRepo.ts](../packages/db/src/repos/TMRepo.ts)
+每个 tier 返回的 row 还会经过 evidence gate：
 
-#### 4a. 提取搜索词
-
-```typescript
-extractSearchTerms(query)
-  .replace(/["()]/g, ' ')                   // 去除 FTS 运算符
-  .replace(/\b(?:AND|OR|NOT)\b/gi, ' ')     // 去除布尔关键字
-  .replace(/[^\w\s\u4e00-\u9fa5]/g, ' ')    // 保留 CJK 和 \w
-  .split(/\s+/)
-  .filter((t) => t.length >= 2)
-```
-
-#### 4b. 分类
-
-```
-ftsTerms   = terms.filter(t => t.length >= 3)    // trigram FTS 最小 3 字符
-shortTerms = terms.filter(t => 2 <= t.length < 3) // LIKE 回退
-```
-
-#### 4c. FTS5 trigram 查询
-
-```typescript
-const ftsQuery = ftsTerms.map(t => `"${t}"`).join(' OR ');
-// 例: '"风荷立柱设计图"' 或 '"Translation" OR "memory" OR "test"'
-```
-
-引号包裹 → trigram tokenizer 执行**精确子串匹配**。
-
-```sql
-SELECT tm_entries.*
-FROM tm_fts
-JOIN tm_entries ON tm_fts.tmEntryId = tm_entries.id
-WHERE tm_fts.tmId IN (?, ?, ...) AND tm_fts MATCH ?
-ORDER BY rank
-LIMIT 10
-```
-
-#### 4d. LIKE 回退（短词补充）
-
-当 FTS 结果不足 10 条且存在 shortTerms（2 字符词）时，补充 LIKE 查询：
-
-```sql
-WHERE tm_fts.tmId IN (...)
-  AND (tm_fts.srcText LIKE '%term%' OR tm_fts.tgtText LIKE '%term%')
-ORDER BY usageCount DESC, updatedAt DESC
-LIMIT remaining
-```
-
-#### 4e. 返回候选
-
-合并 FTS + LIKE 结果，去重，最多 10 条 `TMEntry[]`。
+- 共享 >=4 字连续 CJK 片段，接受。
+- 共享至少两个不同 3 字 CJK 片段，接受。
+- 只有 2 字命中时，要求 source 或 candidate 存在短 CJK component。
+- active segment 匹配只使用 source-side evidence，不接受 target-only 命中。
 
 ### Step 5 — 相似度评分
 
@@ -217,7 +171,7 @@ CREATE VIRTUAL TABLE tm_fts USING fts5(
 | 导入 TM | `TMImportService` / `tmImportWorker` | `insertTMFts` / `replaceTMFts` |
 | 批量提交到主 TM | `TMBatchOpsService.commitToMainTM` | `replaceTMFts` |
 
-所有路径使用 `serializeTokensToTextOnly()` 提取纯文本写入 FTS，确保与查询端一致（无 tag 标记干扰 trigram 序列）。
+当前写入路径使用 display text 或导入原始文本写入 FTS。`findMatches()` 的评分仍使用 `serializeTokensToTextOnly()`；candidate recall 通过 evidence gate 抵消 tag/display text 对召回的影响。后续若统一 FTS 写入为 text-only，应同步更新导入、确认 Segment、批量提交主 TM 三条路径。
 
 ## Trigram Tokenizer 行为
 
@@ -231,6 +185,6 @@ CREATE VIRTUAL TABLE tm_fts USING fts5(
 | 文件 | 职责 |
 |---|---|
 | `apps/desktop/src/main/services/TMService.ts` | findMatches 主流程、相似度算法 |
-| `packages/db/src/repos/TMRepo.ts` | searchConcordance、FTS 查询构建 |
+| `packages/db/src/repos/TMRepo.ts` | searchTMRecallCandidates、FTS 查询构建 |
 | `packages/core/src/text/tokenText.ts` | serializeTokensToTextOnly / DisplayText |
 | `packages/db/src/currentSchema.ts` | tm_fts 表定义 |
