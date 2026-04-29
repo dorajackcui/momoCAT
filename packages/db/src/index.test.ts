@@ -553,6 +553,76 @@ describe("CATDatabase", () => {
       expect(allResults[0].srcHash).toBe("h2");
     });
 
+    it("should recall shorter CJK TM source contained in longer active source", () => {
+      const projectId = db.createProject("TM CJK Recall Contained", "zh", "fr");
+      const mainTmId = db.createTM("Main CJK Recall", "zh", "fr", "main");
+      db.mountTMToProject(projectId, mainTmId, 10, "read");
+
+      db.upsertTMEntry({
+        id: "animal-party-entry",
+        tmId: mainTmId,
+        srcHash: "animal-party-hash",
+        matchKey: "animal-party",
+        tagsSignature: "",
+        sourceTokens: [{ type: "text", content: "动物变身聚会" }],
+        targetTokens: [{ type: "text", content: "Fete de metamorphose animale" }],
+        usageCount: 1,
+      } as any);
+
+      db.upsertTMEntry({
+        id: "pillar-drawing-entry",
+        tmId: mainTmId,
+        srcHash: "pillar-drawing-hash",
+        matchKey: "pillar-drawing",
+        tagsSignature: "",
+        sourceTokens: [{ type: "text", content: "风荷立柱" }],
+        targetTokens: [{ type: "text", content: "Colonne lotus venteux" }],
+        usageCount: 1,
+      } as any);
+
+      const partyResults = db.searchTMRecallCandidates(
+        projectId,
+        "前往动物变身聚会（可选）",
+        [mainTmId],
+        { scope: "source", limit: 50 },
+      );
+      expect(partyResults.map((row) => row.srcHash)).toContain("animal-party-hash");
+
+      const pillarResults = db.searchTMRecallCandidates(
+        projectId,
+        "风荷立柱设计图",
+        [mainTmId],
+        { scope: "source", limit: 50 },
+      );
+      expect(pillarResults.map((row) => row.srcHash)).toContain("pillar-drawing-hash");
+    });
+
+    it("should not return target-only hits for active source recall", () => {
+      const projectId = db.createProject("TM Source Scope Recall", "zh", "fr");
+      const mainTmId = db.createTM("Main Source Scope", "zh", "fr", "main");
+      db.mountTMToProject(projectId, mainTmId, 10, "read");
+
+      db.upsertTMEntry({
+        id: "target-only-entry",
+        tmId: mainTmId,
+        srcHash: "target-only-hash",
+        matchKey: "unrelated-source",
+        tagsSignature: "",
+        sourceTokens: [{ type: "text", content: "完全无关的来源文本" }],
+        targetTokens: [{ type: "text", content: "风荷立柱设计图" }],
+        usageCount: 100,
+      } as any);
+
+      const sourceScopeResults = db.searchTMRecallCandidates(
+        projectId,
+        "风荷立柱设计图",
+        [mainTmId],
+        { scope: "source", limit: 50 },
+      );
+
+      expect(sourceScopeResults.map((row) => row.srcHash)).not.toContain("target-only-hash");
+    });
+
     it("should keep highly relevant hit in top candidates under common-term noise", () => {
       const projectId = db.createProject("Concordance Ranking Project", "zh", "fr");
 
@@ -594,11 +664,13 @@ describe("CATDatabase", () => {
         usageCount: 1,
       } as any);
 
-      const results = db.searchConcordance(
+      const results = db.searchTMRecallCandidates(
         projectId,
-        "这份样本从录入到完成是需要时间的 OR 没关系 OR 我等你们",
+        "这份样本从录入到完成是需要时间的，没关系，我等你们！",
+        [mainTmId],
+        { scope: "source", limit: 50 },
       );
-      expect(results).toHaveLength(10);
+      expect(results.length).toBeLessThanOrEqual(50);
       expect(results[0].srcHash).toBe("target-hash");
       expect(results.some((row) => row.srcHash === "target-hash")).toBe(true);
     });
@@ -640,8 +712,13 @@ describe("CATDatabase", () => {
         usageCount: 1,
       } as any);
 
-      const results = db.searchConcordance(projectId, "乙组是怎么成为临时项目的负责人的？");
-      expect(results.length).toBeLessThanOrEqual(10);
+      const results = db.searchTMRecallCandidates(
+        projectId,
+        "乙组是怎么成为临时项目的负责人的？",
+        [mainTmId],
+        { scope: "source", limit: 50 },
+      );
+      expect(results.length).toBeLessThanOrEqual(50);
       expect(results.some((row) => row.srcHash === "cjk-near-hash")).toBe(true);
     });
 
@@ -672,7 +749,12 @@ describe("CATDatabase", () => {
         usageCount: 1,
       } as any);
 
-      const cloudwoodResults = db.searchConcordance(projectId, "织云木种子");
+      const cloudwoodResults = db.searchTMRecallCandidates(
+        projectId,
+        "织云木种子",
+        [mainTmId],
+        { scope: "source", limit: 50 },
+      );
       expect(cloudwoodResults.map((row) => row.srcHash)).toEqual(
         expect.arrayContaining(["soft-pink-cloudwood", "green-cloudwood"]),
       );
@@ -699,7 +781,12 @@ describe("CATDatabase", () => {
         usageCount: 1,
       } as any);
 
-      const dreamResults = db.searchConcordance(projectId, "晴日裱花·困梦");
+      const dreamResults = db.searchTMRecallCandidates(
+        projectId,
+        "晴日裱花·困梦",
+        [mainTmId],
+        { scope: "source", limit: 50 },
+      );
       expect(dreamResults.map((row) => row.srcHash)).toEqual(
         expect.arrayContaining(["sunny-icing", "remote-dream"]),
       );
@@ -734,7 +821,12 @@ describe("CATDatabase", () => {
         usageCount: 1,
       } as any);
 
-      const results = db.searchConcordance(projectId, "晴日裱花琉璃霜雪困梦");
+      const results = db.searchTMRecallCandidates(
+        projectId,
+        "晴日裱花琉璃霜雪困梦",
+        [mainTmId],
+        { scope: "source", limit: 50 },
+      );
       expect(results.map((row) => row.srcHash)).toContain("late-fragment");
     });
   });
