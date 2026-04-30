@@ -8,6 +8,7 @@ import {
   normalizeTermForLookup,
   serializeTokensToDisplayText,
   serializeTokensToSearchText,
+  serializeTokensToTextOnly,
   suppressNestedTermMatches,
 } from './index';
 
@@ -30,6 +31,16 @@ describe('Text Utilities', () => {
     ];
 
     expect(computeMatchKey(tokens)).toBe('hello {TAG} world');
+  });
+
+  it('keeps tag boundaries when serializing text-only TM content', () => {
+    const text = serializeTokensToTextOnly([
+      { type: 'text', content: '风荷' },
+      { type: 'tag', content: '{1}', meta: { id: '{1}' } },
+      { type: 'text', content: '立柱' },
+    ]);
+
+    expect(text).toBe('风荷 立柱');
   });
 
   it('drops tags but preserves text spacing for TB matching', () => {

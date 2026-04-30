@@ -6,8 +6,7 @@ export function serializeTokensToDisplayText(tokens: Token[]): string {
 
 export function serializeTokensToTextOnly(tokens: Token[]): string {
   return tokens
-    .filter((token) => token.type === 'text')
-    .map((token) => token.content)
+    .map((token) => (token.type === 'text' ? token.content : ' '))
     .join('')
     .replace(/\s+/g, ' ')
     .trim();
