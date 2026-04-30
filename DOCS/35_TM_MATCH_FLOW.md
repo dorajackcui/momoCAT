@@ -68,7 +68,7 @@ tmRepo.searchTMRecallCandidates(projectId, sourceTextOnly, tmIds, {
 });
 ```
 
-这一层只负责召回候选，不决定 `kind: 'tm'` 或 `kind: 'concordance'`。
+这一层负责召回候选，不决定 `kind: 'tm'` 或 `kind: 'concordance'`。为了避免进入评分前的 50 条候选已经被同一种子串占满，repo 会先 overfetch 一个最多 3x 的候选池，再做 diversity cap 后返回 `limit` 条。
 
 ### Step 4 — CJK-aware recall plan
 
@@ -87,6 +87,8 @@ tmRepo.searchTMRecallCandidates(projectId, sourceTextOnly, tmIds, {
 - 共享至少两个不同 3 字 CJK 片段，接受。
 - 只有 2 字命中时，要求 source 或 candidate 存在短 CJK component。
 - active segment 匹配只使用 source-side evidence，不接受 target-only 命中。
+
+完成分层召回后，`searchTMRecallCandidates()` 会按 query 与候选 source（或 concordance 场景的 source/target）的最长公共 CJK 片段分桶，每个 bucket 最多保留 2 条。若短 bucket 被同一候选池中的更长 bucket 完全包含，例如 `能力套装` 被 `能力套装限时上架中` 包含，则归并到更长 bucket 计数。
 
 ### Step 5 — 相似度评分
 
@@ -132,15 +134,27 @@ standardSimilarity = min(99, round(lev × 0.75 + dice × 0.25 + bonus))
 
 ### Step 6 — 分类结果
 
+先检查“局部片段是否明显强于整句 fuzzy”。这用于处理 `风荷立柱设计图` → `风荷立柱` 这类完整短片段命中：
+
+```typescript
+standardSimilarity >= 50
+localOverlap.score >= 80
+localOverlap.score - standardSimilarity >= 15
+localOverlap.entryCoverage >= 90
+localOverlap.sourceCoverage < 75
+→ kind: 'concordance'
+```
+
 | 条件 | 类型 | 字段 |
 |---|---|---|
+| 上述 local-overlap 规则命中 | `kind: 'concordance'` | `matchedSourceText`, `sourceCoverage`, `entryCoverage`, `rank = localOverlap.score` |
 | `standardSimilarity >= 50` | `kind: 'tm'` | `similarity`, `rank = similarity` |
 | `localOverlap.score >= 50` | `kind: 'concordance'` | `matchedSourceText`, `sourceCoverage`, `entryCoverage`, `rank = score` |
 | 两者都 < 50 | 丢弃 | — |
 
-优先判断 standardSimilarity，达标即归类为 TM 匹配，不再检查 concordance。
+一般 fuzzy 仍优先归类为 TM；但当完整短片段覆盖候选大部分、只覆盖 active source 一部分，并且 local overlap 分数显著高于 standard similarity 时，归类为 Concordance。
 
-### Step 7 — 排序 & 截断
+### Step 7 — 排序、多样性 & 截断
 
 ```typescript
 results
@@ -148,8 +162,17 @@ results
     if (b.rank !== a.rank) return b.rank - a.rank;   // rank 降序
     return b.usageCount - a.usageCount;               // 同 rank 按使用次数
   })
+  .diversifyByOverlapBucket({ maxPerBucket: 2 })
   .slice(0, 10);  // 最多 10 条
 ```
+
+`diversifyByOverlapBucket` 使用最长公共 CJK 片段作为 bucket key。只有纯 CJK 且长度 >=4 的片段参与限制；每个 bucket 最多保留 2 条。短 bucket 被更长 bucket 完全包含时，会归并到更长 bucket。这样 `立柱设计图` 这类共享后缀不会占满整个结果列表，`风荷立柱` 这类另一组强片段仍能进入可见结果。
+
+## Concordance Search 多样性
+
+`TMRepo.searchConcordance(projectId, query, tmIds)` 复用 `searchTMRecallCandidates(scope: 'source-and-target', limit: 50)`，因此进入 concordance 排序前的 recall 候选已经经过 repo-level diversity cap。随后 `searchConcordance()` 再按 query 与候选 source/target 的最长公共 CJK 片段做一次最终 bucket cap，返回最多 10 条。
+
+因此 active segment flow 与显式 concordance search 都会在 repo recall 层先避免候选池被单一子串占满；active segment flow 还会在 `TMService.findMatches()` 评分、排序后对最终 10 条结果再做一次 diversity cap。
 
 ## FTS 索引写入路径
 

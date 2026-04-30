@@ -34,11 +34,22 @@ interface LocalOverlapResult {
   entryCoverage: number;
 }
 
+interface RankedTMMatch {
+  match: TMMatch;
+  diversityBucket: string | null;
+}
+
 export class TMService {
   private static readonly TM_MATCH_RESULT_LIMIT = 10;
   private static readonly MIN_SIMILARITY = 50;
   private static readonly LEVENSHTEIN_WEIGHT = 0.75;
   private static readonly DICE_WEIGHT = 0.25;
+  private static readonly DIVERSITY_MAX_PER_BUCKET = 2;
+  private static readonly DIVERSITY_MIN_CJK_BUCKET_LENGTH = 4;
+  private static readonly LOCAL_OVERLAP_CONCORDANCE_MIN_SCORE = 80;
+  private static readonly LOCAL_OVERLAP_CONCORDANCE_MIN_ADVANTAGE = 15;
+  private static readonly LOCAL_OVERLAP_CONCORDANCE_MIN_ENTRY_COVERAGE = 90;
+  private static readonly LOCAL_OVERLAP_CONCORDANCE_MAX_SOURCE_COVERAGE = 75;
 
   private projectRepo: ProjectRepository;
   private tmRepo: TMRepository;
@@ -102,7 +113,7 @@ export class TMService {
     const sourceTextOnly = serializeTokensToTextOnly(segment.sourceTokens);
     const sourceNormalized = this.normalizeForSimilarity(sourceTextOnly);
 
-    const results: TMMatch[] = [];
+    const results: RankedTMMatch[] = [];
     const seenHashes = new Set<string>();
 
     // 1. First, check for 100% matches (exact hash)
@@ -110,12 +121,15 @@ export class TMService {
       const match = this.tmRepo.findTMEntryByHash(tm.id, segment.srcHash);
       if (match) {
         results.push({
-          ...match,
-          kind: 'tm',
-          similarity: 100,
-          rank: 100,
-          tmName: tm.name,
-          tmType: tm.type,
+          match: {
+            ...match,
+            kind: 'tm',
+            similarity: 100,
+            rank: 100,
+            tmName: tm.name,
+            tmType: tm.type,
+          },
+          diversityBucket: null,
         });
         seenHashes.add(match.srcHash);
       }
@@ -171,36 +185,63 @@ export class TMService {
         tmType: tm?.type || 'main',
       } as const;
 
-      if (standardSimilarity >= TMService.MIN_SIMILARITY) {
-        results.push({
-          ...baseMatch,
-          kind: 'tm',
-          similarity: standardSimilarity,
-          rank: standardSimilarity,
-        });
-        seenHashes.add(cand.srcHash);
-        continue;
-      }
+      const diversityBucket = this.getLocalOverlapDiversityBucket(localOverlap);
 
-        if (localOverlap.score >= TMService.MIN_SIMILARITY) {
-          results.push({
+      if (this.shouldClassifyLocalOverlapAsConcordance(standardSimilarity, localOverlap)) {
+        results.push({
+          match: {
             ...baseMatch,
             kind: 'concordance',
             rank: localOverlap.score,
             matchedSourceText: localOverlap.matchedSourceText,
             sourceCoverage: localOverlap.sourceCoverage,
             entryCoverage: localOverlap.entryCoverage,
-          });
-          seenHashes.add(cand.srcHash);
+          },
+          diversityBucket,
+        });
+        seenHashes.add(cand.srcHash);
+        continue;
+      }
+
+      if (standardSimilarity >= TMService.MIN_SIMILARITY) {
+        results.push({
+          match: {
+            ...baseMatch,
+            kind: 'tm',
+            similarity: standardSimilarity,
+            rank: standardSimilarity,
+          },
+          diversityBucket,
+        });
+        seenHashes.add(cand.srcHash);
+        continue;
+      }
+
+      if (localOverlap.score >= TMService.MIN_SIMILARITY) {
+        results.push({
+          match: {
+            ...baseMatch,
+            kind: 'concordance',
+            rank: localOverlap.score,
+            matchedSourceText: localOverlap.matchedSourceText,
+            sourceCoverage: localOverlap.sourceCoverage,
+            entryCoverage: localOverlap.entryCoverage,
+          },
+          diversityBucket,
+        });
+        seenHashes.add(cand.srcHash);
       }
     }
 
-    return results
+    const sortedResults = results
       .sort((a, b) => {
-        if (b.rank !== a.rank) return b.rank - a.rank;
-        return b.usageCount - a.usageCount;
-      })
-      .slice(0, TMService.TM_MATCH_RESULT_LIMIT);
+        if (b.match.rank !== a.match.rank) return b.match.rank - a.match.rank;
+        return b.match.usageCount - a.match.usageCount;
+      });
+
+    return this.diversifyRankedMatches(sortedResults)
+      .slice(0, TMService.TM_MATCH_RESULT_LIMIT)
+      .map((result) => result.match);
   }
 
   private normalizeForSimilarity(text: string): string {
@@ -307,6 +348,83 @@ export class TMService {
       sourceCoverage: Math.round((overlapLength / aLength) * 100),
       entryCoverage: Math.round((overlapLength / bLength) * 100),
     };
+  }
+
+  private shouldClassifyLocalOverlapAsConcordance(
+    standardSimilarity: number,
+    localOverlap: LocalOverlapResult,
+  ): boolean {
+    if (standardSimilarity < TMService.MIN_SIMILARITY) return false;
+    if (localOverlap.score < TMService.LOCAL_OVERLAP_CONCORDANCE_MIN_SCORE) return false;
+    if (
+      localOverlap.score - standardSimilarity <
+      TMService.LOCAL_OVERLAP_CONCORDANCE_MIN_ADVANTAGE
+    ) {
+      return false;
+    }
+    if (
+      localOverlap.entryCoverage <
+      TMService.LOCAL_OVERLAP_CONCORDANCE_MIN_ENTRY_COVERAGE
+    ) {
+      return false;
+    }
+    return localOverlap.sourceCoverage < TMService.LOCAL_OVERLAP_CONCORDANCE_MAX_SOURCE_COVERAGE;
+  }
+
+  private diversifyRankedMatches(results: RankedTMMatch[]): RankedTMMatch[] {
+    const accepted: RankedTMMatch[] = [];
+    const bucketCounts = new Map<string, number>();
+    const canonicalBuckets = this.buildCanonicalDiversityBuckets(
+      results.map((result) => result.diversityBucket),
+    );
+
+    for (const result of results) {
+      const bucket = result.diversityBucket
+        ? canonicalBuckets.get(result.diversityBucket) ?? result.diversityBucket
+        : null;
+
+      if (!bucket) {
+        accepted.push(result);
+        continue;
+      }
+
+      const count = bucketCounts.get(bucket) ?? 0;
+      if (count < TMService.DIVERSITY_MAX_PER_BUCKET) {
+        bucketCounts.set(bucket, count + 1);
+        accepted.push(result);
+      }
+    }
+
+    return accepted;
+  }
+
+  private buildCanonicalDiversityBuckets(buckets: Array<string | null>): Map<string, string> {
+    const uniqueBuckets = Array.from(
+      new Set(buckets.filter((bucket): bucket is string => Boolean(bucket))),
+    ).sort((a, b) => Array.from(b).length - Array.from(a).length);
+    const canonicalBuckets = new Map<string, string>();
+
+    for (const bucket of uniqueBuckets) {
+      const containingBucket = uniqueBuckets.find(
+        (candidate) => candidate !== bucket && candidate.includes(bucket),
+      );
+      canonicalBuckets.set(bucket, containingBucket ?? bucket);
+    }
+
+    return canonicalBuckets;
+  }
+
+  private getLocalOverlapDiversityBucket(localOverlap: LocalOverlapResult): string | null {
+    const fragment = localOverlap.matchedSourceText.trim();
+    if (!this.isStrongCjkDiversityBucket(fragment)) return null;
+    return fragment;
+  }
+
+  private isStrongCjkDiversityBucket(fragment: string): boolean {
+    return (
+      /^[\u4e00-\u9fa5]+$/.test(fragment) &&
+      Array.from(fragment).length >= TMService.DIVERSITY_MIN_CJK_BUCKET_LENGTH
+    );
   }
 
   private findLongestCommonSubstring(a: string, b: string): string {

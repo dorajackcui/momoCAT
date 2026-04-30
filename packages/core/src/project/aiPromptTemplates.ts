@@ -1,6 +1,7 @@
 import type {
   DialoguePromptBundleBuildParams,
   DialogueUserPromptBuildParams,
+  PromptConcordanceReference,
   PromptTMReference,
   SystemPromptBuildParams,
   TextPromptBundleBuildParams,
@@ -16,6 +17,7 @@ const TRANSLATION_PROMPTS = AI_PROMPT_TEMPLATE_CATALOG.translation;
 const REVIEW_PROMPTS = AI_PROMPT_TEMPLATE_CATALOG.review;
 const CUSTOM_PROMPTS = AI_PROMPT_TEMPLATE_CATALOG.custom;
 const DIALOGUE_PROMPTS = AI_PROMPT_TEMPLATE_CATALOG.dialogue;
+const MAX_TM_TB_REFERENCES_WITH_CONCORDANCE = 15;
 
 function renderTemplate(
   template: string,
@@ -121,6 +123,12 @@ function buildTranslationUserPrompt(params: UserPromptBuildParams): string {
     params.tmReferences,
     params.tmReference,
   );
+  const tbReferences = params.tbReferences ?? [];
+  const concordanceReferences = getRenderableConcordanceReferences({
+    tmReferenceCount: tmReferences.length,
+    tbReferenceCount: tbReferences.length,
+    concordanceReferences: params.concordanceReferences,
+  });
   if (tmReferences.length > 0) {
     userParts.push("", TRANSLATION_PROMPTS.tmHeader);
     for (const reference of tmReferences) {
@@ -139,9 +147,9 @@ function buildTranslationUserPrompt(params: UserPromptBuildParams): string {
     }
   }
 
-  if (params.concordanceReferences && params.concordanceReferences.length > 0) {
+  if (concordanceReferences.length > 0) {
     userParts.push("", TRANSLATION_PROMPTS.concordanceHeader);
-    for (const reference of params.concordanceReferences) {
+    for (const reference of concordanceReferences) {
       userParts.push(
         renderTemplate(TRANSLATION_PROMPTS.concordanceEntrySummary, {
           matchedSourceText: reference.matchedSourceText,
@@ -157,9 +165,9 @@ function buildTranslationUserPrompt(params: UserPromptBuildParams): string {
     }
   }
 
-  if (params.tbReferences && params.tbReferences.length > 0) {
+  if (tbReferences.length > 0) {
     userParts.push("", TRANSLATION_PROMPTS.tbHeader);
-    for (const reference of params.tbReferences) {
+    for (const reference of tbReferences) {
       const note =
         typeof reference.note === "string" ? reference.note.trim() : "";
       const noteSuffix = note ? ` (note: ${note})` : "";
@@ -263,6 +271,10 @@ function buildCustomUserPrompt(params: UserPromptBuildParams): string {
 function buildDialogueTranslationUserPrompt(
   params: DialogueUserPromptBuildParams,
 ): string {
+  const omitConcordanceReferences = shouldOmitConcordanceReferences(
+    countDialogueTmReferences(params.segments),
+    countDialogueTbReferences(params.segments),
+  );
   const userParts: string[] = [
     renderTemplate(DIALOGUE_PROMPTS.introLine, {
       srcLang: params.srcLang,
@@ -293,6 +305,10 @@ function buildDialogueTranslationUserPrompt(
       segment.tmReferences,
       segment.tmReference,
     );
+    const tbReferences = segment.tbReferences ?? [];
+    const concordanceReferences = omitConcordanceReferences
+      ? []
+      : (segment.concordanceReferences ?? []);
     if (tmReferences.length > 0) {
       userParts.push(DIALOGUE_PROMPTS.tmHeader);
       for (const reference of tmReferences) {
@@ -311,12 +327,9 @@ function buildDialogueTranslationUserPrompt(
       }
     }
 
-    if (
-      segment.concordanceReferences &&
-      segment.concordanceReferences.length > 0
-    ) {
+    if (concordanceReferences.length > 0) {
       userParts.push(DIALOGUE_PROMPTS.concordanceHeader);
-      for (const reference of segment.concordanceReferences) {
+      for (const reference of concordanceReferences) {
         userParts.push(
           renderTemplate(DIALOGUE_PROMPTS.concordanceEntrySummary, {
             matchedSourceText: reference.matchedSourceText,
@@ -332,9 +345,9 @@ function buildDialogueTranslationUserPrompt(
       }
     }
 
-    if (segment.tbReferences && segment.tbReferences.length > 0) {
+    if (tbReferences.length > 0) {
       userParts.push(DIALOGUE_PROMPTS.tbHeader);
-      for (const reference of segment.tbReferences) {
+      for (const reference of tbReferences) {
         const note =
           typeof reference.note === "string" ? reference.note.trim() : "";
         const noteSuffix = note ? ` (note: ${note})` : "";
@@ -485,6 +498,60 @@ function normalizeTMReferences(
 ): PromptTMReference[] {
   if (tmReferences && tmReferences.length > 0) return tmReferences;
   return tmReference ? [tmReference] : [];
+}
+
+function getRenderableConcordanceReferences(params: {
+  tmReferenceCount: number;
+  tbReferenceCount: number;
+  concordanceReferences?: PromptConcordanceReference[];
+}): PromptConcordanceReference[] {
+  const concordanceReferences = params.concordanceReferences ?? [];
+  if (concordanceReferences.length === 0) {
+    return [];
+  }
+
+  if (
+    shouldOmitConcordanceReferences(
+      params.tmReferenceCount,
+      params.tbReferenceCount,
+    )
+  ) {
+    return [];
+  }
+
+  return concordanceReferences;
+}
+
+function shouldOmitConcordanceReferences(
+  tmReferenceCount: number,
+  tbReferenceCount: number,
+): boolean {
+  return (
+    tmReferenceCount > 0 &&
+    tbReferenceCount > 0 &&
+    tmReferenceCount + tbReferenceCount >
+      MAX_TM_TB_REFERENCES_WITH_CONCORDANCE
+  );
+}
+
+function countDialogueTmReferences(
+  segments: DialogueUserPromptBuildParams["segments"],
+): number {
+  return segments.reduce(
+    (count, segment) =>
+      count +
+      normalizeTMReferences(segment.tmReferences, segment.tmReference).length,
+    0,
+  );
+}
+
+function countDialogueTbReferences(
+  segments: DialogueUserPromptBuildParams["segments"],
+): number {
+  return segments.reduce(
+    (count, segment) => count + (segment.tbReferences?.length ?? 0),
+    0,
+  );
 }
 
 export function buildAIDialoguePromptBundle(

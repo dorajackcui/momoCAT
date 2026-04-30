@@ -217,6 +217,66 @@ describe("Project AI Prompt Templates", () => {
     expect(prompt).not.toContain("Terminology References (hit terms):");
   });
 
+  it("omits concordance suggestions when TM and TB references together exceed 15", () => {
+    const prompt = buildAIUserPrompt("translation", {
+      srcLang: "en",
+      sourcePayload: "alpha",
+      hasProtectedMarkers: false,
+      tmReferences: Array.from({ length: 3 }, (_, index) => ({
+        similarity: 100 - index,
+        tmName: `TM ${index + 1}`,
+        sourceText: `source ${index + 1}`,
+        targetText: `target ${index + 1}`,
+      })),
+      tbReferences: Array.from({ length: 13 }, (_, index) => ({
+        srcTerm: `term ${index + 1}`,
+        tgtTerm: `term target ${index + 1}`,
+      })),
+      concordanceReferences: [
+        {
+          tmName: "Main TM",
+          matchedSourceText: "alpha",
+          sourceText: "alpha beta",
+          targetText: "alpha target beta target",
+        },
+      ],
+    });
+
+    expect(prompt).toContain("TM References (top matches):");
+    expect(prompt).toContain("Terminology References (hit terms):");
+    expect(prompt).not.toContain("Concordance Suggestions:");
+    expect(prompt).not.toContain("Match: alpha | TM: Main TM");
+  });
+
+  it("keeps concordance suggestions when TM and TB references total 15", () => {
+    const prompt = buildAIUserPrompt("translation", {
+      srcLang: "en",
+      sourcePayload: "alpha",
+      hasProtectedMarkers: false,
+      tmReferences: Array.from({ length: 3 }, (_, index) => ({
+        similarity: 100 - index,
+        tmName: `TM ${index + 1}`,
+        sourceText: `source ${index + 1}`,
+        targetText: `target ${index + 1}`,
+      })),
+      tbReferences: Array.from({ length: 12 }, (_, index) => ({
+        srcTerm: `term ${index + 1}`,
+        tgtTerm: `term target ${index + 1}`,
+      })),
+      concordanceReferences: [
+        {
+          tmName: "Main TM",
+          matchedSourceText: "alpha",
+          sourceText: "alpha beta",
+          targetText: "alpha target beta target",
+        },
+      ],
+    });
+
+    expect(prompt).toContain("Concordance Suggestions:");
+    expect(prompt).toContain("Match: alpha | TM: Main TM");
+  });
+
   it("does not include context line for translation user prompt when context is empty", () => {
     const prompt = buildAIUserPrompt("translation", {
       srcLang: "en",
@@ -357,6 +417,67 @@ describe("Project AI Prompt Templates", () => {
     expect(prompt).toContain("Concordance Suggestions:");
     expect(prompt).toContain("Match: 麦浪农场 | TM: Main TM");
     expect(prompt).not.toContain("Similarity: 73%");
+  });
+
+  it("omits dialogue concordance suggestions when prompt TM and TB references together exceed 15", () => {
+    const prompt = buildAIDialogueUserPrompt({
+      srcLang: "en",
+      tgtLang: "zh",
+      segments: [
+        {
+          id: "seg-1",
+          speaker: "Narrator",
+          sourcePayload: "alpha",
+          tmReferences: Array.from({ length: 2 }, (_, index) => ({
+            similarity: 100 - index,
+            tmName: `TM ${index + 1}`,
+            sourceText: `source ${index + 1}`,
+            targetText: `target ${index + 1}`,
+          })),
+          tbReferences: Array.from({ length: 8 }, (_, index) => ({
+            srcTerm: `term ${index + 1}`,
+            tgtTerm: `term target ${index + 1}`,
+          })),
+          concordanceReferences: [
+            {
+              tmName: "Main TM",
+              matchedSourceText: "alpha",
+              sourceText: "alpha beta",
+              targetText: "alpha target beta target",
+            },
+          ],
+        },
+        {
+          id: "seg-2",
+          speaker: "Narrator",
+          sourcePayload: "beta",
+          tmReference: {
+            similarity: 91,
+            tmName: "TM 3",
+            sourceText: "source 3",
+            targetText: "target 3",
+          },
+          tbReferences: Array.from({ length: 5 }, (_, index) => ({
+            srcTerm: `other term ${index + 1}`,
+            tgtTerm: `other target ${index + 1}`,
+          })),
+          concordanceReferences: [
+            {
+              tmName: "Main TM",
+              matchedSourceText: "beta",
+              sourceText: "beta gamma",
+              targetText: "beta target gamma target",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(prompt).toContain("TM References (top matches):");
+    expect(prompt).toContain("Terminology References (hit terms):");
+    expect(prompt).not.toContain("Concordance Suggestions:");
+    expect(prompt).not.toContain("Match: alpha | TM: Main TM");
+    expect(prompt).not.toContain("Match: beta | TM: Main TM");
   });
 
   it("builds text prompt bundles from the same canonical rules as legacy builders", () => {

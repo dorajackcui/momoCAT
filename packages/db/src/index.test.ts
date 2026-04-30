@@ -553,6 +553,56 @@ describe("CATDatabase", () => {
       expect(allResults[0].srcHash).toBe("h2");
     });
 
+    it("should keep concordance results diverse when one CJK overlap dominates", () => {
+      const projectId = db.createProject("Concordance Diversity Project", "zh", "fr");
+      const mainTmId = db.createTM("Main Concordance Diversity", "zh", "fr", "main");
+      db.mountTMToProject(projectId, mainTmId, 10, "read");
+
+      [
+        "台阶立柱设计图",
+        "星系立柱设计图",
+        "栅栏立柱设计图",
+        "庄园立柱设计图",
+        "星间立柱设计图",
+        "夜幕立柱设计图",
+        "晴光立柱设计图",
+        "云纹立柱设计图",
+        "森影立柱设计图",
+        "月辉立柱设计图",
+        "晨露立柱设计图",
+        "暮色立柱设计图",
+      ].forEach((sourceText, index) => {
+        db.upsertTMEntry({
+          id: `template-crowd-${index}`,
+          tmId: mainTmId,
+          srcHash: `template-crowd-${index}`,
+          matchKey: sourceText,
+          tagsSignature: "",
+          sourceTokens: [{ type: "text", content: sourceText }],
+          targetTokens: [{ type: "text", content: `Modele ${index}` }],
+          usageCount: 1,
+        } as any);
+      });
+
+      db.upsertTMEntry({
+        id: "wind-lotus-pillar-entry",
+        tmId: mainTmId,
+        srcHash: "wind-lotus-pillar",
+        matchKey: "风荷立柱",
+        tagsSignature: "",
+        sourceTokens: [{ type: "text", content: "风荷立柱" }],
+        targetTokens: [{ type: "text", content: "Pilier Lotus ondoyant" }],
+        usageCount: 1,
+      } as any);
+
+      const results = db.searchConcordance(projectId, "风荷立柱设计图", [mainTmId]);
+      const topFiveHashes = results.slice(0, 5).map((row) => row.srcHash);
+
+      expect(results.length).toBeLessThanOrEqual(10);
+      expect(topFiveHashes).toContain("wind-lotus-pillar");
+      expect(topFiveHashes.filter((srcHash) => srcHash.startsWith("template-crowd-"))).toHaveLength(2);
+    });
+
     it("should recall shorter CJK TM source contained in longer active source", () => {
       const projectId = db.createProject("TM CJK Recall Contained", "zh", "fr");
       const mainTmId = db.createTM("Main CJK Recall", "zh", "fr", "main");
@@ -597,6 +647,85 @@ describe("CATDatabase", () => {
       expect(pillarResults.map((row) => row.srcHash)).toContain("pillar-drawing-hash");
     });
 
+    it("should diversify active recall candidates before applying the result limit", () => {
+      const projectId = db.createProject("TM Recall Diversity Project", "zh", "fr");
+      const mainTmId = db.createTM("Main Recall Diversity", "zh", "fr", "main");
+      db.mountTMToProject(projectId, mainTmId, 10, "read");
+
+      for (let index = 0; index < 70; index += 1) {
+        const sourceText = `噪音${index}立柱设计图`;
+        db.upsertTMEntry({
+          id: `active-template-crowd-${index}`,
+          tmId: mainTmId,
+          srcHash: `active-template-crowd-${index}`,
+          matchKey: sourceText,
+          tagsSignature: "",
+          sourceTokens: [{ type: "text", content: sourceText }],
+          targetTokens: [{ type: "text", content: `Modele ${index}` }],
+          usageCount: 1,
+        } as any);
+      }
+
+      db.upsertTMEntry({
+        id: "active-wind-lotus-pillar-entry",
+        tmId: mainTmId,
+        srcHash: "active-wind-lotus-pillar",
+        matchKey: "风荷立柱",
+        tagsSignature: "",
+        sourceTokens: [{ type: "text", content: "风荷立柱" }],
+        targetTokens: [{ type: "text", content: "Pilier Lotus ondoyant" }],
+        usageCount: 1,
+      } as any);
+
+      const results = db.searchTMRecallCandidates(
+        projectId,
+        "风荷立柱设计图",
+        [mainTmId],
+        { scope: "source", limit: 50 },
+      );
+      const hashes = results.map((row) => row.srcHash);
+
+      expect(hashes).toContain("active-wind-lotus-pillar");
+      expect(hashes.filter((srcHash) => srcHash.startsWith("active-template-crowd-"))).toHaveLength(2);
+    });
+
+    it("should count contained CJK recall buckets against the longest overlapping bucket", () => {
+      const projectId = db.createProject("TM Recall Contained Diversity", "zh", "fr");
+      const mainTmId = db.createTM("Main Recall Contained Diversity", "zh", "fr", "main");
+      db.mountTMToProject(projectId, mainTmId, 10, "read");
+
+      [
+        ["contained-long-1", "能力套装限时上架中"],
+        ["contained-long-2", "能力套装限时上架中"],
+        ["contained-short-1", "能力套装"],
+        ["contained-short-2", "能力套装"],
+      ].forEach(([srcHash, sourceText]) => {
+        db.upsertTMEntry({
+          id: `${srcHash}-entry`,
+          tmId: mainTmId,
+          srcHash,
+          matchKey: sourceText,
+          tagsSignature: "",
+          sourceTokens: [{ type: "text", content: sourceText }],
+          targetTokens: [{ type: "text", content: `Modele ${srcHash}` }],
+          usageCount: 1,
+        } as any);
+      });
+
+      const results = db.searchTMRecallCandidates(
+        projectId,
+        "能力套装限时上架中",
+        [mainTmId],
+        { scope: "source", limit: 50 },
+      );
+      const familyHashes = results
+        .map((row) => row.srcHash)
+        .filter((srcHash) => srcHash.startsWith("contained-"));
+
+      expect(familyHashes).toHaveLength(2);
+      expect(familyHashes.every((srcHash) => srcHash.startsWith("contained-long-"))).toBe(true);
+    });
+
     it("should not return target-only hits for active source recall", () => {
       const projectId = db.createProject("TM Source Scope Recall", "zh", "fr");
       const mainTmId = db.createTM("Main Source Scope", "zh", "fr", "main");
@@ -621,6 +750,45 @@ describe("CATDatabase", () => {
       );
 
       expect(sourceScopeResults.map((row) => row.srcHash)).not.toContain("target-only-hash");
+    });
+
+    it("should not let target-only FTS hits exhaust source-scoped recall", () => {
+      const projectId = db.createProject("TM Source Scope Saturation", "en", "zh");
+      const mainTmId = db.createTM("Main Source Scope Saturation", "en", "zh", "main");
+      db.mountTMToProject(projectId, mainTmId, 10, "read");
+
+      for (let index = 0; index < 40; index += 1) {
+        db.upsertTMEntry({
+          id: `target-noise-${index}`,
+          tmId: mainTmId,
+          srcHash: `target-noise-hash-${index}`,
+          matchKey: `unrelated-source-${index}`,
+          tagsSignature: "",
+          sourceTokens: [{ type: "text", content: `unrelated source ${index}` }],
+          targetTokens: [{ type: "text", content: "critical recall phrase" }],
+          usageCount: 100,
+        } as any);
+      }
+
+      db.upsertTMEntry({
+        id: "source-hit-entry",
+        tmId: mainTmId,
+        srcHash: "source-hit-hash",
+        matchKey: "critical recall phrase",
+        tagsSignature: "",
+        sourceTokens: [{ type: "text", content: "critical recall phrase" }],
+        targetTokens: [{ type: "text", content: "关键召回短语" }],
+        usageCount: 1,
+      } as any);
+
+      const sourceScopeResults = db.searchTMRecallCandidates(
+        projectId,
+        "critical recall phrase",
+        [mainTmId],
+        { scope: "source", limit: 1 },
+      );
+
+      expect(sourceScopeResults.map((row) => row.srcHash)).toEqual(["source-hit-hash"]);
     });
 
     it("should keep highly relevant hit in top candidates under common-term noise", () => {

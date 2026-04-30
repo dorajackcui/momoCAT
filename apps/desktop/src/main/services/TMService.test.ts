@@ -153,6 +153,80 @@ describe('TMService.findMatches', () => {
     expect(matches.map((match) => match.srcHash)).toContain('pillar-drawing-hash');
   });
 
+  it('keeps a contained CJK item visible when repeated template matches crowd the top results', async () => {
+    const source = '风荷立柱设计图';
+    const repeatedTemplateEntries = [
+      '台阶立柱设计图',
+      '星系立柱设计图',
+      '栅栏立柱设计图',
+      '庄园立柱设计图',
+      '星间立柱设计图',
+      '夜幕立柱设计图',
+    ].map((sourceText, index) =>
+      createConcordanceEntry('tm-main', {
+        srcHash: `template-${index}`,
+        sourceText,
+      }),
+    );
+    const service = createService({
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      concordanceEntries: [
+        ...repeatedTemplateEntries,
+        createConcordanceEntry('tm-main', {
+          srcHash: 'wind-lotus-pillar',
+          sourceText: '风荷立柱',
+        }),
+      ],
+    });
+
+    const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
+    const topFiveHashes = matches.slice(0, 5).map((match) => match.srcHash);
+    const windPillarMatch = matches.find((match) => match.srcHash === 'wind-lotus-pillar');
+
+    expect(topFiveHashes).toContain('wind-lotus-pillar');
+    expect(topFiveHashes.filter((srcHash) => srcHash.startsWith('template-'))).toHaveLength(2);
+    expect(windPillarMatch).toMatchObject({
+      kind: 'concordance',
+      rank: expect.any(Number),
+      matchedSourceText: '风荷立柱',
+      sourceCoverage: 57,
+      entryCoverage: 100,
+    });
+    expect(windPillarMatch?.rank).toBeGreaterThan(70);
+  });
+
+  it('counts contained CJK diversity buckets against the longest overlapping bucket', async () => {
+    const source = '能力套装限时上架中';
+    const service = createService({
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      concordanceEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'long-family-1',
+          sourceText: source,
+        }),
+        createConcordanceEntry('tm-main', {
+          srcHash: 'long-family-2',
+          sourceText: source,
+        }),
+        createConcordanceEntry('tm-main', {
+          srcHash: 'short-family-1',
+          sourceText: '能力套装',
+        }),
+        createConcordanceEntry('tm-main', {
+          srcHash: 'short-family-2',
+          sourceText: '能力套装',
+        }),
+      ],
+    });
+
+    const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
+    const familyHashes = matches
+      .map((match) => match.srcHash)
+      .filter((srcHash) => srcHash.includes('family'));
+
+    expect(familyHashes).toEqual(['long-family-1', 'long-family-2']);
+  });
+
   it('matches near-identical CJK sentence when one character differs at the beginning', async () => {
     const source = '乙组是怎么成为临时项目的负责人的？';
     const service = createService({
@@ -377,7 +451,12 @@ describe('TMService.findMatches', () => {
 
     const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
     expect(matches.map((match) => match.srcHash)).toEqual(['sunny-icing', 'remote-dream']);
-    expect(matches[0]).toMatchObject({ kind: 'tm' });
+    expect(matches[0]).toMatchObject({
+      kind: 'concordance',
+      matchedSourceText: '晴日裱花',
+      sourceCoverage: 57,
+      entryCoverage: 100,
+    });
     expect(matches[1]).toMatchObject({ kind: 'concordance' });
     expect(matches[0].rank).toBeGreaterThan(matches[1].rank);
     expect(matches[1].rank).toBeGreaterThanOrEqual(50);

@@ -29,12 +29,16 @@ interface TMRecallQueryPlan {
 
 const TM_RECALL_DEFAULT_LIMIT = 50;
 const TM_RECALL_MAX_LIMIT = 50;
+const TM_RECALL_DIVERSITY_POOL_MULTIPLIER = 3;
 const TM_RECALL_PRIMARY_FRAGMENT_LIMIT = 16;
 const TM_RECALL_SECONDARY_FRAGMENT_LIMIT = 12;
 const TM_RECALL_SHORT_TERM_LIMIT = 4;
 const TM_RECALL_SHORT_ROW_LIMIT = 10;
 const TM_RECALL_SECONDARY_TRIGGER = 8;
 const TM_RECALL_SHORT_TRIGGER = 6;
+const TM_CONCORDANCE_RESULT_LIMIT = 10;
+const TM_RECALL_DIVERSITY_MAX_PER_BUCKET = 2;
+const TM_RECALL_DIVERSITY_MIN_CJK_BUCKET_LENGTH = 4;
 const ONLY_CJK_RE = /^[一-龥]+$/;
 const WEAK_SHORT_CJK_TERMS = new Set(['前往', '可选']);
 
@@ -214,6 +218,10 @@ export class TMRepo {
     const accepted: TMRecallDbRow[] = [];
     const seenIds = new Set<string>();
     const scope = options.scope ?? 'source';
+    const collectionLimit = Math.min(
+      maxResults * TM_RECALL_DIVERSITY_POOL_MULTIPLIER,
+      TM_RECALL_MAX_LIMIT * TM_RECALL_DIVERSITY_POOL_MULTIPLIER,
+    );
 
     this.collectFtsRecallTier({
       tmIds: resolvedTmIds,
@@ -223,11 +231,11 @@ export class TMRepo {
       scope,
       accepted,
       seenIds,
-      maxResults,
+      maxResults: collectionLimit,
       allowShortOnly: false,
     });
 
-    if (accepted.length < maxResults) {
+    if (accepted.length < collectionLimit) {
       this.collectFtsRecallTier({
         tmIds: resolvedTmIds,
         terms: plan.primaryCjkFragments,
@@ -236,12 +244,12 @@ export class TMRepo {
         scope,
         accepted,
         seenIds,
-        maxResults,
+        maxResults: collectionLimit,
         allowShortOnly: false,
       });
     }
 
-    if (accepted.length < Math.min(maxResults, TM_RECALL_SECONDARY_TRIGGER)) {
+    if (accepted.length < Math.min(collectionLimit, TM_RECALL_SECONDARY_TRIGGER)) {
       this.collectFtsRecallTier({
         tmIds: resolvedTmIds,
         terms: plan.secondaryCjkFragments,
@@ -250,12 +258,12 @@ export class TMRepo {
         scope,
         accepted,
         seenIds,
-        maxResults,
+        maxResults: collectionLimit,
         allowShortOnly: false,
       });
     }
 
-    if (accepted.length < Math.min(maxResults, TM_RECALL_SHORT_TRIGGER)) {
+    if (accepted.length < Math.min(collectionLimit, TM_RECALL_SHORT_TRIGGER)) {
       this.collectLikeRecallTier({
         tmIds: resolvedTmIds,
         terms: plan.shortCjkTerms,
@@ -264,18 +272,21 @@ export class TMRepo {
         scope,
         accepted,
         seenIds,
-        maxResults,
+        maxResults: collectionLimit,
       });
     }
 
-    return accepted.slice(0, maxResults).map((row) => this.mapTMEntryDbRow(row));
+    return this.diversifyRecallRows(sourceText, accepted, maxResults, scope).map((row) =>
+      this.mapTMEntryDbRow(row),
+    );
   }
 
   public searchConcordance(projectId: number, query: string, tmIds?: string[]): TMEntryRow[] {
-    return this.searchTMRecallCandidates(projectId, query, tmIds, {
+    const candidates = this.searchTMRecallCandidates(projectId, query, tmIds, {
       scope: 'source-and-target',
-      limit: 10,
+      limit: TM_RECALL_MAX_LIMIT,
     });
+    return this.diversifyConcordanceRows(query, candidates, TM_CONCORDANCE_RESULT_LIMIT);
   }
 
   private collectFtsRecallTier(params: {
@@ -293,7 +304,7 @@ export class TMRepo {
     if (terms.length === 0 || params.accepted.length >= params.maxResults) return;
 
     const placeholders = params.tmIds.map(() => '?').join(',');
-    const ftsQuery = terms.map((term) => `"${term.replace(/"/g, '""')}"`).join(' OR ');
+    const ftsQuery = this.buildFtsRecallQuery(terms, params.scope ?? 'source');
     const rawLimit = Math.max(params.maxResults * 3, 20);
 
     const rows = this.db
@@ -325,6 +336,14 @@ export class TMRepo {
       params.accepted.push(row);
       if (params.accepted.length >= params.maxResults) break;
     }
+  }
+
+  private buildFtsRecallQuery(terms: string[], scope: TMRecallOptions['scope']): string {
+    const query = terms.map((term) => `"${term.replace(/"/g, '""')}"`).join(' OR ');
+    if ((scope ?? 'source') === 'source') {
+      return `srcText : (${query})`;
+    }
+    return query;
   }
 
   private collectLikeRecallTier(params: {
@@ -484,6 +503,159 @@ export class TMRepo {
         )
       );
     });
+  }
+
+  private diversifyConcordanceRows(
+    query: string,
+    rows: TMEntryRow[],
+    limit: number,
+  ): TMEntryRow[] {
+    const accepted: TMEntryRow[] = [];
+    const bucketCounts = new Map<string, number>();
+    const rowBuckets = rows.map((row) => this.getConcordanceDiversityBucket(query, row));
+    const canonicalBuckets = this.buildCanonicalDiversityBuckets(rowBuckets);
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      const rawBucket = rowBuckets[index];
+      const bucket = rawBucket ? canonicalBuckets.get(rawBucket) ?? rawBucket : null;
+      if (!bucket) {
+        accepted.push(row);
+        continue;
+      }
+
+      const count = bucketCounts.get(bucket) ?? 0;
+      if (count < TM_RECALL_DIVERSITY_MAX_PER_BUCKET) {
+        bucketCounts.set(bucket, count + 1);
+        accepted.push(row);
+      }
+    }
+
+    return accepted.slice(0, limit);
+  }
+
+  private diversifyRecallRows(
+    sourceText: string,
+    rows: TMRecallDbRow[],
+    limit: number,
+    scope: TMRecallOptions['scope'],
+  ): TMRecallDbRow[] {
+    const accepted: TMRecallDbRow[] = [];
+    const bucketCounts = new Map<string, number>();
+    const rowBuckets = rows.map((row) =>
+      this.getRecallDiversityBucket(sourceText, row, scope ?? 'source'),
+    );
+    const canonicalBuckets = this.buildCanonicalDiversityBuckets(rowBuckets);
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      const rawBucket = rowBuckets[index];
+      const bucket = rawBucket ? canonicalBuckets.get(rawBucket) ?? rawBucket : null;
+      if (!bucket) {
+        accepted.push(row);
+      } else {
+        const count = bucketCounts.get(bucket) ?? 0;
+        if (count >= TM_RECALL_DIVERSITY_MAX_PER_BUCKET) continue;
+        bucketCounts.set(bucket, count + 1);
+        accepted.push(row);
+      }
+
+      if (accepted.length >= limit) break;
+    }
+
+    return accepted;
+  }
+
+  private buildCanonicalDiversityBuckets(buckets: Array<string | null>): Map<string, string> {
+    const uniqueBuckets = Array.from(
+      new Set(buckets.filter((bucket): bucket is string => Boolean(bucket))),
+    ).sort((a, b) => Array.from(b).length - Array.from(a).length);
+    const canonicalBuckets = new Map<string, string>();
+
+    for (const bucket of uniqueBuckets) {
+      const containingBucket = uniqueBuckets.find(
+        (candidate) => candidate !== bucket && candidate.includes(bucket),
+      );
+      canonicalBuckets.set(bucket, containingBucket ?? bucket);
+    }
+
+    return canonicalBuckets;
+  }
+
+  private getRecallDiversityBucket(
+    sourceText: string,
+    row: TMRecallDbRow,
+    scope: 'source' | 'source-and-target',
+  ): string | null {
+    const normalizedQuery = this.normalizeForOverlap(sourceText);
+    const candidateTexts =
+      scope === 'source-and-target'
+        ? [row.ftsSrcText, row.ftsTgtText]
+        : [row.ftsSrcText];
+
+    return this.getBestDiversityBucket(normalizedQuery, candidateTexts);
+  }
+
+  private getConcordanceDiversityBucket(query: string, row: TMEntryRow): string | null {
+    const normalizedQuery = this.normalizeForOverlap(query);
+    const candidateTexts = [
+      this.normalizeForOverlap(this.serializeTokensForOverlap(row.sourceTokens)),
+      this.normalizeForOverlap(this.serializeTokensForOverlap(row.targetTokens)),
+    ];
+    return this.getBestDiversityBucket(normalizedQuery, candidateTexts);
+  }
+
+  private getBestDiversityBucket(query: string, candidateTexts: string[]): string | null {
+    let best = '';
+
+    for (const candidateText of candidateTexts) {
+      const overlap = this.findLongestCommonSubstring(query, this.normalizeForOverlap(candidateText));
+      if (Array.from(overlap).length > Array.from(best).length) {
+        best = overlap;
+      }
+    }
+
+    if (!this.isStrongCjkDiversityBucket(best)) return null;
+    return best;
+  }
+
+  private serializeTokensForOverlap(tokens: Token[]): string {
+    return tokens.map((token) => token.content).join('');
+  }
+
+  private normalizeForOverlap(text: string): string {
+    return text.toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  private findLongestCommonSubstring(a: string, b: string): string {
+    const aChars = Array.from(a);
+    const bChars = Array.from(b);
+    let previous = new Array(bChars.length + 1).fill(0);
+    let bestLength = 0;
+    let bestEnd = 0;
+
+    for (let i = 1; i <= aChars.length; i += 1) {
+      const current = new Array(bChars.length + 1).fill(0);
+      for (let j = 1; j <= bChars.length; j += 1) {
+        if (aChars[i - 1] !== bChars[j - 1]) continue;
+
+        current[j] = previous[j - 1] + 1;
+        if (current[j] > bestLength) {
+          bestLength = current[j];
+          bestEnd = i;
+        }
+      }
+      previous = current;
+    }
+
+    return aChars.slice(bestEnd - bestLength, bestEnd).join('');
+  }
+
+  private isStrongCjkDiversityBucket(fragment: string): boolean {
+    return (
+      /^[\u4e00-\u9fa5]+$/.test(fragment) &&
+      Array.from(fragment).length >= TM_RECALL_DIVERSITY_MIN_CJK_BUCKET_LENGTH
+    );
   }
 
   private extractCjkComponents(text: string): string[] {
