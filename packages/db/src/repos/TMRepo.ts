@@ -3,6 +3,7 @@ import type { TMEntry, Token } from '@cat/core/models';
 import { randomUUID } from 'crypto';
 import type {
   MountedTMRecord,
+  TMConcordanceRecallOptions,
   TMEntryRow,
   TMRecallOptions,
   TMRecord,
@@ -27,6 +28,22 @@ interface TMRecallQueryPlan {
   latinTerms: string[];
 }
 
+interface TMConcordanceRecallQueryPlan {
+  cjk4Fragments: string[];
+  cjk3Fragments: string[];
+  longCjkFragments: string[];
+  latinTerms: string[];
+  shortCjkTerms: string[];
+}
+
+interface TMConcordanceRecallStats {
+  ftsQueryCount: number;
+  rawRows: number;
+  acceptedRows: number;
+  degraded: boolean;
+  elapsedMs: number;
+}
+
 const TM_RECALL_DEFAULT_LIMIT = 50;
 const TM_RECALL_MAX_LIMIT = 50;
 const TM_RECALL_DIVERSITY_POOL_MULTIPLIER = 3;
@@ -37,6 +54,18 @@ const TM_RECALL_SHORT_ROW_LIMIT = 10;
 const TM_RECALL_SECONDARY_TRIGGER = 8;
 const TM_RECALL_SHORT_TRIGGER = 6;
 const TM_CONCORDANCE_RESULT_LIMIT = 10;
+const TM_CONCORDANCE_RECALL_DEFAULT_LIMIT = 50;
+const TM_CONCORDANCE_RECALL_MAX_LIMIT = 50;
+const TM_CONCORDANCE_RECALL_RAW_LIMIT = 200;
+const TM_CONCORDANCE_RECALL_BATCH_SIZE = 32;
+const TM_CONCORDANCE_RECALL_SOFT_BUDGET_MS = 50;
+const TM_CONCORDANCE_RECALL_CJK4_LIMIT = 64;
+const TM_CONCORDANCE_RECALL_CJK3_LIMIT = 48;
+const TM_CONCORDANCE_RECALL_CJK_LONG_LIMIT = 32;
+const TM_CONCORDANCE_RECALL_LATIN_LIMIT = 32;
+const TM_CONCORDANCE_RECALL_SHORT_CJK_LIMIT = 16;
+const TM_CONCORDANCE_RECALL_RAW_LIMIT_MAX = 1000;
+const TM_CONCORDANCE_RECALL_BATCH_RAW_LIMIT = 64;
 const TM_RECALL_DIVERSITY_MAX_PER_BUCKET = 2;
 const TM_RECALL_DIVERSITY_MIN_CJK_BUCKET_LENGTH = 4;
 const ONLY_CJK_RE = /^[一-龥]+$/;
@@ -205,6 +234,15 @@ export class TMRepo {
     tmIds?: string[],
     options: TMRecallOptions = {},
   ): TMEntryRow[] {
+    return this.searchTMFuzzyRecallCandidates(projectId, sourceText, tmIds, options);
+  }
+
+  public searchTMFuzzyRecallCandidates(
+    projectId: number,
+    sourceText: string,
+    tmIds?: string[],
+    options: TMRecallOptions = {},
+  ): TMEntryRow[] {
     const maxResults = Math.min(
       Math.max(options.limit ?? TM_RECALL_DEFAULT_LIMIT, 0),
       TM_RECALL_MAX_LIMIT,
@@ -287,6 +325,339 @@ export class TMRepo {
       limit: TM_RECALL_MAX_LIMIT,
     });
     return this.diversifyConcordanceRows(query, candidates, TM_CONCORDANCE_RESULT_LIMIT);
+  }
+
+  public searchTMConcordanceRecallCandidates(
+    projectId: number,
+    queryText: string,
+    tmIds?: string[],
+    options: TMConcordanceRecallOptions = {},
+  ): TMEntryRow[] {
+    const startedAt = Date.now();
+    const stats: TMConcordanceRecallStats = {
+      ftsQueryCount: 0,
+      rawRows: 0,
+      acceptedRows: 0,
+      degraded: false,
+      elapsedMs: 0,
+    };
+    const maxResults = Math.min(
+      Math.max(options.limit ?? TM_CONCORDANCE_RECALL_DEFAULT_LIMIT, 0),
+      TM_CONCORDANCE_RECALL_MAX_LIMIT,
+    );
+    if (maxResults === 0) return [];
+
+    const resolvedTmIds = tmIds ?? this.getProjectMountedTMs(projectId).map((tm) => tm.id);
+    if (resolvedTmIds.length === 0) return [];
+
+    const plan = this.buildTMConcordanceRecallQueryPlan(queryText);
+    const rawLimit = this.clampConcordanceRawLimit(options.rawLimit, maxResults);
+    const rows = this.collectConcordanceRecallRows({
+      tmIds: resolvedTmIds,
+      queryText,
+      plan,
+      maxResults: rawLimit,
+      rawLimit,
+      stats,
+      startedAt,
+    });
+    const diversified = this.diversifyRecallRows(queryText, rows, maxResults, 'source');
+
+    stats.elapsedMs = Date.now() - startedAt;
+    this.logRecallDebug('concordance recall', {
+      projectId,
+      tmCount: resolvedTmIds.length,
+      queryLength: Array.from(queryText).length,
+      ...stats,
+    });
+
+    return diversified.map((row) => this.mapTMEntryDbRow(row));
+  }
+
+  private buildTMConcordanceRecallQueryPlan(queryText: string): TMConcordanceRecallQueryPlan {
+    const terms = this.extractSearchTerms(queryText);
+    const cjkComponents = this.uniqueTerms(terms.flatMap((term) => this.extractCjkComponents(term)));
+    const cjk3 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 3));
+    const cjk4 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 4));
+    const cjk5 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 5));
+    const cjk6 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 6));
+    const cjk2 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 2));
+
+    return {
+      cjk4Fragments: this.selectSpreadFragments(
+        this.uniqueTerms(cjk4),
+        TM_CONCORDANCE_RECALL_CJK4_LIMIT,
+      ),
+      cjk3Fragments: this.selectSpreadFragments(
+        this.uniqueTerms(cjk3),
+        TM_CONCORDANCE_RECALL_CJK3_LIMIT,
+      ),
+      longCjkFragments: this.selectSpreadFragments(
+        this.uniqueTerms([...cjk5, ...cjk6]),
+        TM_CONCORDANCE_RECALL_CJK_LONG_LIMIT,
+      ),
+      latinTerms: this.selectSpreadFragments(
+        this.uniqueTerms(terms.filter((term) => term.length >= 3 && !ONLY_CJK_RE.test(term))),
+        TM_CONCORDANCE_RECALL_LATIN_LIMIT,
+      ),
+      shortCjkTerms: this.selectSpreadFragments(
+        this.uniqueTerms(cjk2).filter((term) => !WEAK_SHORT_CJK_TERMS.has(term)),
+        TM_CONCORDANCE_RECALL_SHORT_CJK_LIMIT,
+      ),
+    };
+  }
+
+  private collectConcordanceRecallRows(params: {
+    tmIds: string[];
+    queryText: string;
+    plan: TMConcordanceRecallQueryPlan;
+    maxResults: number;
+    rawLimit: number;
+    stats: TMConcordanceRecallStats;
+    startedAt: number;
+  }): TMRecallDbRow[] {
+    const accepted: TMRecallDbRow[] = [];
+    const seenIds = new Set<string>();
+    const tiers = [
+      [...params.plan.cjk4Fragments, ...params.plan.latinTerms],
+      params.plan.longCjkFragments,
+      params.plan.cjk3Fragments,
+    ];
+
+    for (let index = 0; index < tiers.length; index += 1) {
+      if (accepted.length >= params.maxResults || params.stats.rawRows >= params.rawLimit) break;
+      if (index > 0 && Date.now() - params.startedAt > TM_CONCORDANCE_RECALL_SOFT_BUDGET_MS) {
+        params.stats.degraded = true;
+        break;
+      }
+
+      this.collectConcordanceFtsBatchTier({
+        ...params,
+        terms: tiers[index],
+        accepted,
+        seenIds,
+      });
+    }
+
+    if (
+      accepted.length < params.maxResults &&
+      params.stats.rawRows < params.rawLimit &&
+      !params.stats.degraded
+    ) {
+      this.collectConcordanceLikeTier({
+        ...params,
+        accepted,
+        seenIds,
+      });
+    }
+
+    return accepted;
+  }
+
+  private collectConcordanceFtsBatchTier(params: {
+    tmIds: string[];
+    queryText: string;
+    terms: string[];
+    maxResults: number;
+    rawLimit: number;
+    stats: TMConcordanceRecallStats;
+    startedAt: number;
+    accepted: TMRecallDbRow[];
+    seenIds: Set<string>;
+  }): void {
+    const terms = this.uniqueTerms(params.terms).filter((term) => term.length >= 3);
+    if (terms.length === 0) return;
+
+    const batches = this.chunkTerms(terms, TM_CONCORDANCE_RECALL_BATCH_SIZE);
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+      if (params.accepted.length >= params.maxResults || params.stats.rawRows >= params.rawLimit) {
+        break;
+      }
+      if (
+        batchIndex > 0 &&
+        Date.now() - params.startedAt > TM_CONCORDANCE_RECALL_SOFT_BUDGET_MS
+      ) {
+        params.stats.degraded = true;
+        break;
+      }
+
+      const batch = batches[batchIndex];
+      const placeholders = params.tmIds.map(() => '?').join(',');
+      const ftsQuery = this.buildFtsRecallQuery(batch, 'source');
+      const remainingRaw = Math.min(
+        params.rawLimit - params.stats.rawRows,
+        TM_CONCORDANCE_RECALL_BATCH_RAW_LIMIT,
+      );
+      if (remainingRaw <= 0) break;
+      params.stats.ftsQueryCount += 1;
+      const rows = this.db
+        .prepare(`
+          SELECT tm_entries.*, tm_fts.srcText AS ftsSrcText, tm_fts.tgtText AS ftsTgtText
+          FROM tm_fts
+          JOIN tm_entries ON tm_fts.tmEntryId = tm_entries.id
+          WHERE tm_fts.tmId IN (${placeholders}) AND tm_fts MATCH ?
+          ORDER BY rank, tm_entries.updatedAt DESC, tm_entries.id ASC
+          LIMIT ?
+        `)
+        .all(...params.tmIds, ftsQuery, remainingRaw) as TMRecallDbRow[];
+
+      params.stats.rawRows += rows.length;
+      this.acceptConcordanceRecallRows({
+        queryText: params.queryText,
+        rows,
+        accepted: params.accepted,
+        seenIds: params.seenIds,
+        maxResults: params.maxResults,
+        stats: params.stats,
+      });
+      if (
+        batchIndex < batches.length - 1 &&
+        Date.now() - params.startedAt > TM_CONCORDANCE_RECALL_SOFT_BUDGET_MS
+      ) {
+        params.stats.degraded = true;
+        break;
+      }
+    }
+  }
+
+  private collectConcordanceLikeTier(params: {
+    tmIds: string[];
+    queryText: string;
+    plan: TMConcordanceRecallQueryPlan;
+    maxResults: number;
+    rawLimit: number;
+    stats: TMConcordanceRecallStats;
+    startedAt: number;
+    accepted: TMRecallDbRow[];
+    seenIds: Set<string>;
+  }): void {
+    const terms = this.uniqueTerms(params.plan.shortCjkTerms).filter(
+      (term) => term.length === 2 && !WEAK_SHORT_CJK_TERMS.has(term),
+    );
+    if (terms.length === 0) return;
+
+    const placeholders = params.tmIds.map(() => '?').join(',');
+    const batches = this.chunkTerms(terms, TM_CONCORDANCE_RECALL_BATCH_SIZE);
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+      if (params.accepted.length >= params.maxResults || params.stats.rawRows >= params.rawLimit) {
+        break;
+      }
+      if (
+        batchIndex > 0 &&
+        Date.now() - params.startedAt > TM_CONCORDANCE_RECALL_SOFT_BUDGET_MS
+      ) {
+        params.stats.degraded = true;
+        break;
+      }
+
+      const batch = batches[batchIndex];
+      const likeClauses = batch.map(() => '(tm_fts.srcText LIKE ? ESCAPE \'/\')').join(' OR ');
+      const likeParams = batch.map((term) => `%${this.escapeLikePattern(term)}%`);
+      const remainingRaw = Math.min(
+        params.rawLimit - params.stats.rawRows,
+        TM_CONCORDANCE_RECALL_BATCH_RAW_LIMIT,
+      );
+      if (remainingRaw <= 0) break;
+      const rows = this.db
+        .prepare(`
+          SELECT tm_entries.*, tm_fts.srcText AS ftsSrcText, tm_fts.tgtText AS ftsTgtText
+          FROM tm_fts
+          JOIN tm_entries ON tm_fts.tmEntryId = tm_entries.id
+          WHERE tm_fts.tmId IN (${placeholders}) AND (${likeClauses})
+          ORDER BY tm_entries.usageCount DESC, tm_entries.updatedAt DESC, tm_entries.id ASC
+          LIMIT ?
+        `)
+        .all(...params.tmIds, ...likeParams, remainingRaw) as TMRecallDbRow[];
+
+      params.stats.rawRows += rows.length;
+      this.acceptConcordanceRecallRows({
+        queryText: params.queryText,
+        rows,
+        accepted: params.accepted,
+        seenIds: params.seenIds,
+        maxResults: params.maxResults,
+        stats: params.stats,
+      });
+      if (
+        batchIndex < batches.length - 1 &&
+        Date.now() - params.startedAt > TM_CONCORDANCE_RECALL_SOFT_BUDGET_MS
+      ) {
+        params.stats.degraded = true;
+        break;
+      }
+    }
+  }
+
+  private acceptConcordanceRecallRows(params: {
+    queryText: string;
+    rows: TMRecallDbRow[];
+    accepted: TMRecallDbRow[];
+    seenIds: Set<string>;
+    maxResults: number;
+    stats: TMConcordanceRecallStats;
+  }): void {
+    for (const row of params.rows) {
+      if (params.accepted.length >= params.maxResults) break;
+      if (params.seenIds.has(row.id)) continue;
+      if (!this.hasConcordanceRecallEvidence(params.queryText, row)) continue;
+
+      params.seenIds.add(row.id);
+      params.accepted.push(row);
+      params.stats.acceptedRows += 1;
+    }
+  }
+
+  private hasConcordanceRecallEvidence(queryText: string, row: TMRecallDbRow): boolean {
+    const normalizedQuery = this.normalizeForOverlap(queryText);
+    const normalizedCandidate = this.normalizeForOverlap(row.ftsSrcText);
+    const candidateChars = Array.from(normalizedCandidate);
+    if (candidateChars.length === 0) return false;
+
+    const overlap = this.findLongestCommonSubstring(normalizedQuery, normalizedCandidate);
+    const overlapLength = Array.from(overlap).length;
+    const candidateCjkLength = Array.from(
+      normalizedCandidate.replace(/[^\u4e00-\u9fa5]/g, ''),
+    ).length;
+
+    if (
+      this.isCjkWithBoundarySpaces(normalizedCandidate) &&
+      candidateCjkLength >= 3 &&
+      candidateCjkLength <= 8 &&
+      this.containsWithTokenBoundary(normalizedQuery, normalizedCandidate)
+    ) {
+      return true;
+    }
+
+    if (
+      this.isCjkWithBoundarySpaces(normalizedCandidate) &&
+      candidateCjkLength === 2 &&
+      this.getTotalCjkComponentLength(normalizedCandidate) <= 4 &&
+      this.containsWithTokenBoundary(normalizedQuery, normalizedCandidate)
+    ) {
+      return true;
+    }
+
+    if (overlapLength >= 3) {
+      const entryCoverage = Math.round((overlapLength / candidateChars.length) * 100);
+      if (entryCoverage >= 90) return true;
+    }
+
+    return overlapLength >= 4;
+  }
+
+  private containsWithTokenBoundary(normalizedQuery: string, normalizedCandidate: string): boolean {
+    return normalizedQuery.includes(normalizedCandidate);
+  }
+
+  private isCjkWithBoundarySpaces(text: string): boolean {
+    return /^[\u4e00-\u9fa5 ]+$/.test(text);
+  }
+
+  private getTotalCjkComponentLength(text: string): number {
+    return this.extractCjkComponents(text).reduce(
+      (sum, component) => sum + Array.from(component).length,
+      0,
+    );
   }
 
   private collectFtsRecallTier(params: {
@@ -704,6 +1075,24 @@ export class TMRepo {
     return selected;
   }
 
+  private chunkTerms(terms: string[], size: number): string[][] {
+    const chunks: string[][] = [];
+    for (let index = 0; index < terms.length; index += size) {
+      chunks.push(terms.slice(index, index + size));
+    }
+    return chunks;
+  }
+
+  private clampConcordanceRawLimit(rawLimit: number | undefined, minResults: number): number {
+    const candidate = Number.isFinite(rawLimit)
+      ? Math.floor(rawLimit as number)
+      : TM_CONCORDANCE_RECALL_RAW_LIMIT;
+    return Math.min(
+      Math.max(candidate, minResults),
+      TM_CONCORDANCE_RECALL_RAW_LIMIT_MAX,
+    );
+  }
+
   private mapTMEntryDbRow(row: TMEntryDbRow): TMEntryRow {
     return {
       ...row,
@@ -726,6 +1115,11 @@ export class TMRepo {
 
   private escapeLikePattern(value: string): string {
     return value.replace(/([/%_])/g, '/$1');
+  }
+
+  private logRecallDebug(message: string, payload: Record<string, unknown>): void {
+    if (process.env.CAT_TM_RECALL_DEBUG !== '1') return;
+    console.debug(`[TM recall] ${message}`, payload);
   }
 
   public listTMs(type?: TMType): TMRecord[] {

@@ -136,18 +136,59 @@ export class TMService {
     }
 
     const tmIds = mountedTMs.map((tm) => tm.id);
-    const candidates = this.tmRepo.searchTMRecallCandidates(
+    const fuzzyCandidates = this.tmRepo.searchTMFuzzyRecallCandidates(
       projectId,
       sourceTextOnly,
       tmIds,
       { scope: 'source', limit: 50 },
     );
+    const concordanceCandidates = this.tmRepo.searchTMConcordanceRecallCandidates(
+      projectId,
+      sourceTextOnly,
+      tmIds,
+      { scope: 'source', limit: 50, rawLimit: 200 },
+    );
+    const candidateMap = new Map<
+      string,
+      { candidate: TMEntry & { tmId: string }; fromFuzzy: boolean; fromConcordance: boolean }
+    >();
 
-    for (const cand of candidates) {
+    for (const candidate of fuzzyCandidates) {
+      candidateMap.set(candidate.id, {
+        candidate,
+        fromFuzzy: true,
+        fromConcordance: false,
+      });
+    }
+
+    for (const candidate of concordanceCandidates) {
+      const existing = candidateMap.get(candidate.id);
+      if (existing) {
+        existing.fromConcordance = true;
+      } else {
+        candidateMap.set(candidate.id, {
+          candidate,
+          fromFuzzy: false,
+          fromConcordance: true,
+        });
+      }
+    }
+
+    for (const candidateState of candidateMap.values()) {
+      const cand = candidateState.candidate;
       if (seenHashes.has(cand.srcHash)) continue;
 
       const candTextOnly = serializeTokensToTextOnly(cand.sourceTokens);
       const candNormalized = this.normalizeForSimilarity(candTextOnly);
+      const sourceLength = Array.from(sourceNormalized).length;
+      const candidateLength = Array.from(candNormalized).length;
+      if (
+        !candidateState.fromFuzzy &&
+        candidateState.fromConcordance &&
+        candidateLength > sourceLength * 3
+      ) {
+        continue;
+      }
 
       let standardSimilarity = 0;
       let localOverlap: LocalOverlapResult = {
@@ -161,6 +202,9 @@ export class TMService {
         standardSimilarity = 99;
       } else {
         localOverlap = this.computeLocalOverlapSimilarity(sourceNormalized, candNormalized);
+        if (candidateState.fromConcordance) {
+          localOverlap = this.promoteContainedConcordanceOverlap(localOverlap);
+        }
         const maxPossibleByLength = this.computeMaxLengthBound(sourceNormalized, candNormalized);
 
         if (maxPossibleByLength >= TMService.MIN_SIMILARITY) {
@@ -185,7 +229,10 @@ export class TMService {
         tmType: tm?.type || 'main',
       } as const;
 
-      const diversityBucket = this.getLocalOverlapDiversityBucket(localOverlap);
+      const diversityBucket =
+        sourceNormalized === candNormalized
+          ? this.getExactNormalizedDiversityBucket(sourceNormalized)
+          : this.getLocalOverlapDiversityBucket(localOverlap);
 
       if (this.shouldClassifyLocalOverlapAsConcordance(standardSimilarity, localOverlap)) {
         results.push({
@@ -350,6 +397,17 @@ export class TMService {
     };
   }
 
+  private promoteContainedConcordanceOverlap(localOverlap: LocalOverlapResult): LocalOverlapResult {
+    const overlapLength = Array.from(localOverlap.matchedSourceText).length;
+    if (overlapLength < 3) return localOverlap;
+    if (localOverlap.entryCoverage < 90) return localOverlap;
+    if (localOverlap.score >= TMService.MIN_SIMILARITY) return localOverlap;
+    return {
+      ...localOverlap,
+      score: TMService.MIN_SIMILARITY,
+    };
+  }
+
   private shouldClassifyLocalOverlapAsConcordance(
     standardSimilarity: number,
     localOverlap: LocalOverlapResult,
@@ -418,6 +476,13 @@ export class TMService {
     const fragment = localOverlap.matchedSourceText.trim();
     if (!this.isStrongCjkDiversityBucket(fragment)) return null;
     return fragment;
+  }
+
+  private getExactNormalizedDiversityBucket(normalizedText: string): string | null {
+    const cjkComponents = this.extractCjkComponents(normalizedText)
+      .filter((component) => this.isStrongCjkDiversityBucket(component))
+      .sort((a, b) => Array.from(b).length - Array.from(a).length);
+    return cjkComponents[0] ?? null;
   }
 
   private isStrongCjkDiversityBucket(fragment: string): boolean {

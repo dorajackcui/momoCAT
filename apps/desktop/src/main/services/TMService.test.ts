@@ -81,6 +81,8 @@ function createService(params: {
   concordanceEntries?: Array<TMEntry & { tmId: string }>;
   recallEntries?: Array<TMEntry & { tmId: string }>;
   searchTMRecallCandidates?: ReturnType<typeof vi.fn>;
+  searchTMFuzzyRecallCandidates?: ReturnType<typeof vi.fn>;
+  searchTMConcordanceRecallCandidates?: ReturnType<typeof vi.fn>;
 }): TMService {
   const projectRepo = {
     getProject: vi.fn().mockReturnValue({
@@ -108,6 +110,14 @@ function createService(params: {
     searchTMRecallCandidates:
       params.searchTMRecallCandidates ??
       vi.fn().mockReturnValue(params.recallEntries ?? params.concordanceEntries ?? []),
+    searchTMFuzzyRecallCandidates:
+      params.searchTMFuzzyRecallCandidates ??
+      (params.searchTMRecallCandidates
+        ? vi.fn().mockImplementation((...args) => params.searchTMRecallCandidates?.(...args))
+        : vi.fn().mockReturnValue(params.recallEntries ?? params.concordanceEntries ?? [])),
+    searchTMConcordanceRecallCandidates:
+      params.searchTMConcordanceRecallCandidates ??
+      vi.fn().mockReturnValue(params.concordanceEntries ?? params.recallEntries ?? []),
   } as unknown as TMRepository;
 
   return new TMService(projectRepo, tmRepo);
@@ -133,24 +143,95 @@ describe('TMService.findMatches', () => {
 
   it('uses source-scoped recall candidates for fuzzy matching', async () => {
     const source = '风荷立柱设计图';
-    const searchTMRecallCandidates = vi.fn().mockReturnValue([
+    const searchTMFuzzyRecallCandidates = vi.fn().mockReturnValue([
       createConcordanceEntry('tm-main', {
         srcHash: 'pillar-drawing-hash',
         sourceText: '风荷立柱',
       }),
     ]);
+    const searchTMConcordanceRecallCandidates = vi.fn().mockReturnValue([]);
     const service = createService({
       mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
-      searchTMRecallCandidates,
+      searchTMFuzzyRecallCandidates,
+      searchTMConcordanceRecallCandidates,
     });
 
     const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
 
-    expect(searchTMRecallCandidates).toHaveBeenCalledWith(1, source, ['tm-main'], {
+    expect(searchTMFuzzyRecallCandidates).toHaveBeenCalledWith(1, source, ['tm-main'], {
       scope: 'source',
       limit: 50,
     });
+    expect(searchTMConcordanceRecallCandidates).toHaveBeenCalledWith(1, source, ['tm-main'], {
+      scope: 'source',
+      limit: 50,
+      rawLimit: 200,
+    });
     expect(matches.map((match) => match.srcHash)).toContain('pillar-drawing-hash');
+  });
+
+  it('merges fuzzy and concordance recall candidates for active TM matching', async () => {
+    const source = '阿茉玻 清新天王';
+    const searchTMFuzzyRecallCandidates = vi.fn().mockReturnValue([]);
+    const searchTMConcordanceRecallCandidates = vi.fn().mockReturnValue([
+      createConcordanceEntry('tm-main', {
+        srcHash: 'amo-glass',
+        sourceText: '阿茉玻',
+      }),
+      createConcordanceEntry('tm-main', {
+        srcHash: 'fresh-king',
+        sourceText: '清新天王',
+      }),
+    ]);
+    const service = createService({
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      searchTMFuzzyRecallCandidates,
+      searchTMConcordanceRecallCandidates,
+    });
+
+    const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
+
+    expect(searchTMFuzzyRecallCandidates).toHaveBeenCalledWith(1, source, ['tm-main'], {
+      scope: 'source',
+      limit: 50,
+    });
+    expect(searchTMConcordanceRecallCandidates).toHaveBeenCalledWith(1, source, ['tm-main'], {
+      scope: 'source',
+      limit: 50,
+      rawLimit: 200,
+    });
+    expect(matches.map((match) => match.srcHash)).toEqual(
+      expect.arrayContaining(['amo-glass', 'fresh-king']),
+    );
+    expect(matches.every((match) => match.kind === 'concordance')).toBe(true);
+  });
+
+  it('keeps contained CJK concordance candidates in an unsegmented sentence', async () => {
+    const source = '阿茉玻曾见证清新天王将因绝望病逝世的心愿精灵送回星空。';
+    const searchTMFuzzyRecallCandidates = vi.fn().mockReturnValue([]);
+    const searchTMConcordanceRecallCandidates = vi.fn().mockReturnValue([
+      createConcordanceEntry('tm-main', {
+        srcHash: 'amo-glass',
+        sourceText: '阿茉玻',
+      }),
+      createConcordanceEntry('tm-main', {
+        srcHash: 'fresh-king',
+        sourceText: '清新天王',
+      }),
+    ]);
+    const service = createService({
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      searchTMFuzzyRecallCandidates,
+      searchTMConcordanceRecallCandidates,
+    });
+
+    const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
+
+    expect(matches.map((match) => match.srcHash)).toEqual(
+      expect.arrayContaining(['amo-glass', 'fresh-king']),
+    );
+    expect(matches.every((match) => match.kind === 'concordance')).toBe(true);
+    expect(matches.every((match) => match.rank >= 50)).toBe(true);
   });
 
   it('keeps a contained CJK item visible when repeated template matches crowd the top results', async () => {

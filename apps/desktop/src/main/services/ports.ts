@@ -5,6 +5,7 @@ import type {
   MountedTMRecord as DbMountedTMRecord,
   ProjectFileRecord as DbProjectFileRecord,
   TBRecord as DbTBRecord,
+  TMConcordanceRecallOptions as DbTMConcordanceRecallOptions,
   TMRecord as DbTMRecord,
   TMRecallOptions as DbTMRecallOptions,
   TMType as DbTMType,
@@ -17,6 +18,7 @@ import type {
 
 export type TMType = DbTMType;
 export type TMRecallOptions = DbTMRecallOptions;
+export type TMConcordanceRecallOptions = DbTMConcordanceRecallOptions;
 export type SpreadsheetPreviewData = SharedSpreadsheetPreviewData;
 
 export type ProjectRecord = Project;
@@ -83,6 +85,18 @@ export interface TMRepository {
     sourceText: string,
     tmIds?: string[],
     options?: TMRecallOptions,
+  ): TMEntryWithTmId[];
+  searchTMFuzzyRecallCandidates(
+    projectId: number,
+    sourceText: string,
+    tmIds?: string[],
+    options?: TMRecallOptions,
+  ): TMEntryWithTmId[];
+  searchTMConcordanceRecallCandidates(
+    projectId: number,
+    queryText: string,
+    tmIds?: string[],
+    options?: TMConcordanceRecallOptions,
   ): TMEntryWithTmId[];
 
   listTMs(type?: TMType): TMRecord[];

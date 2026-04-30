@@ -20,6 +20,7 @@ import {
   ProjectListRecord,
   ProjectTermEntryRecord,
   TBRecord,
+  TMConcordanceRecallOptions,
   TMEntryRow,
   TMRecord,
   TMRecallOptions,
@@ -369,6 +370,24 @@ export class CATDatabase {
     options?: TMRecallOptions,
   ): TMEntryRow[] {
     return this.tmRepo.searchTMRecallCandidates(projectId, sourceText, tmIds, options);
+  }
+
+  public searchTMFuzzyRecallCandidates(
+    projectId: number,
+    sourceText: string,
+    tmIds?: string[],
+    options?: TMRecallOptions,
+  ): TMEntryRow[] {
+    return this.tmRepo.searchTMFuzzyRecallCandidates(projectId, sourceText, tmIds, options);
+  }
+
+  public searchTMConcordanceRecallCandidates(
+    projectId: number,
+    queryText: string,
+    tmIds?: string[],
+    options?: TMConcordanceRecallOptions,
+  ): TMEntryRow[] {
+    return this.tmRepo.searchTMConcordanceRecallCandidates(projectId, queryText, tmIds, options);
   }
 
   public searchConcordance(projectId: number, query: string, tmIds?: string[]): TMEntryRow[] {

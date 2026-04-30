@@ -45,6 +45,12 @@ export interface TMRecallOptions {
   limit?: number;
 }
 
+export interface TMConcordanceRecallOptions {
+  scope?: 'source';
+  limit?: number;
+  rawLimit?: number;
+}
+
 export interface TBRecord {
   id: string;
   name: string;

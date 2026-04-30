@@ -1,6 +1,12 @@
 import { CATDatabase } from '@cat/db';
 import type { TMEntry } from '@cat/core/models';
-import { MountedTMRecord, TMRecallOptions, TMRecord, TMRepository } from '../ports';
+import {
+  MountedTMRecord,
+  TMConcordanceRecallOptions,
+  TMRecallOptions,
+  TMRecord,
+  TMRepository,
+} from '../ports';
 
 export class SqliteTMRepository implements TMRepository {
   constructor(private readonly db: CATDatabase) {}
@@ -36,6 +42,28 @@ export class SqliteTMRepository implements TMRepository {
     options?: TMRecallOptions,
   ): Array<TMEntry & { tmId: string }> {
     return this.db.searchTMRecallCandidates(projectId, sourceText, tmIds, options) as Array<
+      TMEntry & { tmId: string }
+    >;
+  }
+
+  searchTMFuzzyRecallCandidates(
+    projectId: number,
+    sourceText: string,
+    tmIds?: string[],
+    options?: TMRecallOptions,
+  ): Array<TMEntry & { tmId: string }> {
+    return this.db.searchTMFuzzyRecallCandidates(projectId, sourceText, tmIds, options) as Array<
+      TMEntry & { tmId: string }
+    >;
+  }
+
+  searchTMConcordanceRecallCandidates(
+    projectId: number,
+    queryText: string,
+    tmIds?: string[],
+    options?: TMConcordanceRecallOptions,
+  ): Array<TMEntry & { tmId: string }> {
+    return this.db.searchTMConcordanceRecallCandidates(projectId, queryText, tmIds, options) as Array<
       TMEntry & { tmId: string }
     >;
   }

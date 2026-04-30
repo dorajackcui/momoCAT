@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CATDatabase } from "./index";
 
 describe("CATDatabase", () => {
@@ -645,6 +645,143 @@ describe("CATDatabase", () => {
         { scope: "source", limit: 50 },
       );
       expect(pillarResults.map((row) => row.srcHash)).toContain("pillar-drawing-hash");
+    });
+
+    it("should recall contained short CJK entries for active concordance recall", () => {
+      const projectId = db.createProject("Active Concordance Recall", "zh", "fr");
+      const mainTmId = db.createTM("Main Active Concordance", "zh", "fr", "main");
+      db.mountTMToProject(projectId, mainTmId, 10, "read");
+
+      for (const [srcHash, sourceText] of [
+        ["amo-glass", "阿茉玻"],
+        ["fresh-king", "清新天王"],
+      ] as const) {
+        db.upsertTMEntry({
+          id: srcHash,
+          tmId: mainTmId,
+          srcHash,
+          matchKey: sourceText,
+          tagsSignature: "",
+          sourceTokens: [{ type: "text", content: sourceText }],
+          targetTokens: [{ type: "text", content: `${sourceText} target` }],
+          usageCount: 1,
+        } as any);
+        db.insertTMFts(mainTmId, sourceText, `${sourceText} target`, srcHash);
+      }
+
+      const results = db.searchTMConcordanceRecallCandidates(
+        projectId,
+        "阿茉玻曾见证清新天王将因绝望病逝世的心愿精灵送回星空。",
+        [mainTmId],
+        { scope: "source", limit: 50, rawLimit: 200 },
+      );
+
+      expect(results.map((row) => row.srcHash)).toEqual(
+        expect.arrayContaining(["amo-glass", "fresh-king"]),
+      );
+    });
+
+    it("should still search 3-character CJK concordance terms when 4-character hits are crowded", () => {
+      const projectId = db.createProject("Active Concordance Tier Diversity", "zh", "fr");
+      const mainTmId = db.createTM("Main Active Concordance Tier Diversity", "zh", "fr", "main");
+      db.mountTMToProject(projectId, mainTmId, 10, "read");
+
+      for (let index = 0; index < 80; index += 1) {
+        const sourceText = `噪声${index}清新天王`;
+        db.upsertTMEntry({
+          id: `fresh-king-noise-${index}`,
+          tmId: mainTmId,
+          srcHash: `fresh-king-noise-${index}`,
+          matchKey: sourceText,
+          tagsSignature: "",
+          sourceTokens: [{ type: "text", content: sourceText }],
+          targetTokens: [{ type: "text", content: `fresh king noise ${index}` }],
+          usageCount: 1,
+        } as any);
+        db.insertTMFts(mainTmId, sourceText, `fresh king noise ${index}`, `fresh-king-noise-${index}`);
+      }
+
+      db.upsertTMEntry({
+        id: "amo-glass-entry",
+        tmId: mainTmId,
+        srcHash: "amo-glass",
+        matchKey: "阿茉玻",
+        tagsSignature: "",
+        sourceTokens: [{ type: "text", content: "阿茉玻" }],
+        targetTokens: [{ type: "text", content: "Amorbo" }],
+        usageCount: 1,
+      } as any);
+      db.insertTMFts(mainTmId, "阿茉玻", "Amorbo", "amo-glass-entry");
+
+      const results = db.searchTMConcordanceRecallCandidates(
+        projectId,
+        "阿茉玻曾见证清新天王将因绝望病逝世的心愿精灵送回星空。",
+        [mainTmId],
+        { scope: "source", limit: 50, rawLimit: 200 },
+      );
+
+      expect(results.map((row) => row.srcHash)).toContain("amo-glass");
+    });
+
+    it("should not accept cross-tag fake CJK containment in active concordance recall", () => {
+      const projectId = db.createProject("Tag Boundary Concordance Recall", "zh", "fr");
+      const mainTmId = db.createTM("Main Tag Boundary", "zh", "fr", "main");
+      db.mountTMToProject(projectId, mainTmId, 10, "read");
+
+      db.upsertTMEntry({
+        id: "cross-tag-fake",
+        tmId: mainTmId,
+        srcHash: "cross-tag-fake",
+        matchKey: "风荷立柱",
+        tagsSignature: "",
+        sourceTokens: [{ type: "text", content: "风荷立柱" }],
+        targetTokens: [{ type: "text", content: "cross tag fake" }],
+        usageCount: 1,
+      } as any);
+      db.insertTMFts(mainTmId, "风荷立柱", "cross tag fake", "cross-tag-fake");
+
+      const results = db.searchTMConcordanceRecallCandidates(
+        projectId,
+        "风荷 立柱",
+        [mainTmId],
+        { scope: "source", limit: 50, rawLimit: 200 },
+      );
+
+      expect(results.map((row) => row.srcHash)).not.toContain("cross-tag-fake");
+    });
+
+    it("should clamp concordance raw limit and cap long latin recall plans", () => {
+      const previousDebug = process.env.CAT_TM_RECALL_DEBUG;
+      const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => undefined);
+      process.env.CAT_TM_RECALL_DEBUG = "1";
+
+      try {
+        const projectId = db.createProject("Concordance Recall Guardrails", "en", "fr");
+        const mainTmId = db.createTM("Main Recall Guardrails", "en", "fr", "main");
+        db.mountTMToProject(projectId, mainTmId, 10, "read");
+        const longLatinSource = Array.from({ length: 200 }, (_, index) => `term${index}`).join(" ");
+
+        expect(() =>
+          db.searchTMConcordanceRecallCandidates(projectId, longLatinSource, [mainTmId], {
+            scope: "source",
+            limit: 50,
+            rawLimit: Number.POSITIVE_INFINITY,
+          }),
+        ).not.toThrow();
+
+        const debugCall = debugSpy.mock.calls.find(([message]) =>
+          String(message).includes("concordance recall"),
+        );
+        expect(debugCall).toBeDefined();
+        expect((debugCall?.[1] as Record<string, unknown>).ftsQueryCount).toBeLessThanOrEqual(1);
+      } finally {
+        if (previousDebug === undefined) {
+          delete process.env.CAT_TM_RECALL_DEBUG;
+        } else {
+          process.env.CAT_TM_RECALL_DEBUG = previousDebug;
+        }
+        debugSpy.mockRestore();
+      }
     });
 
     it("should diversify active recall candidates before applying the result limit", () => {
