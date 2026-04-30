@@ -66,6 +66,7 @@ const TM_CONCORDANCE_RECALL_LATIN_LIMIT = 32;
 const TM_CONCORDANCE_RECALL_SHORT_CJK_LIMIT = 16;
 const TM_CONCORDANCE_RECALL_RAW_LIMIT_MAX = 1000;
 const TM_CONCORDANCE_RECALL_BATCH_RAW_LIMIT = 64;
+const TM_CONCORDANCE_RECALL_EXACT_SOURCE_LIMIT = 64;
 const TM_RECALL_DIVERSITY_MAX_PER_BUCKET = 2;
 const TM_RECALL_DIVERSITY_MIN_CJK_BUCKET_LENGTH = 4;
 const ONLY_CJK_RE = /^[一-龥]+$/;
@@ -424,6 +425,12 @@ export class TMRepo {
       params.plan.cjk3Fragments,
     ];
 
+    this.collectConcordanceExactSourceTier({
+      ...params,
+      accepted,
+      seenIds,
+    });
+
     for (let index = 0; index < tiers.length; index += 1) {
       if (accepted.length >= params.maxResults || params.stats.rawRows >= params.rawLimit) break;
       if (index > 0 && Date.now() - params.startedAt > TM_CONCORDANCE_RECALL_SOFT_BUDGET_MS) {
@@ -452,6 +459,59 @@ export class TMRepo {
     }
 
     return accepted;
+  }
+
+  private collectConcordanceExactSourceTier(params: {
+    tmIds: string[];
+    queryText: string;
+    plan: TMConcordanceRecallQueryPlan;
+    maxResults: number;
+    rawLimit: number;
+    stats: TMConcordanceRecallStats;
+    accepted: TMRecallDbRow[];
+    seenIds: Set<string>;
+  }): void {
+    if (params.accepted.length >= params.maxResults || params.stats.rawRows >= params.rawLimit) {
+      return;
+    }
+
+    const terms = this.uniqueTerms([
+      ...params.plan.shortCjkTerms,
+      ...params.plan.cjk3Fragments,
+      ...params.plan.cjk4Fragments,
+      ...params.plan.longCjkFragments,
+    ]).filter((term) => term.length >= 2);
+    if (terms.length === 0) return;
+
+    const placeholders = params.tmIds.map(() => '?').join(',');
+    const termPlaceholders = terms.map(() => '?').join(',');
+    const remainingRaw = Math.min(
+      params.rawLimit - params.stats.rawRows,
+      params.maxResults - params.accepted.length,
+      TM_CONCORDANCE_RECALL_EXACT_SOURCE_LIMIT,
+    );
+    if (remainingRaw <= 0) return;
+
+    const rows = this.db
+      .prepare(`
+        SELECT tm_entries.*, tm_fts.srcText AS ftsSrcText, tm_fts.tgtText AS ftsTgtText
+        FROM tm_fts
+        JOIN tm_entries ON tm_fts.tmEntryId = tm_entries.id
+        WHERE tm_fts.tmId IN (${placeholders}) AND tm_fts.srcText IN (${termPlaceholders})
+        ORDER BY length(tm_fts.srcText) ASC, tm_entries.usageCount DESC, tm_entries.updatedAt DESC, tm_entries.id ASC
+        LIMIT ?
+      `)
+      .all(...params.tmIds, ...terms, remainingRaw) as TMRecallDbRow[];
+
+    params.stats.rawRows += rows.length;
+    this.acceptConcordanceRecallRows({
+      queryText: params.queryText,
+      rows,
+      accepted: params.accepted,
+      seenIds: params.seenIds,
+      maxResults: params.maxResults,
+      stats: params.stats,
+    });
   }
 
   private collectConcordanceFtsBatchTier(params: {

@@ -274,6 +274,7 @@ active flow 只查 `srcText`。显式 Concordance Search 因为使用 `scope: 's
 | `rawLimit` | 默认 200；至少为 `maxResults`，最大 1000 |
 | batch size | 每批最多 32 个 FTS/LIKE term |
 | per-batch raw limit | 每批最多拉 64 条 raw row |
+| exact-source limit | FTS 前最多拉 64 条 `tm_fts.srcText IN (...)` 精确源文候选 |
 | soft budget | 50ms；超过后后续 tier 会 degraded 停止 |
 
 `rawLimit` 是整个 concordance recall 的 raw row 总预算，per-batch raw limit 防止前面的 4 字窗口把全部 raw row 吃满，导致后面的 3 字窗口没有机会执行。
@@ -295,11 +296,20 @@ active flow 只查 `srcText`。显式 Concordance Search 因为使用 `scope: 's
 ### 3B.3 Concordance tier 顺序
 
 ```typescript
+tier -1: exact source lookup with tm_fts.srcText IN (...)
 tier 0: cjk4Fragments + latinTerms
 tier 1: longCjkFragments
 tier 2: cjk3Fragments
 fallback: shortCjkTerms LIKE
 ```
+
+Exact source lookup 使用 `shortCjkTerms`、`cjk3Fragments`、`cjk4Fragments`、`longCjkFragments` 的合集，在 broad OR FTS 之前先查：
+
+```sql
+tm_fts.srcText IN ('阿茉玻', '清新天王', ...)
+```
+
+这一步是为了保护“TM entry 本身就是 active source 的完整短片段”的场景。否则在真实大 TM 里，`"阿茉玻"` 这种 3 字 exact entry 可能被 `清新天王`、`心愿精灵` 等大量更长句子的 FTS rank 挤到 raw limit 之外。
 
 每个 FTS tier 按 batch 查询：
 

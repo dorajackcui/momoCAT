@@ -23,6 +23,7 @@
     "rebuild:electron": "node scripts/rebuild-electron.mjs",
     "rebuild:test": "npm rebuild better-sqlite3",
     "test": "npm run rebuild:test && vitest run",
+    "test:tm-flow": "npm run rebuild:test && vitest run apps/desktop/src/main/services/TMMatchFlow.test.ts",
     "test:watch": "vitest",
     "postinstall": "npm run rebuild:electron",
     "format": "prettier --write ."

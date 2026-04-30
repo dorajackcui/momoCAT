@@ -723,6 +723,46 @@ describe("CATDatabase", () => {
       expect(results.map((row) => row.srcHash)).toContain("amo-glass");
     });
 
+    it("should keep exact contained 3-character CJK source when broad concordance FTS is crowded", () => {
+      const projectId = db.createProject("Active Concordance Exact Short Source", "zh", "fr");
+      const mainTmId = db.createTM("Main Active Concordance Exact Short Source", "zh", "fr", "main");
+      db.mountTMToProject(projectId, mainTmId, 10, "read");
+
+      for (let index = 0; index < 80; index += 1) {
+        const sourceText = `清新天王将因绝望病逝世的心愿精灵噪声${index}`;
+        db.upsertTMEntry({
+          id: `crowded-concordance-${index}`,
+          tmId: mainTmId,
+          srcHash: `crowded-concordance-${index}`,
+          matchKey: sourceText,
+          tagsSignature: "",
+          sourceTokens: [{ type: "text", content: sourceText }],
+          targetTokens: [{ type: "text", content: `crowded concordance ${index}` }],
+          usageCount: 1,
+        } as any);
+      }
+
+      db.upsertTMEntry({
+        id: "amo-glass-exact-entry",
+        tmId: mainTmId,
+        srcHash: "amo-glass",
+        matchKey: "阿茉玻",
+        tagsSignature: "",
+        sourceTokens: [{ type: "text", content: "阿茉玻" }],
+        targetTokens: [{ type: "text", content: "Amorbo" }],
+        usageCount: 1,
+      } as any);
+
+      const results = db.searchTMConcordanceRecallCandidates(
+        projectId,
+        "阿茉玻曾见证清新天王将因绝望病逝世的心愿精灵送回星空。",
+        [mainTmId],
+        { scope: "source", limit: 50, rawLimit: 50 },
+      );
+
+      expect(results.map((row) => row.srcHash)).toContain("amo-glass");
+    });
+
     it("should not accept cross-tag fake CJK containment in active concordance recall", () => {
       const projectId = db.createProject("Tag Boundary Concordance Recall", "zh", "fr");
       const mainTmId = db.createTM("Main Tag Boundary", "zh", "fr", "main");
