@@ -126,6 +126,8 @@ Internal dependency direction:
 
 Renderer action -> `apiClient.aiTranslateFile` -> `ProjectService` -> `AIModule` -> AI orchestration -> segment updates -> job progress events
 
+Standard file processing uses bounded concurrent segment requests for translation default, review, and custom projects. Translation dialogue mode remains serial because each dialogue unit may depend on the previous translated group for consistency context.
+
 ### TM import and batch match
 
 Renderer import flow -> IPC -> `ProjectService` -> `TMModule` -> TM import/query/batch services -> repos/db

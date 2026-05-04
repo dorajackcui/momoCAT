@@ -63,6 +63,80 @@ function expectTBPromptCap(userPrompt: string) {
   expect(userPrompt).not.toContain('- t101 => v101');
 }
 
+async function runFileProcessingConcurrencyCase(params: {
+  projectType: 'translation' | 'review' | 'custom';
+  segmentPrefix: string;
+  responseContent: (index: number) => string;
+}) {
+  const segments: Segment[] = Array.from({ length: 5 }, (_, index) =>
+    createSegment({
+      segmentId: `${params.segmentPrefix}-${index + 1}`,
+      sourceText: `Source ${index + 1}`,
+    }),
+  );
+
+  const projectRepo = {
+    getFile: vi.fn().mockReturnValue({ id: 1, projectId: 11, name: 'demo.xlsx' }),
+    getProject: vi.fn().mockReturnValue({
+      id: 11,
+      srcLang: 'en',
+      tgtLang: 'zh',
+      projectType: params.projectType,
+      aiPrompt: params.projectType === 'custom' ? 'Rewrite the input.' : '',
+      aiTemperature: 0.2,
+    }),
+  } as unknown as ProjectRepository;
+
+  const segmentRepo = {
+    getSegmentsPage: vi.fn().mockReturnValue(segments),
+  } as unknown as SegmentRepository;
+
+  const settingsRepo = {
+    getSetting: vi.fn().mockReturnValue('test-api-key'),
+  } as unknown as SettingsRepository;
+
+  const segmentService = {
+    updateSegment: vi.fn().mockResolvedValue(undefined),
+  } as unknown as SegmentService;
+
+  type TransportResponse = { content: string; status: number; endpoint: string };
+  const pending: Array<ReturnType<typeof createDeferred<TransportResponse>>> = [];
+  const transport = {
+    testConnection: vi.fn().mockResolvedValue({ ok: true }),
+    createResponse: vi.fn().mockImplementation(() => {
+      const deferred = createDeferred<TransportResponse>();
+      pending.push(deferred);
+      return deferred.promise;
+    }),
+  } as unknown as AITransport;
+
+  const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
+  const task = module.aiTranslateFile(1);
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const initiallyStarted = pending.length;
+
+  let resolved = 0;
+  while (resolved < segments.length) {
+    while (!pending[resolved]) {
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 0));
+    }
+    pending[resolved].resolve({
+      content: params.responseContent(resolved),
+      status: 200,
+      endpoint: '/v1/responses',
+    });
+    resolved += 1;
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 0));
+  }
+
+  return {
+    initiallyStarted,
+    result: await task,
+    segmentService,
+  };
+}
+
 describe('AIModule.aiTranslateFile', () => {
   it('keeps scanning after consecutive empty source segments', async () => {
     const segments: Segment[] = [
@@ -348,12 +422,9 @@ describe('AIModule.aiTranslateFile', () => {
     } as unknown as ProjectRepository;
 
     const segmentRepo = {
-      getSegmentsPage: vi
-        .fn()
-        .mockReturnValueOnce(segments)
-        .mockReturnValueOnce([])
-        .mockReturnValueOnce(segments)
-        .mockReturnValueOnce([]),
+      getSegmentsPage: vi.fn((_fileId: number, offset: number) =>
+        offset === 0 ? segments : [],
+      ),
     } as unknown as SegmentRepository;
 
     const settingsRepo = {
@@ -1016,12 +1087,9 @@ describe('AIModule.aiTranslateFile', () => {
     } as unknown as ProjectRepository;
 
     const segmentRepo = {
-      getSegmentsPage: vi
-        .fn()
-        .mockReturnValueOnce(segments)
-        .mockReturnValueOnce([])
-        .mockReturnValueOnce(segments)
-        .mockReturnValueOnce([]),
+      getSegmentsPage: vi.fn((_fileId: number, offset: number) =>
+        offset === 0 ? segments : [],
+      ),
     } as unknown as SegmentRepository;
 
     const settingsRepo = {
@@ -1252,6 +1320,30 @@ describe('AIModule.aiTranslateFile', () => {
       expect.any(Array),
       'translated',
     );
+  });
+
+  it('starts custom file processing with bounded concurrent provider requests', async () => {
+    const { initiallyStarted, result, segmentService } = await runFileProcessingConcurrencyCase({
+      projectType: 'custom',
+      segmentPrefix: 'custom-concurrent',
+      responseContent: (index) => `Output ${index + 1}`,
+    });
+
+    expect(initiallyStarted).toBe(4);
+    expect(result).toEqual({ translated: 5, skipped: 0, failed: 0, total: 5 });
+    expect(segmentService.updateSegment).toHaveBeenCalledTimes(5);
+  });
+
+  it('starts default translation file processing with bounded concurrent provider requests', async () => {
+    const { initiallyStarted, result, segmentService } = await runFileProcessingConcurrencyCase({
+      projectType: 'translation',
+      segmentPrefix: 'translation-concurrent',
+      responseContent: (index) => `译文 ${index + 1}`,
+    });
+
+    expect(initiallyStarted).toBe(4);
+    expect(result).toEqual({ translated: 5, skipped: 0, failed: 0, total: 5 });
+    expect(segmentService.updateSegment).toHaveBeenCalledTimes(5);
   });
 
   it('returns the actual tester system/user prompts from aiTestTranslate', async () => {

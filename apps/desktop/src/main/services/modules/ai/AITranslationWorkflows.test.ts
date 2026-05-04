@@ -52,6 +52,22 @@ function createProject(overrides?: Partial<Project>): Project {
   };
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+async function flushPromises() {
+  await Promise.resolve();
+  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 describe('AI translation workflows', () => {
   it('supports overwrite-non-confirmed in standard file workflow', async () => {
     const segments = [
@@ -158,6 +174,158 @@ describe('AI translation workflows', () => {
     expect(warnSpy).toHaveBeenCalledWith(
       '[AITranslationOrchestrator] Failed to translate segment in file workflow',
       expect.objectContaining({ fileId: 9, segmentId: 'failed-segment' }),
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it('runs standard file workflow with bounded concurrency when requested', async () => {
+    const segments = [
+      createSegment({ segmentId: 'custom-1', sourceText: 'One' }),
+      createSegment({ segmentId: 'custom-2', sourceText: 'Two' }),
+      createSegment({ segmentId: 'custom-3', sourceText: 'Three' }),
+    ];
+    const pending = new Map<string, ReturnType<typeof createDeferred<Segment['targetTokens']>>>();
+    const completedProgress: number[] = [];
+
+    const segmentPagingIterator = {
+      countFileSegments: vi.fn().mockReturnValue(segments.length),
+      countMatchingSegments: vi
+        .fn()
+        .mockImplementation(
+          (_fileId: number, predicate: (segment: Segment) => boolean) =>
+            segments.filter(predicate).length,
+        ),
+      iterateFileSegments: vi.fn().mockReturnValue(segments.values()),
+    };
+
+    const textTranslator = {
+      translateSegment: vi.fn().mockImplementation(({ segmentId }: { segmentId: string }) => {
+        const deferred = createDeferred<Segment['targetTokens']>();
+        pending.set(segmentId, deferred);
+        return deferred.promise;
+      }),
+    };
+
+    const segmentService = {
+      updateSegment: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const task = runStandardFileTranslation({
+      fileId: 1,
+      projectId: 11,
+      project: createProject({ projectType: 'custom' }),
+      apiKey: 'test-key',
+      baseUrl: 'https://api.example.test/v1',
+      model: 'gpt-5.4-mini',
+      runtimeConfig: { reasoningEffort: 'medium' },
+      targetScope: 'blank-only',
+      segmentPagingIterator: segmentPagingIterator as never,
+      textTranslator: textTranslator as never,
+      segmentService: segmentService as never,
+      resolveTranslationPromptReferences: vi.fn().mockResolvedValue({}),
+      intervalMs: 0,
+      maxConcurrency: 2,
+      onProgress: (event) => completedProgress.push(event.current),
+    });
+
+    await flushPromises();
+    const initiallyStarted = Array.from(pending.keys());
+    const resolved = new Set<string>();
+
+    if (pending.has('custom-2')) {
+      pending.get('custom-2')?.resolve([{ type: 'text', content: 'Second done' }]);
+      resolved.add('custom-2');
+    }
+    await flushPromises();
+    const startedAfterOneCompletion = Array.from(pending.keys());
+
+    for (const segment of segments) {
+      if (resolved.has(segment.segmentId)) continue;
+      while (!pending.has(segment.segmentId)) {
+        await flushPromises();
+      }
+      pending.get(segment.segmentId)?.resolve([
+        { type: 'text', content: `${segment.segmentId} done` },
+      ]);
+      resolved.add(segment.segmentId);
+      await flushPromises();
+    }
+
+    const result = await task;
+
+    expect(initiallyStarted).toEqual(['custom-1', 'custom-2']);
+    expect(startedAfterOneCompletion).toEqual(['custom-1', 'custom-2', 'custom-3']);
+    expect(result).toEqual({ translated: 3, skipped: 0, failed: 0, total: 3 });
+    expect(segmentService.updateSegment).toHaveBeenCalledTimes(3);
+    expect(completedProgress).toEqual([1, 2, 3]);
+  });
+
+  it('keeps bounded concurrent standard file workflow running after one segment fails', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const segments = [
+      createSegment({ segmentId: 'custom-ok-1', sourceText: 'One' }),
+      createSegment({ segmentId: 'custom-fail', sourceText: 'Two' }),
+      createSegment({ segmentId: 'custom-ok-2', sourceText: 'Three' }),
+    ];
+
+    const segmentPagingIterator = {
+      countFileSegments: vi.fn().mockReturnValue(segments.length),
+      countMatchingSegments: vi
+        .fn()
+        .mockImplementation(
+          (_fileId: number, predicate: (segment: Segment) => boolean) =>
+            segments.filter(predicate).length,
+        ),
+      iterateFileSegments: vi.fn().mockReturnValue(segments.values()),
+    };
+
+    const textTranslator = {
+      translateSegment: vi
+        .fn()
+        .mockResolvedValueOnce([{ type: 'text', content: 'First done' }])
+        .mockRejectedValueOnce(new Error('provider failed'))
+        .mockResolvedValueOnce([{ type: 'text', content: 'Third done' }]),
+    };
+
+    const segmentService = {
+      updateSegment: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const result = await runStandardFileTranslation({
+      fileId: 2,
+      projectId: 11,
+      project: createProject({ projectType: 'custom' }),
+      apiKey: 'test-key',
+      baseUrl: 'https://api.example.test/v1',
+      model: 'gpt-5.4-mini',
+      runtimeConfig: { reasoningEffort: 'medium' },
+      targetScope: 'blank-only',
+      segmentPagingIterator: segmentPagingIterator as never,
+      textTranslator: textTranslator as never,
+      segmentService: segmentService as never,
+      resolveTranslationPromptReferences: vi.fn().mockResolvedValue({}),
+      intervalMs: 0,
+      maxConcurrency: 2,
+    });
+
+    expect(result).toEqual({ translated: 2, skipped: 0, failed: 1, total: 3 });
+    expect(segmentService.updateSegment).toHaveBeenCalledTimes(2);
+    expect(segmentService.updateSegment).toHaveBeenNthCalledWith(
+      1,
+      'custom-ok-1',
+      expect.any(Array),
+      'translated',
+    );
+    expect(segmentService.updateSegment).toHaveBeenNthCalledWith(
+      2,
+      'custom-ok-2',
+      expect.any(Array),
+      'translated',
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[AITranslationOrchestrator] Failed to translate segment in file workflow',
+      expect.objectContaining({ fileId: 2, segmentId: 'custom-fail' }),
     );
 
     warnSpy.mockRestore();

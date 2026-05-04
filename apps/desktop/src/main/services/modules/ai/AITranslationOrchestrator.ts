@@ -33,6 +33,7 @@ export interface AITranslateFileOptions {
 
 export class AITranslationOrchestrator {
   private static readonly TRANSLATION_INTERVAL_MS = 40;
+  private static readonly STANDARD_FILE_TRANSLATION_CONCURRENCY = 4;
 
   private readonly tagValidator = new TagValidator();
   private readonly segmentWorkflow = createSegmentOperationLock();
@@ -102,6 +103,7 @@ export class AITranslationOrchestrator {
         this.resolveTranslationPromptReferences(projectId, segment),
       onProgress: options?.onProgress,
       intervalMs: AITranslationOrchestrator.TRANSLATION_INTERVAL_MS,
+      maxConcurrency: AITranslationOrchestrator.STANDARD_FILE_TRANSLATION_CONCURRENCY,
     });
   }
 

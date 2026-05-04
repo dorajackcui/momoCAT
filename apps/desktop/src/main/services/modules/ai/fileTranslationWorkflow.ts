@@ -42,6 +42,7 @@ export interface StandardFileTranslationParams {
   ) => Promise<TranslationPromptReferences>;
   onProgress?: (data: { current: number; total: number; message?: string }) => void;
   intervalMs?: number;
+  maxConcurrency?: number;
 }
 
 export async function translateBatchSegment(
@@ -99,6 +100,76 @@ export async function runStandardFileTranslation(
   let failed = 0;
   const aiStatus: SegmentStatus =
     (params.project.projectType || 'translation') === 'review' ? 'reviewed' : 'translated';
+  const maxConcurrency = normalizeMaxConcurrency(params.maxConcurrency);
+
+  if (maxConcurrency > 1) {
+    const iterator = params.segmentPagingIterator.iterateFileSegments(params.fileId);
+    const nextTranslatableSegment = (): Segment | null => {
+      while (true) {
+        const next = iterator.next();
+        if (next.done) return null;
+        if (isTranslatableSegment(next.value, params.targetScope)) return next.value;
+      }
+    };
+
+    const processSegment = async (segment: Segment): Promise<void> => {
+      try {
+        const targetTokens = await translateBatchSegment(
+          {
+            projectId: params.projectId,
+            segment,
+            apiKey: params.apiKey,
+            baseUrl: params.baseUrl,
+            model: params.model,
+            projectPrompt: params.project.aiPrompt || '',
+            projectType: params.project.projectType || 'translation',
+            runtimeConfig: params.runtimeConfig,
+            srcLang: params.project.srcLang,
+            tgtLang: params.project.tgtLang,
+          },
+          {
+            textTranslator: params.textTranslator,
+            resolveTranslationPromptReferences: params.resolveTranslationPromptReferences,
+          },
+        );
+
+        await params.segmentService.updateSegment(segment.segmentId, targetTokens, aiStatus);
+        translated += 1;
+      } catch (error) {
+        failed += 1;
+        console.warn('[AITranslationOrchestrator] Failed to translate segment in file workflow', {
+          fileId: params.fileId,
+          segmentId: segment.segmentId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      current += 1;
+      params.onProgress?.({
+        current,
+        total,
+        message: `${getAIProgressVerb(params.project.projectType || 'translation')} segment ${current} of ${total}`,
+      });
+
+      if ((params.intervalMs ?? 40) > 0) {
+        await sleep(params.intervalMs ?? 40);
+      }
+    };
+
+    const worker = async (): Promise<void> => {
+      while (true) {
+        const segment = nextTranslatableSegment();
+        if (!segment) return;
+        await processSegment(segment);
+      }
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(maxConcurrency, total) }, () => worker()),
+    );
+
+    return { translated, skipped, failed, total: totalSegments };
+  }
 
   for (const segment of params.segmentPagingIterator.iterateFileSegments(params.fileId)) {
     if (!isTranslatableSegment(segment, params.targetScope)) continue;
@@ -147,6 +218,11 @@ export async function runStandardFileTranslation(
   }
 
   return { translated, skipped, failed, total: totalSegments };
+}
+
+function normalizeMaxConcurrency(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value)) return 1;
+  return Math.max(1, Math.floor(value));
 }
 
 function sleep(ms: number): Promise<void> {
