@@ -11,6 +11,7 @@ import type { TranslationPromptReferences } from './types';
 import { isTranslatableSegment } from './translationTargetScope';
 import { AITextTranslator } from './AITextTranslator';
 import { translateBatchSegment } from './fileTranslationWorkflow';
+import { logAIBatchDebug } from './aiBatchDebug';
 
 const DIALOGUE_MAX_SEGMENTS_PER_UNIT = 6;
 const DIALOGUE_MAX_CHARS_PER_UNIT = 1200;
@@ -55,7 +56,23 @@ export async function runDialogueFileTranslation(
   let failed = 0;
   let previousGroup: { speaker: string; sourceText: string; targetText: string } | undefined;
 
+  logAIBatchDebug({
+    event: 'dialogue_file_start',
+    mode: 'dialogue',
+    fileId: params.fileId,
+    projectId: params.project.id,
+    projectType: params.project.projectType || 'translation',
+    targetScope: params.targetScope,
+    totalSegments,
+    translatableSegments: total,
+    skipped,
+    unitCount: units.length,
+    model: params.model,
+    reasoningEffort: params.runtimeConfig.reasoningEffort,
+  });
+
   for (const unit of units) {
+    logAIBatchDialogueUnitEvent('dialogue_unit_start', params, unit);
     try {
       const result = await translateDialogueUnit({
         projectId: params.project.id,
@@ -72,7 +89,13 @@ export async function runDialogueFileTranslation(
           params.resolveTranslationPromptReferences(projectId, segment),
       });
 
+      logAIBatchDialogueUnitEvent('dialogue_unit_translated', params, unit, {
+        updateCount: result.updates.length,
+      });
       await params.segmentService.updateSegmentsAtomically(result.updates);
+      logAIBatchDialogueUnitEvent('dialogue_unit_write_success', params, unit, {
+        updateCount: result.updates.length,
+      });
       translated += unit.segments.length;
       previousGroup = result.previousGroup;
       for (let index = 0; index < unit.segments.length; index += 1) {
@@ -84,6 +107,11 @@ export async function runDialogueFileTranslation(
         });
       }
     } catch (error) {
+      logAIBatchDialogueUnitEvent('dialogue_unit_failed_fallback', params, unit, {
+        stage: 'translate_or_write',
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       console.warn(
         '[AITranslationOrchestrator] Dialogue group translation failed; falling back to per-segment mode',
         {
@@ -94,6 +122,8 @@ export async function runDialogueFileTranslation(
         },
       );
       for (const draft of unit.segments) {
+        let stage: 'translate' | 'write' = 'translate';
+        logAIBatchDialogueSegmentEvent('dialogue_fallback_segment_start', params, draft.segment);
         try {
           const targetTokens = await translateBatchSegment(
             {
@@ -114,10 +144,37 @@ export async function runDialogueFileTranslation(
             },
           );
 
+          stage = 'write';
+          logAIBatchDialogueSegmentEvent(
+            'dialogue_fallback_segment_translated',
+            params,
+            draft.segment,
+            {
+              targetChars: serializeTokensToEditorText(
+                targetTokens,
+                draft.segment.sourceTokens,
+              ).trim().length,
+              targetPreview: buildPreview(
+                serializeTokensToEditorText(targetTokens, draft.segment.sourceTokens),
+              ),
+              tokenCount: targetTokens.length,
+            },
+          );
           await params.segmentService.updateSegment(
             draft.segment.segmentId,
             targetTokens,
             'translated',
+          );
+          logAIBatchDialogueSegmentEvent(
+            'dialogue_fallback_segment_write_success',
+            params,
+            draft.segment,
+            {
+              targetChars: serializeTokensToEditorText(
+                targetTokens,
+                draft.segment.sourceTokens,
+              ).trim().length,
+            },
           );
           translated += 1;
           previousGroup = {
@@ -127,6 +184,16 @@ export async function runDialogueFileTranslation(
           };
         } catch (fallbackError) {
           failed += 1;
+          logAIBatchDialogueSegmentEvent(
+            'dialogue_fallback_segment_failed',
+            params,
+            draft.segment,
+            {
+              stage,
+              error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+              stack: fallbackError instanceof Error ? fallbackError.stack : undefined,
+            },
+          );
           console.warn('[AITranslationOrchestrator] Dialogue fallback segment translation failed', {
             fileId: params.fileId,
             segmentId: draft.segment.segmentId,
@@ -153,9 +220,72 @@ export async function runDialogueFileTranslation(
     }
   }
 
+  logAIBatchDebug({
+    event: 'dialogue_file_complete',
+    mode: 'dialogue',
+    fileId: params.fileId,
+    projectId: params.project.id,
+    translated,
+    skipped,
+    failed,
+    total: totalSegments,
+  });
+
   return { translated, skipped, failed, total: totalSegments };
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildPreview(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().slice(0, 160);
+}
+
+function logAIBatchDialogueUnitEvent(
+  event: string,
+  params: DialogueFileTranslationParams,
+  unit: ReturnType<typeof buildDialogueUnits>[number],
+  details: Record<string, unknown> = {},
+): void {
+  logAIBatchDebug({
+    event,
+    mode: 'dialogue',
+    fileId: params.fileId,
+    projectId: params.project.id,
+    segmentIds: unit.segments.map((draft) => draft.segment.segmentId),
+    orderIndexes: unit.segments.map((draft) => draft.segment.orderIndex),
+    speaker: unit.speaker || 'Unknown',
+    groupSize: unit.segments.length,
+    sourceChars: unit.charCount,
+    sourcePreview: buildPreview(unit.segments.map((draft) => draft.sourcePayload).join('\n')),
+    ...details,
+  });
+}
+
+function logAIBatchDialogueSegmentEvent(
+  event: string,
+  params: DialogueFileTranslationParams,
+  segment: Parameters<typeof translateBatchSegment>[0]['segment'],
+  details: Record<string, unknown> = {},
+): void {
+  const sourceText = serializeTokensToEditorText(segment.sourceTokens, segment.sourceTokens);
+  const existingTargetText = serializeTokensToEditorText(
+    segment.targetTokens,
+    segment.sourceTokens,
+  );
+  logAIBatchDebug({
+    event,
+    mode: 'dialogue',
+    fileId: params.fileId,
+    projectId: params.project.id,
+    segmentId: segment.segmentId,
+    orderIndex: segment.orderIndex,
+    status: segment.status,
+    sourceChars: sourceText.trim().length,
+    sourcePreview: buildPreview(sourceText),
+    existingTargetChars: existingTargetText.trim().length,
+    existingTargetPreview: buildPreview(existingTargetText),
+    ...details,
+  });
 }

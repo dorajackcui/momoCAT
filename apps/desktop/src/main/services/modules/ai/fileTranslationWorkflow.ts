@@ -10,6 +10,7 @@ import type { TranslationPromptReferences } from './types';
 import { SegmentPagingIterator } from './SegmentPagingIterator';
 import { AITextTranslator } from './AITextTranslator';
 import { isTranslatableSegment } from './translationTargetScope';
+import { logAIBatchDebug } from './aiBatchDebug';
 
 export interface TranslateBatchSegmentParams {
   projectId: number;
@@ -102,6 +103,21 @@ export async function runStandardFileTranslation(
     (params.project.projectType || 'translation') === 'review' ? 'reviewed' : 'translated';
   const maxConcurrency = normalizeMaxConcurrency(params.maxConcurrency);
 
+  logAIBatchDebug({
+    event: 'standard_file_start',
+    mode: 'standard',
+    fileId: params.fileId,
+    projectId: params.projectId,
+    projectType: params.project.projectType || 'translation',
+    targetScope: params.targetScope,
+    totalSegments,
+    translatableSegments: total,
+    skipped,
+    maxConcurrency,
+    model: params.model,
+    reasoningEffort: params.runtimeConfig.reasoningEffort,
+  });
+
   if (maxConcurrency > 1) {
     const iterator = params.segmentPagingIterator.iterateFileSegments(params.fileId);
     const nextTranslatableSegment = (): Segment | null => {
@@ -113,6 +129,10 @@ export async function runStandardFileTranslation(
     };
 
     const processSegment = async (segment: Segment): Promise<void> => {
+      let stage: 'translate' | 'write' = 'translate';
+      logAIBatchSegmentEvent('segment_start', params, segment, {
+        targetScope: params.targetScope,
+      });
       try {
         const targetTokens = await translateBatchSegment(
           {
@@ -133,10 +153,26 @@ export async function runStandardFileTranslation(
           },
         );
 
+        stage = 'write';
+        logAIBatchSegmentEvent('segment_translated', params, segment, {
+          targetChars: serializeTokensToDisplayText(targetTokens).trim().length,
+          targetPreview: buildPreview(serializeTokensToDisplayText(targetTokens)),
+          tokenCount: targetTokens.length,
+          writeStatus: aiStatus,
+        });
         await params.segmentService.updateSegment(segment.segmentId, targetTokens, aiStatus);
+        logAIBatchSegmentEvent('segment_write_success', params, segment, {
+          targetChars: serializeTokensToDisplayText(targetTokens).trim().length,
+          writeStatus: aiStatus,
+        });
         translated += 1;
       } catch (error) {
         failed += 1;
+        logAIBatchSegmentEvent('segment_failed', params, segment, {
+          stage,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
         console.warn('[AITranslationOrchestrator] Failed to translate segment in file workflow', {
           fileId: params.fileId,
           segmentId: segment.segmentId,
@@ -170,6 +206,16 @@ export async function runStandardFileTranslation(
       Array.from({ length: workerCount }, (_, i) => sleep(i * intervalMs).then(() => worker())),
     );
 
+    logAIBatchDebug({
+      event: 'standard_file_complete',
+      mode: 'standard',
+      fileId: params.fileId,
+      projectId: params.projectId,
+      translated,
+      skipped,
+      failed,
+      total: totalSegments,
+    });
     return { translated, skipped, failed, total: totalSegments };
   }
 
@@ -183,6 +229,10 @@ export async function runStandardFileTranslation(
       message: `${getAIProgressVerb(params.project.projectType || 'translation')} segment ${current} of ${total}`,
     });
 
+    let stage: 'translate' | 'write' = 'translate';
+    logAIBatchSegmentEvent('segment_start', params, segment, {
+      targetScope: params.targetScope,
+    });
     try {
       const targetTokens = await translateBatchSegment(
         {
@@ -203,10 +253,26 @@ export async function runStandardFileTranslation(
         },
       );
 
+      stage = 'write';
+      logAIBatchSegmentEvent('segment_translated', params, segment, {
+        targetChars: serializeTokensToDisplayText(targetTokens).trim().length,
+        targetPreview: buildPreview(serializeTokensToDisplayText(targetTokens)),
+        tokenCount: targetTokens.length,
+        writeStatus: aiStatus,
+      });
       await params.segmentService.updateSegment(segment.segmentId, targetTokens, aiStatus);
+      logAIBatchSegmentEvent('segment_write_success', params, segment, {
+        targetChars: serializeTokensToDisplayText(targetTokens).trim().length,
+        writeStatus: aiStatus,
+      });
       translated += 1;
     } catch (error) {
       failed += 1;
+      logAIBatchSegmentEvent('segment_failed', params, segment, {
+        stage,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       console.warn('[AITranslationOrchestrator] Failed to translate segment in file workflow', {
         fileId: params.fileId,
         segmentId: segment.segmentId,
@@ -219,6 +285,16 @@ export async function runStandardFileTranslation(
     }
   }
 
+  logAIBatchDebug({
+    event: 'standard_file_complete',
+    mode: 'standard',
+    fileId: params.fileId,
+    projectId: params.projectId,
+    translated,
+    skipped,
+    failed,
+    total: totalSegments,
+  });
   return { translated, skipped, failed, total: totalSegments };
 }
 
@@ -229,4 +305,32 @@ function normalizeMaxConcurrency(value: number | undefined): number {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildPreview(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().slice(0, 160);
+}
+
+function logAIBatchSegmentEvent(
+  event: string,
+  params: StandardFileTranslationParams,
+  segment: Segment,
+  details: Record<string, unknown> = {},
+): void {
+  const sourceText = serializeTokensToDisplayText(segment.sourceTokens);
+  const existingTargetText = serializeTokensToDisplayText(segment.targetTokens);
+  logAIBatchDebug({
+    event,
+    mode: 'standard',
+    fileId: params.fileId,
+    projectId: params.projectId,
+    segmentId: segment.segmentId,
+    orderIndex: segment.orderIndex,
+    status: segment.status,
+    sourceChars: sourceText.trim().length,
+    sourcePreview: buildPreview(sourceText),
+    existingTargetChars: existingTargetText.trim().length,
+    existingTargetPreview: buildPreview(existingTargetText),
+    ...details,
+  });
 }

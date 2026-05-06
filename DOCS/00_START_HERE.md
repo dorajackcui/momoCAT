@@ -49,7 +49,13 @@ Windows note:
 
 - Packaging and Electron rebuild scripts invoke `npm`/`npx` through the Windows shell to avoid `.cmd` spawn failures such as `spawnSync npm.cmd EINVAL` in some PowerShell/Volta setups.
 - Packaging entrypoints rebuild native modules and refresh the production renderer bundle before `electron-builder` runs, so release validation does not rely on stale `out/` artifacts.
-- To print AI `systemPrompt` and `userPrompt` in the main-process console during development, set `CAT_AI_DEBUG_PROMPTS=1` before `npm run dev`, or add it to `apps/desktop/proxy.env` / `.cat_data/proxy.env`. Leave it unset for normal work.
+
+AI debug logs:
+
+- Enable prompt debugging with `CAT_AI_DEBUG_PROMPTS=1` before `npm run dev`, or add it to `apps/desktop/proxy.env` / `.cat_data/proxy.env`. In dev, prompt logs are written to `.cat_data/ai_prompt_debug.log` unless `CAT_AI_DEBUG_PROMPTS_FILE` overrides the path.
+- Enable batch workflow diagnostics with `CAT_AI_DEBUG_BATCH=1`. In dev, JSONL batch logs are written to `.cat_data/ai_batch_translate_debug.log` unless `CAT_AI_DEBUG_BATCH_FILE` overrides the path. `CAT_AI_DEBUG_PROMPTS=1` also enables batch diagnostics.
+- For batch AI translate blank-line triage, run one translation pass, then inspect `segment_start`, `segment_translated`, `segment_write_success`, and `segment_failed` events. `stage=translate` means provider/prompt/validation failed before writeback; `stage=write` means translated tokens existed but persistence failed.
+- Leave these flags unset for normal work because prompt logs may contain source text, target text, TM/TB references, and provider response context.
 
 ## Platform Command Matrix
 

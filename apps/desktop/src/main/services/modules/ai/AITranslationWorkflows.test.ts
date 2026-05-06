@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Segment } from '@cat/core/models';
 import type { Project } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
 import { runStandardFileTranslation } from './fileTranslationWorkflow';
 import { runDialogueFileTranslation } from './dialogueTranslationWorkflow';
+import { AI_BATCH_DEBUG_ENV } from './aiBatchDebug';
 
 function createSegment(params: {
   segmentId: string;
@@ -69,6 +70,11 @@ async function flushPromises() {
 }
 
 describe('AI translation workflows', () => {
+  afterEach(() => {
+    delete process.env[AI_BATCH_DEBUG_ENV];
+    vi.restoreAllMocks();
+  });
+
   it('supports overwrite-non-confirmed in standard file workflow', async () => {
     const segments = [
       createSegment({ segmentId: 's1', sourceText: 'Hello' }),
@@ -179,6 +185,74 @@ describe('AI translation workflows', () => {
     warnSpy.mockRestore();
   });
 
+  it('logs batch diagnostic events around segment translation and writeback', async () => {
+    process.env[AI_BATCH_DEBUG_ENV] = '1';
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const segments = [
+      createSegment({ segmentId: 'diag-ok', sourceText: 'Hello' }),
+      createSegment({ segmentId: 'diag-fail', sourceText: 'World' }),
+    ];
+
+    const segmentPagingIterator = {
+      countFileSegments: vi.fn().mockReturnValue(segments.length),
+      countMatchingSegments: vi
+        .fn()
+        .mockImplementation(
+          (_fileId: number, predicate: (segment: Segment) => boolean) =>
+            segments.filter(predicate).length,
+        ),
+      iterateFileSegments: vi.fn().mockReturnValue(segments.values()),
+    };
+
+    const textTranslator = {
+      translateSegment: vi
+        .fn()
+        .mockResolvedValueOnce([{ type: 'text', content: 'Done' }])
+        .mockRejectedValueOnce(new Error('provider failed')),
+    };
+
+    await runStandardFileTranslation({
+      fileId: 9,
+      projectId: 11,
+      project: createProject(),
+      apiKey: 'test-key',
+      baseUrl: 'https://api.example.test/v1',
+      model: 'gpt-5.4-mini',
+      runtimeConfig: { reasoningEffort: 'medium' },
+      targetScope: 'blank-only',
+      segmentPagingIterator: segmentPagingIterator as never,
+      textTranslator: textTranslator as never,
+      segmentService: { updateSegment: vi.fn().mockResolvedValue(undefined) } as never,
+      resolveTranslationPromptReferences: vi.fn().mockResolvedValue({}),
+      intervalMs: 0,
+      maxConcurrency: 1,
+    });
+
+    const messages = logSpy.mock.calls.map(([message]) => String(message));
+    expect(messages.some((message) => message.includes('event=standard_file_start'))).toBe(true);
+    expect(
+      messages.some(
+        (message) => message.includes('event=segment_start') && message.includes('diag-ok'),
+      ),
+    ).toBe(true);
+    expect(
+      messages.some(
+        (message) => message.includes('event=segment_write_success') && message.includes('diag-ok'),
+      ),
+    ).toBe(true);
+    expect(
+      messages.some(
+        (message) =>
+          message.includes('event=segment_failed') &&
+          message.includes('diag-fail') &&
+          message.includes('stage=translate'),
+      ),
+    ).toBe(true);
+
+    warnSpy.mockRestore();
+  });
+
   it('runs standard file workflow with bounded concurrency when requested', async () => {
     const segments = [
       createSegment({ segmentId: 'custom-1', sourceText: 'One' }),
@@ -245,9 +319,9 @@ describe('AI translation workflows', () => {
       while (!pending.has(segment.segmentId)) {
         await flushPromises();
       }
-      pending.get(segment.segmentId)?.resolve([
-        { type: 'text', content: `${segment.segmentId} done` },
-      ]);
+      pending
+        .get(segment.segmentId)
+        ?.resolve([{ type: 'text', content: `${segment.segmentId} done` }]);
       resolved.add(segment.segmentId);
       await flushPromises();
     }

@@ -13,6 +13,11 @@ import {
   AI_PROMPT_DEBUG_FILE_ENV,
   isAIPromptDebugEnabled,
 } from './services/modules/ai/promptDebug';
+import {
+  AI_BATCH_DEBUG_ENV,
+  AI_BATCH_DEBUG_FILE_ENV,
+  isAIBatchDebugEnabled,
+} from './services/modules/ai/aiBatchDebug';
 import { registerProjectHandlers } from './ipc/projectHandlers';
 import { registerTMHandlers } from './ipc/tmHandlers';
 import { registerTBHandlers } from './ipc/tbHandlers';
@@ -136,6 +141,13 @@ app.whenReady().then(async () => {
     }
     console.log(`[AIPromptDebug] Enabled via ${AI_PROMPT_DEBUG_ENV}`);
     console.log(`[AIPromptDebug] UTF-8 prompt log: ${process.env[AI_PROMPT_DEBUG_FILE_ENV]}`);
+  }
+  if (isAIBatchDebugEnabled()) {
+    if (!process.env[AI_BATCH_DEBUG_FILE_ENV]) {
+      process.env[AI_BATCH_DEBUG_FILE_ENV] = join(userDataPath, 'ai_batch_translate_debug.log');
+    }
+    console.log(`[AIBatchDebug] Enabled via ${AI_BATCH_DEBUG_ENV} or ${AI_PROMPT_DEBUG_ENV}`);
+    console.log(`[AIBatchDebug] UTF-8 batch log: ${process.env[AI_BATCH_DEBUG_FILE_ENV]}`);
   }
   setupProxy();
 
