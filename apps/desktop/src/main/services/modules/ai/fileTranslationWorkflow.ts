@@ -201,10 +201,7 @@ export async function runStandardFileTranslation(
     };
 
     const workerCount = Math.min(maxConcurrency, total);
-    const intervalMs = params.intervalMs ?? 40;
-    await Promise.all(
-      Array.from({ length: workerCount }, (_, i) => sleep(i * intervalMs).then(() => worker())),
-    );
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
     logAIBatchDebug({
       event: 'standard_file_complete',
