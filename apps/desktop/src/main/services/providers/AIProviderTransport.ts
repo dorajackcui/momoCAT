@@ -117,58 +117,78 @@ export class AIProviderTransport implements AITransport {
     rawResponseText?: string;
   }> {
     const endpoint = `${normalizeBaseUrl(params.baseUrl)}/chat/completions`;
-    let response: Response;
+    const maxRetries = 3;
 
-    try {
-      response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-          Authorization: `Bearer ${params.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: params.model,
-          messages: [
-            { role: 'system', content: params.systemPrompt },
-            { role: 'user', content: params.userPrompt },
-          ],
-        }),
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(
-        `AI provider network request failed: ${message}${this.getProxyHint()} endpoint=${endpoint}`,
-      );
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      let response: Response;
+
+      try {
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            Authorization: `Bearer ${params.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: params.model,
+            messages: [
+              { role: 'system', content: params.systemPrompt },
+              { role: 'user', content: params.userPrompt },
+            ],
+          }),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `AI provider network request failed: ${message}${this.getProxyHint()} endpoint=${endpoint}`,
+        );
+      }
+
+      if (response.status === 429 && attempt < maxRetries) {
+        const retryAfterSec = parseFloat(response.headers.get('retry-after') ?? '');
+        const backoffMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
+          ? retryAfterSec * 1000
+          : Math.min(1000 * 2 ** attempt, 16000);
+        await sleep(backoffMs);
+        continue;
+      }
+
+      const requestId =
+        response.headers.get('x-request-id') ||
+        response.headers.get('x-openai-request-id') ||
+        undefined;
+      const rawBody = await response.text();
+
+      if (!response.ok) {
+        throw new Error(`AI provider request failed: ${response.status} ${rawBody}`);
+      }
+
+      let data: unknown;
+      try {
+        data = JSON.parse(rawBody) as unknown;
+      } catch {
+        throw new Error(`AI provider response is not valid JSON: ${rawBody}`);
+      }
+
+      const content = extractMessageText(data);
+      if (!content) {
+        throw new Error('AI provider response missing assistant content');
+      }
+
+      return {
+        content,
+        requestId,
+        status: response.status,
+        endpoint,
+        rawResponseText: rawBody.slice(0, 4000),
+      };
     }
 
-    const requestId =
-      response.headers.get('x-request-id') ||
-      response.headers.get('x-openai-request-id') ||
-      undefined;
-    const rawBody = await response.text();
-
-    if (!response.ok) {
-      throw new Error(`AI provider request failed: ${response.status} ${rawBody}`);
-    }
-
-    let data: unknown;
-    try {
-      data = JSON.parse(rawBody) as unknown;
-    } catch {
-      throw new Error(`AI provider response is not valid JSON: ${rawBody}`);
-    }
-
-    const content = extractMessageText(data);
-    if (!content) {
-      throw new Error('AI provider response missing assistant content');
-    }
-
-    return {
-      content,
-      requestId,
-      status: response.status,
-      endpoint,
-      rawResponseText: rawBody.slice(0, 4000),
-    };
+    // exhausted retries (TypeScript flow; loop always returns or throws)
+    throw new Error(`AI provider request failed: exceeded ${maxRetries} retries on rate limit`);
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

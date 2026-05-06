@@ -164,8 +164,10 @@ export async function runStandardFileTranslation(
       }
     };
 
+    const workerCount = Math.min(maxConcurrency, total);
+    const intervalMs = params.intervalMs ?? 40;
     await Promise.all(
-      Array.from({ length: Math.min(maxConcurrency, total) }, () => worker()),
+      Array.from({ length: workerCount }, (_, i) => sleep(i * intervalMs).then(() => worker())),
     );
 
     return { translated, skipped, failed, total: totalSegments };
