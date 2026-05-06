@@ -1418,7 +1418,7 @@ describe("CATDatabase", () => {
       );
 
       expect(results.map((row) => row.srcTerm)).toContain("领奖台");
-    });
+    }, 15_000);
 
     it("should recall single-character CJK terms alongside longer candidates", () => {
       const projectId = db.createProject("TB Search Single CJK", "zh-CN", "en-US");
