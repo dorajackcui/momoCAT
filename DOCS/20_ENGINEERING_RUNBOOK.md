@@ -16,7 +16,7 @@ Read before coding, before opening PRs, and whenever gate/test failures occur.
 
 ## Last Updated
 
-2026-03-29
+2026-05-06
 
 ## Owner
 
@@ -195,6 +195,39 @@ Desktop validation entrypoint:
 1. Re-run `npm run test:e2e:smoke --workspace=apps/desktop` before full e2e to confirm the failure reproduces in the smallest desktop path.
 2. If smoke passes but broader coverage is still needed, run `npm run test:e2e --workspace=apps/desktop`.
 3. Treat desktop e2e failures separately from packaging failures; do not jump to `pack:win` or `pack:mac` unless the problem is installer/build specific.
+
+### TM match workflow triage
+
+Use this when the active TM panel looks wrong and you need to determine whether the problem is recall, scoring/classification, or final ranking/diversity.
+
+Run from repo root:
+
+```bash
+npm run trace:tm-flow -- --project-id <id> --source "<source text>"
+npm run trace:tm-flow -- --project-id <id> --segment-id <segment id>
+```
+
+Useful options:
+
+1. `--db <path>` uses a specific SQLite database; the default is `.cat_data/cat_v1.db`.
+2. `--src-hash <hash>` enables exact-hash checks for synthetic `--source` traces.
+3. `--focus-src-hash <hash[,hash]>` adds per-entry target buckets to recall summaries.
+4. `--no-recall-debug` suppresses `CAT_TM_RECALL_DEBUG` event capture.
+
+Interpret the JSON trace in this order:
+
+1. `step0MountedTMs`: if empty, this is a mounted-TM/project setup issue.
+2. `step1SourceText`: verify text-only serialization and tag boundaries.
+3. `step2ExactHash`: if the expected 100% match is absent, compare `srcHash`, `matchKey`, and tags signature paths.
+4. `step3FuzzyRecall` and `step4ConcordanceRecall`: if the expected `srcHash` is absent here, investigate repository recall/query-plan behavior.
+5. `step5CandidateScoring`: if the expected candidate is present but `accepted: false`, inspect `droppedAt`, `standardSimilarity`, and `localOverlap`.
+6. `step6FinalMatches`: if a candidate was accepted but is absent here, investigate sorting, top-10 truncation, or diversity buckets.
+
+For deterministic regression coverage of the trace fixture itself, run:
+
+```bash
+npm run test:tm-flow
+```
 
 ### Worktree dependency link issues
 

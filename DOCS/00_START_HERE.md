@@ -16,7 +16,7 @@ Read first for every new task, new session, or handoff.
 
 ## Last Updated
 
-2026-03-29
+2026-05-06
 
 ## Owner
 
@@ -56,6 +56,12 @@ AI debug logs:
 - Enable batch workflow diagnostics with `CAT_AI_DEBUG_BATCH=1`. In dev, JSONL batch logs are written to `.cat_data/ai_batch_translate_debug.log` unless `CAT_AI_DEBUG_BATCH_FILE` overrides the path. `CAT_AI_DEBUG_PROMPTS=1` also enables batch diagnostics.
 - For batch AI translate blank-line triage, run one translation pass, then inspect `segment_start`, `segment_translated`, `segment_write_success`, and `segment_failed` events. `stage=translate` means provider/prompt/validation failed before writeback; `stage=write` means translated tokens existed but persistence failed.
 - Leave these flags unset for normal work because prompt logs may contain source text, target text, TM/TB references, and provider response context.
+
+TM match workflow diagnostics:
+
+- For active TM panel recall/scoring/ranking triage, run `npm run trace:tm-flow -- --project-id <id> --source "<source text>"` or `npm run trace:tm-flow -- --project-id <id> --segment-id <segment id>`.
+- Add `--focus-src-hash <hash[,hash]>` when checking whether specific TM entries were recalled, scored, or dropped before the final top results.
+- Read `DOCS/20_ENGINEERING_RUNBOOK.md` -> "TM match workflow triage" for how to interpret the trace.
 
 ## Platform Command Matrix
 
@@ -110,6 +116,7 @@ Targeted tests (run when touching corresponding areas):
 npx vitest run apps/desktop/src/main/services/modules/AIModule.test.ts
 npx vitest run apps/desktop/src/main/services/modules/ai/AITranslationWorkflows.test.ts
 npx vitest run apps/desktop/src/main/services/modules/TMModule.test.ts
+npm run test:tm-flow
 npx vitest run apps/desktop/src/renderer/src/hooks/useEditor.test.ts
 npx vitest run apps/desktop/src/renderer/src/hooks/projectDetail/useProjectAI.test.ts
 npx vitest run apps/desktop/src/renderer/src/hooks/projectDetail/useProjectAI.behavior.test.ts

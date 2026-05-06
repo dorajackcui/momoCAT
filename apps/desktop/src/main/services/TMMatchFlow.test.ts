@@ -32,6 +32,25 @@ type TraceableTMService = {
   getLocalOverlapDiversityBucket(localOverlap: TraceLocalOverlapResult): string | null;
 };
 
+interface TraceActiveTMMatchFlowParams {
+  db: CATDatabase;
+  projectId: number;
+  source?: string;
+  segment?: Segment;
+  srcHash?: string;
+  targetHashes?: string[];
+  scenarioName?: string;
+}
+
+interface TraceEnvConfig {
+  dbPath: string;
+  projectId: number;
+  source?: string;
+  segmentId?: string;
+  srcHash?: string;
+  targetHashes: string[];
+}
+
 const ACTIVE_SOURCE = '阿茉玻曾见证清新天王将因绝望病逝世的心愿精灵送回星空。';
 const TARGET_HASHES = ['amo-glass', 'fresh-king'];
 
@@ -143,13 +162,13 @@ function summarizeMatch(match: TMMatch) {
   };
 }
 
-function summarizeRecall(entries: TMEntryWithTmId[]) {
+function summarizeRecall(entries: TMEntryWithTmId[], targetHashes: string[]) {
   const candidates = entries.map(summarizeEntry);
   return {
     count: entries.length,
     candidates,
     targets: Object.fromEntries(
-      TARGET_HASHES.map((srcHash) => [
+      targetHashes.map((srcHash) => [
         srcHash,
         candidates.filter((candidate) => candidate.srcHash === srcHash),
       ]),
@@ -341,18 +360,16 @@ function traceCandidateScoring(params: {
   });
 }
 
-async function traceActiveTMMatchFlow(params: {
-  db: CATDatabase;
-  projectId: number;
-  source: string;
-  srcHash: string;
-}) {
+async function traceActiveTMMatchFlow(params: TraceActiveTMMatchFlowParams) {
   const service = new TMService(
     params.db as unknown as ProjectRepository,
     params.db as unknown as TMRepository,
   );
   const debugService = service as unknown as TraceableTMService;
-  const segment = createSegment(params.source, params.srcHash);
+  const segment =
+    params.segment ??
+    createSegment(params.source ?? '', params.srcHash ?? 'tm-match-flow-trace-source');
+  const targetHashes = params.targetHashes ?? TARGET_HASHES;
   const mountedTMs = params.db.getProjectMountedTMs(params.projectId);
   const tmIds = mountedTMs.map((tm) => tm.id);
   const sourceTextOnly = serializeTokensToTextOnly(segment.sourceTokens);
@@ -384,8 +401,8 @@ async function traceActiveTMMatchFlow(params: {
 
   return {
     scenario: {
-      name: 'contained CJK entries under crowded active concordance recall',
-      expectedTargets: TARGET_HASHES,
+      name: params.scenarioName ?? 'contained CJK entries under crowded active concordance recall',
+      expectedTargets: targetHashes,
     },
     step0MountedTMs: mountedTMs.map((tm) => ({
       id: tm.id,
@@ -396,7 +413,7 @@ async function traceActiveTMMatchFlow(params: {
       isEnabled: tm.isEnabled,
     })),
     step1SourceText: {
-      original: params.source,
+      original: params.source ?? sourceTextOnly,
       sourceTextOnly,
       sourceNormalized,
       sourceLength: Array.from(sourceNormalized).length,
@@ -405,14 +422,125 @@ async function traceActiveTMMatchFlow(params: {
       count: exactHashMatches.length,
       candidates: exactHashMatches.map(summarizeEntry),
     },
-    step3FuzzyRecall: summarizeRecall(fuzzyCandidates),
-    step4ConcordanceRecall: summarizeRecall(concordanceCandidates),
+    step3FuzzyRecall: summarizeRecall(fuzzyCandidates, targetHashes),
+    step4ConcordanceRecall: summarizeRecall(concordanceCandidates, targetHashes),
     step5CandidateScoring: candidateScoring,
     step6FinalMatches: finalMatches.map(summarizeMatch),
   };
 }
 
+function parseTraceList(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function readTraceEnvConfig(env: NodeJS.ProcessEnv): TraceEnvConfig | null {
+  if (env.TM_MATCH_FLOW_DYNAMIC !== '1') return null;
+
+  const projectId = Number(env.TM_MATCH_FLOW_PROJECT_ID);
+  if (!Number.isInteger(projectId) || projectId <= 0) {
+    throw new Error('TM_MATCH_FLOW_PROJECT_ID must be a positive integer.');
+  }
+
+  const source = env.TM_MATCH_FLOW_SOURCE;
+  const segmentId = env.TM_MATCH_FLOW_SEGMENT_ID;
+  if (!source && !segmentId) {
+    throw new Error('Set TM_MATCH_FLOW_SOURCE or TM_MATCH_FLOW_SEGMENT_ID for dynamic tracing.');
+  }
+  if (source && segmentId) {
+    throw new Error('Set only one of TM_MATCH_FLOW_SOURCE or TM_MATCH_FLOW_SEGMENT_ID.');
+  }
+
+  return {
+    dbPath: env.TM_MATCH_FLOW_DB_PATH || '.cat_data/cat_v1.db',
+    projectId,
+    source,
+    segmentId,
+    srcHash: env.TM_MATCH_FLOW_SRC_HASH,
+    targetHashes: parseTraceList(env.TM_MATCH_FLOW_FOCUS_SRC_HASH),
+  };
+}
+
+async function runEnvConfiguredTrace(config: TraceEnvConfig) {
+  const previousDebug = process.env.CAT_TM_RECALL_DEBUG;
+  const recallDebugEvents: Array<{ message: unknown; payload: unknown }> = [];
+  const debugSpy = vi.spyOn(console, 'debug').mockImplementation((message, payload) => {
+    recallDebugEvents.push({ message, payload });
+  });
+
+  if (process.env.TM_MATCH_FLOW_RECALL_DEBUG === '1') {
+    process.env.CAT_TM_RECALL_DEBUG = '1';
+  }
+
+  const db = new CATDatabase(config.dbPath);
+  try {
+    const segment = config.segmentId
+      ? db.getSegment(config.segmentId)
+      : createSegment(config.source ?? '', config.srcHash ?? 'tm-match-flow-trace-source');
+
+    if (!segment) {
+      throw new Error(`Segment not found: ${config.segmentId}`);
+    }
+
+    const trace = {
+      ...(await traceActiveTMMatchFlow({
+        db,
+        projectId: config.projectId,
+        segment,
+        targetHashes: config.targetHashes,
+        scenarioName: 'env-configured active TM match trace',
+      })),
+      recallDebugEvents,
+    };
+
+    if (process.env.TM_MATCH_FLOW_TRACE === '1') {
+      console.info(`[TM match flow trace]\n${JSON.stringify(trace, null, 2)}`);
+    }
+
+    return trace;
+  } finally {
+    db.close();
+    debugSpy.mockRestore();
+    if (previousDebug === undefined) {
+      delete process.env.CAT_TM_RECALL_DEBUG;
+    } else {
+      process.env.CAT_TM_RECALL_DEBUG = previousDebug;
+    }
+  }
+}
+
 describe('TM match flow trace', () => {
+  it('summarizes only the requested focus source hashes', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const { projectId } = seedCrowdedContainedCjkFixture(db);
+      const trace = await traceActiveTMMatchFlow({
+        db,
+        projectId,
+        source: ACTIVE_SOURCE,
+        srcHash: 'active-source-hash',
+        targetHashes: ['fresh-king'],
+      });
+
+      expect(Object.keys(trace.step4ConcordanceRecall.targets)).toEqual(['fresh-king']);
+      expect(trace.step4ConcordanceRecall.targets['fresh-king']).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('tm-flow-env-trace', async () => {
+    const config = readTraceEnvConfig(process.env);
+    if (!config) return;
+
+    const trace = await runEnvConfiguredTrace(config);
+
+    expect(trace.step1SourceText.sourceTextOnly.length).toBeGreaterThan(0);
+  });
+
   it('records each active TM match stage for contained CJK recall under crowded candidates', async () => {
     const previousDebug = process.env.CAT_TM_RECALL_DEBUG;
     const recallDebugEvents: Array<{ message: unknown; payload: unknown }> = [];

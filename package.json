@@ -24,6 +24,7 @@
     "rebuild:test": "npm rebuild better-sqlite3",
     "test": "npm run rebuild:test && vitest run",
     "test:tm-flow": "npm run rebuild:test && vitest run apps/desktop/src/main/services/TMMatchFlow.test.ts",
+    "trace:tm-flow": "npm run rebuild:test && node scripts/tm-match-flow-trace.mjs",
     "test:watch": "vitest",
     "postinstall": "npm run rebuild:electron",
     "format": "prettier --write ."
