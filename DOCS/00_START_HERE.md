@@ -16,7 +16,7 @@ Read first for every new task, new session, or handoff.
 
 ## Last Updated
 
-2026-05-06
+2026-05-08
 
 ## Owner
 
@@ -88,6 +88,7 @@ Notes:
 2. Use `npm run test:e2e:smoke --workspace=apps/desktop` before full e2e when you need desktop behavior confidence quickly.
 3. Never mix `pack:win` and `pack:mac` across hosts; packaging validation is platform-native only.
 4. If Windows/macOS commands behave differently, run `npm run rebuild:electron` before deeper debugging.
+5. On Windows, do not rely on PowerShell's default text encoding for non-ASCII files or output. Read files with explicit UTF-8 such as `Get-Content -Raw -Encoding UTF8 <path>`, prefer patch/editor tools for writes, and if PowerShell must write text, specify UTF-8 (`-Encoding utf8NoBOM` in PowerShell 7 or `-Encoding UTF8` in Windows PowerShell) and verify with `git diff`.
 
 ## If Task Is X, Open Y
 
