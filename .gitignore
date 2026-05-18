@@ -36,6 +36,7 @@ pnpm-debug.log*
 *.swo
 
 # Dependency directories
+node_modules
 node_modules/
 .electron-gyp/
 .gyp/

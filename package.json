@@ -26,6 +26,7 @@
     "test:tm-flow": "npm run rebuild:test && vitest run apps/desktop/src/main/services/TMMatchFlow.test.ts",
     "trace:tm-flow": "npm run rebuild:test && node scripts/tm-match-flow-trace.mjs",
     "trace:tb-flow": "npm run rebuild:test && node scripts/tb-match-flow-trace.mjs",
+    "trace:ai-file": "npm run rebuild:test && node scripts/ai-file-flow-trace.mjs",
     "test:watch": "vitest",
     "postinstall": "npm run rebuild:electron",
     "format": "prettier --write ."

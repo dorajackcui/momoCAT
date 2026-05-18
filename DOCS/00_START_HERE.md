@@ -63,6 +63,13 @@ TM match workflow diagnostics:
 - Add `--focus-src-hash <hash[,hash]>` when checking whether specific TM entries were recalled, scored, or dropped before the final top results.
 - Read `DOCS/20_ENGINEERING_RUNBOOK.md` -> "TM match workflow triage" for how to interpret the trace.
 
+Headless AI file flow diagnostics:
+
+- To run a project file through mounted TM/TB reference preview and the existing AI batch translation workflow, run `npm run trace:ai-file -- --project-id <id> --file-id <id>`.
+- The command writes translations back through the normal segment update path. Use `--target-scope overwrite-non-confirmed` only when replacing non-confirmed target text is intended.
+- Use `--preview-limit <n>` to control how many leading segments print TM/TB reference preview events before translation starts.
+- The command emits JSONL-style events from the dynamic Vitest runner: `ai_file_flow_start`, `ai_file_flow_resources`, `ai_file_flow_reference_preview`, `ai_file_flow_progress`, and `ai_file_flow_complete`.
+
 ## Platform Command Matrix
 
 Run from repo root `simple-cat-tool`.

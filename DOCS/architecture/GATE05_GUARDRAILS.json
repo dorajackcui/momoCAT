@@ -57,6 +57,8 @@
       "runInTransaction",
       "searchProjectTermEntries",
       "searchConcordance",
+      "searchTMConcordanceRecallCandidates",
+      "searchTMFuzzyRecallCandidates",
       "searchTMRecallCandidates",
       "setSetting",
       "unmountTMFromProject",

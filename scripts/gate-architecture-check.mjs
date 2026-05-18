@@ -138,6 +138,10 @@ function resolveImportTarget(fromFile, specifier) {
   return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
 }
 
+function toPosixPath(value) {
+  return value.split(path.sep).join('/');
+}
+
 function validateProjectService() {
   const sourceFile = readSourceFile(PROJECT_SERVICE_PATH);
   const classDeclaration = getClassOrThrow(sourceFile, 'ProjectService');
@@ -247,7 +251,7 @@ function validateCatCoreImports() {
     const files = listSourceFiles(checkedRoot);
 
     for (const filePath of files) {
-      const relativeFilePath = path.relative(ROOT, filePath);
+      const relativeFilePath = toPosixPath(path.relative(ROOT, filePath));
       const sourceFile = readSourceFile(filePath);
       const importSpecifiers = getImportSpecifiers(sourceFile);
 
