@@ -70,6 +70,12 @@ Headless AI file flow diagnostics:
 - Use `--preview-limit <n>` to control how many leading segments print TM/TB reference preview events before translation starts.
 - The command emits JSONL-style events from the dynamic Vitest runner: `ai_file_flow_start`, `ai_file_flow_resources`, `ai_file_flow_reference_preview`, `ai_file_flow_progress`, and `ai_file_flow_complete`.
 
+Headless project/API inspection:
+
+- To list projects with mounted TM/TB resources, files, target coverage, and AI provider status, run `npm run inspect:projects -- --db <path>`.
+- Use `--project-id <id>` to narrow the output and `--json` for automation-friendly output.
+- The command opens SQLite read-only and only prints API key status plus last four characters; it never prints full API keys.
+
 ## Platform Command Matrix
 
 Run from repo root `simple-cat-tool`.
