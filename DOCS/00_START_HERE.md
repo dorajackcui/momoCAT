@@ -66,7 +66,9 @@ TM match workflow diagnostics:
 Headless AI file flow diagnostics:
 
 - To run a project file through mounted TM/TB reference preview and the existing AI batch translation workflow, run `npm run trace:ai-file -- --project-id <id> --file-id <id>`.
+- To import an external spreadsheet first, run `npm run trace:ai-file -- --project-name "<name>" --file <path>`. The import path auto-detects `source` and `target` header columns by default.
 - The command writes translations back through the normal segment update path. Use `--target-scope overwrite-non-confirmed` only when replacing non-confirmed target text is intended.
+- Use `--source-col <n>` and `--target-col <n>` only when overriding header detection for `--file`; column indexes are zero-based.
 - Use `--preview-limit <n>` to control how many leading segments print TM/TB reference preview events before translation starts.
 - The command emits JSONL-style events from the dynamic Vitest runner: `ai_file_flow_start`, `ai_file_flow_resources`, `ai_file_flow_reference_preview`, `ai_file_flow_progress`, and `ai_file_flow_complete`.
 

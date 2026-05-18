@@ -2,13 +2,14 @@ import path from 'path';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { Segment, TBMatch } from '@cat/core/models';
 import { CATDatabase } from '../../../../../packages/db/src';
-import type { AIBatchMode, AIBatchTargetScope } from '../../shared/ipc';
+import type { AIBatchMode, AIBatchTargetScope, ImportOptions } from '../../shared/ipc';
 import { ProjectService } from '../services/ProjectService';
-import type { AIRuntimeConfigProvider, AITransport } from '../services/ports';
+import type { AIRuntimeConfigProvider, AITransport, SpreadsheetGateway } from '../services/ports';
 import type { TMMatch } from '../services/TMService';
 
 type AIFileFlowEvent =
   | AIFileFlowStartEvent
+  | AIFileFlowImportedFileEvent
   | AIFileFlowResourcesEvent
   | AIFileFlowReferencePreviewEvent
   | AIFileFlowProgressEvent
@@ -23,6 +24,15 @@ interface AIFileFlowStartEvent {
   mode?: AIBatchMode;
   model?: string;
   targetScope?: AIBatchTargetScope;
+}
+
+interface AIFileFlowImportedFileEvent {
+  event: 'ai_file_flow_imported_file';
+  projectId: number;
+  fileId: number;
+  fileName: string;
+  sourcePath: string;
+  totalSegments: number;
 }
 
 interface AIFileFlowResourcesEvent {
@@ -85,8 +95,11 @@ interface AIFileFlowTranslationResult {
 
 export interface RunAIFileFlowTraceOptions {
   dbPath: string;
-  projectId: number;
-  fileId: number;
+  projectId?: number;
+  projectName?: string;
+  fileId?: number;
+  filePath?: string;
+  importOptions?: ImportOptions;
   projectsDir?: string;
   model?: string;
   mode?: AIBatchMode;
@@ -96,6 +109,7 @@ export interface RunAIFileFlowTraceOptions {
   db?: CATDatabase;
   aiTransport?: AITransport;
   aiRuntimeConfigProvider?: AIRuntimeConfigProvider;
+  filter?: SpreadsheetGateway;
 }
 
 export interface AIFileFlowTraceResult {
@@ -103,6 +117,11 @@ export interface AIFileFlowTraceResult {
 }
 
 const DEFAULT_PREVIEW_LIMIT = 3;
+const DEFAULT_IMPORT_OPTIONS: ImportOptions = {
+  hasHeader: true,
+  sourceCol: 0,
+  targetCol: 1,
+};
 
 export async function runAIFileFlowTrace(
   options: RunAIFileFlowTraceOptions,
@@ -118,23 +137,12 @@ export async function runAIFileFlowTrace(
       {
         aiTransport: options.aiTransport,
         aiRuntimeConfigProvider: options.aiRuntimeConfigProvider,
+        filter: options.filter,
       },
     );
 
-    const project = projectService.getProject(options.projectId);
-    if (!project) {
-      throw new Error(`Project not found: ${options.projectId}`);
-    }
-
-    const file = projectService.getFile(options.fileId);
-    if (!file) {
-      throw new Error(`File not found: ${options.fileId}`);
-    }
-    if (file.projectId !== options.projectId) {
-      throw new Error(
-        `File ${options.fileId} belongs to project ${file.projectId}, not project ${options.projectId}`,
-      );
-    }
+    const project = resolveProject(projectService, options);
+    const file = await resolveFile(projectService, project.id, options);
 
     emit(options, {
       event: 'ai_file_flow_start',
@@ -148,8 +156,8 @@ export async function runAIFileFlowTrace(
     });
 
     const [mountedTMs, mountedTBs] = await Promise.all([
-      projectService.getProjectMountedTMs(options.projectId),
-      projectService.getProjectMountedTBs(options.projectId),
+      projectService.getProjectMountedTMs(project.id),
+      projectService.getProjectMountedTBs(project.id),
     ]);
     emit(options, {
       event: 'ai_file_flow_resources',
@@ -169,9 +177,9 @@ export async function runAIFileFlowTrace(
       })),
     });
 
-    await emitReferencePreview(options, projectService);
+    await emitReferencePreview(options, projectService, project.id, file.id);
 
-    const translation = await projectService.aiTranslateFile(options.fileId, {
+    const translation = await projectService.aiTranslateFile(file.id, {
       model: options.model,
       mode: options.mode,
       targetScope: options.targetScope,
@@ -197,9 +205,116 @@ export async function runAIFileFlowTrace(
   }
 }
 
+function resolveProject(projectService: ProjectService, options: RunAIFileFlowTraceOptions) {
+  if (options.projectId !== undefined) {
+    const project = projectService.getProject(options.projectId);
+    if (!project) {
+      throw new Error(`Project not found: ${options.projectId}`);
+    }
+    return project;
+  }
+
+  const projectName = options.projectName?.trim();
+  if (!projectName) {
+    throw new Error('Missing project id or project name.');
+  }
+
+  const matches = projectService.listProjects().filter((project) => project.name === projectName);
+  if (matches.length === 0) {
+    throw new Error(`Project not found by name: ${projectName}`);
+  }
+  if (matches.length > 1) {
+    throw new Error(`Project name is ambiguous: ${projectName}`);
+  }
+  return matches[0];
+}
+
+async function resolveFile(
+  projectService: ProjectService,
+  projectId: number,
+  options: RunAIFileFlowTraceOptions,
+) {
+  if (options.fileId !== undefined) {
+    const file = projectService.getFile(options.fileId);
+    if (!file) {
+      throw new Error(`File not found: ${options.fileId}`);
+    }
+    if (file.projectId !== projectId) {
+      throw new Error(
+        `File ${options.fileId} belongs to project ${file.projectId}, not project ${projectId}`,
+      );
+    }
+    return file;
+  }
+
+  const filePath = options.filePath?.trim();
+  if (!filePath) {
+    throw new Error('Missing file id or file path.');
+  }
+
+  const importOptions = await resolveImportOptions(projectService, filePath, options.importOptions);
+  const file = await projectService.addFileToProject(projectId, filePath, importOptions);
+  emit(options, {
+    event: 'ai_file_flow_imported_file',
+    projectId,
+    fileId: file.id,
+    fileName: file.name,
+    sourcePath: filePath,
+    totalSegments: file.totalSegments,
+  });
+  return file;
+}
+
+async function resolveImportOptions(
+  projectService: ProjectService,
+  filePath: string,
+  importOptions: ImportOptions | undefined,
+): Promise<ImportOptions> {
+  if (importOptions) {
+    return importOptions;
+  }
+
+  const preview = await projectService.getSpreadsheetPreview(filePath);
+  const headerRow = preview[0] ?? [];
+  const sourceCol = findHeaderColumn(headerRow, 'source');
+  const targetCol = findHeaderColumn(headerRow, 'target');
+  if (sourceCol === undefined || targetCol === undefined) {
+    const headers = headerRow.map((cell) => String(cell ?? '').trim()).join(', ');
+    throw new Error(
+      `Could not auto-detect import columns. Expected header columns "source" and "target"; found: ${headers}`,
+    );
+  }
+  if (sourceCol === targetCol) {
+    throw new Error('Auto-detected source and target columns are the same column.');
+  }
+
+  return {
+    ...DEFAULT_IMPORT_OPTIONS,
+    hasHeader: true,
+    sourceCol,
+    targetCol,
+  };
+}
+
+function findHeaderColumn(
+  headerRow: Array<string | number | boolean | null | undefined>,
+  headerName: string,
+): number | undefined {
+  const normalizedHeaderName = headerName.trim().toLowerCase();
+  const index = headerRow.findIndex(
+    (cell) =>
+      String(cell ?? '')
+        .trim()
+        .toLowerCase() === normalizedHeaderName,
+  );
+  return index >= 0 ? index : undefined;
+}
+
 async function emitReferencePreview(
   options: RunAIFileFlowTraceOptions,
   projectService: ProjectService,
+  projectId: number,
+  fileId: number,
 ): Promise<void> {
   const limit = normalizePreviewLimit(options.previewLimit);
   if (limit === 0) return;
@@ -207,13 +322,13 @@ async function emitReferencePreview(
   let emitted = 0;
   let offset = 0;
   while (emitted < limit) {
-    const page = projectService.getSegments(options.fileId, offset, limit - emitted);
+    const page = projectService.getSegments(fileId, offset, limit - emitted);
     if (page.length === 0) return;
 
     for (const segment of page) {
       const [tmMatches, tbMatches] = await Promise.all([
-        projectService.findMatches(options.projectId, segment),
-        projectService.findTermMatches(options.projectId, segment),
+        projectService.findMatches(projectId, segment),
+        projectService.findTermMatches(projectId, segment),
       ]);
 
       emit(options, {

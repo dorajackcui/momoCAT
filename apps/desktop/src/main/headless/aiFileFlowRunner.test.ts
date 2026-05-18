@@ -1,14 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'fs/promises';
+import { join } from 'path';
+import { tmpdir } from 'os';
 import type { Segment, TMEntry } from '@cat/core/models';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import { CATDatabase } from '../../../../../packages/db/src';
-import type { AITransport } from '../services/ports';
+import type { AITransport, SpreadsheetGateway } from '../services/ports';
 import { runAIFileFlowTrace } from './aiFileFlowRunner';
 
 interface EnvTraceConfig {
   dbPath: string;
-  projectId: number;
-  fileId: number;
+  projectId?: number;
+  projectName?: string;
+  fileId?: number;
+  filePath?: string;
+  importOptions?: {
+    hasHeader: boolean;
+    sourceCol: number;
+    targetCol: number;
+    contextCol?: number;
+  };
   model?: string;
   mode?: 'dialogue';
   targetScope?: 'blank-only' | 'overwrite-non-confirmed';
@@ -175,13 +186,137 @@ describe('runAIFileFlowTrace', () => {
       db.close();
     }
   });
+
+  it('resolves project by name and imports file path using source/target headers', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'cat-headless-ai-file-'));
+    const inputPath = join(rootDir, 'mt.xlsx');
+    await writeFile(inputPath, 'placeholder workbook');
+
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Nikki(zh-fr)', 'zh-CN', 'fr-FR');
+      db.setSetting('openai_api_key', 'test-api-key');
+      const importSpy = vi.fn(async (_filePath: string, _projectId: number, fileId: number) => [
+        createSegment({
+          segmentId: 'seg-imported',
+          fileId,
+          sourceText: '测试文本',
+          srcHash: 'hash-imported',
+        }),
+      ]);
+      const filter = {
+        getPreview: vi.fn().mockResolvedValue([
+          ['note', 'target', 'source'],
+          ['context', '', '测试文本'],
+        ]),
+        import: importSpy,
+        export: vi.fn(),
+      } as unknown as SpreadsheetGateway;
+
+      const tmId = db.createTM('Nikki(zh-fr)TM', 'zh', 'fr', 'main');
+      db.mountTMToProject(projectId, tmId, 10, 'read');
+      db.upsertTMEntry(
+        createTMEntry({
+          tmId,
+          projectId,
+          srcHash: 'hash-imported',
+          sourceText: '测试文本',
+          targetText: 'Texte de test',
+        }),
+      );
+
+      const tbId = db.createTermBase('Nikki_TB(zh-fr)', 'zh-CN', 'fr');
+      db.mountTermBaseToProject(projectId, tbId, 10);
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'term-imported',
+        tbId,
+        srcLang: 'zh-CN',
+        srcTerm: '测试',
+        tgtTerm: 'test',
+      });
+
+      const transport = {
+        testConnection: vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          endpoint: '/mock',
+        }),
+        createResponse: vi.fn().mockResolvedValue({
+          content: 'Texte de test',
+          status: 200,
+          endpoint: '/mock',
+        }),
+      } as unknown as AITransport;
+      const events: unknown[] = [];
+
+      const result = await runAIFileFlowTrace({
+        dbPath: ':memory:',
+        db,
+        projectName: 'Nikki(zh-fr)',
+        filePath: inputPath,
+        projectsDir: join(rootDir, 'projects'),
+        previewLimit: 1,
+        aiTransport: transport,
+        filter,
+        emit: (event) => events.push(event),
+      });
+
+      expect(result.translation).toEqual({ translated: 1, skipped: 0, failed: 0, total: 1 });
+      expect(filter.getPreview).toHaveBeenCalledWith(inputPath);
+      expect(importSpy).toHaveBeenCalledWith(
+        expect.any(String),
+        projectId,
+        expect.any(Number),
+        expect.objectContaining({
+          hasHeader: true,
+          sourceCol: 2,
+          targetCol: 1,
+        }),
+      );
+      expect(events.map((event) => (event as { event: string }).event)).toContain(
+        'ai_file_flow_imported_file',
+      );
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          event: 'ai_file_flow_start',
+          projectId,
+          projectName: 'Nikki(zh-fr)',
+          fileName: 'mt.xlsx',
+        }),
+      );
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          event: 'ai_file_flow_reference_preview',
+          tmMatchCount: 1,
+          tbMatchCount: 1,
+        }),
+      );
+    } finally {
+      db.close();
+      await rm(rootDir, { recursive: true, force: true });
+    }
+  });
 });
 
 function readEnvTraceConfig(env: NodeJS.ProcessEnv): EnvTraceConfig | null {
   if (env.AI_FILE_FLOW_DYNAMIC !== '1') return null;
 
-  const projectId = readPositiveInt(env.AI_FILE_FLOW_PROJECT_ID, 'AI_FILE_FLOW_PROJECT_ID');
-  const fileId = readPositiveInt(env.AI_FILE_FLOW_FILE_ID, 'AI_FILE_FLOW_FILE_ID');
+  const projectId = env.AI_FILE_FLOW_PROJECT_ID
+    ? readPositiveInt(env.AI_FILE_FLOW_PROJECT_ID, 'AI_FILE_FLOW_PROJECT_ID')
+    : undefined;
+  const projectName = env.AI_FILE_FLOW_PROJECT_NAME || undefined;
+  if (projectId === undefined && !projectName) {
+    throw new Error('AI_FILE_FLOW_PROJECT_ID or AI_FILE_FLOW_PROJECT_NAME is required.');
+  }
+
+  const fileId = env.AI_FILE_FLOW_FILE_ID
+    ? readPositiveInt(env.AI_FILE_FLOW_FILE_ID, 'AI_FILE_FLOW_FILE_ID')
+    : undefined;
+  const filePath = env.AI_FILE_FLOW_FILE_PATH || undefined;
+  if (fileId === undefined && !filePath) {
+    throw new Error('AI_FILE_FLOW_FILE_ID or AI_FILE_FLOW_FILE_PATH is required.');
+  }
+
   const previewLimit = env.AI_FILE_FLOW_PREVIEW_LIMIT
     ? readNonNegativeInt(env.AI_FILE_FLOW_PREVIEW_LIMIT, 'AI_FILE_FLOW_PREVIEW_LIMIT')
     : undefined;
@@ -199,11 +334,33 @@ function readEnvTraceConfig(env: NodeJS.ProcessEnv): EnvTraceConfig | null {
   return {
     dbPath: env.AI_FILE_FLOW_DB_PATH || '.cat_data/cat_v1.db',
     projectId,
+    projectName,
     fileId,
+    filePath,
+    importOptions: readEnvImportOptions(env),
     model: env.AI_FILE_FLOW_MODEL || undefined,
     mode: mode === 'standard' ? undefined : mode,
     targetScope,
     previewLimit,
+  };
+}
+
+function readEnvImportOptions(env: NodeJS.ProcessEnv): EnvTraceConfig['importOptions'] {
+  const hasManualImportOptions =
+    env.AI_FILE_FLOW_SOURCE_COL !== undefined ||
+    env.AI_FILE_FLOW_TARGET_COL !== undefined ||
+    env.AI_FILE_FLOW_CONTEXT_COL !== undefined ||
+    env.AI_FILE_FLOW_HAS_HEADER !== undefined;
+  if (!hasManualImportOptions) return undefined;
+
+  return {
+    hasHeader: env.AI_FILE_FLOW_HAS_HEADER !== '0',
+    sourceCol: readNonNegativeInt(env.AI_FILE_FLOW_SOURCE_COL ?? '0', 'AI_FILE_FLOW_SOURCE_COL'),
+    targetCol: readNonNegativeInt(env.AI_FILE_FLOW_TARGET_COL ?? '1', 'AI_FILE_FLOW_TARGET_COL'),
+    contextCol:
+      env.AI_FILE_FLOW_CONTEXT_COL === undefined
+        ? undefined
+        : readNonNegativeInt(env.AI_FILE_FLOW_CONTEXT_COL, 'AI_FILE_FLOW_CONTEXT_COL'),
   };
 }
 
