@@ -295,7 +295,14 @@ function runTrace(config) {
   }
   const result = spawnCommandSync(
     vitestCmd,
-    ["run", TRACE_TEST_PATH, "-t", TRACE_TEST_NAME, "--reporter=verbose"],
+    [
+      "run",
+      TRACE_TEST_PATH,
+      "-t",
+      TRACE_TEST_NAME,
+      "--reporter=verbose",
+      "--testTimeout=3600000",
+    ],
     {
       cwd: process.cwd(),
       env,
