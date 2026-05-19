@@ -1,5 +1,11 @@
 export { LocalizationEngine } from './LocalizationEngine';
 export type { LocalizationEngineConstructorOptions } from './LocalizationEngine';
+export { LocalizationInspector } from './LocalizationInspector';
+export type {
+  InspectFileInput,
+  InspectFileResult,
+  LocalizationInspectorOptions,
+} from './LocalizationInspector';
 export type {
   FileCellValue,
   FileParseArtifact,
