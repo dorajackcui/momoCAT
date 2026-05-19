@@ -12,25 +12,47 @@ export interface JsonlReadResult<T> {
   diagnostics: JsonlReadDiagnostic[];
 }
 
+export interface JsonlRecordEntry<T> {
+  line: number;
+  raw: string;
+  record: T;
+}
+
+export interface JsonlEntryReadResult<T> {
+  entries: Array<JsonlRecordEntry<T>>;
+  diagnostics: JsonlReadDiagnostic[];
+}
+
 export async function appendJsonlRecord<T>(filePath: string, record: T): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true });
   await appendFile(filePath, `${JSON.stringify(record)}\n`, 'utf8');
 }
 
 export async function readJsonlRecords<T = unknown>(filePath: string): Promise<JsonlReadResult<T>> {
+  const { entries, diagnostics } = await readJsonlRecordEntries<T>(filePath);
+
+  return {
+    records: entries.map((entry) => entry.record),
+    diagnostics,
+  };
+}
+
+export async function readJsonlRecordEntries<T = unknown>(
+  filePath: string,
+): Promise<JsonlEntryReadResult<T>> {
   let content: string;
 
   try {
     content = await readFile(filePath, 'utf8');
   } catch (error) {
     if (isMissingFileError(error)) {
-      return { records: [], diagnostics: [] };
+      return { entries: [], diagnostics: [] };
     }
 
     throw error;
   }
 
-  const records: T[] = [];
+  const entries: Array<JsonlRecordEntry<T>> = [];
   const diagnostics: JsonlReadDiagnostic[] = [];
 
   content.split(/\r?\n/).forEach((line, index) => {
@@ -39,7 +61,11 @@ export async function readJsonlRecords<T = unknown>(filePath: string): Promise<J
     }
 
     try {
-      records.push(JSON.parse(line) as T);
+      entries.push({
+        line: index + 1,
+        raw: line,
+        record: JSON.parse(line) as T,
+      });
     } catch (error) {
       diagnostics.push({
         line: index + 1,
@@ -49,7 +75,7 @@ export async function readJsonlRecords<T = unknown>(filePath: string): Promise<J
     }
   });
 
-  return { records, diagnostics };
+  return { entries, diagnostics };
 }
 
 function isMissingFileError(error: unknown): boolean {

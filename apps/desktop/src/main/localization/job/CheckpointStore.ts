@@ -2,7 +2,7 @@ import type { CheckpointRecord, JobUnit, UnitResult } from './types';
 import {
   type JsonlReadDiagnostic,
   appendJsonlRecord,
-  readJsonlRecords,
+  readJsonlRecordEntries,
 } from './JsonlStore';
 
 export interface CheckpointDiagnostic extends JsonlReadDiagnostic {
@@ -84,17 +84,17 @@ export class CheckpointStore {
   }
 
   async loadRecords(jobId: string): Promise<CheckpointLoadResult> {
-    const { records, diagnostics } = await readJsonlRecords<unknown>(this.filePath);
+    const { entries, diagnostics } = await readJsonlRecordEntries<unknown>(this.filePath);
     const validRecords: CheckpointRecord[] = [];
     const checkpointDiagnostics: CheckpointDiagnostic[] = [...diagnostics];
 
-    records.forEach((record, index) => {
-      const parsed = parseCheckpointRecord(record);
+    entries.forEach((entry) => {
+      const parsed = parseCheckpointRecord(entry.record);
 
       if (!parsed) {
         checkpointDiagnostics.push({
-          line: index + 1,
-          raw: JSON.stringify(record),
+          line: entry.line,
+          raw: entry.raw,
           error: 'Invalid checkpoint record',
           reason: 'Record does not match CheckpointRecord shape',
         });

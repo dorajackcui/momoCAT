@@ -1,7 +1,7 @@
-import { mkdtemp, readFile } from 'fs/promises';
+import { appendFile, mkdtemp, readFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ArtifactStore } from './ArtifactStore';
 import { CheckpointStore } from './CheckpointStore';
 import { EventSink } from './EventSink';
@@ -42,9 +42,7 @@ describe('JsonlStore', () => {
 
     await appendJsonlRecord(filePath, { id: 1 });
     await appendJsonlRecord(filePath, { id: 2 });
-    await import('fs/promises').then(({ appendFile }) =>
-      appendFile(filePath, '{invalid-json}\n{"id":3}\n', 'utf8'),
-    );
+    await appendFile(filePath, '{invalid-json}\n{"id":3}\n', 'utf8');
 
     const result = await readJsonlRecords(filePath);
 
@@ -116,18 +114,21 @@ describe('CheckpointStore', () => {
     const unit = makeUnit({ sourceHash: 'hash-1' });
 
     await appendJsonlRecord(filePath, makeCheckpoint({ target: 'target' }));
-    await import('fs/promises').then(({ appendFile }) =>
-      appendFile(filePath, '{invalid-json}\n{"job":"job-1","doc":"doc-1"}\n', 'utf8'),
-    );
+    await appendFile(filePath, '\n{invalid-json}\n{"job":"job-1","doc":"doc-1"}\n', 'utf8');
 
     const index = await store.load('job-1');
 
     expect(index.getReusableRecord(unit)?.target).toBe('target');
     expect(index.diagnostics).toHaveLength(2);
+    expect(index.diagnostics.map((diagnostic) => diagnostic.line)).toEqual([3, 4]);
   });
 });
 
 describe('EventSink', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('writes stdout output as one NDJSON line through an injected writer', async () => {
     const dir = await makeTempDir();
     const event = makeEvent();
@@ -142,6 +143,17 @@ describe('EventSink', () => {
     expect(stdoutLines).toEqual([`${JSON.stringify(event)}\n`]);
     expect(JSON.parse(stdoutLines[0])).toEqual(event);
     expect(stdoutLines[0].endsWith('\n')).toBe(true);
+  });
+
+  it('defaults to process stdout when stdout is enabled without an injected writer', async () => {
+    const dir = await makeTempDir();
+    const event = makeEvent();
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const sink = new EventSink(join(dir, 'events.jsonl'), { stdout: true });
+
+    await sink.append(event);
+
+    expect(stdoutWrite).toHaveBeenCalledWith(`${JSON.stringify(event)}\n`);
   });
 });
 

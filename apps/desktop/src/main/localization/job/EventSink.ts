@@ -10,20 +10,24 @@ export interface EventSinkOptions {
 
 export class EventSink {
   private readonly stdout: boolean;
-  private readonly writeStdout?: StdoutWriter;
+  private readonly writeStdout: StdoutWriter;
 
   constructor(
     private readonly filePath: string,
     options: EventSinkOptions = {},
   ) {
     this.stdout = options.stdout ?? false;
-    this.writeStdout = options.writeStdout;
+    this.writeStdout =
+      options.writeStdout ??
+      ((line) => {
+        process.stdout.write(line);
+      });
   }
 
   async append(record: ProgressEventRecord): Promise<void> {
     await appendJsonlRecord(this.filePath, record);
 
-    if (this.stdout && this.writeStdout) {
+    if (this.stdout) {
       await this.writeStdout(`${JSON.stringify(record)}\n`);
     }
   }
