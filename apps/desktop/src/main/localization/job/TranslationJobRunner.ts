@@ -349,12 +349,7 @@ function canonicalizeArtifact(
     result: artifact.result
       ? {
           ...artifact.result,
-          jobId: result.jobId,
-          documentId: result.documentId,
-          unitId: result.unitId,
-          sourceHash: result.sourceHash,
-          source: result.source,
-          metadata: result.metadata,
+          ...result,
         }
       : artifact.result,
   };

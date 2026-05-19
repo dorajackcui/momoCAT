@@ -33,6 +33,10 @@ describe('TranslationJobRunner', () => {
         makeArtifact({
           task: task.taskId,
           unit: task.units[0].unitId,
+          result: makeResult({
+            unitId: task.units[0].unitId,
+            target: 'Bonjour',
+          }),
         }),
       ],
     }));
@@ -56,7 +60,15 @@ describe('TranslationJobRunner', () => {
       failed: 0,
     });
     expect(await readJsonlRecords<ArtifactRecord>(harness.artifactsPath)).toMatchObject({
-      records: [expect.objectContaining({ unit: 'unit-1', task: 'task-1' })],
+      records: [
+        expect.objectContaining({
+          unit: 'unit-1',
+          task: 'task-1',
+          result: expect.objectContaining({
+            attempts: 1,
+          }),
+        }),
+      ],
       diagnostics: [],
     });
     expect(await readJsonlRecords<CheckpointRecord>(harness.checkpointPath)).toMatchObject({
