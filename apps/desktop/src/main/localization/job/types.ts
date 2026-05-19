@@ -41,14 +41,6 @@ export interface TranslationJob {
   projectId: number;
   units: JobUnit[];
   options?: JobOptions;
-  io?: {
-    checkpointPath?: string;
-    eventsPath?: string;
-    artifactsPath?: string;
-    writeSnapshot?: (results: UnitResult[]) => Promise<void>;
-    writeFinal?: (results: UnitResult[]) => Promise<void>;
-    emitStdout?: boolean;
-  };
 }
 
 export interface UnitResult {

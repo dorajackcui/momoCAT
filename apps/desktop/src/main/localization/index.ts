@@ -30,11 +30,8 @@ export type {
   JobUnit,
   ProgressEventName,
   ProgressEventRecord,
-  TaskExecutionContext,
-  TaskExecutionResult,
   TranslationJob,
   TranslationTask,
-  TranslationTaskExecutor,
   UnitResult,
   UnitResultStatus,
 } from './job/types';

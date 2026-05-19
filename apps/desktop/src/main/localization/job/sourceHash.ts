@@ -3,6 +3,8 @@ import { createHash } from 'crypto';
 export interface SourceHashInput {
   source: string;
   context?: string;
+  // Accepted for callers that pass unit-like objects; target is intentionally
+  // excluded from resume identity so target-only edits do not invalidate reuse.
   target?: string;
 }
 
