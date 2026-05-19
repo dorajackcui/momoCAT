@@ -1,31 +1,26 @@
 import type { Segment } from '@cat/core/models';
-import {
-  normalizeProjectAIModel,
-  type PromptConcordanceReference,
-  type PromptTBReference,
-  type PromptTMReference,
-} from '@cat/core/project';
+import { normalizeProjectAIModel } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
-import { serializeTokensToEditorText } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { CATDatabase } from '@cat/db';
 import { TBService } from '../services/TBService';
-import { TMService, type TMMatch } from '../services/TMService';
+import { TMService } from '../services/TMService';
 import { SqliteProjectRepository } from '../services/adapters/SqliteProjectRepository';
 import { SqliteSettingsRepository } from '../services/adapters/SqliteSettingsRepository';
 import { SqliteTBRepository } from '../services/adapters/SqliteTBRepository';
 import { SqliteTMRepository } from '../services/adapters/SqliteTMRepository';
 import { DefaultAIRuntimeConfigProvider } from '../services/modules/ai/AIRuntimeConfigService';
 import { AIProviderCatalogService } from '../services/modules/ai/AIProviderCatalogService';
-import { AITextTranslator } from '../services/modules/ai/AITextTranslator';
 import { resolveBatchTargetScope } from '../services/modules/ai/translationTargetScope';
 import { AIProviderTransport } from '../services/providers/AIProviderTransport';
 import type { AIRuntimeConfigProvider, AITransport } from '../services/ports';
 import { runBounded } from './RequestScheduler';
+import { MTModule, type ResolvedMTConfig } from './modules/MTModule';
+import { TBModule, mapTBEngineReferences } from './modules/TBModule';
+import { TMModule, mapTMEngineReferences } from './modules/TMModule';
 import { translateSpreadsheetFile } from './spreadsheetFileAdapter';
 import { createTransientSegment } from './transientSegment';
 import type {
-  EngineTMReference,
   ExternalTranslationUnit,
   LocalizationEngineOptions,
   LocalizationEngineProfile,
@@ -39,12 +34,6 @@ import type {
   TranslateUnitsResult,
 } from './types';
 
-const MAX_TM_PROMPT_REFERENCES = 3;
-const MAX_CONCORDANCE_PROMPT_REFERENCES = 3;
-const MAX_TB_PROMPT_REFERENCES = 100;
-const MAX_ENGINE_TM_REFERENCES = 10;
-const MAX_ENGINE_TB_REFERENCES = 100;
-
 export interface LocalizationEngineConstructorOptions extends LocalizationEngineOptions {
   dbPath: string;
   aiTransport?: AITransport;
@@ -53,12 +42,8 @@ export interface LocalizationEngineConstructorOptions extends LocalizationEngine
 
 interface ResolvedReferences {
   engineReferences: TranslateUnitReferences;
-  promptReferences: {
-    tmReference?: PromptTMReference;
-    tmReferences?: PromptTMReference[];
-    concordanceReferences?: PromptConcordanceReference[];
-    tbReferences?: PromptTBReference[];
-  };
+  tm: Awaited<ReturnType<TMModule['inspect']>>;
+  tb: Awaited<ReturnType<TBModule['inspect']>>;
 }
 
 type ProjectRecord = NonNullable<ReturnType<SqliteProjectRepository['getProject']>>;
@@ -83,7 +68,9 @@ export class LocalizationEngine {
   private readonly tbService: TBService;
   private readonly providerCatalogService: AIProviderCatalogService;
   private readonly aiRuntimeConfigProvider: AIRuntimeConfigProvider;
-  private readonly textTranslator: AITextTranslator;
+  private readonly tmModule: TMModule;
+  private readonly tbModule: TBModule;
+  private readonly mtModule: MTModule;
   private readonly options: LocalizationEngineConstructorOptions;
 
   constructor(db: CATDatabase, options: LocalizationEngineConstructorOptions) {
@@ -99,7 +86,20 @@ export class LocalizationEngine {
     this.providerCatalogService = new AIProviderCatalogService(this.settingsRepo, aiTransport);
     this.aiRuntimeConfigProvider =
       options.aiRuntimeConfigProvider ?? new DefaultAIRuntimeConfigProvider();
-    this.textTranslator = new AITextTranslator(aiTransport, new TagValidator());
+    this.tmModule = new TMModule({
+      tmRepo: this.tmRepo,
+      tmService: this.tmService,
+    });
+    this.tbModule = new TBModule({
+      tbRepo: this.tbRepo,
+      tbService: this.tbService,
+    });
+    this.mtModule = new MTModule({
+      providerCatalogService: this.providerCatalogService,
+      aiRuntimeConfigProvider: this.aiRuntimeConfigProvider,
+      aiTransport,
+      tagValidator: new TagValidator(),
+    });
   }
 
   public async inspectProject(projectId: number): Promise<LocalizationEngineProfile> {
@@ -126,9 +126,9 @@ export class LocalizationEngine {
     const providerId = this.options.mt?.providerId ?? project.aiModel;
 
     try {
-      const { provider, apiKey } = this.providerCatalogService.resolveProviderConfig(providerId);
-      model = this.options.mt?.model ?? provider.model;
-      apiKeySet = apiKey.trim().length > 0;
+      const config = await this.mtModule.resolveConfig(project, this.options.mt);
+      model = config.model;
+      apiKeySet = config.apiKey.trim().length > 0;
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));
       const normalizedProviderId = normalizeProjectAIModel(providerId);
@@ -185,19 +185,15 @@ export class LocalizationEngine {
       );
     }
 
-    const providerId =
-      input.options?.providerOverride ??
-      input.options?.mt?.providerId ??
-      this.options.mt?.providerId ??
-      project.aiModel;
-    const { provider, apiKey } = this.providerCatalogService.resolveProviderConfig(providerId);
-    const model = input.options?.mt?.model ?? this.options.mt?.model ?? provider.model;
-    const runtimeConfig = await this.aiRuntimeConfigProvider.getModelConfig(model);
-    const reasoningEffort =
-      input.options?.mt?.reasoningEffort ??
-      this.options.mt?.reasoningEffort ??
-      runtimeConfig.reasoningEffort;
-    const systemPrompt = input.options?.mt?.systemPrompt ?? this.options.mt?.systemPrompt;
+    const mtOptions = {
+      ...this.options.mt,
+      ...input.options?.mt,
+    };
+    const mtConfig = await this.mtModule.resolveConfig(
+      project,
+      mtOptions,
+      input.options?.providerOverride,
+    );
 
     const scheduledResults = await runBounded(
       preparedUnits,
@@ -210,12 +206,9 @@ export class LocalizationEngine {
           unit: prepared.unit,
           segment: prepared.segment,
           project,
-          apiKey,
-          baseUrl: provider.baseUrl,
-          model,
-          reasoningEffort,
+          mtConfig,
+          mtOptions,
           includeReferences: Boolean(input.options?.includeReferences),
-          systemPrompt,
         });
       },
       { maxConcurrency },
@@ -305,12 +298,9 @@ export class LocalizationEngine {
     unit: ExternalTranslationUnit;
     segment: Segment;
     project: ProjectRecord;
-    apiKey: string;
-    baseUrl: string;
-    model: string;
-    reasoningEffort: NonNullable<LocalizationEngineOptions['mt']>['reasoningEffort'];
+    mtConfig: ResolvedMTConfig;
+    mtOptions: NonNullable<LocalizationEngineOptions['mt']>;
     includeReferences: boolean;
-    systemPrompt?: string;
   }): Promise<TranslateUnitResult> {
     const source = params.unit.source;
     const projectType = params.project.projectType ?? 'translation';
@@ -318,28 +308,21 @@ export class LocalizationEngine {
       projectType === 'translation'
         ? await this.resolveReferences(params.project.id, params.segment)
         : emptyReferences();
-    const sourceText = serializeTokensToDisplayText(params.segment.sourceTokens);
-    const sourceTagPreservedText = serializeTokensToEditorText(
-      params.segment.sourceTokens,
-      params.segment.sourceTokens,
-    );
-    const context = params.segment.meta?.context ? String(params.segment.meta.context).trim() : '';
 
-    const targetTokens = await this.textTranslator.translateSegment({
-      segmentId: params.segment.segmentId,
-      apiKey: params.apiKey,
-      baseUrl: params.baseUrl,
-      model: params.model,
-      projectPrompt: params.systemPrompt ?? params.project.aiPrompt ?? '',
-      projectType,
-      reasoningEffort: params.reasoningEffort,
+    const { targetTokens } = await this.mtModule.translate({
+      unitId: params.unit.id,
+      project: params.project,
+      segment: params.segment,
+      tm: references.tm,
+      tb: references.tb,
+      mtOptions: params.mtOptions,
+      apiKey: params.mtConfig.apiKey,
+      baseUrl: params.mtConfig.provider.baseUrl,
+      model: params.mtConfig.model,
+      reasoningEffort: params.mtConfig.reasoningEffort,
+      provider: params.mtConfig.provider,
       srcLang: params.unit.sourceLanguage ?? params.project.srcLang,
       tgtLang: params.unit.targetLanguage ?? params.project.tgtLang,
-      sourceTokens: params.segment.sourceTokens,
-      sourceText,
-      sourceTagPreservedText,
-      context,
-      ...references.promptReferences,
     });
 
     return {
@@ -357,50 +340,17 @@ export class LocalizationEngine {
     segment: Segment,
   ): Promise<ResolvedReferences> {
     const [tmMatches, tbMatches] = await Promise.all([
-      this.tmService.findMatches(projectId, segment),
-      this.tbService.findMatches(projectId, segment),
+      this.tmModule.inspect(projectId, segment),
+      this.tbModule.inspect(projectId, segment),
     ]);
-    const tmReferences = tmMatches.slice(0, MAX_ENGINE_TM_REFERENCES).map(mapTMReference);
-    const tbReferences = tbMatches.slice(0, MAX_ENGINE_TB_REFERENCES).map((match) => ({
-      tbName: match.tbName,
-      srcTerm: match.srcTerm,
-      tgtTerm: match.tgtTerm,
-      note: match.note ?? null,
-    }));
-    const promptTmReferences = tmMatches
-      .filter((match) => match.kind === 'tm')
-      .slice(0, MAX_TM_PROMPT_REFERENCES)
-      .map((match) => ({
-        similarity: match.similarity,
-        tmName: match.tmName,
-        sourceText: serializeTokensToDisplayText(match.sourceTokens),
-        targetText: serializeTokensToDisplayText(match.targetTokens),
-      }));
-    const promptConcordanceReferences = tmMatches
-      .filter((match) => match.kind === 'concordance')
-      .slice(0, MAX_CONCORDANCE_PROMPT_REFERENCES)
-      .map((match) => ({
-        tmName: match.tmName,
-        matchedSourceText: match.matchedSourceText,
-        sourceText: serializeTokensToDisplayText(match.sourceTokens),
-        targetText: serializeTokensToDisplayText(match.targetTokens),
-      }));
-    const promptTbReferences = tbReferences
-      .slice(0, MAX_TB_PROMPT_REFERENCES)
-      .map(({ srcTerm, tgtTerm, note }) => ({ srcTerm, tgtTerm, note }));
 
     return {
       engineReferences: {
-        tm: tmReferences,
-        tb: tbReferences,
+        tm: mapTMEngineReferences(tmMatches.rawMatches),
+        tb: mapTBEngineReferences(tbMatches.rawMatches),
       },
-      promptReferences: {
-        tmReference: promptTmReferences[0],
-        tmReferences: promptTmReferences.length > 0 ? promptTmReferences : undefined,
-        concordanceReferences:
-          promptConcordanceReferences.length > 0 ? promptConcordanceReferences : undefined,
-        tbReferences: promptTbReferences.length > 0 ? promptTbReferences : undefined,
-      },
+      tm: tmMatches,
+      tb: tbMatches,
     };
   }
 }
@@ -411,7 +361,32 @@ function emptyReferences(): ResolvedReferences {
       tm: [],
       tb: [],
     },
-    promptReferences: {},
+    tm: {
+      unitId: '',
+      segmentId: '',
+      mountedTMs: [],
+      rawMatches: [],
+      selectedReferences: {
+        tmReferences: [],
+        concordanceReferences: [],
+      },
+      selectionPolicy: {
+        maxTmReferences: 0,
+        maxConcordanceReferences: 0,
+      },
+      diagnostics: [],
+    },
+    tb: {
+      unitId: '',
+      segmentId: '',
+      mountedTBs: [],
+      rawMatches: [],
+      selectedReferences: [],
+      selectionPolicy: {
+        maxTbReferences: 0,
+      },
+      diagnostics: [],
+    },
   };
 }
 
@@ -424,29 +399,5 @@ function buildTranslateUnitsResult(results: TranslateUnitResult[]): TranslateUni
       failed: results.filter((result) => result.status === 'failed').length,
     },
     results,
-  };
-}
-
-function mapTMReference(match: TMMatch): EngineTMReference {
-  const base = {
-    kind: match.kind,
-    rank: match.rank,
-    tmName: match.tmName,
-    sourceText: serializeTokensToDisplayText(match.sourceTokens),
-    targetText: serializeTokensToDisplayText(match.targetTokens),
-  };
-
-  if (match.kind === 'tm') {
-    return {
-      ...base,
-      kind: 'tm',
-      similarity: match.similarity,
-    };
-  }
-
-  return {
-    ...base,
-    kind: 'concordance',
-    matchedSourceText: match.matchedSourceText,
   };
 }

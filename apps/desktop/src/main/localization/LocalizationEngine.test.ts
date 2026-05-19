@@ -180,6 +180,7 @@ describe('LocalizationEngine.translateUnits', () => {
         },
       });
       const request = transport.createResponse.mock.calls[0]?.[0];
+      expect(request.userPrompt).toMatch(/Client Main TM[\s\S]*Use the common noun\./);
       expect(request.userPrompt).toContain('Client Main TM');
       expect(request.userPrompt).toContain('Bonjour le monde');
       expect(request.userPrompt).toContain('world');
