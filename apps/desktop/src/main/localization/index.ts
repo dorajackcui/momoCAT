@@ -1,6 +1,22 @@
 export { LocalizationEngine } from './LocalizationEngine';
 export type { LocalizationEngineConstructorOptions } from './LocalizationEngine';
 export type {
+  FileCellValue,
+  FileParseArtifact,
+  FileParseColumnsArtifact,
+  FileParseRowArtifact,
+  InspectArtifact,
+  InspectTruncatedFields,
+  InspectUnitArtifact,
+  InspectUnitStatus,
+  MountedTBArtifact,
+  MountedTMArtifact,
+  PromptArtifact,
+  PromptProviderArtifact,
+  TBArtifact,
+  TMArtifact,
+} from './artifacts';
+export type {
   EngineTBReference,
   EngineTMReference,
   ExternalTranslationUnit,
