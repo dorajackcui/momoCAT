@@ -1,0 +1,185 @@
+import type { ReasoningEffort } from '../services/ports';
+
+export type LocalizationTargetScope = 'blank-only' | 'overwrite-non-confirmed';
+
+export type LocalizationMode = 'standard' | 'dialogue';
+
+export interface ExternalTranslationUnit {
+  id: string;
+  source: string;
+  target?: string;
+  sourceLanguage?: string;
+  targetLanguage?: string;
+  context?: string;
+  fileName?: string;
+  rowNumber?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export type LocalizationUnit = ExternalTranslationUnit;
+
+export interface MTModuleOptions {
+  providerId?: string;
+  model?: string;
+  reasoningEffort?: ReasoningEffort;
+  systemPrompt?: string;
+  temperature?: number;
+}
+
+export interface TranslateUnitsOptions {
+  targetScope?: LocalizationTargetScope;
+  mode?: LocalizationMode;
+  includeReferences?: boolean;
+  maxConcurrency?: number;
+  providerOverride?: string;
+  mt?: MTModuleOptions;
+}
+
+export interface LocalizationEngineOptions {
+  dbPath?: string;
+  maxConcurrency?: number;
+  defaultTargetScope?: LocalizationTargetScope;
+  defaultMode?: LocalizationMode;
+  mt?: MTModuleOptions;
+}
+
+export interface EngineTMReference {
+  kind: 'tm' | 'concordance';
+  rank: number;
+  similarity?: number;
+  tmName: string;
+  sourceText: string;
+  targetText: string;
+  matchedSourceText?: string;
+}
+
+export interface EngineTBReference {
+  tbName: string;
+  srcTerm: string;
+  tgtTerm: string;
+  note?: string | null;
+}
+
+export interface TranslateUnitReferences {
+  tm: EngineTMReference[];
+  tb: EngineTBReference[];
+}
+
+export interface TranslateUnitSuccess {
+  id: string;
+  source: string;
+  target: string;
+  status: 'translated' | 'skipped';
+  references?: TranslateUnitReferences;
+  metadata?: Record<string, unknown>;
+}
+
+export interface TranslateUnitFailure {
+  id: string;
+  source: string;
+  target?: string;
+  status: 'failed';
+  error: string;
+  references?: TranslateUnitReferences;
+  metadata?: Record<string, unknown>;
+}
+
+export type TranslateUnitResult = TranslateUnitSuccess | TranslateUnitFailure;
+
+export type LocalizationUnitResult = TranslateUnitResult;
+
+export interface TranslateUnitsResult {
+  summary: {
+    total: number;
+    translated: number;
+    skipped: number;
+    failed: number;
+  };
+  results: TranslateUnitResult[];
+}
+
+export interface TranslateUnitsInput {
+  projectId: number;
+  units: ExternalTranslationUnit[];
+  options?: TranslateUnitsOptions;
+}
+
+export interface FileTranslationColumns {
+  sourceHeader?: string;
+  targetHeader?: string;
+  contextHeader?: string;
+  sourceCol?: number;
+  targetCol?: number;
+  contextCol?: number;
+  hasHeader?: boolean;
+}
+
+export interface TranslateFileOptions {
+  projectId: number;
+  inputPath: string;
+  outputPath: string;
+  format?: 'xlsx' | 'csv';
+  columns?: FileTranslationColumns;
+  options?: TranslateUnitsOptions;
+}
+
+export type TranslateFileInput = TranslateFileOptions;
+
+export interface TranslateFileResult extends TranslateUnitsResult {
+  inputPath: string;
+  outputPath: string;
+}
+
+export interface LocalizationTMResourceConfig {
+  id: string;
+  name: string;
+  priority: number;
+  permission?: string;
+  type?: string;
+  entryCount?: number;
+}
+
+export interface LocalizationTBResourceConfig {
+  id: string;
+  name: string;
+  priority: number;
+  entryCount?: number;
+}
+
+export interface ProjectLocalizationConfig {
+  projectId: number;
+  projectName: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+  prompt?: string | null;
+  model?: string | null;
+}
+
+export interface InspectProjectResult {
+  project: ProjectLocalizationConfig;
+  resources: {
+    translationMemories: LocalizationTMResourceConfig[];
+    termBases: LocalizationTBResourceConfig[];
+  };
+  mt: {
+    providerId?: string | null;
+    model?: string | null;
+    apiKeySet: boolean;
+  };
+  ready: boolean;
+  errors: string[];
+}
+
+export interface LocalizationEngineProfile {
+  projectId: number;
+  projectName: string;
+  srcLang: string;
+  tgtLang: string;
+  promptChars: number;
+  model: string | null;
+  apiKeySet: boolean;
+  mountedTMCount: number;
+  mountedTBCount: number;
+  ready: boolean;
+  errors: string[];
+}
