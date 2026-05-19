@@ -158,6 +158,24 @@ function runInspection(config) {
     throw new Error(`Vitest binary not found: ${vitestCmd}`);
   }
 
+  const env = {
+    ...process.env,
+    LOCALIZATION_INSPECT_DYNAMIC: "1",
+    LOCALIZATION_INSPECT_DB_PATH: config.dbPath,
+    LOCALIZATION_INSPECT_PROJECT_ID: config.projectId,
+    LOCALIZATION_INSPECT_INPUT_PATH: config.inputPath,
+    LOCALIZATION_INSPECT_OUTPUT_PATH: config.outputPath,
+  };
+  if (config.jsonOutputPath) {
+    env.LOCALIZATION_INSPECT_JSON_OUTPUT_PATH = config.jsonOutputPath;
+  }
+  if (config.unitLimit) {
+    env.LOCALIZATION_INSPECT_UNIT_LIMIT = config.unitLimit;
+  }
+  if (config.maxCellChars) {
+    env.LOCALIZATION_INSPECT_MAX_CELL_CHARS = config.maxCellChars;
+  }
+
   const result = spawnCommandSync(
     vitestCmd,
     [
@@ -170,17 +188,7 @@ function runInspection(config) {
     ],
     {
       cwd: process.cwd(),
-      env: {
-        ...process.env,
-        LOCALIZATION_INSPECT_DYNAMIC: "1",
-        LOCALIZATION_INSPECT_DB_PATH: config.dbPath,
-        LOCALIZATION_INSPECT_PROJECT_ID: config.projectId,
-        LOCALIZATION_INSPECT_INPUT_PATH: config.inputPath,
-        LOCALIZATION_INSPECT_OUTPUT_PATH: config.outputPath,
-        LOCALIZATION_INSPECT_JSON_OUTPUT_PATH: config.jsonOutputPath,
-        LOCALIZATION_INSPECT_UNIT_LIMIT: config.unitLimit,
-        LOCALIZATION_INSPECT_MAX_CELL_CHARS: config.maxCellChars,
-      },
+      env,
       stdio: "inherit",
     },
   );

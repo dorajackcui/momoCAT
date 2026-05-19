@@ -27,7 +27,8 @@ describe('LocalizationInspector CLI file runner', () => {
     const projectId = Number(requireEnv('LOCALIZATION_INSPECT_PROJECT_ID'));
     const inputPath = requireEnv('LOCALIZATION_INSPECT_INPUT_PATH');
     const outputPath = requireEnv('LOCALIZATION_INSPECT_OUTPUT_PATH');
-    const jsonOutputPath = process.env.LOCALIZATION_INSPECT_JSON_OUTPUT_PATH;
+    const jsonOutputPath =
+      process.env.LOCALIZATION_INSPECT_JSON_OUTPUT_PATH || undefined;
     const unitLimit = optionalPositiveInteger('LOCALIZATION_INSPECT_UNIT_LIMIT');
     const maxCellChars = optionalPositiveInteger(
       'LOCALIZATION_INSPECT_MAX_CELL_CHARS',
