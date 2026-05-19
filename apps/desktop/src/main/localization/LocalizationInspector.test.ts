@@ -282,7 +282,7 @@ describe('LocalizationInspector.inspectFile', () => {
       expect(result.summary).toEqual({ total: 1, ready: 0, error: 1 });
       expect(result.artifact.units[0]).toMatchObject({
         status: 'error',
-        error: 'controlled compose failure',
+        error: 'mt: controlled compose failure',
       });
       const written = XLSX.read(await readFile(result.outputPath), { type: 'buffer' });
       const segmentRows = XLSX.utils.sheet_to_json(written.Sheets.Segments, {
@@ -290,6 +290,139 @@ describe('LocalizationInspector.inspectFile', () => {
         defval: '',
       }) as string[][];
       expect(segmentRows[1][5]).toBe('error');
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves TM and TB artifacts when MT compose fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Preserve Stage Artifacts', 'en', 'fr');
+      mountReferenceData(db, projectId);
+      const inputPath = writeInputWorkbook(root, [
+        ['source', 'target'],
+        ['Hello world', ''],
+      ]);
+      const inspector = new LocalizationInspector(db, {
+        aiTransport: createTransport(),
+        aiRuntimeConfigProvider: runtimeConfigProvider(),
+        mtModule: {
+          composePrompt: vi.fn().mockRejectedValue(new Error('controlled compose failure')),
+        },
+      });
+
+      const result = await inspector.inspectFile({
+        projectId,
+        inputPath,
+        outputPath: join(root, 'inspect.xlsx'),
+      });
+      const json = JSON.parse(await readFile(result.jsonOutputPath, 'utf8'));
+
+      expect(result.summary).toEqual({ total: 1, ready: 0, error: 1 });
+      expect(json.units[0].status).toBe('error');
+      expect(json.units[0].error).toBe('mt: controlled compose failure');
+      expect(json.units[0].tm.rawMatches[0]).toMatchObject({
+        tmName: 'Client Main TM',
+        kind: 'tm',
+      });
+      expect(json.units[0].tb.selectedReferences[0]).toMatchObject({
+        srcTerm: 'world',
+        tgtTerm: 'monde',
+      });
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('uses the same ready unit for system prompt value and metadata', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Prompt Metadata Inspect', 'en', 'fr');
+      const inputPath = writeInputWorkbook(root, [
+        ['source', 'target'],
+        ['First fails', ''],
+        ['Second ready', ''],
+      ]);
+      const inspector = new LocalizationInspector(db, {
+        aiTransport: createTransport(),
+        aiRuntimeConfigProvider: runtimeConfigProvider(),
+        mtModule: {
+          composePrompt: vi.fn().mockImplementation(({ unitId, project, segment }) => {
+            if (unitId === 'row-2') {
+              return Promise.reject(new Error('first compose failure'));
+            }
+
+            return Promise.resolve(
+              createPromptArtifact(unitId, project.projectType, segment, 'SECOND_SYSTEM', {
+                providerId: 'ready-provider',
+                providerName: 'Ready Provider',
+                model: 'ready-model',
+                reasoningEffort: 'high',
+              }),
+            );
+          }),
+        },
+      });
+
+      const result = await inspector.inspectFile({
+        projectId,
+        inputPath,
+        outputPath: join(root, 'inspect.xlsx'),
+      });
+
+      expect(result.artifact.systemPrompt.value).toBe('SECOND_SYSTEM');
+      const written = XLSX.read(await readFile(result.outputPath), { type: 'buffer' });
+      const promptRows = XLSX.utils.sheet_to_json(written.Sheets.MT_SystemPrompt, {
+        header: 1,
+        defval: '',
+      }) as Array<[string, string | number | boolean]>;
+      expect(promptRows).toContainEqual(['provider_id', 'ready-provider']);
+      expect(promptRows).toContainEqual(['provider_name', 'Ready Provider']);
+      expect(promptRows).toContainEqual(['model', 'ready-model']);
+      expect(promptRows).toContainEqual(['reasoning_effort', 'high']);
+      expect(promptRows).toContainEqual(['systemPrompt', 'SECOND_SYSTEM']);
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ['unitLimit', 0],
+    ['unitLimit', -1],
+    ['unitLimit', 1.5],
+    ['unitLimit', Number.POSITIVE_INFINITY],
+    ['maxCellChars', 0],
+    ['maxCellChars', -1],
+    ['maxCellChars', 1.5],
+    ['maxCellChars', Number.NaN],
+  ] as const)('rejects invalid %s values', async (field, value) => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject(`Invalid ${field}`, 'en', 'fr');
+      const inputPath = writeInputWorkbook(root, [
+        ['source', 'target'],
+        ['Hello', ''],
+      ]);
+      const inspector = new LocalizationInspector(db, {
+        aiTransport: createTransport(),
+        aiRuntimeConfigProvider: runtimeConfigProvider(),
+      });
+
+      await expect(
+        inspector.inspectFile({
+          projectId,
+          inputPath,
+          outputPath: join(root, 'inspect.xlsx'),
+          [field]: value,
+        }),
+      ).rejects.toThrow(`${field} must be a positive integer.`);
     } finally {
       db.close();
       await rm(root, { recursive: true, force: true });
@@ -393,16 +526,22 @@ function createPromptArtifact(
   projectType: PromptArtifact['projectType'],
   segment: Segment,
   userPrompt: string,
+  overrides: {
+    providerId?: string;
+    providerName?: string;
+    model?: string;
+    reasoningEffort?: PromptArtifact['reasoningEffort'];
+  } = {},
 ): PromptArtifact {
   return {
     unitId,
     provider: {
-      id: 'openai',
-      name: 'OpenAI',
+      id: overrides.providerId ?? 'openai',
+      name: overrides.providerName ?? 'OpenAI',
       baseUrl: 'https://api.openai.com/v1',
     },
-    model: 'gpt-test',
-    reasoningEffort: 'medium',
+    model: overrides.model ?? 'gpt-test',
+    reasoningEffort: overrides.reasoningEffort ?? 'medium',
     projectPrompt: '',
     projectType,
     sourcePayload: serializeTokensToDisplayText(segment.sourceTokens),

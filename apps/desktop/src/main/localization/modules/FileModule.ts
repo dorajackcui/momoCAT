@@ -243,16 +243,16 @@ function buildSegmentRows(
 }
 
 function buildSystemPromptRows(artifact: InspectArtifact): FileCellValue[][] {
-  const firstUnit = artifact.units[0];
+  const promptUnit = artifact.units.find((unit) => unit.status === 'ready');
 
   return [
     ['key', 'value'],
     ['project_id', artifact.project.id],
     ['project_name', artifact.project.name],
-    ['provider_id', firstUnit?.mt.provider.id ?? ''],
-    ['provider_name', firstUnit?.mt.provider.name ?? ''],
-    ['model', firstUnit?.mt.model ?? ''],
-    ['reasoning_effort', firstUnit?.mt.reasoningEffort ?? ''],
+    ['provider_id', promptUnit?.mt.provider.id ?? ''],
+    ['provider_name', promptUnit?.mt.provider.name ?? ''],
+    ['model', promptUnit?.mt.model ?? ''],
+    ['reasoning_effort', promptUnit?.mt.reasoningEffort ?? ''],
     ['systemPrompt', artifact.systemPrompt.xlsxValue],
     ['promptChars', artifact.systemPrompt.promptChars],
     ['truncated', artifact.systemPrompt.truncated],

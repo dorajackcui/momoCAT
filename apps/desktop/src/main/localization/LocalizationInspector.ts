@@ -109,12 +109,13 @@ export class LocalizationInspector {
       throw new Error('Dialogue mode is not supported for external localization inspection.');
     }
 
+    const unitLimit = validatePositiveInteger(input.unitLimit, 'unitLimit');
+    const maxCellChars =
+      validatePositiveInteger(input.maxCellChars, 'maxCellChars') ?? DEFAULT_MAX_CELL_CHARS;
     const parsed = await parseExternalSpreadsheet(input);
-    const maxCellChars = input.maxCellChars ?? DEFAULT_MAX_CELL_CHARS;
     const jsonOutputPath = input.jsonOutputPath ?? inferJsonOutputPath(input.outputPath);
     const sourceRows = parsed.artifact.rows.filter((row) => row.source.trim());
-    const limitedRows =
-      input.unitLimit === undefined ? sourceRows : sourceRows.slice(0, Math.max(0, input.unitLimit));
+    const limitedRows = unitLimit === undefined ? sourceRows : sourceRows.slice(0, unitLimit);
 
     const units: InspectUnitArtifact[] = [];
     for (const [index, row] of limitedRows.entries()) {
@@ -180,11 +181,35 @@ export class LocalizationInspector {
     segment: Segment,
     maxCellChars: number,
   ): Promise<InspectUnitArtifact> {
+    const [tmResult, tbResult] = await Promise.allSettled([
+      this.tmModule.inspect(project.id, segment),
+      this.tbModule.inspect(project.id, segment),
+    ]);
+    const tm =
+      tmResult.status === 'fulfilled'
+        ? tmResult.value
+        : emptyTMArtifact(row.unitId, segment.segmentId);
+    const tb =
+      tbResult.status === 'fulfilled'
+        ? tbResult.value
+        : emptyTBArtifact(row.unitId, segment.segmentId);
+    const referenceErrors = [
+      stageError('tm', tmResult),
+      stageError('tb', tbResult),
+    ].filter((error): error is string => Boolean(error));
+
+    if (referenceErrors.length > 0) {
+      return buildErrorUnit({
+        row,
+        segment,
+        project,
+        tm,
+        tb,
+        error: referenceErrors.join('; '),
+      });
+    }
+
     try {
-      const [tm, tb] = await Promise.all([
-        this.tmModule.inspect(project.id, segment),
-        this.tbModule.inspect(project.id, segment),
-      ]);
       const mt = await this.mtModule.composePrompt({
         unitId: row.unitId,
         project,
@@ -205,25 +230,14 @@ export class LocalizationInspector {
         status: 'ready',
       };
     } catch (error) {
-      return {
-        unit: row,
-        transientSegment: segmentMetadata(segment),
-        tm: emptyTMArtifact(row.unitId, segment.segmentId),
-        tb: emptyTBArtifact(row.unitId, segment.segmentId),
-        mt: emptyPromptArtifact(row.unitId, project),
-        xlsx: {
-          tmForMt: '',
-          tbForMt: '',
-          mtUserPrompt: '',
-          truncated: {
-            tmForMt: false,
-            tbForMt: false,
-            mtUserPrompt: false,
-          },
-        },
-        status: 'error',
-        error: error instanceof Error ? error.message : String(error),
-      };
+      return buildErrorUnit({
+        row,
+        segment,
+        project,
+        tm,
+        tb,
+        error: `mt: ${errorMessage(error)}`,
+      });
     }
   }
 }
@@ -278,6 +292,62 @@ function truncateForCell(value: string, maxCellChars: number, jsonRef: string): 
   return {
     value: marker.length <= maxCellChars ? marker : marker.slice(0, maxCellChars),
     truncated: true,
+  };
+}
+
+function validatePositiveInteger(value: number | undefined, name: string): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+
+  return value;
+}
+
+function stageError<T>(
+  stage: string,
+  result: PromiseSettledResult<T>,
+): string | undefined {
+  if (result.status === 'fulfilled') {
+    return undefined;
+  }
+
+  return `${stage}: ${errorMessage(result.reason)}`;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function buildErrorUnit(params: {
+  row: FileParseRowArtifact;
+  segment: Segment;
+  project: ProjectRecord;
+  tm: TMArtifact;
+  tb: TBArtifact;
+  error: string;
+}): InspectUnitArtifact {
+  return {
+    unit: params.row,
+    transientSegment: segmentMetadata(params.segment),
+    tm: params.tm,
+    tb: params.tb,
+    mt: emptyPromptArtifact(params.row.unitId, params.project),
+    xlsx: {
+      tmForMt: '',
+      tbForMt: '',
+      mtUserPrompt: '',
+      truncated: {
+        tmForMt: false,
+        tbForMt: false,
+        mtUserPrompt: false,
+      },
+    },
+    status: 'error',
+    error: params.error,
   };
 }
 
