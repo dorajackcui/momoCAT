@@ -37,9 +37,16 @@ export class SnapshotThrottle {
       return false;
     }
 
+    return true;
+  }
+
+  markSnapshotWritten(completedCount: number): void {
+    if (!Number.isFinite(completedCount) || completedCount <= this.lastSnapshotCompletedCount) {
+      return;
+    }
+
     this.lastSnapshotCompletedCount = completedCount;
     this.lastSnapshotAt = this.now();
-    return true;
   }
 }
 

@@ -41,6 +41,13 @@ export { SnapshotThrottle } from './job/SnapshotThrottle';
 export type { SnapshotThrottleOptions } from './job/SnapshotThrottle';
 export { OneUnitTaskPlanner } from './job/TaskPlanner';
 export type { TaskPlanner } from './job/TaskPlanner';
+export { TranslationJobRunner } from './job/TranslationJobRunner';
+export type {
+  TranslationJobRunnerCallbackContext,
+  TranslationJobRunnerDependencies,
+  TranslationJobRunResult,
+  TranslationJobSummary,
+} from './job/TranslationJobRunner';
 export type {
   EngineTBReference,
   EngineTMReference,

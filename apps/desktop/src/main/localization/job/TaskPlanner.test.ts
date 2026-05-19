@@ -39,6 +39,7 @@ describe('SnapshotThrottle', () => {
     expect(throttle.shouldSnapshot(1)).toBe(false);
     expect(throttle.shouldSnapshot(2)).toBe(false);
     expect(throttle.shouldSnapshot(3)).toBe(true);
+    throttle.markSnapshotWritten(3);
     expect(throttle.shouldSnapshot(4)).toBe(false);
     expect(throttle.shouldSnapshot(6)).toBe(true);
   });
@@ -56,6 +57,7 @@ describe('SnapshotThrottle', () => {
 
     now = 6_000;
     expect(throttle.shouldSnapshot(2)).toBe(true);
+    throttle.markSnapshotWritten(2);
 
     now = 10_999;
     expect(throttle.shouldSnapshot(3)).toBe(false);
@@ -73,6 +75,7 @@ describe('SnapshotThrottle', () => {
     });
 
     expect(throttle.shouldSnapshot(2)).toBe(true);
+    throttle.markSnapshotWritten(2);
 
     now = 10_000;
     expect(throttle.shouldSnapshot(2)).toBe(false);
@@ -89,8 +92,10 @@ describe('SnapshotThrottle', () => {
 
     expect(defaultThrottle.shouldSnapshot(9)).toBe(false);
     expect(defaultThrottle.shouldSnapshot(10)).toBe(true);
+    defaultThrottle.markSnapshotWritten(10);
     expect(invalidThrottle.shouldSnapshot(9)).toBe(false);
     expect(invalidThrottle.shouldSnapshot(10)).toBe(true);
+    invalidThrottle.markSnapshotWritten(10);
 
     now = 59_999;
     expect(defaultThrottle.shouldSnapshot(11)).toBe(false);
