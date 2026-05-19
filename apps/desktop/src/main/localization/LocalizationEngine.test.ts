@@ -4,6 +4,7 @@ import { serializeTokensToDisplayText } from '@cat/core/text';
 import { CATDatabase } from '../../../../../packages/db/src';
 import type { AITransport } from '../services/ports';
 import { LocalizationEngine } from './LocalizationEngine';
+import { createLocalizationTaskExecutor } from './job/LocalizationTaskExecutor';
 import { createTransientSegment } from './transientSegment';
 
 type MockTransport = AITransport & {
@@ -361,6 +362,192 @@ describe('LocalizationEngine.translateUnits', () => {
           options: { mode: 'dialogue' },
         }),
       ).rejects.toThrow(/dialogue mode is not supported/i);
+      expect(transport.createResponse).not.toHaveBeenCalled();
+    } finally {
+      db.close();
+    }
+  });
+});
+
+describe('LocalizationEngine task executor', () => {
+  it('translates a task unit without creating files or segment rows and returns artifacts', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Task Executor', 'en', 'fr');
+      seedApiKey(db);
+      const tmId = db.createTM('Client Main TM', 'en', 'fr', 'main');
+      db.mountTMToProject(projectId, tmId, 10, 'read');
+      const tmEntry = createTMEntry({
+        tmId,
+        projectId,
+        sourceText: 'Hello world',
+        targetText: 'Bonjour le monde',
+      });
+      const tmEntryId = db.upsertTMEntryBySrcHash(tmEntry);
+      db.replaceTMFts(
+        tmId,
+        serializeTokensToDisplayText(tmEntry.sourceTokens),
+        serializeTokensToDisplayText(tmEntry.targetTokens),
+        tmEntryId,
+      );
+
+      const tbId = db.createTermBase('Client Terms', 'en', 'fr');
+      db.mountTermBaseToProject(projectId, tbId, 20);
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'term-world',
+        tbId,
+        srcLang: 'en',
+        srcTerm: 'world',
+        tgtTerm: 'monde',
+        note: 'Use the common noun.',
+      });
+
+      const transport = createTransport('Bonjour le monde');
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+      const executor = createLocalizationTaskExecutor(engine);
+
+      const result = await executor(
+        {
+          taskId: 'task-1',
+          units: [
+            {
+              documentId: 'doc-1',
+              unitId: 'unit-1',
+              source: 'Hello world',
+              sourceHash: 'hash-1',
+            },
+          ],
+        },
+        {
+          attempt: 1,
+          job: {
+            id: 'job-1',
+            projectId,
+            units: [],
+          },
+        },
+      );
+
+      expect(result.results).toEqual([
+        {
+          jobId: 'job-1',
+          documentId: 'doc-1',
+          unitId: 'unit-1',
+          sourceHash: 'hash-1',
+          source: 'Hello world',
+          target: 'Bonjour le monde',
+          status: 'translated',
+          error: undefined,
+          metadata: undefined,
+        },
+      ]);
+      expect(result.artifacts).toHaveLength(1);
+      expect(result.artifacts?.[0]).toMatchObject({
+        job: 'job-1',
+        task: 'task-1',
+        doc: 'doc-1',
+        unit: 'unit-1',
+        tm: {
+          selectedReferences: {
+            tmReferences: [
+              expect.objectContaining({
+                tmName: 'Client Main TM',
+                targetText: 'Bonjour le monde',
+              }),
+            ],
+          },
+        },
+        tb: {
+          selectedReferences: [
+            expect.objectContaining({
+              srcTerm: 'world',
+              tgtTerm: 'monde',
+              note: 'Use the common noun.',
+            }),
+          ],
+        },
+        prompt: expect.objectContaining({
+          unitId: 'unit-1',
+          model: expect.any(String),
+          provider: expect.objectContaining({
+            id: expect.any(String),
+            baseUrl: expect.any(String),
+          }),
+          userPrompt: expect.stringContaining('Client Main TM'),
+        }),
+        result: expect.objectContaining({
+          status: 'translated',
+          target: 'Bonjour le monde',
+        }),
+      });
+      expect(JSON.stringify(result.artifacts)).not.toContain('test-api-key');
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
+      expect(db.listFiles(projectId)).toEqual([]);
+      expect(db.getProjectStats(projectId)).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('skips task units without provider setup when no unit needs translation', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Task Skip Without Key', 'en', 'fr');
+      const transport = createTransport('Bonjour');
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+        defaultTargetScope: 'blank-only',
+      });
+
+      const result = await engine.executeTranslationTask(
+        {
+          taskId: 'task-skip',
+          units: [
+            {
+              documentId: 'doc-1',
+              unitId: 'already-targeted',
+              source: 'Hello',
+              target: 'Deja traduit',
+              sourceHash: 'hash-1',
+            },
+          ],
+        },
+        {
+          attempt: 1,
+          job: {
+            id: 'job-skip',
+            projectId,
+            units: [],
+          },
+        },
+      );
+
+      expect(result.results).toEqual([
+        expect.objectContaining({
+          jobId: 'job-skip',
+          documentId: 'doc-1',
+          unitId: 'already-targeted',
+          status: 'skipped',
+          target: 'Deja traduit',
+        }),
+      ]);
+      expect(result.artifacts).toEqual([
+        expect.objectContaining({
+          job: 'job-skip',
+          task: 'task-skip',
+          unit: 'already-targeted',
+          tm: undefined,
+          tb: undefined,
+          prompt: undefined,
+          result: expect.objectContaining({
+            status: 'skipped',
+          }),
+        }),
+      ]);
       expect(transport.createResponse).not.toHaveBeenCalled();
     } finally {
       db.close();

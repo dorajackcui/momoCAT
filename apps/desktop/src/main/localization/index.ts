@@ -38,6 +38,7 @@ export type {
 export { computeSourceHash } from './job/sourceHash';
 export type { SourceHashInput } from './job/sourceHash';
 export { TranslationJobRunner } from './job/TranslationJobRunner';
+export { createLocalizationTaskExecutor } from './job/LocalizationTaskExecutor';
 export type {
   TranslationJobRunnerCallbackContext,
   TranslationJobRunnerDependencies,
