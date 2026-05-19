@@ -8,6 +8,24 @@ import process from "node:process";
 const TEST_NAME = "localization-engine-file-env-run";
 const TEST_PATH =
   "apps/desktop/src/main/localization/LocalizationEngine.cli.test.ts";
+const OPTION_NAMES = new Set([
+  "db",
+  "db-path",
+  "project-id",
+  "input",
+  "output",
+  "target-scope",
+  "checkpoint",
+  "events",
+  "artifacts",
+  "resume",
+  "max-attempts",
+  "snapshot",
+  "snapshot-every-units",
+  "snapshot-every-seconds",
+  "progress-stdout",
+]);
+const BOOLEAN_OPTIONS = new Set(["resume", "progress-stdout"]);
 
 function usage() {
   console.log(`Usage:
@@ -19,11 +37,20 @@ Options:
   --input <path>                 Spreadsheet path to translate.
   --output <path>                Output spreadsheet path.
   --target-scope <scope>         blank-only or overwrite-non-confirmed. Default: engine default.
+  --checkpoint <path>            Checkpoint JSONL path. Default: inferred from output path.
+  --events <path>                Event JSONL path. Default: inferred from output path.
+  --artifacts <path>             Artifact JSONL path. Default: inferred from output path.
+  --resume                       Resume from an existing checkpoint.
+  --max-attempts <n>             Positive integer retry attempt limit.
+  --snapshot <path>              Snapshot spreadsheet path. Default: inferred from output path.
+  --snapshot-every-units <n>     Positive integer snapshot cadence by completed units.
+  --snapshot-every-seconds <n>   Positive integer snapshot cadence by elapsed seconds.
+  --progress-stdout              Emit live NDJSON job events to stdout.
   -h, --help                     Show this help.
 
 Examples:
   npm run translate:file -- --db .cat_data/cat_v1.db --project-id 1 --input mt.xlsx --output mt.fr.xlsx
-  npm run translate:file -- --db .cat_data/cat_v1.db --project-id 1 --input mt.xlsx --output mt.fr.xlsx --target-scope overwrite-non-confirmed`);
+  npm run translate:file -- --db .cat_data/cat_v1.db --project-id 1 --input mt.xlsx --output mt.fr.xlsx --target-scope overwrite-non-confirmed --resume`);
 }
 
 function readValue(argv, index, flag) {
@@ -34,6 +61,78 @@ function readValue(argv, index, flag) {
   return value;
 }
 
+function requireOptionValue(flag, value) {
+  if (!value) {
+    throw new Error(`Missing value for ${flag}.`);
+  }
+  return value;
+}
+
+function assignOption(config, name, value, flag = `--${name}`) {
+  if (!OPTION_NAMES.has(name)) {
+    throw new Error(`Unknown argument: --${name}`);
+  }
+
+  if (BOOLEAN_OPTIONS.has(name)) {
+    if (value !== undefined) {
+      throw new Error(`${flag} does not take a value.`);
+    }
+    config[name === "resume" ? "resume" : "progressStdout"] = true;
+    return;
+  }
+
+  const optionValue = requireOptionValue(flag, value);
+
+  if (name === "db" || name === "db-path") {
+    config.dbPath = path.resolve(optionValue);
+    return;
+  }
+  if (name === "project-id") {
+    config.projectId = optionValue;
+    return;
+  }
+  if (name === "input") {
+    config.inputPath = path.resolve(optionValue);
+    return;
+  }
+  if (name === "output") {
+    config.outputPath = path.resolve(optionValue);
+    return;
+  }
+  if (name === "target-scope") {
+    config.targetScope = optionValue;
+    return;
+  }
+  if (name === "checkpoint") {
+    config.checkpointPath = path.resolve(optionValue);
+    return;
+  }
+  if (name === "events") {
+    config.eventsPath = path.resolve(optionValue);
+    return;
+  }
+  if (name === "artifacts") {
+    config.artifactsPath = path.resolve(optionValue);
+    return;
+  }
+  if (name === "max-attempts") {
+    config.maxAttempts = optionValue;
+    return;
+  }
+  if (name === "snapshot") {
+    config.snapshotPath = path.resolve(optionValue);
+    return;
+  }
+  if (name === "snapshot-every-units") {
+    config.snapshotEveryUnits = optionValue;
+    return;
+  }
+  if (name === "snapshot-every-seconds") {
+    config.snapshotEverySeconds = optionValue;
+    return;
+  }
+}
+
 function parseArgs(argv) {
   const config = {
     dbPath: "",
@@ -41,6 +140,15 @@ function parseArgs(argv) {
     inputPath: "",
     outputPath: "",
     targetScope: "",
+    checkpointPath: "",
+    eventsPath: "",
+    artifactsPath: "",
+    resume: false,
+    maxAttempts: "",
+    snapshotPath: "",
+    snapshotEveryUnits: "",
+    snapshotEverySeconds: "",
+    progressStdout: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -50,53 +158,31 @@ function parseArgs(argv) {
       usage();
       process.exit(0);
     }
-    if (arg === "--db" || arg === "--db-path") {
-      config.dbPath = path.resolve(readValue(argv, index, arg));
-      index += 1;
-      continue;
+    if (!arg.startsWith("--")) {
+      throw new Error(`Unknown argument: ${arg}`);
     }
-    if (arg.startsWith("--db=")) {
-      config.dbPath = path.resolve(arg.slice("--db=".length));
-      continue;
-    }
-    if (arg === "--project-id") {
-      config.projectId = readValue(argv, index, arg);
-      index += 1;
-      continue;
-    }
-    if (arg.startsWith("--project-id=")) {
-      config.projectId = arg.slice("--project-id=".length);
-      continue;
-    }
-    if (arg === "--input") {
-      config.inputPath = path.resolve(readValue(argv, index, arg));
-      index += 1;
-      continue;
-    }
-    if (arg.startsWith("--input=")) {
-      config.inputPath = path.resolve(arg.slice("--input=".length));
-      continue;
-    }
-    if (arg === "--output") {
-      config.outputPath = path.resolve(readValue(argv, index, arg));
-      index += 1;
-      continue;
-    }
-    if (arg.startsWith("--output=")) {
-      config.outputPath = path.resolve(arg.slice("--output=".length));
-      continue;
-    }
-    if (arg === "--target-scope") {
-      config.targetScope = readValue(argv, index, arg);
-      index += 1;
-      continue;
-    }
-    if (arg.startsWith("--target-scope=")) {
-      config.targetScope = arg.slice("--target-scope=".length);
+
+    const equalsIndex = arg.indexOf("=");
+    if (equalsIndex !== -1) {
+      assignOption(
+        config,
+        arg.slice(2, equalsIndex),
+        arg.slice(equalsIndex + 1),
+        arg.slice(0, equalsIndex),
+      );
       continue;
     }
 
-    throw new Error(`Unknown argument: ${arg}`);
+    const name = arg.slice(2);
+    if (!OPTION_NAMES.has(name)) {
+      throw new Error(`Unknown argument: --${name}`);
+    }
+    if (BOOLEAN_OPTIONS.has(name)) {
+      assignOption(config, name);
+      continue;
+    }
+    assignOption(config, name, readValue(argv, index, arg), arg);
+    index += 1;
   }
 
   if (!config.dbPath) {
@@ -129,6 +215,21 @@ function parseArgs(argv) {
       "--target-scope must be blank-only or overwrite-non-confirmed.",
     );
   }
+  if (config.maxAttempts && !isPositiveInteger(config.maxAttempts)) {
+    throw new Error("--max-attempts must be a positive integer.");
+  }
+  if (
+    config.snapshotEveryUnits &&
+    !isPositiveInteger(config.snapshotEveryUnits)
+  ) {
+    throw new Error("--snapshot-every-units must be a positive integer.");
+  }
+  if (
+    config.snapshotEverySeconds &&
+    !isPositiveInteger(config.snapshotEverySeconds)
+  ) {
+    throw new Error("--snapshot-every-seconds must be a positive integer.");
+  }
 
   return config;
 }
@@ -142,6 +243,57 @@ function spawnCommandSync(command, args, options = {}) {
     ...options,
     shell: process.platform === "win32",
   });
+}
+
+function buildRunnerEnv(config) {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("LOCALIZATION_ENGINE_")) {
+      delete env[key];
+    }
+  }
+
+  Object.assign(env, {
+    LOCALIZATION_ENGINE_FILE_DYNAMIC: "1",
+    LOCALIZATION_ENGINE_DB_PATH: config.dbPath,
+    LOCALIZATION_ENGINE_PROJECT_ID: config.projectId,
+    LOCALIZATION_ENGINE_INPUT_PATH: config.inputPath,
+    LOCALIZATION_ENGINE_OUTPUT_PATH: config.outputPath,
+    LOCALIZATION_ENGINE_JOB_ENABLED: "1",
+  });
+  if (config.targetScope) {
+    env.LOCALIZATION_ENGINE_TARGET_SCOPE = config.targetScope;
+  }
+  if (config.checkpointPath) {
+    env.LOCALIZATION_ENGINE_CHECKPOINT_PATH = config.checkpointPath;
+  }
+  if (config.eventsPath) {
+    env.LOCALIZATION_ENGINE_EVENTS_PATH = config.eventsPath;
+  }
+  if (config.artifactsPath) {
+    env.LOCALIZATION_ENGINE_ARTIFACTS_PATH = config.artifactsPath;
+  }
+  if (config.resume) {
+    env.LOCALIZATION_ENGINE_RESUME = "1";
+  }
+  if (config.maxAttempts) {
+    env.LOCALIZATION_ENGINE_MAX_ATTEMPTS = config.maxAttempts;
+  }
+  if (config.snapshotPath) {
+    env.LOCALIZATION_ENGINE_SNAPSHOT_PATH = config.snapshotPath;
+  }
+  if (config.snapshotEveryUnits) {
+    env.LOCALIZATION_ENGINE_SNAPSHOT_EVERY_UNITS = config.snapshotEveryUnits;
+  }
+  if (config.snapshotEverySeconds) {
+    env.LOCALIZATION_ENGINE_SNAPSHOT_EVERY_SECONDS =
+      config.snapshotEverySeconds;
+  }
+  if (config.progressStdout) {
+    env.LOCALIZATION_ENGINE_PROGRESS_STDOUT = "1";
+  }
+
+  return env;
 }
 
 function runTranslation(config) {
@@ -167,15 +319,7 @@ function runTranslation(config) {
     ],
     {
       cwd: process.cwd(),
-      env: {
-        ...process.env,
-        LOCALIZATION_ENGINE_FILE_DYNAMIC: "1",
-        LOCALIZATION_ENGINE_DB_PATH: config.dbPath,
-        LOCALIZATION_ENGINE_PROJECT_ID: config.projectId,
-        LOCALIZATION_ENGINE_INPUT_PATH: config.inputPath,
-        LOCALIZATION_ENGINE_OUTPUT_PATH: config.outputPath,
-        LOCALIZATION_ENGINE_TARGET_SCOPE: config.targetScope,
-      },
+      env: buildRunnerEnv(config),
       stdio: "inherit",
     },
   );
