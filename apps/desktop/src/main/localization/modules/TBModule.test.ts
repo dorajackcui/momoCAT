@@ -6,7 +6,12 @@ import { SqliteTBRepository } from '../../services/adapters/SqliteTBRepository';
 import type { TBRepository } from '../../services/ports';
 import { TBService } from '../../services/TBService';
 import { createTransientSegment } from '../transientSegment';
-import { MAX_TB_PROMPT_REFERENCES, TBModule } from './TBModule';
+import {
+  MAX_ENGINE_TB_REFERENCES,
+  MAX_TB_PROMPT_REFERENCES,
+  TBModule,
+  mapTBEngineReferences,
+} from './TBModule';
 
 describe('TBModule', () => {
   it('inspects mounted TBs, raw matches, selected TB references, and policy limits', async () => {
@@ -93,6 +98,28 @@ describe('TBModule', () => {
     expect(artifact.selectedReferences[99]).toEqual({
       srcTerm: 'term-99',
       tgtTerm: 'terme-99',
+      note: null,
+    });
+  });
+
+  it('maps TB matches to capped engine references', () => {
+    const matches = Array.from({ length: MAX_ENGINE_TB_REFERENCES + 5 }, (_, index) =>
+      createTBMatch(index),
+    );
+
+    const references = mapTBEngineReferences(matches);
+
+    expect(references).toHaveLength(MAX_ENGINE_TB_REFERENCES);
+    expect(references[0]).toEqual({
+      tbName: 'Stub TB',
+      srcTerm: 'term-0',
+      tgtTerm: 'terme-0',
+      note: null,
+    });
+    expect(references[MAX_ENGINE_TB_REFERENCES - 1]).toEqual({
+      tbName: 'Stub TB',
+      srcTerm: `term-${MAX_ENGINE_TB_REFERENCES - 1}`,
+      tgtTerm: `terme-${MAX_ENGINE_TB_REFERENCES - 1}`,
       note: null,
     });
   });

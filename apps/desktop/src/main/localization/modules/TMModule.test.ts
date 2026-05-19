@@ -9,8 +9,10 @@ import { TMService, type TMMatch } from '../../services/TMService';
 import { createTransientSegment } from '../transientSegment';
 import {
   MAX_CONCORDANCE_PROMPT_REFERENCES,
+  MAX_ENGINE_TM_REFERENCES,
   MAX_TM_PROMPT_REFERENCES,
   TMModule,
+  mapTMEngineReferences,
 } from './TMModule';
 
 describe('TMModule', () => {
@@ -127,6 +129,96 @@ describe('TMModule', () => {
       },
     ]);
     expect(artifact.selectedReferences.tmReferences).toEqual([]);
+  });
+
+  it('caps selected TM and concordance references at 3 each', async () => {
+    const segment = createTransientSegment({ id: 'unit-cap', source: 'source' }, 0);
+    const matches: TMMatch[] = [
+      ...Array.from({ length: 5 }, (_, index) =>
+        createTMMatch({
+          kind: 'tm',
+          id: `tm-${index}`,
+          sourceText: `source ${index}`,
+          targetText: `target ${index}`,
+          similarity: 100 - index,
+        }),
+      ),
+      ...Array.from({ length: 5 }, (_, index) =>
+        createTMMatch({
+          kind: 'concordance',
+          id: `concordance-${index}`,
+          matchedSourceText: `matched ${index}`,
+          sourceText: `concordance source ${index}`,
+          targetText: `concordance target ${index}`,
+        }),
+      ),
+    ];
+    const module = new TMModule(
+      { getProjectMountedTMs: vi.fn().mockReturnValue([]) },
+      { findMatches: vi.fn().mockResolvedValue(matches) },
+    );
+
+    const artifact = await module.inspect(1, segment);
+
+    expect(artifact.rawMatches).toBe(matches);
+    expect(artifact.selectedReferences.tmReferences).toHaveLength(MAX_TM_PROMPT_REFERENCES);
+    expect(artifact.selectedReferences.concordanceReferences).toHaveLength(
+      MAX_CONCORDANCE_PROMPT_REFERENCES,
+    );
+    expect(
+      artifact.selectedReferences.tmReferences.map((reference) => reference.sourceText),
+    ).toEqual(['source 0', 'source 1', 'source 2']);
+    expect(
+      artifact.selectedReferences.concordanceReferences.map(
+        (reference) => reference.matchedSourceText,
+      ),
+    ).toEqual(['matched 0', 'matched 1', 'matched 2']);
+  });
+
+  it('maps TM and concordance matches to capped engine references', () => {
+    const tmMatch = createTMMatch({
+      kind: 'tm',
+      id: 'tm-engine',
+      sourceText: 'Hello',
+      targetText: 'Bonjour',
+      similarity: 98,
+    });
+    const concordanceMatch = createTMMatch({
+      kind: 'concordance',
+      id: 'concordance-engine',
+      matchedSourceText: 'world',
+      sourceText: 'Hello world',
+      targetText: 'Bonjour le monde',
+    });
+    const extraMatches = Array.from({ length: MAX_ENGINE_TM_REFERENCES }, (_, index) =>
+      createTMMatch({
+        kind: 'tm',
+        id: `extra-${index}`,
+        sourceText: `extra source ${index}`,
+        targetText: `extra target ${index}`,
+        similarity: 80,
+      }),
+    );
+
+    const references = mapTMEngineReferences([tmMatch, concordanceMatch, ...extraMatches]);
+
+    expect(references).toHaveLength(MAX_ENGINE_TM_REFERENCES);
+    expect(references[0]).toEqual({
+      kind: 'tm',
+      rank: 98,
+      similarity: 98,
+      tmName: 'Stub TM',
+      sourceText: 'Hello',
+      targetText: 'Bonjour',
+    });
+    expect(references[1]).toEqual({
+      kind: 'concordance',
+      rank: 90,
+      tmName: 'Stub TM',
+      sourceText: 'Hello world',
+      targetText: 'Bonjour le monde',
+      matchedSourceText: 'world',
+    });
   });
 
   it('does not include prompt text fields', async () => {
