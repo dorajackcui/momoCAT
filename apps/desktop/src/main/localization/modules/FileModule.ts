@@ -181,8 +181,7 @@ function rowsToArtifacts(
       unitId: `row-${rowNumber}`,
       source: cellToText(row[columns.sourceCol]),
       target: cellToText(row[columns.targetCol]),
-      context:
-        columns.contextCol === undefined ? undefined : cellToText(row[columns.contextCol]),
+      context: columns.contextCol === undefined ? undefined : cellToText(row[columns.contextCol]),
       originalCells: row.map(cellToSerializableValue),
     });
   }
@@ -314,10 +313,7 @@ async function writeWorkbook(
   outputPath: string,
   bookType: XLSX.BookType,
 ): Promise<void> {
-  const data = XLSX.write(workbook, { bookType, type: 'buffer' }) as
-    | Buffer
-    | Uint8Array
-    | string;
+  const data = XLSX.write(workbook, { bookType, type: 'buffer' }) as Buffer | Uint8Array | string;
 
   if (typeof data === 'string') {
     await writeFile(outputPath, data, 'utf8');

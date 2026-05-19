@@ -7,10 +7,7 @@
       "aiModule",
       "segmentService"
     ],
-    "delegationExceptions": [
-      "onProgress",
-      "onSegmentsUpdated"
-    ]
+    "delegationExceptions": ["onProgress", "onSegmentsUpdated"]
   },
   "catDatabase": {
     "publicMethods": [
@@ -73,13 +70,8 @@
       "upsertTMEntry",
       "upsertTMEntryBySrcHash"
     ],
-    "legacyMultiRepoMethods": [
-      "createProject",
-      "listProjects"
-    ],
-    "allowedDirectDbMethods": [
-      "close"
-    ]
+    "legacyMultiRepoMethods": ["createProject", "listProjects"],
+    "allowedDirectDbMethods": ["close"]
   },
   "catCore": {
     "rootBarrelModule": "@cat/core",
@@ -89,11 +81,7 @@
       "packages/db/src",
       "packages/core/src"
     ],
-    "allowedRootBarrelImportFiles": [
-      "packages/core/src/index.test.ts"
-    ],
-    "allowedInternalRootIndexImportFiles": [
-      "packages/core/src/index.test.ts"
-    ]
+    "allowedRootBarrelImportFiles": ["packages/core/src/index.test.ts"],
+    "allowedInternalRootIndexImportFiles": ["packages/core/src/index.test.ts"]
   }
 }

@@ -23,11 +23,11 @@ describe('TMModule', () => {
       const tmId = db.createTM('Client Main TM', 'en', 'fr', 'main');
       db.mountTMToProject(projectId, tmId, 10, 'read');
 
-      const segment = createTransientSegment(
-        { id: 'unit-1', source: 'Hello world' },
-        0,
-        { projectId, sourceLanguage: 'en', targetLanguage: 'fr' },
-      );
+      const segment = createTransientSegment({ id: 'unit-1', source: 'Hello world' }, 0, {
+        projectId,
+        sourceLanguage: 'en',
+        targetLanguage: 'fr',
+      });
       const entry = createTMEntry({
         id: 'tm-entry-1',
         tmId,

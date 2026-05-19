@@ -29,11 +29,11 @@ describe('TBModule', () => {
         note: 'Use the common noun.',
       });
 
-      const segment = createTransientSegment(
-        { id: 'unit-1', source: 'Hello world' },
-        0,
-        { projectId, sourceLanguage: 'en', targetLanguage: 'fr' },
-      );
+      const segment = createTransientSegment({ id: 'unit-1', source: 'Hello world' }, 0, {
+        projectId,
+        sourceLanguage: 'en',
+        targetLanguage: 'fr',
+      });
       const projectRepo = new SqliteProjectRepository(db);
       const tbRepo = new SqliteTBRepository(db);
       const module = new TBModule({

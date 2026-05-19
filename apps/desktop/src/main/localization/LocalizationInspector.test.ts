@@ -189,9 +189,13 @@ describe('LocalizationInspector.inspectFile', () => {
         aiTransport: createTransport(),
         aiRuntimeConfigProvider: runtimeConfigProvider(),
         mtModule: {
-          composePrompt: vi.fn().mockImplementation(({ unitId, project, segment }) =>
-            Promise.resolve(createPromptArtifact(unitId, project.projectType, segment, longPrompt)),
-          ),
+          composePrompt: vi
+            .fn()
+            .mockImplementation(({ unitId, project, segment }) =>
+              Promise.resolve(
+                createPromptArtifact(unitId, project.projectType, segment, longPrompt),
+              ),
+            ),
         },
       });
 

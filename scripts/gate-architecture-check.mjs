@@ -1,16 +1,19 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import ts from 'typescript';
+import fs from "node:fs";
+import path from "node:path";
+import ts from "typescript";
 
 const ROOT = process.cwd();
 const PROJECT_SERVICE_PATH = path.join(
   ROOT,
-  'apps/desktop/src/main/services/ProjectService.ts',
+  "apps/desktop/src/main/services/ProjectService.ts",
 );
-const CAT_DATABASE_PATH = path.join(ROOT, 'packages/db/src/index.ts');
-const GUARDRAILS_PATH = path.join(ROOT, 'DOCS/architecture/GATE05_GUARDRAILS.json');
+const CAT_DATABASE_PATH = path.join(ROOT, "packages/db/src/index.ts");
+const GUARDRAILS_PATH = path.join(
+  ROOT,
+  "DOCS/architecture/GATE05_GUARDRAILS.json",
+);
 
-const guardrails = JSON.parse(fs.readFileSync(GUARDRAILS_PATH, 'utf8'));
+const guardrails = JSON.parse(fs.readFileSync(GUARDRAILS_PATH, "utf8"));
 const errors = [];
 
 const CONTROL_FLOW_KINDS = new Set([
@@ -25,18 +28,31 @@ const CONTROL_FLOW_KINDS = new Set([
 ]);
 
 function readSourceFile(filePath) {
-  const text = fs.readFileSync(filePath, 'utf8');
-  const scriptKind = filePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
-  return ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true, scriptKind);
+  const text = fs.readFileSync(filePath, "utf8");
+  const scriptKind = filePath.endsWith(".tsx")
+    ? ts.ScriptKind.TSX
+    : ts.ScriptKind.TS;
+  return ts.createSourceFile(
+    filePath,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKind,
+  );
 }
 
 function hasModifier(node, modifierKind) {
-  return node.modifiers?.some((modifier) => modifier.kind === modifierKind) ?? false;
+  return (
+    node.modifiers?.some((modifier) => modifier.kind === modifierKind) ?? false
+  );
 }
 
 function getClassOrThrow(sourceFile, className) {
   for (const statement of sourceFile.statements) {
-    if (ts.isClassDeclaration(statement) && statement.name?.text === className) {
+    if (
+      ts.isClassDeclaration(statement) &&
+      statement.name?.text === className
+    ) {
       return statement;
     }
   }
@@ -55,7 +71,7 @@ function getPublicMethods(classDeclaration) {
 function getMethodName(method) {
   if (ts.isIdentifier(method.name)) return method.name.text;
   if (ts.isStringLiteral(method.name)) return method.name.text;
-  return '<computed>';
+  return "<computed>";
 }
 
 function collectMethodFacts(method) {
@@ -68,11 +84,17 @@ function collectMethodFacts(method) {
       controlFlowKinds.add(ts.SyntaxKind[node.kind]);
     }
 
-    if (ts.isPropertyAccessExpression(node) && node.expression.kind === ts.SyntaxKind.ThisKeyword) {
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ThisKeyword
+    ) {
       thisProperties.add(node.name.text);
     }
 
-    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression)
+    ) {
       const outer = node.expression;
       if (ts.isPropertyAccessExpression(outer.expression)) {
         const inner = outer.expression;
@@ -102,13 +124,13 @@ function listSourceFiles(rootDir) {
   const walk = (currentDir) => {
     const entries = fs.readdirSync(currentDir, { withFileTypes: true });
     for (const entry of entries) {
-      if (entry.name === 'dist' || entry.name === 'node_modules') continue;
+      if (entry.name === "dist" || entry.name === "node_modules") continue;
       const fullPath = path.join(currentDir, entry.name);
       if (entry.isDirectory()) {
         walk(fullPath);
         continue;
       }
-      if (fullPath.endsWith('.ts') || fullPath.endsWith('.tsx')) {
+      if (fullPath.endsWith(".ts") || fullPath.endsWith(".tsx")) {
         result.push(fullPath);
       }
     }
@@ -122,7 +144,7 @@ function getImportSpecifiers(sourceFile) {
   return sourceFile.statements
     .filter((statement) => ts.isImportDeclaration(statement))
     .map((statement) => statement.moduleSpecifier.text)
-    .filter((specifier) => typeof specifier === 'string');
+    .filter((specifier) => typeof specifier === "string");
 }
 
 function resolveImportTarget(fromFile, specifier) {
@@ -131,37 +153,45 @@ function resolveImportTarget(fromFile, specifier) {
     basePath,
     `${basePath}.ts`,
     `${basePath}.tsx`,
-    path.join(basePath, 'index.ts'),
-    path.join(basePath, 'index.tsx'),
+    path.join(basePath, "index.ts"),
+    path.join(basePath, "index.tsx"),
   ];
 
   return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
 }
 
 function toPosixPath(value) {
-  return value.split(path.sep).join('/');
+  return value.split(path.sep).join("/");
 }
 
 function validateProjectService() {
   const sourceFile = readSourceFile(PROJECT_SERVICE_PATH);
-  const classDeclaration = getClassOrThrow(sourceFile, 'ProjectService');
+  const classDeclaration = getClassOrThrow(sourceFile, "ProjectService");
   const methods = getPublicMethods(classDeclaration);
 
-  const allowedDelegateFields = new Set(guardrails.projectService.allowedDelegateFields);
-  const delegationExceptions = new Set(guardrails.projectService.delegationExceptions);
+  const allowedDelegateFields = new Set(
+    guardrails.projectService.allowedDelegateFields,
+  );
+  const delegationExceptions = new Set(
+    guardrails.projectService.delegationExceptions,
+  );
 
   for (const method of methods) {
     const methodName = getMethodName(method);
-    const { thisProperties, delegatedFields, controlFlowKinds } = collectMethodFacts(method);
+    const { thisProperties, delegatedFields, controlFlowKinds } =
+      collectMethodFacts(method);
 
     if (delegationExceptions.has(methodName)) {
       continue;
     }
 
-    const unknownThisProperties = compareSetWithAllowlist(thisProperties, allowedDelegateFields);
+    const unknownThisProperties = compareSetWithAllowlist(
+      thisProperties,
+      allowedDelegateFields,
+    );
     if (unknownThisProperties.length > 0) {
       errors.push(
-        `ProjectService.${methodName} references disallowed fields: ${unknownThisProperties.join(', ')}`,
+        `ProjectService.${methodName} references disallowed fields: ${unknownThisProperties.join(", ")}`,
       );
     }
 
@@ -172,7 +202,7 @@ function validateProjectService() {
       errors.push(
         `ProjectService.${methodName} must delegate to a module/use-case field (${[
           ...allowedDelegateFields,
-        ].join(', ')})`,
+        ].join(", ")})`,
       );
     }
 
@@ -180,7 +210,7 @@ function validateProjectService() {
       errors.push(
         `ProjectService.${methodName} contains business control flow (${[
           ...controlFlowKinds,
-        ].join(', ')}); move logic to services/modules`,
+        ].join(", ")}); move logic to services/modules`,
       );
     }
   }
@@ -188,11 +218,13 @@ function validateProjectService() {
 
 function validateCatDatabase() {
   const sourceFile = readSourceFile(CAT_DATABASE_PATH);
-  const classDeclaration = getClassOrThrow(sourceFile, 'CATDatabase');
+  const classDeclaration = getClassOrThrow(sourceFile, "CATDatabase");
   const methods = getPublicMethods(classDeclaration);
 
   const publicMethodNames = methods.map(getMethodName).sort();
-  const expectedPublicMethodNames = [...guardrails.catDatabase.publicMethods].sort();
+  const expectedPublicMethodNames = [
+    ...guardrails.catDatabase.publicMethods,
+  ].sort();
 
   const missingMethods = expectedPublicMethodNames.filter(
     (methodName) => !publicMethodNames.includes(methodName),
@@ -204,31 +236,46 @@ function validateCatDatabase() {
   if (missingMethods.length > 0 || addedMethods.length > 0) {
     errors.push(
       `CATDatabase public API changed. Missing: ${
-        missingMethods.join(', ') || '(none)'
-      } | Added: ${addedMethods.join(', ') || '(none)'}`,
+        missingMethods.join(", ") || "(none)"
+      } | Added: ${addedMethods.join(", ") || "(none)"}`,
     );
   }
 
-  const repoFields = new Set(['projectRepo', 'segmentRepo', 'settingsRepo', 'tbRepo', 'tmRepo']);
-  const legacyMultiRepoMethods = new Set(guardrails.catDatabase.legacyMultiRepoMethods);
-  const allowedDirectDbMethods = new Set(guardrails.catDatabase.allowedDirectDbMethods);
+  const repoFields = new Set([
+    "projectRepo",
+    "segmentRepo",
+    "settingsRepo",
+    "tbRepo",
+    "tmRepo",
+  ]);
+  const legacyMultiRepoMethods = new Set(
+    guardrails.catDatabase.legacyMultiRepoMethods,
+  );
+  const allowedDirectDbMethods = new Set(
+    guardrails.catDatabase.allowedDirectDbMethods,
+  );
 
   for (const method of methods) {
     const methodName = getMethodName(method);
     const { thisProperties } = collectMethodFacts(method);
 
-    const touchedRepoFields = [...thisProperties].filter((field) => repoFields.has(field));
+    const touchedRepoFields = [...thisProperties].filter((field) =>
+      repoFields.has(field),
+    );
     const uniqueTouchedRepos = new Set(touchedRepoFields);
 
-    if (uniqueTouchedRepos.size > 1 && !legacyMultiRepoMethods.has(methodName)) {
+    if (
+      uniqueTouchedRepos.size > 1 &&
+      !legacyMultiRepoMethods.has(methodName)
+    ) {
       errors.push(
         `CATDatabase.${methodName} touches multiple repos (${[
           ...uniqueTouchedRepos,
-        ].join(', ')}); orchestration must move to use-case/module layer`,
+        ].join(", ")}); orchestration must move to use-case/module layer`,
       );
     }
 
-    if (thisProperties.has('db') && !allowedDirectDbMethods.has(methodName)) {
+    if (thisProperties.has("db") && !allowedDirectDbMethods.has(methodName)) {
       errors.push(
         `CATDatabase.${methodName} touches raw db directly; keep db access inside repos`,
       );
@@ -240,12 +287,16 @@ function validateCatCoreImports() {
   const catCoreGuard = guardrails.catCore;
   const rootBarrelModule = catCoreGuard.rootBarrelModule;
   const rootBarrelPath = path.join(ROOT, catCoreGuard.rootBarrelPath);
-  const checkedRoots = catCoreGuard.checkedRoots.map((checkedRoot) => path.join(ROOT, checkedRoot));
-  const allowedRootBarrelImportFiles = new Set(catCoreGuard.allowedRootBarrelImportFiles);
+  const checkedRoots = catCoreGuard.checkedRoots.map((checkedRoot) =>
+    path.join(ROOT, checkedRoot),
+  );
+  const allowedRootBarrelImportFiles = new Set(
+    catCoreGuard.allowedRootBarrelImportFiles,
+  );
   const allowedInternalRootIndexImportFiles = new Set(
     catCoreGuard.allowedInternalRootIndexImportFiles,
   );
-  const coreSourceRoot = path.join(ROOT, 'packages/core/src');
+  const coreSourceRoot = path.join(ROOT, "packages/core/src");
 
   for (const checkedRoot of checkedRoots) {
     const files = listSourceFiles(checkedRoot);
@@ -265,7 +316,10 @@ function validateCatCoreImports() {
           );
         }
 
-        if (!filePath.startsWith(coreSourceRoot) || !specifier.startsWith('.')) {
+        if (
+          !filePath.startsWith(coreSourceRoot) ||
+          !specifier.startsWith(".")
+        ) {
           continue;
         }
 
@@ -292,16 +346,19 @@ try {
   validateCatDatabase();
   validateCatCoreImports();
 } catch (error) {
-  console.error('[gate:arch] Fatal error:', error instanceof Error ? error.message : String(error));
+  console.error(
+    "[gate:arch] Fatal error:",
+    error instanceof Error ? error.message : String(error),
+  );
   process.exit(1);
 }
 
 if (errors.length > 0) {
-  console.error('[gate:arch] Architecture guard failed:');
+  console.error("[gate:arch] Architecture guard failed:");
   for (const error of errors) {
     console.error(`- ${error}`);
   }
   process.exit(1);
 }
 
-console.log('[gate:arch] Architecture guard passed.');
+console.log("[gate:arch] Architecture guard passed.");

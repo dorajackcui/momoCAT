@@ -591,8 +591,7 @@ function shouldOmitConcordanceReferences(
   return (
     tmReferenceCount > 0 &&
     tbReferenceCount > 0 &&
-    tmReferenceCount + tbReferenceCount >
-      MAX_TM_TB_REFERENCES_WITH_CONCORDANCE
+    tmReferenceCount + tbReferenceCount > MAX_TM_TB_REFERENCES_WITH_CONCORDANCE
   );
 }
 

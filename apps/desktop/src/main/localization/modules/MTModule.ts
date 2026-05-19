@@ -272,7 +272,11 @@ export class MTModule {
     const tbReferences = input.tb.selectedReferences;
 
     return {
-      projectPrompt: input.projectPromptOverride ?? input.mtOptions?.systemPrompt ?? input.project.aiPrompt ?? '',
+      projectPrompt:
+        input.projectPromptOverride ??
+        input.mtOptions?.systemPrompt ??
+        input.project.aiPrompt ??
+        '',
       projectType: normalizeProjectType(input.project.projectType),
       sourceText,
       sourceTagPreservedText,
@@ -281,8 +285,7 @@ export class MTModule {
       references: {
         tmReference: tmReferences[0],
         tmReferences: tmReferences.length > 0 ? tmReferences : undefined,
-        concordanceReferences:
-          concordanceReferences.length > 0 ? concordanceReferences : undefined,
+        concordanceReferences: concordanceReferences.length > 0 ? concordanceReferences : undefined,
         tbReferences: tbReferences.length > 0 ? tbReferences : undefined,
       },
     };

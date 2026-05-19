@@ -193,10 +193,9 @@ export class LocalizationInspector {
       tbResult.status === 'fulfilled'
         ? tbResult.value
         : emptyTBArtifact(row.unitId, segment.segmentId);
-    const referenceErrors = [
-      stageError('tm', tmResult),
-      stageError('tb', tbResult),
-    ].filter((error): error is string => Boolean(error));
+    const referenceErrors = [stageError('tm', tmResult), stageError('tb', tbResult)].filter(
+      (error): error is string => Boolean(error),
+    );
 
     if (referenceErrors.length > 0) {
       return buildErrorUnit({
@@ -264,9 +263,21 @@ function buildXlsxFields(
   unitId: string,
   maxCellChars: number,
 ): InspectUnitArtifact['xlsx'] {
-  const tmForMt = truncateForCell(mt.tmPromptBlock, maxCellChars, `#/units/${unitId}/mt/tmPromptBlock`);
-  const tbForMt = truncateForCell(mt.tbPromptBlock, maxCellChars, `#/units/${unitId}/mt/tbPromptBlock`);
-  const mtUserPrompt = truncateForCell(mt.userPrompt, maxCellChars, `#/units/${unitId}/mt/userPrompt`);
+  const tmForMt = truncateForCell(
+    mt.tmPromptBlock,
+    maxCellChars,
+    `#/units/${unitId}/mt/tmPromptBlock`,
+  );
+  const tbForMt = truncateForCell(
+    mt.tbPromptBlock,
+    maxCellChars,
+    `#/units/${unitId}/mt/tbPromptBlock`,
+  );
+  const mtUserPrompt = truncateForCell(
+    mt.userPrompt,
+    maxCellChars,
+    `#/units/${unitId}/mt/userPrompt`,
+  );
 
   return {
     tmForMt: tmForMt.value,
@@ -280,7 +291,11 @@ function buildXlsxFields(
   };
 }
 
-function truncateForCell(value: string, maxCellChars: number, jsonRef: string): {
+function truncateForCell(
+  value: string,
+  maxCellChars: number,
+  jsonRef: string,
+): {
   value: string;
   truncated: boolean;
 } {
@@ -307,10 +322,7 @@ function validatePositiveInteger(value: number | undefined, name: string): numbe
   return value;
 }
 
-function stageError<T>(
-  stage: string,
-  result: PromiseSettledResult<T>,
-): string | undefined {
+function stageError<T>(stage: string, result: PromiseSettledResult<T>): string | undefined {
   if (result.status === 'fulfilled') {
     return undefined;
   }
@@ -392,7 +404,10 @@ function emptyTBArtifact(unitId: string, segmentId: string): TBArtifact {
   };
 }
 
-function emptyPromptArtifact(unitId: string, project: Pick<Project, 'projectType'>): PromptArtifact {
+function emptyPromptArtifact(
+  unitId: string,
+  project: Pick<Project, 'projectType'>,
+): PromptArtifact {
   return {
     unitId,
     provider: {

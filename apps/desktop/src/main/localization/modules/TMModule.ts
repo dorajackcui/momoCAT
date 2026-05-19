@@ -97,8 +97,7 @@ export function buildTMPromptReferences(matches: TMMatch[]): TMArtifact['selecte
       .map(mapTMPromptReference),
     concordanceReferences: matches
       .filter(
-        (match): match is Extract<TMMatch, { kind: 'concordance' }> =>
-          match.kind === 'concordance',
+        (match): match is Extract<TMMatch, { kind: 'concordance' }> => match.kind === 'concordance',
       )
       .slice(0, MAX_CONCORDANCE_PROMPT_REFERENCES)
       .map(mapConcordancePromptReference),

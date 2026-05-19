@@ -1,4 +1,4 @@
-import type { QaSeverity } from '../models';
+import type { QaSeverity } from "../models";
 export {
   BUILTIN_OPENAI_PROVIDER_MODELS,
   DEFAULT_PROJECT_AI_MODEL,
@@ -12,8 +12,8 @@ export {
   toBuiltinProviderId,
   type BuiltinOpenAIProviderId,
   type ProjectAIModel,
-} from './aiModelRegistry';
-import type { ProjectAIModel } from './aiModelRegistry';
+} from "./aiModelRegistry";
+import type { ProjectAIModel } from "./aiModelRegistry";
 
 export interface ProjectFile {
   id: number;
@@ -26,9 +26,9 @@ export interface ProjectFile {
   updatedAt: string;
 }
 
-export type ProjectType = 'translation' | 'review' | 'custom';
+export type ProjectType = "translation" | "review" | "custom";
 
-export type SegmentQaRuleId = 'tag-integrity' | 'terminology-consistency';
+export type SegmentQaRuleId = "tag-integrity" | "terminology-consistency";
 
 export interface SegmentQaRuleOption {
   id: SegmentQaRuleId;
@@ -74,19 +74,19 @@ export interface FileQaReport {
 
 export const SEGMENT_QA_RULE_OPTIONS: SegmentQaRuleOption[] = [
   {
-    id: 'tag-integrity',
-    label: 'Tag Integrity',
-    description: 'Check missing/extra/out-of-order tags.',
+    id: "tag-integrity",
+    label: "Tag Integrity",
+    description: "Check missing/extra/out-of-order tags.",
   },
   {
-    id: 'terminology-consistency',
-    label: 'Terminology Consistency',
-    description: 'Check TB preferred terms in target text.',
+    id: "terminology-consistency",
+    label: "Terminology Consistency",
+    description: "Check TB preferred terms in target text.",
   },
 ];
 
 export const DEFAULT_PROJECT_QA_SETTINGS: ProjectQASettings = {
-  enabledRuleIds: ['tag-integrity', 'terminology-consistency'],
+  enabledRuleIds: ["tag-integrity", "terminology-consistency"],
   instantQaOnConfirm: true,
 };
 
@@ -97,7 +97,7 @@ export {
   buildAITextPromptBundle,
   buildAIUserPrompt,
   normalizeProjectType,
-} from './aiPromptTemplates';
+} from "./aiPromptTemplates";
 export type {
   DialoguePromptBundle,
   DialoguePromptBundleBuildParams,
@@ -112,4 +112,4 @@ export type {
   TextPromptBundleBuildParams,
   TextPromptSections,
   UserPromptBuildParams,
-} from './aiPromptTypes';
+} from "./aiPromptTypes";
