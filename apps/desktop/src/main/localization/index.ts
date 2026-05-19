@@ -23,6 +23,24 @@ export type {
   TMArtifact,
 } from './artifacts';
 export type {
+  ArtifactRecord,
+  CheckpointRecord,
+  CheckpointStatus,
+  JobOptions,
+  JobUnit,
+  ProgressEventName,
+  ProgressEventRecord,
+  TaskExecutionContext,
+  TaskExecutionResult,
+  TranslationJob,
+  TranslationTask,
+  TranslationTaskExecutor,
+  UnitResult,
+  UnitResultStatus,
+} from './job/types';
+export { computeSourceHash } from './job/sourceHash';
+export type { SourceHashInput } from './job/sourceHash';
+export type {
   EngineTBReference,
   EngineTMReference,
   ExternalTranslationUnit,
