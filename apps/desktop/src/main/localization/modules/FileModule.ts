@@ -22,6 +22,14 @@ export interface ParsedSpreadsheetFile {
   artifact: FileParseArtifact;
 }
 
+interface WorksheetCellEntry {
+  rowIndex: number;
+  columnIndex: number;
+  value: SheetCell;
+}
+
+type WorksheetCellRows = Map<number, Map<number, SheetCell>>;
+
 const INSPECT_COLUMNS = [
   '_tm_for_mt',
   '_tb_for_mt',
@@ -40,13 +48,10 @@ export async function parseExternalSpreadsheet(
   }
 
   const worksheet = workbook.Sheets[sheetName];
-  const rawRows = XLSX.utils.sheet_to_json(worksheet, {
-    header: 1,
-    blankrows: true,
-    defval: '',
-  }) as SheetCell[][];
-
-  const columns = resolveColumns(rawRows[0] ?? [], input.columns);
+  const worksheetCells = collectWorksheetCells(worksheet);
+  const worksheetRows = groupWorksheetCellsByRow(worksheetCells);
+  const columns = resolveColumns(buildRowFromCellRows(worksheetRows, 0), input.columns);
+  const rawRows = buildRawRowsThroughLastSource(worksheetCells, worksheetRows, columns);
   const artifact: FileParseArtifact = {
     inputPath: input.inputPath,
     sheetName,
@@ -107,6 +112,7 @@ export async function writeTranslatedSpreadsheet(
     ensureWorksheetRefIncludesCell(parsed.worksheet, rowIndex, parsed.columns.targetCol);
   }
 
+  compactWorksheetRefToParsedRows(parsed);
   await writeWorkbook(parsed.workbook, outputPath, detectBookType(outputPath, explicitFormat));
 }
 
@@ -165,6 +171,133 @@ function resolveColumns(
   }
 
   return { sourceCol, targetCol, contextCol, hasHeader };
+}
+
+function collectWorksheetCells(worksheet: XLSX.WorkSheet): WorksheetCellEntry[] {
+  const cells: WorksheetCellEntry[] = [];
+
+  for (const [address, cell] of Object.entries(worksheet)) {
+    if (address.startsWith('!')) continue;
+
+    const decoded = XLSX.utils.decode_cell(address);
+    const value = readCellValue(cell as XLSX.CellObject);
+    if (value === undefined) continue;
+
+    cells.push({
+      rowIndex: decoded.r,
+      columnIndex: decoded.c,
+      value,
+    });
+  }
+
+  return cells;
+}
+
+function groupWorksheetCellsByRow(cells: WorksheetCellEntry[]): WorksheetCellRows {
+  const rows: WorksheetCellRows = new Map();
+
+  for (const cell of cells) {
+    let row = rows.get(cell.rowIndex);
+    if (!row) {
+      row = new Map();
+      rows.set(cell.rowIndex, row);
+    }
+    row.set(cell.columnIndex, cell.value);
+  }
+
+  return rows;
+}
+
+function readCellValue(cell: XLSX.CellObject): SheetCell {
+  if (!Object.prototype.hasOwnProperty.call(cell, 'v')) return undefined;
+
+  const value = cell.v;
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  return String(value);
+}
+
+function buildRawRowsThroughLastSource(
+  cells: WorksheetCellEntry[],
+  rows: WorksheetCellRows,
+  columns: FileParseColumnsArtifact,
+): SheetCell[][] {
+  const startIndex = columns.hasHeader ? 1 : 0;
+  const lastSourceRowIndex = findLastSourceRowIndex(cells, columns.sourceCol, startIndex);
+  if (lastSourceRowIndex === undefined) {
+    return columns.hasHeader ? [buildRowFromCellRows(rows, 0)] : [];
+  }
+
+  const maxColumnIndex = findMaxColumnIndex(cells, lastSourceRowIndex, columns);
+  const rawRows: SheetCell[][] = [];
+
+  for (let rowIndex = 0; rowIndex <= lastSourceRowIndex; rowIndex += 1) {
+    rawRows.push(buildRowFromCellRows(rows, rowIndex, maxColumnIndex));
+  }
+
+  return rawRows;
+}
+
+function findLastSourceRowIndex(
+  cells: WorksheetCellEntry[],
+  sourceColumnIndex: number,
+  startIndex: number,
+): number | undefined {
+  let lastSourceRowIndex: number | undefined;
+
+  for (const cell of cells) {
+    if (cell.columnIndex !== sourceColumnIndex || cell.rowIndex < startIndex) continue;
+    if (!cellToText(cell.value).trim()) continue;
+
+    lastSourceRowIndex =
+      lastSourceRowIndex === undefined
+        ? cell.rowIndex
+        : Math.max(lastSourceRowIndex, cell.rowIndex);
+  }
+
+  return lastSourceRowIndex;
+}
+
+function findMaxColumnIndex(
+  cells: WorksheetCellEntry[],
+  endRowIndex: number,
+  columns: FileParseColumnsArtifact,
+): number {
+  let maxColumnIndex = Math.max(columns.sourceCol, columns.targetCol, columns.contextCol ?? 0, 0);
+
+  for (const cell of cells) {
+    if (cell.rowIndex > endRowIndex) continue;
+    maxColumnIndex = Math.max(maxColumnIndex, cell.columnIndex);
+  }
+
+  return maxColumnIndex;
+}
+
+function buildRowFromCellRows(
+  rows: WorksheetCellRows,
+  rowIndex: number,
+  maxColumnIndex?: number,
+): SheetCell[] {
+  const cells = rows.get(rowIndex);
+  if (!cells) {
+    return maxColumnIndex === undefined ? [] : Array.from({ length: maxColumnIndex + 1 }, () => '');
+  }
+
+  const rowMaxColumnIndex =
+    maxColumnIndex ??
+    Array.from(cells.keys()).reduce((maxIndex, columnIndex) => Math.max(maxIndex, columnIndex), -1);
+
+  if (rowMaxColumnIndex < 0) return [];
+
+  const row: SheetCell[] = Array.from({ length: rowMaxColumnIndex + 1 }, () => '');
+  for (const [columnIndex, value] of cells.entries()) {
+    if (columnIndex <= rowMaxColumnIndex) {
+      row[columnIndex] = value ?? '';
+    }
+  }
+  return row;
 }
 
 function rowsToArtifacts(
@@ -309,6 +442,26 @@ function ensureWorksheetRefIncludesCell(
   range.e.r = Math.max(range.e.r, rowIndex);
   range.e.c = Math.max(range.e.c, columnIndex);
   worksheet['!ref'] = XLSX.utils.encode_range(range);
+}
+
+function compactWorksheetRefToParsedRows(parsed: ParsedSpreadsheetFile): void {
+  if (parsed.rawRows.length === 0) {
+    delete parsed.worksheet['!ref'];
+    return;
+  }
+
+  const maxRowIndex = parsed.rawRows.length - 1;
+  const maxColumnIndex = Math.max(
+    parsed.columns.sourceCol,
+    parsed.columns.targetCol,
+    parsed.columns.contextCol ?? 0,
+    ...parsed.rawRows.map((row) => Math.max(row.length - 1, 0)),
+  );
+
+  parsed.worksheet['!ref'] = XLSX.utils.encode_range({
+    s: { r: 0, c: 0 },
+    e: { r: maxRowIndex, c: maxColumnIndex },
+  });
 }
 
 async function writeWorkbook(

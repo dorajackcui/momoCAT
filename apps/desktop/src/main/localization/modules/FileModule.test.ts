@@ -101,6 +101,35 @@ describe('FileModule', () => {
     }
   });
 
+  it('stops parsing at the last non-empty source cell even when worksheet range is bloated', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-module-'));
+    try {
+      const inputPath = join(root, 'bloated-range.xlsx');
+      const outputPath = join(root, 'unused.xlsx');
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.aoa_to_sheet([
+        ['source', 'target', 'note'],
+        ['Hello', '', 'first'],
+        ['', 'Existing target', 'blank source before final source'],
+        ['Bye', '', 'last source'],
+      ]);
+
+      worksheet.B100 = { t: 's', v: 'orphan target after source data' };
+      worksheet['!ref'] = 'A1:C5000';
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+      XLSX.writeFile(workbook, inputPath);
+
+      const parsed = await parseExternalSpreadsheet({ projectId: 1, inputPath, outputPath });
+
+      expect(parsed.rawRows).toHaveLength(4);
+      expect(parsed.rawRows[3]).toEqual(['Bye', '', 'last source']);
+      expect(parsed.rawRows.flat()).not.toContain('orphan target after source data');
+      expect(parsed.artifact.rows.map((row) => row.rowNumber)).toEqual([2, 3, 4]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('writes translated targets to a new workbook without changing input bytes', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-file-module-'));
     try {
@@ -149,6 +178,64 @@ describe('FileModule', () => {
       }) as string[][];
       expect(rows[1][1]).toBe('Bonjour');
       expect(rows[2][1]).toBe('Au revoir');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('compacts translated workbook range to parsed rows instead of preserving bloated ranges', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-module-'));
+    try {
+      const inputPath = join(root, 'bloated-input.xlsx');
+      const outputPath = join(root, 'compact-output.xlsx');
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.aoa_to_sheet([
+        ['source', 'target'],
+        ['Hello', ''],
+        ['Bye', ''],
+      ]);
+      worksheet.B100 = { t: 's', v: 'orphan target after source data' };
+      worksheet['!ref'] = 'A1:B5000';
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+      XLSX.writeFile(workbook, inputPath);
+
+      const parsed = await parseExternalSpreadsheet({ projectId: 1, inputPath, outputPath });
+      await writeTranslatedSpreadsheet(
+        parsed,
+        {
+          summary: { total: 2, translated: 2, skipped: 0, failed: 0 },
+          results: [
+            {
+              id: 'row-2',
+              source: 'Hello',
+              target: 'Bonjour',
+              status: 'translated',
+              metadata: { rowIndex: 1 },
+            },
+            {
+              id: 'row-3',
+              source: 'Bye',
+              target: 'Au revoir',
+              status: 'translated',
+              metadata: { rowIndex: 2 },
+            },
+          ],
+        },
+        outputPath,
+      );
+
+      const written = XLSX.read(await readFile(outputPath), { type: 'buffer' });
+      const worksheetOut = written.Sheets.Sheet1;
+      expect(worksheetOut['!ref']).toBe('A1:B3');
+      const rows = XLSX.utils.sheet_to_json(worksheetOut, {
+        header: 1,
+        defval: '',
+      }) as string[][];
+      expect(rows).toEqual([
+        ['source', 'target'],
+        ['Hello', 'Bonjour'],
+        ['Bye', 'Au revoir'],
+      ]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -235,7 +322,7 @@ describe('FileModule', () => {
         'ready',
         '#/units/0',
       ]);
-      expect(segmentRows[2]).toEqual(['', '', 'blank', '', '', '', 'skipped-empty-source', '']);
+      expect(segmentRows).toHaveLength(2);
 
       const promptRows = XLSX.utils.sheet_to_json(written.Sheets.MT_SystemPrompt, {
         header: 1,
