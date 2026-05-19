@@ -268,7 +268,7 @@ describe('LocalizationInspector.inspectFile', () => {
       }) as string[][];
       expect(segmentRows[1][2]).toContain('TM prompt block');
       expect(segmentRows[1][2]).toContain('Concordance Suggestions:');
-      expect(segmentRows[1][7]).toBe('#/units/0');
+      expect(segmentRows[1][6]).toBe('#/units/0');
       expect(JSON.parse(await readFile(result.jsonOutputPath, 'utf8')).units[0].mt).toMatchObject({
         concordancePromptBlock: 'Concordance Suggestions:\nMatch: world',
         referencePromptBlock:
