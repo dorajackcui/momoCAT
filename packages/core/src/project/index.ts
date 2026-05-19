@@ -110,5 +110,6 @@ export type {
   SystemPromptBuildParams,
   TextPromptBundle,
   TextPromptBundleBuildParams,
+  TextPromptSections,
   UserPromptBuildParams,
 } from './aiPromptTypes';

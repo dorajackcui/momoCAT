@@ -569,6 +569,51 @@ describe("Project AI Prompt Templates", () => {
     expect(bundle.userPrompt).toContain(bundle.sections.tbPromptBlock);
   });
 
+  it("matches the exact translation prompt fixture with all core sections", () => {
+    const bundle = buildAITextPromptBundle("translation", {
+      srcLang: "en",
+      tgtLang: "zh",
+      sourceText: "Save file",
+      context: "Toolbar label",
+      currentTranslationPayload: "Current target text",
+      refinementInstruction: "Shorten slightly",
+      validationFeedback: "Keep markers unchanged",
+      tmReference: {
+        similarity: 100,
+        tmName: "Main TM",
+        sourceText: "Save file",
+        targetText: "Current target text",
+      },
+      tbReferences: [{ srcTerm: "Save", tgtTerm: "Save target term" }],
+    });
+
+    expect(bundle.userPrompt).toBe(
+      [
+        "Source (en):",
+        "Save file",
+        "",
+        "Context: Toolbar label",
+        "",
+        "Current Translation:",
+        "Current target text",
+        "",
+        "Refinement Instruction:",
+        "Shorten slightly",
+        "",
+        "TM References (top matches):",
+        "- Similarity: 100% | TM: Main TM",
+        "- Source: Save file",
+        "- Target: Current target text",
+        "",
+        "Terminology References (hit terms):",
+        "- Save => Save target term",
+        "",
+        "Validation feedback from previous attempt:",
+        "Keep markers unchanged",
+      ].join("\n"),
+    );
+  });
+
   it("preserves empty translation source payload line in text prompt bundles", () => {
     const bundle = buildAITextPromptBundle("translation", {
       srcLang: "en",
