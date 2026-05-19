@@ -74,13 +74,12 @@ describe('MTModule', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('MT No Transport', 'en', 'fr');
-      db.setSetting('openai_api_key', 'test-api-key');
       const project = db.getProject(projectId);
       if (!project) throw new Error('Project not created');
       const segment = createTransientSegment({ id: 'unit-1', source: 'Hello world' }, 0);
       const transport = createTransport();
 
-      await createModule(db, transport).composePrompt({
+      const artifact = await createModule(db, transport).composePrompt({
         unitId: 'unit-1',
         project,
         segment,
@@ -88,6 +87,13 @@ describe('MTModule', () => {
         tb: createTBArtifact(segment),
       });
 
+      expect(artifact.provider).toMatchObject({
+        id: expect.any(String),
+        name: expect.any(String),
+        baseUrl: 'https://api.openai.com/v1',
+      });
+      expect(artifact.model).toBeTruthy();
+      expect(artifact.reasoningEffort).toBe('medium');
       expect(transport.createResponse).not.toHaveBeenCalled();
       expect(transport.testConnection).not.toHaveBeenCalled();
     } finally {
@@ -129,12 +135,15 @@ describe('MTModule', () => {
       expect(result.prompt.userPrompt).toContain('Client Main TM');
       expect(result.prompt.userPrompt).toContain('monde');
       expect(transport.createResponse).toHaveBeenCalledTimes(1);
-      expect(transport.createResponse.mock.calls[0]?.[0]).toMatchObject({
+      const request = transport.createResponse.mock.calls[0]?.[0];
+      expect(request).toMatchObject({
         apiKey: 'test-api-key',
         baseUrl: 'https://api.openai.com/v1',
         model: 'test-model',
         reasoningEffort: 'medium',
       });
+      expect(request.systemPrompt).toBe(result.prompt.systemPrompt);
+      expect(request.userPrompt).toBe(result.prompt.userPrompt);
     } finally {
       db.close();
     }

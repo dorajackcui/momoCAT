@@ -307,6 +307,43 @@ describe('LocalizationEngine.translateUnits', () => {
     }
   });
 
+  it('keeps constructor MT defaults when call MT fields are explicitly undefined', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Constructor MT Undefined Defaults', 'en', 'fr');
+      seedApiKey(db);
+      const transport = createTransport('Salut');
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+        mt: {
+          model: 'engine-default-model',
+          reasoningEffort: 'low',
+          systemPrompt: 'Use nautical tone.',
+        },
+      });
+
+      await engine.translateUnits({
+        projectId,
+        units: [{ id: 'unit-1', source: 'Hello' }],
+        options: {
+          mt: {
+            model: undefined,
+            reasoningEffort: undefined,
+            systemPrompt: undefined,
+          },
+        },
+      });
+
+      const request = transport.createResponse.mock.calls[0]?.[0];
+      expect(request.model).toBe('engine-default-model');
+      expect(request.reasoningEffort).toBe('low');
+      expect(request.systemPrompt).toContain('Use nautical tone.');
+    } finally {
+      db.close();
+    }
+  });
+
   it('rejects dialogue mode for external units without contacting the provider', async () => {
     const db = new CATDatabase(':memory:');
     try {
