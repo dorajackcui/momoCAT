@@ -28,6 +28,7 @@
     "trace:tb-flow": "npm run rebuild:test && node scripts/tb-match-flow-trace.mjs",
     "trace:ai-file": "npm run rebuild:test && node scripts/ai-file-flow-trace.mjs",
     "translate:file": "npm run rebuild:test && node scripts/translate-file.mjs",
+    "inspect:localization": "npm run rebuild:test && node scripts/inspect-localization.mjs",
     "inspect:projects": "node scripts/inspect-projects.mjs",
     "test:watch": "vitest",
     "postinstall": "npm run rebuild:electron",
