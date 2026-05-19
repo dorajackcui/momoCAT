@@ -210,7 +210,7 @@ export class TranslationJobRunner {
 
     for (const result of taskResult.results) {
       for (const artifact of artifactsByUnit.get(unitKeyFromParts(result.documentId, result.unitId)) ?? []) {
-        await this.artifactStore.append(artifact);
+        await this.artifactStore.append(canonicalizeArtifact(artifact, job, task, result));
       }
 
       const checkpoint = resultToCheckpoint(result, this.isoNow());
@@ -289,8 +289,12 @@ function normalizeTaskResults(
   results: UnitResult[],
   attempt: number,
 ): UnitResult[] {
-  return task.units.map((unit, index) => {
-    const result = results[index];
+  const resultsByUnit = new Map(
+    results.map((result) => [unitKeyFromParts(result.documentId, result.unitId), result]),
+  );
+
+  return task.units.map((unit) => {
+    const result = resultsByUnit.get(unitKey(unit));
 
     if (!result) {
       return makeFailedResult(job, unit, 'Task executor did not return a result for this unit', attempt);
@@ -327,6 +331,32 @@ function makeFailedResult(
     error: message,
     attempts,
     metadata: unit.metadata,
+  };
+}
+
+function canonicalizeArtifact(
+  artifact: ArtifactRecord,
+  job: TranslationJob,
+  task: TranslationTask,
+  result: UnitResult,
+): ArtifactRecord {
+  return {
+    ...artifact,
+    job: job.id,
+    task: task.taskId,
+    doc: result.documentId,
+    unit: result.unitId,
+    result: artifact.result
+      ? {
+          ...artifact.result,
+          jobId: result.jobId,
+          documentId: result.documentId,
+          unitId: result.unitId,
+          sourceHash: result.sourceHash,
+          source: result.source,
+          metadata: result.metadata,
+        }
+      : artifact.result,
   };
 }
 

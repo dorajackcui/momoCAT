@@ -322,8 +322,8 @@ describe('TranslationJobRunner', () => {
       results: [
         makeResult({
           jobId: 'wrong-job',
-          documentId: 'wrong-doc',
-          unitId: 'wrong-unit',
+          documentId: 'doc-canonical',
+          unitId: 'unit-canonical',
           sourceHash: 'wrong-hash',
           source: 'wrong source',
           target: 'canonical target',
@@ -367,6 +367,87 @@ describe('TranslationJobRunner', () => {
       }),
     ]);
   });
+
+  it('matches out-of-order multi-unit task results by unit identity', async () => {
+    const harness = await makeHarness();
+    const runner = harness.makeRunner(
+      async (task) => ({
+        results: [
+          makeResult({
+            documentId: task.units[1].documentId,
+            unitId: task.units[1].unitId,
+            sourceHash: task.units[1].sourceHash,
+            source: task.units[1].source,
+            target: 'target for second',
+          }),
+          makeResult({
+            documentId: 'extra-doc',
+            unitId: 'extra-unit',
+            sourceHash: 'extra-hash',
+            target: 'ignored extra target',
+          }),
+          makeResult({
+            documentId: task.units[0].documentId,
+            unitId: task.units[0].unitId,
+            sourceHash: task.units[0].sourceHash,
+            source: task.units[0].source,
+            target: 'target for first',
+          }),
+        ],
+        artifacts: [
+          makeArtifact({
+            task: task.taskId,
+            doc: task.units[1].documentId,
+            unit: task.units[1].unitId,
+            result: makeResult({
+              documentId: task.units[1].documentId,
+              unitId: task.units[1].unitId,
+              sourceHash: task.units[1].sourceHash,
+              target: 'target for second',
+            }),
+          }),
+          makeArtifact({
+            task: task.taskId,
+            doc: 'extra-doc',
+            unit: 'extra-unit',
+          }),
+        ],
+      }),
+      {
+        taskPlanner: {
+          plan: (units) => [{ taskId: 'batch-1', units }],
+        },
+      },
+    );
+
+    const result = await runner.run(
+      makeJob({
+        units: [
+          makeUnit({ unitId: 'unit-1', sourceHash: 'hash-1', source: 'first source' }),
+          makeUnit({ unitId: 'unit-2', sourceHash: 'hash-2', source: 'second source' }),
+        ],
+      }),
+    );
+
+    expect(result.results).toEqual([
+      expect.objectContaining({ unitId: 'unit-1', target: 'target for first' }),
+      expect.objectContaining({ unitId: 'unit-2', target: 'target for second' }),
+    ]);
+    expect((await readJsonlRecords<CheckpointRecord>(harness.checkpointPath)).records).toEqual([
+      expect.objectContaining({ unit: 'unit-1', target: 'target for first' }),
+      expect.objectContaining({ unit: 'unit-2', target: 'target for second' }),
+    ]);
+    expect((await readJsonlRecords<ArtifactRecord>(harness.artifactsPath)).records).toEqual([
+      expect.objectContaining({
+        task: 'batch-1',
+        unit: 'unit-2',
+        result: expect.objectContaining({
+          unitId: 'unit-2',
+          sourceHash: 'hash-2',
+        }),
+      }),
+    ]);
+  });
 });
 
 async function makeHarness(): Promise<{
@@ -376,7 +457,10 @@ async function makeHarness(): Promise<{
   checkpointStore: CheckpointStore;
   makeRunner: (
     executor: TranslationTaskExecutor,
-    callbacks?: Pick<ConstructorParameters<typeof TranslationJobRunner>[0], 'writeSnapshot' | 'writeFinal'>,
+    options?: Pick<
+      ConstructorParameters<typeof TranslationJobRunner>[0],
+      'writeSnapshot' | 'writeFinal' | 'taskPlanner'
+    >,
   ) => TranslationJobRunner;
   events: () => Promise<ProgressEventRecord[]>;
 }> {
@@ -391,15 +475,16 @@ async function makeHarness(): Promise<{
     eventsPath,
     artifactsPath,
     checkpointStore,
-    makeRunner: (taskExecutor, callbacks = {}) =>
+    makeRunner: (taskExecutor, options = {}) =>
       new TranslationJobRunner({
         checkpointStore,
         eventSink: new EventSink(eventsPath),
         artifactStore: new ArtifactStore(artifactsPath),
-        taskPlanner: new OneUnitTaskPlanner(),
+        taskPlanner: options.taskPlanner ?? new OneUnitTaskPlanner(),
         taskExecutor,
         clock: () => new Date('2026-05-19T00:00:00.000Z'),
-        ...callbacks,
+        writeSnapshot: options.writeSnapshot,
+        writeFinal: options.writeFinal,
       }),
     events: async () => (await readJsonlRecords<ProgressEventRecord>(eventsPath)).records,
   };
