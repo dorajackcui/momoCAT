@@ -94,20 +94,13 @@ describe('translateSpreadsheetFile', () => {
       const inputPath = join(root, 'bad.xlsx');
       const outputPath = join(root, 'bad.out.xlsx');
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(
-        workbook,
-        XLSX.utils.aoa_to_sheet([['src', 'dst']]),
-        'Sheet1',
-      );
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['src', 'dst']]), 'Sheet1');
       XLSX.writeFile(workbook, inputPath);
 
       await expect(
-        translateSpreadsheetFile(
-          { projectId: 3, inputPath, outputPath },
-          async () => {
-            throw new Error('translate should not run');
-          },
-        ),
+        translateSpreadsheetFile({ projectId: 3, inputPath, outputPath }, async () => {
+          throw new Error('translate should not run');
+        }),
       ).rejects.toThrow('Could not detect source/target columns');
     } finally {
       await rm(root, { recursive: true, force: true });

@@ -37,15 +37,16 @@ export async function translateSpreadsheetFile(
 
   const columns = resolveColumns(rows[0] ?? [], input.columns);
   const units = rowsToUnits(rows, columns);
-  const rowIndexByUnitId = new Map(
-    units.map((unit) => [unit.id, Number(unit.metadata?.rowIndex)]),
-  );
+  const rowIndexByUnitId = new Map(units.map((unit) => [unit.id, Number(unit.metadata?.rowIndex)]));
   const translation = await translateUnits(units);
 
   for (const result of translation.results) {
     if (result.status === 'failed' || result.target === undefined) continue;
 
-    const rowIndex = resolveResultRowIndex(result.metadata?.rowIndex, rowIndexByUnitId.get(result.id));
+    const rowIndex = resolveResultRowIndex(
+      result.metadata?.rowIndex,
+      rowIndexByUnitId.get(result.id),
+    );
     if (rowIndex === undefined) continue;
 
     const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: columns.targetCol });
@@ -54,10 +55,7 @@ export async function translateSpreadsheetFile(
   }
 
   const bookType = detectBookType(input.outputPath, input.format);
-  const data = XLSX.write(workbook, { bookType, type: 'buffer' }) as
-    | Buffer
-    | Uint8Array
-    | string;
+  const data = XLSX.write(workbook, { bookType, type: 'buffer' }) as Buffer | Uint8Array | string;
 
   if (typeof data === 'string') {
     await writeFile(input.outputPath, data, 'utf8');
@@ -85,7 +83,9 @@ function resolveColumns(
     (hasHeader ? findHeaderColumn(headerRow, options.targetHeader ?? 'target') : undefined);
   const contextCol =
     options.contextCol ??
-    (hasHeader && options.contextHeader ? findHeaderColumn(headerRow, options.contextHeader) : undefined);
+    (hasHeader && options.contextHeader
+      ? findHeaderColumn(headerRow, options.contextHeader)
+      : undefined);
 
   if (sourceCol === undefined || targetCol === undefined) {
     throw new Error(
@@ -113,8 +113,7 @@ function rowsToUnits(rows: SheetCell[][], columns: ResolvedColumns): Localizatio
       id: `row-${rowIndex + 1}`,
       source,
       target: cellToText(row[columns.targetCol]),
-      context:
-        columns.contextCol === undefined ? undefined : cellToText(row[columns.contextCol]),
+      context: columns.contextCol === undefined ? undefined : cellToText(row[columns.contextCol]),
       metadata: { rowIndex },
     });
   }
@@ -124,9 +123,7 @@ function rowsToUnits(rows: SheetCell[][], columns: ResolvedColumns): Localizatio
 
 function findHeaderColumn(headerRow: SheetCell[], headerName: string): number | undefined {
   const normalized = headerName.trim().toLowerCase();
-  const index = headerRow.findIndex(
-    (cell) => cellToText(cell).trim().toLowerCase() === normalized,
-  );
+  const index = headerRow.findIndex((cell) => cellToText(cell).trim().toLowerCase() === normalized);
   return index >= 0 ? index : undefined;
 }
 
@@ -166,10 +163,7 @@ function ensureWorksheetRefIncludesCell(
   worksheet['!ref'] = XLSX.utils.encode_range(range);
 }
 
-function detectBookType(
-  outputPath: string,
-  explicitFormat?: 'xlsx' | 'csv',
-): XLSX.BookType {
+function detectBookType(outputPath: string, explicitFormat?: 'xlsx' | 'csv'): XLSX.BookType {
   if (explicitFormat) return explicitFormat;
 
   const extension = extname(outputPath).toLowerCase();

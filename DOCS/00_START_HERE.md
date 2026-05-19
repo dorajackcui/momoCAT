@@ -78,6 +78,13 @@ Headless project/API inspection:
 - Use `--project-id <id>` to narrow the output and `--json` for automation-friendly output.
 - The command opens SQLite read-only and only prints API key status plus last four characters; it never prints full API keys.
 
+External LocalizationEngine file translation:
+
+- To translate an external spreadsheet through a project as a TM+TB+MT engine without importing the file into the project, run `npm run translate:file -- --db <path> --project-id <id> --input <path> --output <path>`.
+- The command reads project settings, mounted TM/TB resources, and AI provider configuration, but does not create `files` or `segments` records.
+- The input file is not modified in place. The translated spreadsheet is written to `--output`.
+- By default, the file adapter detects `source` and `target` headers and translates only blank targets.
+
 ## Platform Command Matrix
 
 Run from repo root `simple-cat-tool`.

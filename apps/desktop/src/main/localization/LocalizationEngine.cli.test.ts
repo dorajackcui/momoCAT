@@ -29,9 +29,7 @@ describe('LocalizationEngine CLI file runner', () => {
         projectId,
         inputPath,
         outputPath,
-        options: targetScope
-          ? { targetScope: targetScope as LocalizationTargetScope }
-          : undefined,
+        options: targetScope ? { targetScope: targetScope as LocalizationTargetScope } : undefined,
       });
 
       console.log(

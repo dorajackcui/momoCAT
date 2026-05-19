@@ -86,10 +86,7 @@ export class LocalizationEngine {
   private readonly textTranslator: AITextTranslator;
   private readonly options: LocalizationEngineConstructorOptions;
 
-  constructor(
-    db: CATDatabase,
-    options: LocalizationEngineConstructorOptions,
-  ) {
+  constructor(db: CATDatabase, options: LocalizationEngineConstructorOptions) {
     this.options = options;
     this.projectRepo = new SqliteProjectRepository(db);
     this.settingsRepo = new SqliteSettingsRepository(db);
@@ -200,8 +197,7 @@ export class LocalizationEngine {
       input.options?.mt?.reasoningEffort ??
       this.options.mt?.reasoningEffort ??
       runtimeConfig.reasoningEffort;
-    const systemPrompt =
-      input.options?.mt?.systemPrompt ?? this.options.mt?.systemPrompt;
+    const systemPrompt = input.options?.mt?.systemPrompt ?? this.options.mt?.systemPrompt;
 
     const scheduledResults = await runBounded(
       preparedUnits,

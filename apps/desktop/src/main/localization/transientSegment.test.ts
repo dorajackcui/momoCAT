@@ -73,10 +73,7 @@ describe('createTransientSegment', () => {
   });
 
   it('has no database dependency or insert side effects', async () => {
-    const source = await readFile(
-      new URL('./transientSegment.ts', import.meta.url),
-      'utf8',
-    );
+    const source = await readFile(new URL('./transientSegment.ts', import.meta.url), 'utf8');
 
     expect(source).not.toContain('@cat/db');
     expect(source).not.toContain('CATDatabase');
