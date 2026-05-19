@@ -29,14 +29,16 @@ describe('translateSpreadsheetFile', () => {
               source: '你好',
               target: '',
               context: undefined,
-              metadata: { rowIndex: 1 },
+              rowNumber: 2,
+              metadata: { rowIndex: 1, rowNumber: 2 },
             },
             {
               id: 'row-3',
               source: '已有译文',
               target: 'Deja traduit',
               context: undefined,
-              metadata: { rowIndex: 2 },
+              rowNumber: 3,
+              metadata: { rowIndex: 2, rowNumber: 3 },
             },
           ]);
 
@@ -128,14 +130,16 @@ describe('translateSpreadsheetFile', () => {
               source: 'Hello',
               target: '',
               context: undefined,
-              metadata: { rowIndex: 0 },
+              rowNumber: 1,
+              metadata: { rowIndex: 0, rowNumber: 1 },
             },
             {
               id: 'row-2',
               source: 'World',
               target: '',
               context: undefined,
-              metadata: { rowIndex: 1 },
+              rowNumber: 2,
+              metadata: { rowIndex: 1, rowNumber: 2 },
             },
           ]);
 
@@ -177,6 +181,56 @@ describe('translateSpreadsheetFile', () => {
       expect(worksheet['!ref']).toBe('A1:C2');
       expect(rows[0][2]).toBe('Bonjour');
       expect(rows[1][2]).toBe('Monde');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('honors explicit xlsx format even when output path has csv extension', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-localization-file-'));
+    try {
+      const inputPath = join(root, 'input.xlsx');
+      const outputPath = join(root, 'output.csv');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target'],
+          ['Hello', ''],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+
+      await translateSpreadsheetFile(
+        {
+          projectId: 3,
+          inputPath,
+          outputPath,
+          format: 'xlsx',
+        },
+        async () => ({
+          summary: { total: 1, translated: 1, skipped: 0, failed: 0 },
+          results: [
+            {
+              id: 'row-2',
+              source: 'Hello',
+              target: 'Bonjour',
+              status: 'translated',
+            },
+          ],
+        }),
+      );
+
+      const writtenBytes = await readFile(outputPath);
+      expect(writtenBytes.subarray(0, 2).toString('utf8')).toBe('PK');
+
+      const written = XLSX.read(writtenBytes, { type: 'buffer' });
+      const rows = XLSX.utils.sheet_to_json(written.Sheets.Sheet1, {
+        header: 1,
+        defval: '',
+      }) as string[][];
+      expect(rows[1][1]).toBe('Bonjour');
     } finally {
       await rm(root, { recursive: true, force: true });
     }
