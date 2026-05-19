@@ -112,13 +112,23 @@ export class TranslationJobRunner {
       now: () => this.clock().getTime(),
     });
     const maxAttempts = normalizeMaxAttempts(job.options?.maxAttempts);
+    let persistenceQueue = Promise.resolve();
+    const enqueuePersistence = (work: () => Promise<void>): Promise<void> => {
+      const queuedWork = persistenceQueue.then(work, work);
+      persistenceQueue = queuedWork.then(
+        () => undefined,
+        () => undefined,
+      );
+      return queuedWork;
+    };
 
     const scheduledResults = await runBounded(
       tasks,
       async (task) => {
-        await this.emitTaskStart(job, task, resultMap.size);
         const taskResult = await this.executeTaskWithAttempts(job, task, maxAttempts);
-        await this.persistTaskResult(job, task, taskResult, resultMap, throttle);
+        await enqueuePersistence(() =>
+          this.persistTaskResult(job, task, taskResult, resultMap, throttle),
+        );
       },
       { maxConcurrency: job.options?.maxConcurrency },
     );
@@ -175,6 +185,9 @@ export class TranslationJobRunner {
     return {
       results: task.units.map((unit) =>
         makeFailedResult(job, unit, errorMessage(lastError), maxAttempts),
+      ),
+      artifacts: task.units.map((unit) =>
+        makeFailedArtifact(job, task, unit, errorMessage(lastError), maxAttempts, this.isoNow()),
       ),
     };
   }
@@ -238,24 +251,6 @@ export class TranslationJobRunner {
     });
   }
 
-  private async emitTaskStart(
-    job: TranslationJob,
-    task: TranslationTask,
-    done: number,
-  ): Promise<void> {
-    for (const unit of task.units) {
-      await this.emit({
-        job: job.id,
-        event: 'unit_start',
-        doc: unit.documentId,
-        unit: unit.unitId,
-        task: task.taskId,
-        done,
-        total: job.units.length,
-      });
-    }
-  }
-
   private async emitUnitEvent(
     job: TranslationJob,
     unit: Pick<JobUnit | UnitResult, 'documentId' | 'unitId'>,
@@ -294,18 +289,24 @@ function normalizeTaskResults(
   results: UnitResult[],
   attempt: number,
 ): UnitResult[] {
-  const resultByUnit = new Map(results.map((result) => [unitKeyFromParts(result.documentId, result.unitId), result]));
-
-  return task.units.map((unit) => {
-    const result = resultByUnit.get(unitKey(unit));
+  return task.units.map((unit, index) => {
+    const result = results[index];
 
     if (!result) {
       return makeFailedResult(job, unit, 'Task executor did not return a result for this unit', attempt);
     }
 
     return {
-      ...result,
+      jobId: job.id,
+      documentId: unit.documentId,
+      unitId: unit.unitId,
+      sourceHash: unit.sourceHash,
+      status: result.status,
+      source: unit.source,
+      target: result.target,
+      error: result.error,
       attempts: result.attempts ?? attempt,
+      metadata: unit.metadata,
     };
   });
 }
@@ -326,6 +327,25 @@ function makeFailedResult(
     error: message,
     attempts,
     metadata: unit.metadata,
+  };
+}
+
+function makeFailedArtifact(
+  job: TranslationJob,
+  task: TranslationTask,
+  unit: JobUnit,
+  error: string,
+  attempts: number,
+  at: string,
+): ArtifactRecord {
+  return {
+    job: job.id,
+    task: task.taskId,
+    doc: unit.documentId,
+    unit: unit.unitId,
+    error,
+    result: makeFailedResult(job, unit, error, attempts),
+    at,
   };
 }
 

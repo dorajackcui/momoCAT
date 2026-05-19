@@ -72,7 +72,6 @@ describe('TranslationJobRunner', () => {
     });
     expect(eventNames(await harness.events())).toEqual([
       'job_start',
-      'unit_start',
       'unit_done',
       'job_done',
     ]);
@@ -97,6 +96,15 @@ describe('TranslationJobRunner', () => {
     ]);
     expect(await readJsonlRecords<CheckpointRecord>(harness.checkpointPath)).toMatchObject({
       records: [expect.objectContaining({ status: 'failed', attempts: 2 })],
+    });
+    expect(await readJsonlRecords<ArtifactRecord>(harness.artifactsPath)).toMatchObject({
+      records: [
+        expect.objectContaining({
+          unit: 'unit-1',
+          error: 'provider unavailable',
+          result: expect.objectContaining({ status: 'failed', attempts: 2 }),
+        }),
+      ],
     });
     expect(await harness.events()).toEqual(
       expect.arrayContaining([
@@ -259,6 +267,105 @@ describe('TranslationJobRunner', () => {
       expect.objectContaining({ unitId: 'unit-2', status: 'translated', target: 'new target' }),
     ]);
     expect(finalCalls[0].resultMapUnits).toEqual(['unit-1', 'unit-2']);
+  });
+
+  it('serializes concurrent persistence so snapshots and final counts stay stable', async () => {
+    const harness = await makeHarness();
+    const snapshots: UnitResult[][] = [];
+    const runner = harness.makeRunner(
+      async (task) => ({
+        results: [
+          makeResult({
+            unitId: task.units[0].unitId,
+            sourceHash: task.units[0].sourceHash,
+            source: task.units[0].source,
+            target: `target ${task.units[0].unitId}`,
+          }),
+        ],
+      }),
+      {
+        writeSnapshot: async (results) => {
+          snapshots.push(results);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        },
+      },
+    );
+
+    const result = await runner.run(
+      makeJob({
+        units: [
+          makeUnit({ unitId: 'unit-1', sourceHash: 'hash-1' }),
+          makeUnit({ unitId: 'unit-2', sourceHash: 'hash-2' }),
+          makeUnit({ unitId: 'unit-3', sourceHash: 'hash-3' }),
+        ],
+        options: { maxConcurrency: 3, snapshotEveryUnits: 2, snapshotEverySeconds: 60 },
+      }),
+    );
+
+    expect(result.summary).toEqual({
+      total: 3,
+      translated: 3,
+      skipped: 0,
+      reused: 0,
+      failed: 0,
+    });
+    expect(snapshots).toHaveLength(1);
+    expect((await harness.events()).filter((event) => event.event === 'snapshot')).toEqual([
+      expect.objectContaining({ done: 2, total: 3 }),
+    ]);
+    expect((await readJsonlRecords<CheckpointRecord>(harness.checkpointPath)).records).toHaveLength(3);
+  });
+
+  it('canonicalizes executor result identity from the planned unit', async () => {
+    const harness = await makeHarness();
+    const runner = harness.makeRunner(async () => ({
+      results: [
+        makeResult({
+          jobId: 'wrong-job',
+          documentId: 'wrong-doc',
+          unitId: 'wrong-unit',
+          sourceHash: 'wrong-hash',
+          source: 'wrong source',
+          target: 'canonical target',
+          metadata: { wrong: true },
+        }),
+      ],
+    }));
+
+    const result = await runner.run(
+      makeJob({
+        units: [
+          makeUnit({
+            documentId: 'doc-canonical',
+            unitId: 'unit-canonical',
+            source: 'canonical source',
+            sourceHash: 'hash-canonical',
+            metadata: { expected: true },
+          }),
+        ],
+      }),
+    );
+
+    expect(result.results).toEqual([
+      expect.objectContaining({
+        jobId: 'job-1',
+        documentId: 'doc-canonical',
+        unitId: 'unit-canonical',
+        sourceHash: 'hash-canonical',
+        source: 'canonical source',
+        target: 'canonical target',
+        metadata: { expected: true },
+      }),
+    ]);
+    expect((await readJsonlRecords<CheckpointRecord>(harness.checkpointPath)).records).toEqual([
+      expect.objectContaining({
+        job: 'job-1',
+        doc: 'doc-canonical',
+        unit: 'unit-canonical',
+        hash: 'hash-canonical',
+        target: 'canonical target',
+      }),
+    ]);
   });
 });
 

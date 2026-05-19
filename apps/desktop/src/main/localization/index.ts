@@ -37,10 +37,6 @@ export type {
 } from './job/types';
 export { computeSourceHash } from './job/sourceHash';
 export type { SourceHashInput } from './job/sourceHash';
-export { SnapshotThrottle } from './job/SnapshotThrottle';
-export type { SnapshotThrottleOptions } from './job/SnapshotThrottle';
-export { OneUnitTaskPlanner } from './job/TaskPlanner';
-export type { TaskPlanner } from './job/TaskPlanner';
 export { TranslationJobRunner } from './job/TranslationJobRunner';
 export type {
   TranslationJobRunnerCallbackContext,
