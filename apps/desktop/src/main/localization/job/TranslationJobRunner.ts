@@ -309,6 +309,7 @@ function normalizeTaskResults(
       source: unit.source,
       target: result.target,
       error: result.error,
+      references: result.references,
       attempts: result.attempts ?? attempt,
       metadata: unit.metadata,
     };

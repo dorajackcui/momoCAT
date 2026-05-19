@@ -1,4 +1,5 @@
 import type { PromptArtifact, TBArtifact, TMArtifact } from '../artifacts';
+import type { TranslateUnitReferences, TranslateUnitsOptions } from '../types';
 
 export type UnitResultStatus = 'translated' | 'skipped' | 'reused' | 'failed';
 
@@ -40,6 +41,7 @@ export interface TranslationJob {
   id: string;
   projectId: number;
   units: JobUnit[];
+  translationOptions?: TranslateUnitsOptions;
   options?: JobOptions;
 }
 
@@ -52,6 +54,7 @@ export interface UnitResult {
   source: string;
   target?: string;
   error?: string;
+  references?: TranslateUnitReferences;
   attempts?: number;
   metadata?: Record<string, unknown>;
 }

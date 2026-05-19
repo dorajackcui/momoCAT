@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, rm } from 'fs/promises';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, win32 } from 'path';
 import * as XLSX from 'xlsx';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -64,11 +64,12 @@ describe('fileTranslationJobAdapter', () => {
   });
 
   it('infers deterministic sidecar paths and honors explicit overrides', async () => {
-    expect(inferFileTranslationJobSidecarPaths('C:\\tmp\\mt.translated.xlsx')).toEqual({
-      checkpointPath: 'C:\\tmp\\mt.translated.checkpoint.jsonl',
-      eventsPath: 'C:\\tmp\\mt.translated.events.jsonl',
-      artifactsPath: 'C:\\tmp\\mt.translated.artifacts.jsonl',
-      snapshotPath: 'C:\\tmp\\mt.translated.snapshot.xlsx',
+    const outputPath = win32.join('C:\\tmp', 'mt.translated.xlsx');
+    expect(inferFileTranslationJobSidecarPaths(outputPath)).toEqual({
+      checkpointPath: win32.join('C:\\tmp', 'mt.translated.checkpoint.jsonl'),
+      eventsPath: win32.join('C:\\tmp', 'mt.translated.events.jsonl'),
+      artifactsPath: win32.join('C:\\tmp', 'mt.translated.artifacts.jsonl'),
+      snapshotPath: win32.join('C:\\tmp', 'mt.translated.snapshot.xlsx'),
     });
 
     const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
@@ -245,6 +246,70 @@ describe('fileTranslationJobAdapter', () => {
       }) as string[][];
       expect(rows[0][2]).toBe('Hello translated');
       expect(rows[1][2]).toBe('World translated');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('passes input maxConcurrency first and then adapter default to the runner job', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
+    try {
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      writeWorkbook(inputPath, [
+        ['source', 'target'],
+        ['Hello', ''],
+      ]);
+      const seenMaxConcurrency: Array<number | undefined> = [];
+
+      await translateSpreadsheetFileJob(
+        {
+          projectId: 7,
+          inputPath,
+          outputPath,
+          job: {},
+        },
+        {
+          defaultMaxConcurrency: 3,
+          taskExecutor: async () => ({ results: [] }),
+          runnerFactory: () => ({
+            run: async (job) => {
+              seenMaxConcurrency.push(job.options?.maxConcurrency);
+              return {
+                jobId: job.id,
+                summary: { total: 1, translated: 0, skipped: 0, reused: 0, failed: 0 },
+                results: [],
+              };
+            },
+          }),
+        },
+      );
+
+      await translateSpreadsheetFileJob(
+        {
+          projectId: 7,
+          inputPath,
+          outputPath,
+          options: { maxConcurrency: 5 },
+          job: {},
+        },
+        {
+          defaultMaxConcurrency: 3,
+          taskExecutor: async () => ({ results: [] }),
+          runnerFactory: () => ({
+            run: async (job) => {
+              seenMaxConcurrency.push(job.options?.maxConcurrency);
+              return {
+                jobId: job.id,
+                summary: { total: 1, translated: 0, skipped: 0, reused: 0, failed: 0 },
+                results: [],
+              };
+            },
+          }),
+        },
+      );
+
+      expect(seenMaxConcurrency).toEqual([3, 5]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

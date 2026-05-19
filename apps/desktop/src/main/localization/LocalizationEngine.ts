@@ -270,16 +270,22 @@ export class LocalizationEngine {
       throw new Error(`Project not found: ${context.job.projectId}`);
     }
 
+    const translationOptions = context.job.translationOptions;
+    const mode = this.resolveMode(translationOptions?.mode);
+    if (mode === 'dialogue') {
+      throw new Error('Dialogue mode is not supported for external translation units.');
+    }
+
     const targetScope = resolveBatchTargetScope(
-      this.options.defaultTargetScope,
+      translationOptions?.targetScope ?? this.options.defaultTargetScope,
     ) as LocalizationTargetScope;
     const preparedUnits = task.units.map((unit, index) =>
       this.prepareUnit(jobUnitToExternalUnit(unit), index, project, targetScope),
     );
     const hasTranslatableUnits = preparedUnits.some((prepared) => prepared.kind === 'translatable');
-    const mtOptions = mergeMTOptions(this.options.mt, undefined);
+    const mtOptions = mergeMTOptions(this.options.mt, translationOptions?.mt);
     const mtConfig = hasTranslatableUnits
-      ? await this.mtModule.resolveConfig(project, mtOptions)
+      ? await this.mtModule.resolveConfig(project, mtOptions, translationOptions?.providerOverride)
       : undefined;
     const results: UnitResult[] = [];
     const artifacts: ArtifactRecord[] = [];
@@ -309,7 +315,7 @@ export class LocalizationEngine {
         project,
         mtConfig,
         mtOptions,
-        includeReferences: false,
+        includeReferences: Boolean(translationOptions?.includeReferences),
       });
       const result = toUnitResult(context.job.id, jobUnit, translated.result);
 
@@ -324,8 +330,14 @@ export class LocalizationEngine {
 
   public async translateFile(input: TranslateFileInput): Promise<TranslateFileResult> {
     if (input.job) {
+      const mode = this.resolveMode(input.options?.mode);
+      if (mode === 'dialogue') {
+        throw new Error('Dialogue mode is not supported for external translation units.');
+      }
+
       return translateSpreadsheetFileJob(input, {
         taskExecutor: this.createTaskExecutor(),
+        defaultMaxConcurrency: this.options.maxConcurrency,
       });
     }
 
@@ -524,6 +536,7 @@ function toUnitResult(
     source: unit.source,
     target: result.target,
     error: result.status === 'failed' ? result.error : undefined,
+    references: result.references,
     metadata: unit.metadata,
   };
 }

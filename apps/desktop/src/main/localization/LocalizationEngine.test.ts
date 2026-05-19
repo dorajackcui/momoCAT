@@ -421,6 +421,143 @@ describe('LocalizationEngine.translateFile job mode', () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it('honors blank-only target scope without contacting the provider', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('External File Blank Only', 'en', 'fr');
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target'],
+          ['Hello', 'Deja traduit'],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+      const transport = createTransport('Bonjour');
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+
+      const result = await engine.translateFile({
+        projectId,
+        inputPath,
+        outputPath,
+        options: { targetScope: 'blank-only' },
+        job: { maxAttempts: 1 },
+      });
+
+      expect(result.summary).toEqual({ total: 1, translated: 0, skipped: 1, failed: 0 });
+      expect(transport.createResponse).not.toHaveBeenCalled();
+      const written = XLSX.read(await readFile(outputPath), { type: 'buffer' });
+      const rows = XLSX.utils.sheet_to_json(written.Sheets.Sheet1, {
+        header: 1,
+        defval: '',
+      }) as string[][];
+      expect(rows[1][1]).toBe('Deja traduit');
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects dialogue mode before starting a file job', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('External File Dialogue', 'en', 'fr');
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target'],
+          ['Hello', ''],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+      const transport = createTransport('Bonjour');
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+
+      await expect(
+        engine.translateFile({
+          projectId,
+          inputPath,
+          outputPath,
+          options: { mode: 'dialogue' },
+          job: { maxAttempts: 1 },
+        }),
+      ).rejects.toThrow(/dialogue mode is not supported/i);
+      expect(transport.createResponse).not.toHaveBeenCalled();
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('honors per-call MT overrides for file jobs', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('External File MT Override', 'en', 'fr');
+      seedApiKey(db);
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target'],
+          ['Hello', ''],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+      const transport = createTransport('Bonjour');
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+        mt: {
+          model: 'engine-default-model',
+          reasoningEffort: 'medium',
+          systemPrompt: 'Use engine defaults.',
+        },
+      });
+
+      await engine.translateFile({
+        projectId,
+        inputPath,
+        outputPath,
+        options: {
+          mt: {
+            model: 'job-call-model',
+            reasoningEffort: 'low',
+            systemPrompt: 'Use job call options.',
+          },
+        },
+        job: { maxAttempts: 1 },
+      });
+
+      const request = transport.createResponse.mock.calls[0]?.[0];
+      expect(request.model).toBe('job-call-model');
+      expect(request.reasoningEffort).toBe('low');
+      expect(request.systemPrompt).toContain('Use job call options.');
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('LocalizationEngine task executor', () => {

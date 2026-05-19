@@ -1,4 +1,4 @@
-import { basename, extname, join, parse as parsePath } from 'path';
+import { basename, extname, join, parse as parsePath, win32 } from 'path';
 import { CheckpointStore } from './job/CheckpointStore';
 import { EventSink } from './job/EventSink';
 import { ArtifactStore } from './job/ArtifactStore';
@@ -37,6 +37,7 @@ export type FileTranslationJobRunnerFactory = (
 
 export interface TranslateSpreadsheetFileJobOptions {
   taskExecutor: TranslationTaskExecutor;
+  defaultMaxConcurrency?: number;
   runnerFactory?: FileTranslationJobRunnerFactory;
 }
 
@@ -69,6 +70,7 @@ export async function prepareFileTranslationJob(
       id: input.job?.jobId ?? defaultFileTranslationJobId(input),
       projectId: input.projectId,
       units,
+      translationOptions: input.options,
       options: {
         resume: input.job?.resume,
         maxAttempts: input.job?.maxAttempts,
@@ -85,6 +87,10 @@ export async function translateSpreadsheetFileJob(
   options: TranslateSpreadsheetFileJobOptions,
 ): Promise<TranslateFileResult> {
   const prepared = await prepareFileTranslationJob(input);
+  prepared.job.options = {
+    ...prepared.job.options,
+    maxConcurrency: input.options?.maxConcurrency ?? options.defaultMaxConcurrency,
+  };
   const runner = (options.runnerFactory ?? defaultRunnerFactory)({
     checkpointStore: new CheckpointStore(prepared.sidecarPaths.checkpointPath),
     eventSink: new EventSink(prepared.sidecarPaths.eventsPath, {
@@ -136,8 +142,9 @@ export function resolveFileTranslationJobSidecarPaths(
 export function inferFileTranslationJobSidecarPaths(
   outputPath: string,
 ): FileTranslationJobSidecarPaths {
-  const parsed = parsePath(outputPath);
-  const basePath = join(parsed.dir, parsed.name);
+  const pathModule = isWindowsPath(outputPath) ? win32 : { parse: parsePath, join };
+  const parsed = pathModule.parse(outputPath);
+  const basePath = pathModule.join(parsed.dir, parsed.name);
 
   return {
     checkpointPath: `${basePath}.checkpoint.jsonl`,
@@ -186,6 +193,7 @@ function unitResultToTranslateUnitResult(result: UnitResult): TranslateUnitResul
       target: result.target,
       status: 'failed',
       error: result.error ?? 'Translation failed',
+      references: result.references,
       metadata: result.metadata,
     };
   }
@@ -195,6 +203,11 @@ function unitResultToTranslateUnitResult(result: UnitResult): TranslateUnitResul
     source: result.source,
     target: result.target ?? '',
     status: result.status === 'translated' ? 'translated' : 'skipped',
+    references: result.references,
     metadata: result.metadata,
   };
+}
+
+function isWindowsPath(path: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(path) || path.includes('\\');
 }
