@@ -553,4 +553,49 @@ describe('LocalizationEngine task executor', () => {
       db.close();
     }
   });
+
+  it('rejects multi-unit tasks before provider setup', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Task Multi Unit Rejected', 'en', 'fr');
+      const transport = createTransport('Bonjour');
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+
+      await expect(
+        engine.executeTranslationTask(
+          {
+            taskId: 'task-multi',
+            units: [
+              {
+                documentId: 'doc-1',
+                unitId: 'unit-1',
+                source: 'Hello',
+                sourceHash: 'hash-1',
+              },
+              {
+                documentId: 'doc-1',
+                unitId: 'unit-2',
+                source: 'World',
+                sourceHash: 'hash-2',
+              },
+            ],
+          },
+          {
+            attempt: 1,
+            job: {
+              id: 'job-multi',
+              projectId,
+              units: [],
+            },
+          },
+        ),
+      ).rejects.toThrow('LocalizationEngine task executor supports one unit per task in this MVP');
+      expect(transport.createResponse).not.toHaveBeenCalled();
+    } finally {
+      db.close();
+    }
+  });
 });

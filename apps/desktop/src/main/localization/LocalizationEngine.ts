@@ -260,6 +260,10 @@ export class LocalizationEngine {
     task: TranslationTask,
     context: TaskExecutionContext,
   ): Promise<TaskExecutionResult> {
+    if (task.units.length !== 1) {
+      throw new Error('LocalizationEngine task executor supports one unit per task in this MVP');
+    }
+
     const project = this.projectRepo.getProject(context.job.projectId);
     if (!project) {
       throw new Error(`Project not found: ${context.job.projectId}`);
