@@ -85,6 +85,14 @@ External LocalizationEngine file translation:
 - The input file is not modified in place. The translated spreadsheet is written to `--output`.
 - By default, the file adapter detects `source` and `target` headers and translates only blank targets.
 
+LocalizationEngine inspection:
+
+- To inspect an external spreadsheet through a project as a TM+TB+MT prompt preview without importing or translating it, run `npm run inspect:localization -- --db <path> --project-id <id> --input <path> --output <inspect.xlsx>`.
+- The command writes an inspect workbook with `Segments` and `MT_SystemPrompt` sheets, plus a JSON sidecar next to the `.xlsx` output.
+- `Segments` preserves the original rows and appends `_tm_for_mt`, `_tb_for_mt`, `_mt_user_prompt`, `_inspect_status`, and `_inspect_json_ref`.
+- The command reads project settings and mounted TM/TB resources, but does not create project `files` or `segments` records and does not send API requests.
+- Use `--unit-limit <n>` to cap inspected units, `--json-output <path>` to override the sidecar path, and `--max-cell-chars <n>` to cap large workbook cell values.
+
 ## Platform Command Matrix
 
 Run from repo root `simple-cat-tool`.
