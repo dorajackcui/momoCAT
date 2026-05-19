@@ -253,6 +253,73 @@ describe('FileModule', () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it('rejects writing inspect output over the input file', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-module-'));
+    try {
+      const inputPath = join(root, 'inspect-source.xlsx');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target'],
+          ['Hello', ''],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+      const inputBefore = await readFile(inputPath);
+
+      const parsed = await parseExternalSpreadsheet({
+        projectId: 7,
+        inputPath,
+        outputPath: inputPath,
+      });
+      const artifact = buildInspectArtifact(parsed.artifact);
+
+      await expect(writeInspectSpreadsheet(parsed, artifact, inputPath)).rejects.toThrow(
+        'Output path must be different from input path',
+      );
+      expect(await readFile(inputPath)).toEqual(inputBefore);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('marks source rows missing from inspect artifact as not inspected', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-module-'));
+    try {
+      const inputPath = join(root, 'partial-inspect-source.xlsx');
+      const outputPath = join(root, 'partial-inspect.xlsx');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target', 'note'],
+          ['Hello', '', 'first'],
+          ['Bye', '', 'second'],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+
+      const parsed = await parseExternalSpreadsheet({ projectId: 7, inputPath, outputPath });
+      const artifact = buildInspectArtifact(parsed.artifact);
+
+      await writeInspectSpreadsheet(parsed, artifact, outputPath);
+
+      const written = XLSX.read(await readFile(outputPath), { type: 'buffer' });
+      const segmentRows = XLSX.utils.sheet_to_json(written.Sheets.Segments, {
+        header: 1,
+        defval: '',
+      }) as string[][];
+      expect(segmentRows[1][6]).toBe('ready');
+      expect(segmentRows[2]).toEqual(['Bye', '', 'second', '', '', '', 'not-inspected', '']);
+      expect(segmentRows[2][6]).not.toBe('error');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 function buildTranslationResult(target: string): TranslateUnitsResult {

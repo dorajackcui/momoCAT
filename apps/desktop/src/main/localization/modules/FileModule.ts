@@ -115,6 +115,8 @@ export async function writeInspectSpreadsheet(
   artifact: InspectArtifact,
   outputPath: string,
 ): Promise<void> {
+  assertNotInputPath(parsed.inputPath, outputPath);
+
   const workbook = XLSX.utils.book_new();
   const inspectUnitById = new Map(artifact.units.map((unit) => [unit.unit.unitId, unit] as const));
   const parseRowByIndex = new Map(parsed.artifact.rows.map((row) => [row.rowIndex, row] as const));
@@ -222,13 +224,18 @@ function buildSegmentRows(
     }
 
     const inspected = inspectUnitById.get(parseRow.unitId);
+    if (!inspected) {
+      rows.push([...originalCells, '', '', '', 'not-inspected', '']);
+      continue;
+    }
+
     rows.push([
       ...originalCells,
-      inspected?.xlsx.tmForMt ?? '',
-      inspected?.xlsx.tbForMt ?? '',
-      inspected?.xlsx.mtUserPrompt ?? '',
-      inspected?.status ?? 'error',
-      inspected ? `#/units/${parseRow.unitId}` : '',
+      inspected.xlsx.tmForMt,
+      inspected.xlsx.tbForMt,
+      inspected.xlsx.mtUserPrompt,
+      inspected.status,
+      `#/units/${parseRow.unitId}`,
     ]);
   }
 
