@@ -35,6 +35,19 @@ export interface TranslateUnitsOptions {
   mt?: MTModuleOptions;
 }
 
+export interface TranslateFileJobOptions {
+  jobId?: string;
+  checkpointPath?: string;
+  eventsPath?: string;
+  artifactsPath?: string;
+  snapshotPath?: string;
+  resume?: boolean;
+  maxAttempts?: number;
+  snapshotEveryUnits?: number;
+  snapshotEverySeconds?: number;
+  progressStdout?: boolean;
+}
+
 export interface LocalizationEngineOptions {
   dbPath?: string;
   maxConcurrency?: number;
@@ -121,6 +134,7 @@ export interface TranslateFileOptions {
   format?: 'xlsx' | 'csv';
   columns?: FileTranslationColumns;
   options?: TranslateUnitsOptions;
+  job?: TranslateFileJobOptions;
 }
 
 export type TranslateFileInput = TranslateFileOptions;

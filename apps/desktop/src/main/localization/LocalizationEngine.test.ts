@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mkdtemp, readFile, rm } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import * as XLSX from 'xlsx';
 import type { TMEntry } from '@cat/core/models';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import { CATDatabase } from '../../../../../packages/db/src';
@@ -365,6 +369,56 @@ describe('LocalizationEngine.translateUnits', () => {
       expect(transport.createResponse).not.toHaveBeenCalled();
     } finally {
       db.close();
+    }
+  });
+});
+
+describe('LocalizationEngine.translateFile job mode', () => {
+  it('translates spreadsheet files through job units without importing the file into the DB', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('External File Job', 'en', 'fr');
+      seedApiKey(db);
+      const initialFiles = db.listFiles(projectId);
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target'],
+          ['Hello', ''],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+      const transport = createTransport('Bonjour');
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+
+      const result = await engine.translateFile({
+        projectId,
+        inputPath,
+        outputPath,
+        job: { maxAttempts: 1 },
+      });
+
+      expect(result.summary).toEqual({ total: 1, translated: 1, skipped: 0, failed: 0 });
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
+      expect(db.listFiles(projectId)).toEqual(initialFiles);
+      expect(db.getProjectStats(projectId)).toEqual([]);
+      const written = XLSX.read(await readFile(outputPath), { type: 'buffer' });
+      const rows = XLSX.utils.sheet_to_json(written.Sheets.Sheet1, {
+        header: 1,
+        defval: '',
+      }) as string[][];
+      expect(rows[1][1]).toBe('Bonjour');
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
     }
   });
 });

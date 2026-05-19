@@ -18,6 +18,7 @@ import { runBounded } from './RequestScheduler';
 import { MTModule, type ResolvedMTConfig } from './modules/MTModule';
 import { TBModule, mapTBEngineReferences } from './modules/TBModule';
 import { TMModule, mapTMEngineReferences } from './modules/TMModule';
+import { translateSpreadsheetFileJob } from './fileTranslationJobAdapter';
 import { translateSpreadsheetFile } from './spreadsheetFileAdapter';
 import { createTransientSegment } from './transientSegment';
 import type {
@@ -322,6 +323,12 @@ export class LocalizationEngine {
   }
 
   public async translateFile(input: TranslateFileInput): Promise<TranslateFileResult> {
+    if (input.job) {
+      return translateSpreadsheetFileJob(input, {
+        taskExecutor: this.createTaskExecutor(),
+      });
+    }
+
     return translateSpreadsheetFile(input, (units) =>
       this.translateUnits({
         projectId: input.projectId,

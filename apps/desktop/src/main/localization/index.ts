@@ -39,6 +39,17 @@ export { computeSourceHash } from './job/sourceHash';
 export type { SourceHashInput } from './job/sourceHash';
 export { TranslationJobRunner } from './job/TranslationJobRunner';
 export { createLocalizationTaskExecutor } from './job/LocalizationTaskExecutor';
+export {
+  inferFileTranslationJobSidecarPaths,
+  prepareFileTranslationJob,
+  resolveFileTranslationJobSidecarPaths,
+  translateSpreadsheetFileJob,
+} from './fileTranslationJobAdapter';
+export type {
+  FileTranslationJobSidecarPaths,
+  PreparedFileTranslationJob,
+  TranslateSpreadsheetFileJobOptions,
+} from './fileTranslationJobAdapter';
 export type {
   TranslationJobRunnerCallbackContext,
   TranslationJobRunnerDependencies,
@@ -56,6 +67,7 @@ export type {
   LocalizationUnit,
   LocalizationUnitResult,
   MTModuleOptions,
+  TranslateFileJobOptions,
   TranslateFileInput,
   TranslateFileOptions,
   TranslateFileResult,
