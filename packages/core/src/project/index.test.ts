@@ -569,6 +569,23 @@ describe("Project AI Prompt Templates", () => {
     expect(bundle.userPrompt).toContain(bundle.sections.tbPromptBlock);
   });
 
+  it("preserves empty translation source payload line in text prompt bundles", () => {
+    const bundle = buildAITextPromptBundle("translation", {
+      srcLang: "en",
+      tgtLang: "zh",
+      sourceText: "",
+    });
+    const expectedUserPrompt = buildAIUserPrompt("translation", {
+      srcLang: "en",
+      sourcePayload: "",
+      hasProtectedMarkers: false,
+    });
+
+    expect(bundle.userPrompt).toBe(expectedUserPrompt);
+    expect(bundle.sections.sourceBlock).toBe("Source (en):\n");
+    expect(bundle.userPrompt).toBe(bundle.sections.sourceBlock);
+  });
+
   it("exposes omitted concordance suggestions as an empty prompt section", () => {
     const bundle = buildAITextPromptBundle("translation", {
       srcLang: "en",

@@ -112,10 +112,10 @@ function buildTranslationUserPromptParts(params: UserPromptBuildParams): {
   userPrompt: string;
   sections: TextPromptSections;
 } {
-  const sourceBlock = joinBlock([
+  const sourceBlock = [
     buildTranslationSourceHeader(params.srcLang, params.hasProtectedMarkers),
     params.sourcePayload,
-  ]);
+  ].join("\n");
 
   const contextText =
     typeof params.context === "string" ? params.context.trim() : "";
