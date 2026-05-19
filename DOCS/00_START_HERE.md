@@ -81,9 +81,11 @@ Headless project/API inspection:
 External LocalizationEngine file translation:
 
 - To translate an external spreadsheet through a project as a TM+TB+MT engine without importing the file into the project, run `npm run translate:file -- --db <path> --project-id <id> --input <path> --output <path>`.
+- To resume a file translation after interruption, rerun with the same output/sidecar paths and `--resume`, for example `npm run translate:file -- --db <db> --project-id <id> --input mt.xlsx --output mt.translated.xlsx --resume`.
 - The command reads project settings, mounted TM/TB resources, and AI provider configuration, but does not create `files` or `segments` records.
 - The input file is not modified in place. The translated spreadsheet is written to `--output`.
 - By default, the file adapter detects `source` and `target` headers and translates only blank targets.
+- Resumable jobs write sidecars next to the output by default: `<output base>.checkpoint.jsonl`, `<output base>.events.jsonl`, `<output base>.artifacts.jsonl`, and `<output base>.snapshot.xlsx`. Override them with `--checkpoint`, `--events`, `--artifacts`, and `--snapshot` when writing to a dedicated smoke/output directory.
 
 LocalizationEngine inspection:
 
