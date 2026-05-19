@@ -125,7 +125,7 @@ export class LocalizationInspector {
         targetLanguage: project.tgtLang,
         fileName: basename(parsed.inputPath),
       });
-      units.push(await this.inspectRow(project, row, segment, maxCellChars));
+      units.push(await this.inspectRow(project, row, segment, index, maxCellChars));
     }
 
     const firstReadyPrompt = units.find((unit) => unit.status === 'ready')?.mt.systemPrompt ?? '';
@@ -179,6 +179,7 @@ export class LocalizationInspector {
     project: ProjectRecord,
     row: FileParseRowArtifact,
     segment: Segment,
+    unitIndex: number,
     maxCellChars: number,
   ): Promise<InspectUnitArtifact> {
     const [tmResult, tbResult] = await Promise.allSettled([
@@ -225,7 +226,7 @@ export class LocalizationInspector {
         tm,
         tb,
         mt,
-        xlsx: buildXlsxFields(mt, row.unitId, maxCellChars),
+        xlsx: buildXlsxFields(mt, unitIndex, maxCellChars),
         status: 'ready',
       };
     } catch (error) {
@@ -260,23 +261,26 @@ function rowToUnit(row: FileParseRowArtifact, project: Project, inputPath: strin
 
 function buildXlsxFields(
   mt: PromptArtifact,
-  unitId: string,
+  unitIndex: number,
   maxCellChars: number,
 ): InspectUnitArtifact['xlsx'] {
+  const tmPromptInput = [mt.tmPromptBlock, mt.concordancePromptBlock]
+    .filter((block) => block.length > 0)
+    .join('\n\n');
   const tmForMt = truncateForCell(
-    mt.tmPromptBlock,
+    tmPromptInput,
     maxCellChars,
-    `#/units/${unitId}/mt/tmPromptBlock`,
+    `#/units/${unitIndex}/mt/userPrompt`,
   );
   const tbForMt = truncateForCell(
     mt.tbPromptBlock,
     maxCellChars,
-    `#/units/${unitId}/mt/tbPromptBlock`,
+    `#/units/${unitIndex}/mt/tbPromptBlock`,
   );
   const mtUserPrompt = truncateForCell(
     mt.userPrompt,
     maxCellChars,
-    `#/units/${unitId}/mt/userPrompt`,
+    `#/units/${unitIndex}/mt/userPrompt`,
   );
 
   return {
@@ -421,7 +425,9 @@ function emptyPromptArtifact(
     projectType: (project.projectType ?? 'translation') as ProjectType,
     sourcePayload: '',
     tmPromptBlock: '',
+    concordancePromptBlock: '',
     tbPromptBlock: '',
+    referencePromptBlock: '',
     systemPrompt: '',
     userPrompt: '',
     promptChars: {

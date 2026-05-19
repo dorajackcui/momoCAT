@@ -99,7 +99,9 @@ export interface PromptArtifact {
   projectType: ProjectType;
   sourcePayload: string;
   tmPromptBlock: string;
+  concordancePromptBlock: string;
   tbPromptBlock: string;
+  referencePromptBlock: string;
   systemPrompt: string;
   userPrompt: string;
   promptChars: {

@@ -175,7 +175,9 @@ export class MTModule {
       projectType: promptParams.projectType,
       sourcePayload: promptBundle.sourcePayload,
       tmPromptBlock: promptBundle.sections.tmPromptBlock,
+      concordancePromptBlock: promptBundle.sections.concordancePromptBlock,
       tbPromptBlock: promptBundle.sections.tbPromptBlock,
+      referencePromptBlock: promptBundle.sections.referencePromptBlock,
       systemPrompt: promptBundle.systemPrompt,
       userPrompt: promptBundle.userPrompt,
       promptChars: {

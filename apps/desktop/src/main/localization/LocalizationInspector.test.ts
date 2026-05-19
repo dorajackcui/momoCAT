@@ -121,7 +121,7 @@ describe('LocalizationInspector.inspectFile', () => {
       expect(segmentRows[1][0]).toBe('Hello world');
       expect(segmentRows[1][5]).toContain('Hello world');
       expect(segmentRows[1][6]).toBe('ready');
-      expect(segmentRows[1][7]).toBe('#/units/row-2');
+      expect(segmentRows[1][7]).toBe('#/units/0');
       expect(segmentRows[2]).toEqual(['', '', 'blank', '', '', '', 'skipped-empty-source', '']);
 
       const promptRows = XLSX.utils.sheet_to_json(written.Sheets.MT_SystemPrompt, {
@@ -167,7 +167,9 @@ describe('LocalizationInspector.inspectFile', () => {
         tgtTerm: 'monde',
       });
       expect(json.units[0].mt.tmPromptBlock).toContain('Bonjour le monde');
+      expect(json.units[0].mt.concordancePromptBlock).toBe('');
       expect(json.units[0].mt.tbPromptBlock).toContain('monde');
+      expect(json.units[0].mt.referencePromptBlock).toContain(json.units[0].mt.tmPromptBlock);
       expect(json.units[0].mt.userPrompt).toContain(json.units[0].mt.tmPromptBlock);
     } finally {
       db.close();
@@ -211,12 +213,67 @@ describe('LocalizationInspector.inspectFile', () => {
         header: 1,
         defval: '',
       }) as string[][];
-      expect(segmentRows[1][4]).toContain('[TRUNCATED: see #/units/row-2/mt/userPrompt]');
+      expect(segmentRows[1][4]).toContain('[TRUNCATED: see #/units/0/mt/userPrompt]');
       expect(result.artifact.units[0].xlsx.truncated.mtUserPrompt).toBe(true);
       expect(result.artifact.units[0].mt.userPrompt).toBe(longPrompt);
       expect(JSON.parse(await readFile(result.jsonOutputPath, 'utf8')).units[0].mt.userPrompt).toBe(
         longPrompt,
       );
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('includes concordance prompt blocks in JSON and TM-for-MT xlsx output', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Concordance Inspect', 'en', 'fr');
+      const inputPath = writeInputWorkbook(root, [
+        ['source', 'target'],
+        ['Hello world', ''],
+      ]);
+      const inspector = new LocalizationInspector(db, {
+        aiTransport: createTransport(),
+        aiRuntimeConfigProvider: runtimeConfigProvider(),
+        mtModule: {
+          composePrompt: vi.fn().mockImplementation(({ unitId, project, segment }) =>
+            Promise.resolve(
+              createPromptArtifact(unitId, project.projectType, segment, 'FULL_PROMPT', {
+                tmPromptBlock: 'TM prompt block',
+                concordancePromptBlock: 'Concordance Suggestions:\nMatch: world',
+                tbPromptBlock: 'TB prompt block',
+                referencePromptBlock:
+                  'TM prompt block\n\nConcordance Suggestions:\nMatch: world\n\nTB prompt block',
+              }),
+            ),
+          ),
+        },
+      });
+
+      const result = await inspector.inspectFile({
+        projectId,
+        inputPath,
+        outputPath: join(root, 'inspect.xlsx'),
+      });
+
+      expect(result.artifact.units[0].mt.concordancePromptBlock).toContain(
+        'Concordance Suggestions:',
+      );
+      const written = XLSX.read(await readFile(result.outputPath), { type: 'buffer' });
+      const segmentRows = XLSX.utils.sheet_to_json(written.Sheets.Segments, {
+        header: 1,
+        defval: '',
+      }) as string[][];
+      expect(segmentRows[1][2]).toContain('TM prompt block');
+      expect(segmentRows[1][2]).toContain('Concordance Suggestions:');
+      expect(segmentRows[1][7]).toBe('#/units/0');
+      expect(JSON.parse(await readFile(result.jsonOutputPath, 'utf8')).units[0].mt).toMatchObject({
+        concordancePromptBlock: 'Concordance Suggestions:\nMatch: world',
+        referencePromptBlock:
+          'TM prompt block\n\nConcordance Suggestions:\nMatch: world\n\nTB prompt block',
+      });
     } finally {
       db.close();
       await rm(root, { recursive: true, force: true });
@@ -535,6 +592,10 @@ function createPromptArtifact(
     providerName?: string;
     model?: string;
     reasoningEffort?: PromptArtifact['reasoningEffort'];
+    tmPromptBlock?: string;
+    concordancePromptBlock?: string;
+    tbPromptBlock?: string;
+    referencePromptBlock?: string;
   } = {},
 ): PromptArtifact {
   return {
@@ -549,8 +610,10 @@ function createPromptArtifact(
     projectPrompt: '',
     projectType,
     sourcePayload: serializeTokensToDisplayText(segment.sourceTokens),
-    tmPromptBlock: userPrompt,
-    tbPromptBlock: userPrompt,
+    tmPromptBlock: overrides.tmPromptBlock ?? userPrompt,
+    concordancePromptBlock: overrides.concordancePromptBlock ?? '',
+    tbPromptBlock: overrides.tbPromptBlock ?? userPrompt,
+    referencePromptBlock: overrides.referencePromptBlock ?? userPrompt,
     systemPrompt: userPrompt,
     userPrompt,
     promptChars: {

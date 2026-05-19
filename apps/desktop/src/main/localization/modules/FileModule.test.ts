@@ -233,7 +233,7 @@ describe('FileModule', () => {
         'TB block',
         'Translate Hello',
         'ready',
-        '#/units/row-2',
+        '#/units/0',
       ]);
       expect(segmentRows[2]).toEqual(['', '', 'blank', '', '', '', 'skipped-empty-source', '']);
 
@@ -405,7 +405,9 @@ function buildInspectArtifact(inputFile: InspectArtifact['inputFile']): InspectA
           projectType: 'general',
           sourcePayload: 'Hello',
           tmPromptBlock: 'TM block',
+          concordancePromptBlock: '',
           tbPromptBlock: 'TB block',
+          referencePromptBlock: 'TM block\n\nTB block',
           systemPrompt: 'System prompt full',
           userPrompt: 'Translate Hello',
           promptChars: {

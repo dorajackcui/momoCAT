@@ -56,9 +56,13 @@ describe('MTModule', () => {
       expect(artifact.sourcePayload).toBe('Hello world');
       expect(artifact.tmPromptBlock).toContain('Client Main TM');
       expect(artifact.tmPromptBlock).toContain('Bonjour le monde');
+      expect(artifact.concordancePromptBlock).toContain('Concordance Suggestions:');
+      expect(artifact.concordancePromptBlock).toContain('Client Concordance TM');
       expect(artifact.tbPromptBlock).toContain('world');
       expect(artifact.tbPromptBlock).toContain('monde');
+      expect(artifact.referencePromptBlock).toContain(artifact.concordancePromptBlock);
       expect(artifact.userPrompt).toContain(artifact.tmPromptBlock);
+      expect(artifact.userPrompt).toContain(artifact.concordancePromptBlock);
       expect(artifact.userPrompt).toContain(artifact.tbPromptBlock);
       expect(artifact.promptChars).toEqual({
         system: artifact.systemPrompt.length,
@@ -221,7 +225,14 @@ function createTMArtifact(segment: Segment): TMArtifact {
           targetText: 'Bonjour le monde',
         },
       ],
-      concordanceReferences: [],
+      concordanceReferences: [
+        {
+          tmName: 'Client Concordance TM',
+          matchedSourceText: 'world',
+          sourceText: 'World menu',
+          targetText: 'Menu monde',
+        },
+      ],
     },
     selectionPolicy: {
       maxTmReferences: 3,

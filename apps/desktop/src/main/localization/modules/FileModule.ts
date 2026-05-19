@@ -118,7 +118,9 @@ export async function writeInspectSpreadsheet(
   assertNotInputPath(parsed.inputPath, outputPath);
 
   const workbook = XLSX.utils.book_new();
-  const inspectUnitById = new Map(artifact.units.map((unit) => [unit.unit.unitId, unit] as const));
+  const inspectUnitById = new Map(
+    artifact.units.map((unit, index) => [unit.unit.unitId, { unit, index }] as const),
+  );
   const parseRowByIndex = new Map(parsed.artifact.rows.map((row) => [row.rowIndex, row] as const));
 
   XLSX.utils.book_append_sheet(
@@ -192,7 +194,7 @@ function rowsToArtifacts(
 function buildSegmentRows(
   parsed: ParsedSpreadsheetFile,
   parseRowByIndex: Map<number, FileParseRowArtifact>,
-  inspectUnitById: Map<string, InspectArtifact['units'][number]>,
+  inspectUnitById: Map<string, { unit: InspectArtifact['units'][number]; index: number }>,
 ): FileCellValue[][] {
   const rows: FileCellValue[][] = [];
 
@@ -222,11 +224,12 @@ function buildSegmentRows(
       continue;
     }
 
-    const inspected = inspectUnitById.get(parseRow.unitId);
-    if (!inspected) {
+    const inspectedEntry = inspectUnitById.get(parseRow.unitId);
+    if (!inspectedEntry) {
       rows.push([...originalCells, '', '', '', 'not-inspected', '']);
       continue;
     }
+    const inspected = inspectedEntry.unit;
 
     rows.push([
       ...originalCells,
@@ -234,7 +237,7 @@ function buildSegmentRows(
       inspected.xlsx.tbForMt,
       inspected.xlsx.mtUserPrompt,
       inspected.status,
-      `#/units/${parseRow.unitId}`,
+      `#/units/${inspectedEntry.index}`,
     ]);
   }
 
