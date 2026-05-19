@@ -11,13 +11,50 @@ const repoRoot = path.resolve(
 );
 const scriptPath = path.join(repoRoot, "scripts", "inspect-localization.mjs");
 
+function runScript(args, options = {}) {
+  return spawnSync(process.execPath, [scriptPath, ...args], {
+    cwd: options.cwd ?? repoRoot,
+    env: options.env,
+    encoding: "utf8",
+  });
+}
+
+function withTempFixture(callback) {
+  const tempRoot = fs.mkdtempSync(
+    path.join(repoRoot, ".tmp-inspect-localization-"),
+  );
+  try {
+    const dbPath = path.join(tempRoot, "cat.db");
+    const inputPath = path.join(tempRoot, "input.xlsx");
+    const outputPath = path.join(tempRoot, "inspect.xlsx");
+    fs.writeFileSync(dbPath, "");
+    fs.writeFileSync(inputPath, "");
+
+    return callback({
+      tempRoot,
+      dbPath,
+      inputPath,
+      outputPath,
+      baseArgs: [
+        "--db",
+        dbPath,
+        "--project-id",
+        "1",
+        "--input",
+        inputPath,
+        "--output",
+        outputPath,
+      ],
+    });
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+}
+
 test("inspect localization script exposes help", () => {
   assert.equal(fs.existsSync(scriptPath), true);
 
-  const result = spawnSync(process.execPath, [scriptPath, "--help"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-  });
+  const result = runScript(["--help"]);
 
   assert.equal(result.status, 0);
   assert.match(result.stdout, /inspect-localization\.mjs/);
@@ -32,29 +69,69 @@ test("inspect localization script exposes help", () => {
 });
 
 test("inspect localization script validates missing db", () => {
-  const result = spawnSync(process.execPath, [scriptPath], {
-    cwd: repoRoot,
-    encoding: "utf8",
-  });
+  const result = runScript([]);
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Missing --db/);
 });
 
+test("inspect localization validates empty equals values", () => {
+  for (const [flag, pattern] of [
+    ["--db=", /Missing value for --db\./],
+    ["--json-output=", /Missing value for --json-output\./],
+    ["--unit-limit=", /Missing value for --unit-limit\./],
+    ["--max-cell-chars=", /Missing value for --max-cell-chars\./],
+  ]) {
+    const result = runScript([flag]);
+    assert.notEqual(result.status, 0, flag);
+    assert.match(result.stderr, pattern, flag);
+  }
+});
+
+test("inspect localization validates common invalid arguments", () => {
+  withTempFixture(({ baseArgs, dbPath, inputPath, outputPath }) => {
+    const cases = [
+      {
+        args: ["--wat"],
+        pattern: /Unknown argument: --wat/,
+      },
+      {
+        args: [
+          "--db",
+          dbPath,
+          "--project-id",
+          "0",
+          "--input",
+          inputPath,
+          "--output",
+          outputPath,
+        ],
+        pattern: /--project-id must be a positive integer\./,
+      },
+      {
+        args: [...baseArgs, "--unit-limit", "0"],
+        pattern: /--unit-limit must be a positive integer\./,
+      },
+      {
+        args: [...baseArgs, "--max-cell-chars", "nope"],
+        pattern: /--max-cell-chars must be a positive integer\./,
+      },
+    ];
+
+    for (const { args, pattern } of cases) {
+      const result = runScript(args);
+      assert.notEqual(result.status, 0, args.join(" "));
+      assert.match(result.stderr, pattern, args.join(" "));
+    }
+  });
+});
+
 test("inspect localization omits optional env vars when options are absent", () => {
-  const tempRoot = fs.mkdtempSync(
-    path.join(repoRoot, ".tmp-inspect-localization-"),
-  );
-  try {
+  withTempFixture(({ tempRoot, dbPath, inputPath, outputPath }) => {
     const binDir = path.join(tempRoot, "node_modules", ".bin");
     fs.mkdirSync(binDir, { recursive: true });
 
-    const dbPath = path.join(tempRoot, "cat.db");
-    const inputPath = path.join(tempRoot, "input.xlsx");
-    const outputPath = path.join(tempRoot, "inspect.xlsx");
     const reportPath = path.join(tempRoot, "env-report.json");
-    fs.writeFileSync(dbPath, "");
-    fs.writeFileSync(inputPath, "");
 
     const fakeVitestScript = path.join(binDir, "vitest-check.mjs");
     fs.writeFileSync(
@@ -93,17 +170,17 @@ fs.writeFileSync(process.env.ENV_REPORT_PATH, JSON.stringify(report), "utf8");
       fs.chmodSync(vitestPath, 0o755);
     }
 
-    const env = { ...process.env };
-    delete env.LOCALIZATION_INSPECT_JSON_OUTPUT_PATH;
-    delete env.LOCALIZATION_INSPECT_UNIT_LIMIT;
-    delete env.LOCALIZATION_INSPECT_MAX_CELL_CHARS;
+    const env = {
+      ...process.env,
+      LOCALIZATION_INSPECT_JSON_OUTPUT_PATH: "stale.json",
+      LOCALIZATION_INSPECT_UNIT_LIMIT: "999",
+      LOCALIZATION_INSPECT_MAX_CELL_CHARS: "999",
+    };
     env.NODE_EXE = process.execPath;
     env.ENV_REPORT_PATH = reportPath;
 
-    const result = spawnSync(
-      process.execPath,
+    const result = runScript(
       [
-        scriptPath,
         "--db",
         dbPath,
         "--project-id",
@@ -116,7 +193,6 @@ fs.writeFileSync(process.env.ENV_REPORT_PATH, JSON.stringify(report), "utf8");
       {
         cwd: tempRoot,
         env,
-        encoding: "utf8",
       },
     );
 
@@ -129,7 +205,5 @@ fs.writeFileSync(process.env.ENV_REPORT_PATH, JSON.stringify(report), "utf8");
     assert.equal(report.LOCALIZATION_INSPECT_JSON_OUTPUT_PATH.present, false);
     assert.equal(report.LOCALIZATION_INSPECT_UNIT_LIMIT.present, false);
     assert.equal(report.LOCALIZATION_INSPECT_MAX_CELL_CHARS.present, false);
-  } finally {
-    fs.rmSync(tempRoot, { recursive: true, force: true });
-  }
+  });
 });

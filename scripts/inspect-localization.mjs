@@ -8,6 +8,16 @@ import process from "node:process";
 const TEST_NAME = "localization-inspect-env-run";
 const TEST_PATH =
   "apps/desktop/src/main/localization/LocalizationInspector.cli.test.ts";
+const OPTION_NAMES = new Set([
+  "db",
+  "db-path",
+  "project-id",
+  "input",
+  "output",
+  "json-output",
+  "unit-limit",
+  "max-cell-chars",
+]);
 
 function usage() {
   console.log(`Usage:
@@ -36,37 +46,48 @@ function readValue(argv, index, flag) {
   return value;
 }
 
-function assignOption(config, name, value) {
+function requireOptionValue(flag, value) {
+  if (!value) {
+    throw new Error(`Missing value for ${flag}.`);
+  }
+  return value;
+}
+
+function assignOption(config, name, value, flag = `--${name}`) {
+  if (!OPTION_NAMES.has(name)) {
+    throw new Error(`Unknown argument: --${name}`);
+  }
+
+  const optionValue = requireOptionValue(flag, value);
+
   if (name === "db" || name === "db-path") {
-    config.dbPath = path.resolve(value);
+    config.dbPath = path.resolve(optionValue);
     return;
   }
   if (name === "project-id") {
-    config.projectId = value;
+    config.projectId = optionValue;
     return;
   }
   if (name === "input") {
-    config.inputPath = path.resolve(value);
+    config.inputPath = path.resolve(optionValue);
     return;
   }
   if (name === "output") {
-    config.outputPath = path.resolve(value);
+    config.outputPath = path.resolve(optionValue);
     return;
   }
   if (name === "json-output") {
-    config.jsonOutputPath = path.resolve(value);
+    config.jsonOutputPath = path.resolve(optionValue);
     return;
   }
   if (name === "unit-limit") {
-    config.unitLimit = value;
+    config.unitLimit = optionValue;
     return;
   }
   if (name === "max-cell-chars") {
-    config.maxCellChars = value;
+    config.maxCellChars = optionValue;
     return;
   }
-
-  throw new Error(`Unknown argument: --${name}`);
 }
 
 function parseArgs(argv) {
@@ -97,11 +118,16 @@ function parseArgs(argv) {
         config,
         arg.slice(2, equalsIndex),
         arg.slice(equalsIndex + 1),
+        arg.slice(0, equalsIndex),
       );
       continue;
     }
 
-    assignOption(config, arg.slice(2), readValue(argv, index, arg));
+    const name = arg.slice(2);
+    if (!OPTION_NAMES.has(name)) {
+      throw new Error(`Unknown argument: --${name}`);
+    }
+    assignOption(config, name, readValue(argv, index, arg), arg);
     index += 1;
   }
 
@@ -158,14 +184,19 @@ function runInspection(config) {
     throw new Error(`Vitest binary not found: ${vitestCmd}`);
   }
 
-  const env = {
-    ...process.env,
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("LOCALIZATION_INSPECT_")) {
+      delete env[key];
+    }
+  }
+  Object.assign(env, {
     LOCALIZATION_INSPECT_DYNAMIC: "1",
     LOCALIZATION_INSPECT_DB_PATH: config.dbPath,
     LOCALIZATION_INSPECT_PROJECT_ID: config.projectId,
     LOCALIZATION_INSPECT_INPUT_PATH: config.inputPath,
     LOCALIZATION_INSPECT_OUTPUT_PATH: config.outputPath,
-  };
+  });
   if (config.jsonOutputPath) {
     env.LOCALIZATION_INSPECT_JSON_OUTPUT_PATH = config.jsonOutputPath;
   }
