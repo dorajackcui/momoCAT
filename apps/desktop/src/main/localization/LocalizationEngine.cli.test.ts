@@ -42,6 +42,7 @@ describe('LocalizationEngine CLI file runner', () => {
       );
 
       expect(result.summary.total).toBeGreaterThan(0);
+      expect(result.summary.failed).toBe(0);
     } finally {
       db.close();
     }
