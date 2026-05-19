@@ -4,7 +4,9 @@ import type {
   PromptConcordanceReference,
   PromptTMReference,
   SystemPromptBuildParams,
+  TextPromptBundle,
   TextPromptBundleBuildParams,
+  TextPromptSections,
   UserPromptBuildParams,
 } from "./aiPromptTypes";
 import { AI_PROMPT_TEMPLATE_CATALOG } from "./aiPromptTemplateCatalog.generated";
@@ -85,20 +87,41 @@ function buildTranslationSystemPrompt(params: SystemPromptBuildParams): string {
   return `${trimmedProjectPrompt}\n\n${base}`;
 }
 
-function buildTranslationUserPrompt(params: UserPromptBuildParams): string {
-  const userParts = [
+function buildEmptyTextPromptSections(): TextPromptSections {
+  return {
+    sourceBlock: "",
+    contextBlock: "",
+    currentTranslationBlock: "",
+    tmPromptBlock: "",
+    concordancePromptBlock: "",
+    tbPromptBlock: "",
+    referencePromptBlock: "",
+    validationFeedbackBlock: "",
+  };
+}
+
+function joinBlock(parts: string[]): string {
+  return parts.filter(Boolean).join("\n");
+}
+
+function joinPromptBlocks(parts: string[]): string {
+  return parts.filter(Boolean).join("\n\n");
+}
+
+function buildTranslationUserPromptParts(params: UserPromptBuildParams): {
+  userPrompt: string;
+  sections: TextPromptSections;
+} {
+  const sourceBlock = joinBlock([
     buildTranslationSourceHeader(params.srcLang, params.hasProtectedMarkers),
     params.sourcePayload,
-  ];
+  ]);
 
   const contextText =
     typeof params.context === "string" ? params.context.trim() : "";
-  if (contextText) {
-    userParts.push(
-      "",
-      renderTemplate(TRANSLATION_PROMPTS.contextLine, { context: contextText }),
-    );
-  }
+  const contextBlock = contextText
+    ? renderTemplate(TRANSLATION_PROMPTS.contextLine, { context: contextText })
+    : "";
 
   const currentTranslationText =
     typeof params.currentTranslationPayload === "string"
@@ -108,16 +131,16 @@ function buildTranslationUserPrompt(params: UserPromptBuildParams): string {
     typeof params.refinementInstruction === "string"
       ? params.refinementInstruction.trim()
       : "";
-  if (currentTranslationText && refinementInstructionText) {
-    userParts.push(
-      "",
-      TRANSLATION_PROMPTS.currentTranslationLabel,
-      currentTranslationText,
-      "",
-      TRANSLATION_PROMPTS.refinementInstructionLabel,
-      refinementInstructionText,
-    );
-  }
+  const currentTranslationBlock =
+    currentTranslationText && refinementInstructionText
+      ? [
+          TRANSLATION_PROMPTS.currentTranslationLabel,
+          currentTranslationText,
+          "",
+          TRANSLATION_PROMPTS.refinementInstructionLabel,
+          refinementInstructionText,
+        ].join("\n")
+      : "";
 
   const tmReferences = normalizeTMReferences(
     params.tmReferences,
@@ -129,10 +152,11 @@ function buildTranslationUserPrompt(params: UserPromptBuildParams): string {
     tbReferenceCount: tbReferences.length,
     concordanceReferences: params.concordanceReferences,
   });
+  const tmPromptParts: string[] = [];
   if (tmReferences.length > 0) {
-    userParts.push("", TRANSLATION_PROMPTS.tmHeader);
+    tmPromptParts.push(TRANSLATION_PROMPTS.tmHeader);
     for (const reference of tmReferences) {
-      userParts.push(
+      tmPromptParts.push(
         renderTemplate(TRANSLATION_PROMPTS.tmEntrySummary, {
           similarity: reference.similarity,
           tmName: reference.tmName,
@@ -146,11 +170,13 @@ function buildTranslationUserPrompt(params: UserPromptBuildParams): string {
       );
     }
   }
+  const tmPromptBlock = joinBlock(tmPromptParts);
 
+  const concordancePromptParts: string[] = [];
   if (concordanceReferences.length > 0) {
-    userParts.push("", TRANSLATION_PROMPTS.concordanceHeader);
+    concordancePromptParts.push(TRANSLATION_PROMPTS.concordanceHeader);
     for (const reference of concordanceReferences) {
-      userParts.push(
+      concordancePromptParts.push(
         renderTemplate(TRANSLATION_PROMPTS.concordanceEntrySummary, {
           matchedSourceText: reference.matchedSourceText,
           tmName: reference.tmName,
@@ -164,14 +190,16 @@ function buildTranslationUserPrompt(params: UserPromptBuildParams): string {
       );
     }
   }
+  const concordancePromptBlock = joinBlock(concordancePromptParts);
 
+  const tbPromptParts: string[] = [];
   if (tbReferences.length > 0) {
-    userParts.push("", TRANSLATION_PROMPTS.tbHeader);
+    tbPromptParts.push(TRANSLATION_PROMPTS.tbHeader);
     for (const reference of tbReferences) {
       const note =
         typeof reference.note === "string" ? reference.note.trim() : "";
       const noteSuffix = note ? ` (note: ${note})` : "";
-      userParts.push(
+      tbPromptParts.push(
         renderTemplate(TRANSLATION_PROMPTS.tbEntry, {
           srcTerm: reference.srcTerm,
           tgtTerm: reference.tgtTerm,
@@ -180,16 +208,46 @@ function buildTranslationUserPrompt(params: UserPromptBuildParams): string {
       );
     }
   }
+  const tbPromptBlock = joinBlock(tbPromptParts);
 
-  if (params.validationFeedback) {
-    userParts.push(
-      "",
-      TRANSLATION_PROMPTS.validationFeedbackHeader,
-      params.validationFeedback,
-    );
-  }
+  const validationFeedbackBlock = params.validationFeedback
+    ? joinBlock([
+        TRANSLATION_PROMPTS.validationFeedbackHeader,
+        params.validationFeedback,
+      ])
+    : "";
 
-  return userParts.join("\n");
+  const sections = {
+    sourceBlock,
+    contextBlock,
+    currentTranslationBlock,
+    tmPromptBlock,
+    concordancePromptBlock,
+    tbPromptBlock,
+    referencePromptBlock: joinPromptBlocks([
+      tmPromptBlock,
+      concordancePromptBlock,
+      tbPromptBlock,
+    ]),
+    validationFeedbackBlock,
+  };
+
+  return {
+    userPrompt: joinPromptBlocks([
+      sourceBlock,
+      contextBlock,
+      currentTranslationBlock,
+      tmPromptBlock,
+      concordancePromptBlock,
+      tbPromptBlock,
+      validationFeedbackBlock,
+    ]),
+    sections,
+  };
+}
+
+function buildTranslationUserPrompt(params: UserPromptBuildParams): string {
+  return buildTranslationUserPromptParts(params).userPrompt;
 }
 
 function buildReviewSystemPrompt(params: SystemPromptBuildParams): string {
@@ -458,15 +516,30 @@ export function buildAIDialogueUserPrompt(
 export function buildAITextPromptBundle(
   projectType: ProjectType,
   params: TextPromptBundleBuildParams,
-): {
-  systemPrompt: string;
-  userPrompt: string;
-  hasProtectedMarkers: boolean;
-  sourcePayload: string;
-} {
+): TextPromptBundle {
   const normalizedType = normalizeProjectType(projectType);
   const { hasProtectedMarkers, sourcePayload } =
     resolveTextSourcePayload(params);
+  const userPromptParams = {
+    srcLang: params.srcLang,
+    sourcePayload,
+    hasProtectedMarkers,
+    context: params.context,
+    currentTranslationPayload: params.currentTranslationPayload,
+    refinementInstruction: params.refinementInstruction,
+    validationFeedback: params.validationFeedback,
+    tmReference: params.tmReference,
+    tmReferences: params.tmReferences,
+    concordanceReferences: params.concordanceReferences,
+    tbReferences: params.tbReferences,
+  };
+  const userPromptParts =
+    normalizedType === "translation"
+      ? buildTranslationUserPromptParts(userPromptParams)
+      : {
+          userPrompt: buildAIUserPrompt(normalizedType, userPromptParams),
+          sections: buildEmptyTextPromptSections(),
+        };
 
   return {
     systemPrompt: buildAISystemPrompt(normalizedType, {
@@ -474,21 +547,10 @@ export function buildAITextPromptBundle(
       tgtLang: params.tgtLang,
       projectPrompt: params.projectPrompt,
     }),
-    userPrompt: buildAIUserPrompt(normalizedType, {
-      srcLang: params.srcLang,
-      sourcePayload,
-      hasProtectedMarkers,
-      context: params.context,
-      currentTranslationPayload: params.currentTranslationPayload,
-      refinementInstruction: params.refinementInstruction,
-      validationFeedback: params.validationFeedback,
-      tmReference: params.tmReference,
-      tmReferences: params.tmReferences,
-      concordanceReferences: params.concordanceReferences,
-      tbReferences: params.tbReferences,
-    }),
+    userPrompt: userPromptParts.userPrompt,
     hasProtectedMarkers,
     sourcePayload,
+    sections: userPromptParts.sections,
   };
 }
 

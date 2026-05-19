@@ -499,6 +499,22 @@ describe("Project AI Prompt Templates", () => {
       },
       tbReferences: [{ srcTerm: "Save", tgtTerm: "Save target term" }],
     });
+    const expectedUserPrompt = buildAIUserPrompt("translation", {
+      srcLang: "en",
+      sourcePayload: "{1>}Save\\nFile<2}",
+      hasProtectedMarkers: true,
+      context: "Toolbar label",
+      currentTranslationPayload: "Current target text",
+      refinementInstruction: "Shorten slightly",
+      validationFeedback: "Keep markers unchanged",
+      tmReference: {
+        similarity: 100,
+        tmName: "Main TM",
+        sourceText: "Save file",
+        targetText: "Current target text",
+      },
+      tbReferences: [{ srcTerm: "Save", tgtTerm: "Save target term" }],
+    });
 
     expect(bundle.hasProtectedMarkers).toBe(true);
     expect(bundle.sourcePayload).toBe("{1>}Save\\nFile<2}");
@@ -509,24 +525,101 @@ describe("Project AI Prompt Templates", () => {
         projectPrompt: "Use concise style.",
       }),
     );
-    expect(bundle.userPrompt).toBe(
-      buildAIUserPrompt("translation", {
-        srcLang: "en",
-        sourcePayload: "{1>}Save\\nFile<2}",
-        hasProtectedMarkers: true,
-        context: "Toolbar label",
-        currentTranslationPayload: "Current target text",
-        refinementInstruction: "Shorten slightly",
-        validationFeedback: "Keep markers unchanged",
-        tmReference: {
-          similarity: 100,
-          tmName: "Main TM",
-          sourceText: "Save file",
-          targetText: "Current target text",
-        },
-        tbReferences: [{ srcTerm: "Save", tgtTerm: "Save target term" }],
-      }),
+    expect(bundle.userPrompt).toBe(expectedUserPrompt);
+  });
+
+  it("exposes translation prompt sections from the canonical bundle builder", () => {
+    const bundle = buildAITextPromptBundle("translation", {
+      srcLang: "en",
+      tgtLang: "zh",
+      projectPrompt: "Use concise style.",
+      sourceText: "Save file",
+      context: "Toolbar label",
+      tmReference: {
+        similarity: 100,
+        tmName: "Main TM",
+        sourceText: "Save file",
+        targetText: "Save file target",
+      },
+      tbReferences: [{ srcTerm: "Save", tgtTerm: "Save target term" }],
+    });
+
+    expect(bundle.sections.sourceBlock).toContain("Source (en):");
+    expect(bundle.sections.sourceBlock).toContain("Save file");
+    expect(bundle.sections.tmPromptBlock).toContain(
+      "TM References (top matches):",
     );
+    expect(bundle.sections.tmPromptBlock).toContain("TM: Main TM");
+    expect(bundle.sections.tmPromptBlock).toContain(
+      "- Target: Save file target",
+    );
+    expect(bundle.sections.tbPromptBlock).toContain(
+      "Terminology References (hit terms):",
+    );
+    expect(bundle.sections.tbPromptBlock).toContain(
+      "- Save => Save target term",
+    );
+    expect(bundle.sections.referencePromptBlock).toContain(
+      bundle.sections.tmPromptBlock,
+    );
+    expect(bundle.sections.referencePromptBlock).toContain(
+      bundle.sections.tbPromptBlock,
+    );
+    expect(bundle.userPrompt).toContain(bundle.sections.tmPromptBlock);
+    expect(bundle.userPrompt).toContain(bundle.sections.tbPromptBlock);
+  });
+
+  it("exposes omitted concordance suggestions as an empty prompt section", () => {
+    const bundle = buildAITextPromptBundle("translation", {
+      srcLang: "en",
+      tgtLang: "zh",
+      sourceText: "alpha",
+      tmReferences: Array.from({ length: 3 }, (_, index) => ({
+        similarity: 100 - index,
+        tmName: `TM ${index + 1}`,
+        sourceText: `source ${index + 1}`,
+        targetText: `target ${index + 1}`,
+      })),
+      tbReferences: Array.from({ length: 13 }, (_, index) => ({
+        srcTerm: `term ${index + 1}`,
+        tgtTerm: `term target ${index + 1}`,
+      })),
+      concordanceReferences: [
+        {
+          tmName: "Main TM",
+          matchedSourceText: "alpha",
+          sourceText: "alpha beta",
+          targetText: "alpha target beta target",
+        },
+      ],
+    });
+
+    expect(bundle.sections.concordancePromptBlock).toBe("");
+    expect(bundle.userPrompt).not.toContain("Concordance Suggestions:");
+  });
+
+  it("builds review and custom text prompt bundles with empty reference sections", () => {
+    const reviewBundle = buildAITextPromptBundle("review", {
+      srcLang: "en",
+      tgtLang: "zh",
+      projectPrompt: "",
+      sourceText: "Translated text",
+      validationFeedback: "Missing marker {1}",
+    });
+    const customBundle = buildAITextPromptBundle("custom", {
+      srcLang: "en",
+      tgtLang: "zh",
+      projectPrompt: "",
+      sourceText: "Process this text",
+      context: "Context text",
+    });
+
+    expect(reviewBundle.userPrompt).toContain("Source (en):");
+    expect(customBundle.userPrompt).toContain("Input:");
+    expect(reviewBundle.sections.tmPromptBlock).toBe("");
+    expect(reviewBundle.sections.tbPromptBlock).toBe("");
+    expect(customBundle.sections.tmPromptBlock).toBe("");
+    expect(customBundle.sections.tbPromptBlock).toBe("");
   });
 
   it("keeps plain source text in text prompt bundles when no protected markers are present", () => {

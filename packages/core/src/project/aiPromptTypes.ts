@@ -54,11 +54,23 @@ export interface TextPromptBundleBuildParams {
   tbReferences?: PromptTBReference[];
 }
 
+export interface TextPromptSections {
+  sourceBlock: string;
+  contextBlock: string;
+  currentTranslationBlock: string;
+  tmPromptBlock: string;
+  concordancePromptBlock: string;
+  tbPromptBlock: string;
+  referencePromptBlock: string;
+  validationFeedbackBlock: string;
+}
+
 export interface TextPromptBundle {
   systemPrompt: string;
   userPrompt: string;
   hasProtectedMarkers: boolean;
   sourcePayload: string;
+  sections: TextPromptSections;
 }
 
 export interface DialoguePromptSegment {
