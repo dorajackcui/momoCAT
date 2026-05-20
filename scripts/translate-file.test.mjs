@@ -10,6 +10,7 @@ const repoRoot = path.resolve(
   "..",
 );
 const scriptPath = path.join(repoRoot, "scripts", "translate-file.mjs");
+const packageJsonPath = path.join(repoRoot, "package.json");
 
 function runScript(args, options = {}) {
   return spawnSync(process.execPath, [scriptPath, ...args], {
@@ -84,6 +85,27 @@ test("translate file script exposes help", () => {
   assert.match(result.stdout, /--snapshot-every-units <n>/);
   assert.match(result.stdout, /--snapshot-every-seconds <n>/);
   assert.match(result.stdout, /--progress-stdout/);
+});
+
+test("localization cli npm scripts build package before entrypoints", () => {
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+  const localizationBuild = "npm run build --workspace=packages/localization";
+
+  for (const [scriptName, entrypoint] of [
+    ["translate:file", "node scripts/translate-file.mjs"],
+    ["inspect:localization", "node scripts/inspect-localization.mjs"],
+  ]) {
+    const script = packageJson.scripts[scriptName];
+    assert.match(script, /npm run rebuild:test/);
+    assert.ok(
+      script.indexOf(localizationBuild) > script.indexOf("npm run rebuild:test"),
+      `${scriptName} must build localization after rebuild:test`,
+    );
+    assert.ok(
+      script.indexOf(entrypoint) > script.indexOf(localizationBuild),
+      `${scriptName} must run ${entrypoint} after localization build`,
+    );
+  }
 });
 
 test("translate file script validates invalid numeric options", () => {
