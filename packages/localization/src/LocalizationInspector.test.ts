@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, rm } from 'fs/promises';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { basename, join } from 'path';
 import type { Segment, TMEntry } from '@cat/core/models';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import { CATDatabase } from '../../db/src';
@@ -226,15 +226,17 @@ describe('LocalizationInspector.inspectFile', () => {
       );
 
       expect(helloUnit.mt.batch.mode).toBe('window');
-      expect(helloUnit.mt.batch.currentIds).toEqual(
-        expect.arrayContaining([
-          expect.stringContaining(helloUnit.unit.unitId),
-        ]),
+      expect(helloUnit.mt.batch.currentIds).toContain('row-3');
+      expect(helloUnit.mt.batch.currentIds).not.toContain(
+        `${basename(inputPath)}#row-3`,
       );
       expect(helloUnit.mt.userPrompt).toContain('Previous 5 translated rows');
       expect(helloUnit.mt.userPrompt).toContain('Open -> Ouvrir');
       expect(helloUnit.mt.userPrompt).toContain('Next 5 source rows');
       expect(helloUnit.mt.userPrompt).toContain('Preferences');
+      expect(helloUnit.mt.userPrompt).toContain('id: row-3');
+      expect(helloUnit.mt.userPrompt).not.toContain(basename(inputPath));
+      expect(helloUnit.mt.userPrompt).not.toContain('#row-3');
       expect(helloUnit.mt.userPrompt).not.toContain('documentId');
       expect(JSON.stringify(json)).not.toMatch(/api[_-]?key/i);
       expect(transport.createResponse).not.toHaveBeenCalled();

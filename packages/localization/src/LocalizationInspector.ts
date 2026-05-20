@@ -260,7 +260,7 @@ export class LocalizationInspector {
       try {
         const current: MTBatchCurrentUnitInput[] = readyRows.map(
           ({ row, segment, unit }) => ({
-            responseId: batchResponseId(inputDocumentId, row.unitId),
+            responseId: row.unitId,
             documentId: inputDocumentId,
             unitId: row.unitId,
             segment,
@@ -460,10 +460,6 @@ function buildNextSourceContext(
     .sort((left, right) => left - right)
     .slice(0, 5)
     .map((index) => ({ source: rows[index].source }));
-}
-
-function batchResponseId(documentId: string, unitId: string): string {
-  return `${encodeURIComponent(documentId)}#${encodeURIComponent(unitId)}`;
 }
 
 function truncateForCell(
