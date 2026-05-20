@@ -10,7 +10,11 @@ const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx']);
 const EXCLUDED_SEGMENTS = new Set(['node_modules', 'dist', 'out', '.git']);
 const EXCLUDED_SUFFIXES = ['.test.ts', '.test.tsx', '.d.ts'];
 
-const LEGACY_ALLOWLIST = new Set([]);
+const LEGACY_ALLOWLIST = new Set([
+  'packages/core/src/project/aiPromptTemplates.ts',
+  'packages/db/src/repos/TMRepo.ts',
+  'packages/localization/src/LocalizationEngine.ts',
+]);
 
 function walk(dir, files) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });

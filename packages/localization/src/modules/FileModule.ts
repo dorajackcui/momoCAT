@@ -268,12 +268,19 @@ function findLastContiguousContentRowIndex(
   let rowIndex = lastSourceRowIndex + 1;
   let endRowIndex = lastSourceRowIndex;
 
-  while (true) {
+  let scanning = true;
+  while (scanning) {
     const cells = rows.get(rowIndex);
-    if (!cells) break;
+    if (!cells) {
+      scanning = false;
+      continue;
+    }
 
     const hasContent = Array.from(cells.values()).some((value) => cellToText(value).trim());
-    if (!hasContent) break;
+    if (!hasContent) {
+      scanning = false;
+      continue;
+    }
 
     endRowIndex = rowIndex;
     rowIndex += 1;

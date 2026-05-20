@@ -157,7 +157,7 @@ export interface TestAIProviderInput {
   model: string;
 }
 
-export interface AddAIProviderInput extends TestAIProviderInput {}
+export type AddAIProviderInput = TestAIProviderInput;
 
 export interface AITestProviderResult {
   ok: boolean;

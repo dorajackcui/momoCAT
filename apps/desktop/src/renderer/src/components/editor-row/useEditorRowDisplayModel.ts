@@ -141,18 +141,41 @@ export function buildEditorRowDisplayModel({
 export function useEditorRowDisplayModel(
   params: UseEditorRowDisplayModelParams,
 ): EditorRowDisplayModel {
+  const {
+    segmentStatus,
+    qaIssues,
+    isActive,
+    draftText,
+    sourceEditorText,
+    sourceTagsCount,
+    sourceHighlightQuery,
+    highlightMode,
+    showNonPrintingSymbols,
+  } = params;
+
   return useMemo(
-    () => buildEditorRowDisplayModel(params),
+    () =>
+      buildEditorRowDisplayModel({
+        segmentStatus,
+        qaIssues,
+        isActive,
+        draftText,
+        sourceEditorText,
+        sourceTagsCount,
+        sourceHighlightQuery,
+        highlightMode,
+        showNonPrintingSymbols,
+      }),
     [
-      params.segmentStatus,
-      params.qaIssues,
-      params.isActive,
-      params.draftText,
-      params.sourceEditorText,
-      params.sourceTagsCount,
-      params.sourceHighlightQuery,
-      params.highlightMode,
-      params.showNonPrintingSymbols,
+      segmentStatus,
+      qaIssues,
+      isActive,
+      draftText,
+      sourceEditorText,
+      sourceTagsCount,
+      sourceHighlightQuery,
+      highlightMode,
+      showNonPrintingSymbols,
     ],
   );
 }
