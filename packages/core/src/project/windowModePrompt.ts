@@ -31,14 +31,31 @@ function isTranslationProject(
   return getWindowModeProjectType(params.projectType) === "translation";
 }
 
+function buildTranslationWindowModeSystemPrompt(
+  params: WindowModePromptBundleBuildParams,
+): string {
+  const base = [
+    `From ${params.srcLang} to ${params.tgtLang}. Output in ${params.tgtLang} ONLY.`,
+    "Keep all protected markers exactly as they appear, including forms such as {1>, <2}, {3}",
+    "Preserve all escape sequences exactly as they appear, including \\n and \\r.",
+  ].join("\n");
+  const projectPrompt = trimOptional(params.projectPrompt);
+
+  return projectPrompt
+    ? `${projectPrompt}\n\n${base}`
+    : `You are a professional translator.\n\n${base}`;
+}
+
 function buildSystemPrompt(params: WindowModePromptBundleBuildParams): string {
   const translationProject = isTranslationProject(params);
   return [
-    buildAISystemPrompt(getWindowModeProjectType(params.projectType), {
-      srcLang: params.srcLang,
-      tgtLang: params.tgtLang,
-      projectPrompt: params.projectPrompt,
-    }),
+    translationProject
+      ? buildTranslationWindowModeSystemPrompt(params)
+      : buildAISystemPrompt(getWindowModeProjectType(params.projectType), {
+          srcLang: params.srcLang,
+          tgtLang: params.tgtLang,
+          projectPrompt: params.projectPrompt,
+        }),
     [
       "Window Mode batch rules:",
       "- Return strict JSON only. Do not include Markdown, code fences, prose, comments, or trailing text.",

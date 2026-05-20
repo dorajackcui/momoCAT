@@ -1222,4 +1222,100 @@ describe('LocalizationEngine task executor', () => {
       db.close();
     }
   });
+
+  it('keeps skipped target rows between current Window Mode rows as previous context', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Task Interleaved Skip Context', 'en', 'fr');
+      seedApiKey(db);
+      const transport = createTransport();
+      transport.createResponse.mockImplementationOnce(async (request: { userPrompt: string }) => {
+        expect(request.userPrompt).toContain(
+          'Current ids: sheet.xlsx#row-2, sheet.xlsx#row-4',
+        );
+        expect(request.userPrompt).toContain('Previous 5 translated rows');
+        expect(request.userPrompt).toContain('Middle -> Milieu');
+        expect(request.userPrompt).not.toMatch(/^id: sheet\.xlsx#row-3$/m);
+        expect(request.userPrompt).not.toMatch(/Next 5 source rows[\s\S]*Middle/);
+
+        return {
+          content: JSON.stringify({
+            translations: [
+              { id: 'sheet.xlsx#row-2', text: 'Debut' },
+              { id: 'sheet.xlsx#row-4', text: 'Fin' },
+            ],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        };
+      });
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+        defaultTargetScope: 'blank-only',
+      });
+      const units = [
+        {
+          documentId: 'sheet.xlsx',
+          unitId: 'row-2',
+          source: 'Start',
+          target: '',
+          sourceHash: 'hash-2',
+        },
+        {
+          documentId: 'sheet.xlsx',
+          unitId: 'row-3',
+          source: 'Middle',
+          target: 'Milieu',
+          sourceHash: 'hash-3',
+        },
+        {
+          documentId: 'sheet.xlsx',
+          unitId: 'row-4',
+          source: 'End',
+          target: '',
+          sourceHash: 'hash-4',
+        },
+      ];
+
+      const result = await engine.executeTranslationTask(
+        {
+          taskId: 'task-interleaved-skip-context',
+          units,
+        },
+        {
+          attempt: 1,
+          job: {
+            id: 'job-interleaved-skip-context',
+            projectId,
+            units,
+          },
+        },
+      );
+
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
+      expect(result.results).toEqual([
+        expect.objectContaining({
+          documentId: 'sheet.xlsx',
+          unitId: 'row-2',
+          status: 'translated',
+          target: 'Debut',
+        }),
+        expect.objectContaining({
+          documentId: 'sheet.xlsx',
+          unitId: 'row-3',
+          status: 'skipped',
+          target: 'Milieu',
+        }),
+        expect.objectContaining({
+          documentId: 'sheet.xlsx',
+          unitId: 'row-4',
+          status: 'translated',
+          target: 'Fin',
+        }),
+      ]);
+    } finally {
+      db.close();
+    }
+  });
 });

@@ -692,15 +692,25 @@ export class LocalizationEngine {
   }): Array<{ source: string; target: string }> {
     const jobOrder = resolveJobOrder(params.jobUnits, params.task.units, params.currentUnits);
     const currentKeys = new Set(params.currentUnits.map(unitKey));
-    const firstCurrentIndex = jobOrder.findIndex((unit) => currentKeys.has(unitKey(unit)));
+    let lastCurrentIndex = -1;
 
-    if (firstCurrentIndex < 0) {
+    for (let index = 0; index < jobOrder.length; index += 1) {
+      if (currentKeys.has(unitKey(jobOrder[index]))) {
+        lastCurrentIndex = index;
+      }
+    }
+
+    if (lastCurrentIndex < 0) {
       return [];
     }
 
     const rows: Array<{ source: string; target: string }> = [];
-    for (let index = firstCurrentIndex - 1; index >= 0 && rows.length < 5; index -= 1) {
+    for (let index = lastCurrentIndex - 1; index >= 0 && rows.length < 5; index -= 1) {
       const unit = jobOrder[index];
+      if (currentKeys.has(unitKey(unit))) {
+        continue;
+      }
+
       const completed = params.completedResults.get(unitKey(unit));
       const target = completed?.target;
 

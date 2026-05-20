@@ -169,6 +169,17 @@ describe("Window Mode prompt builder", () => {
     expect(bundle.systemPrompt).toContain(
       "Translate every current segment exactly once",
     );
+    expect(bundle.systemPrompt).toContain("Return strict JSON only");
+    expect(bundle.systemPrompt).toContain("From en to fr. Output in fr ONLY.");
+    expect(bundle.systemPrompt).toContain(
+      "Keep all protected markers exactly as they appear",
+    );
+    expect(bundle.systemPrompt).toContain(
+      "Preserve all escape sequences exactly as they appear",
+    );
+    expect(bundle.systemPrompt).not.toContain(
+      "Return only the translated text",
+    );
     expect(bundle.userPrompt).toContain("Batch: translate 1 current segment(s)");
     expect(bundle.userPrompt).toContain("Current segments to translate");
   });
