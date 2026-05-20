@@ -486,6 +486,39 @@ describe('TranslationJobRunner', () => {
       }),
     ]);
   });
+
+  it('passes completed results snapshot into each ordered task attempt', async () => {
+    const harness = await makeHarness();
+    const seenCompletedUnits: string[][] = [];
+    const runner = harness.makeRunner(async (task, context) => {
+      seenCompletedUnits.push(
+        Array.from(context.completedResults?.values() ?? []).map((result) => result.unitId),
+      );
+
+      return {
+        results: [
+          makeResult({
+            unitId: task.units[0].unitId,
+            sourceHash: task.units[0].sourceHash,
+            source: task.units[0].source,
+            target: `target ${task.units[0].unitId}`,
+          }),
+        ],
+      };
+    });
+
+    await runner.run(
+      makeJob({
+        units: [
+          makeUnit({ unitId: 'unit-1', sourceHash: 'hash-1' }),
+          makeUnit({ unitId: 'unit-2', sourceHash: 'hash-2' }),
+        ],
+        options: { maxConcurrency: 1 },
+      }),
+    );
+
+    expect(seenCompletedUnits).toEqual([[], ['unit-1']]);
+  });
 });
 
 async function makeHarness(): Promise<{

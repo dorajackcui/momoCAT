@@ -18,6 +18,7 @@ const OPTION_NAMES = new Set([
   "artifacts",
   "resume",
   "max-attempts",
+  "batch-size",
   "snapshot",
   "snapshot-every-units",
   "snapshot-every-seconds",
@@ -40,6 +41,7 @@ Options:
   --artifacts <path>             Enable diagnostic prompt artifact JSONL at this path.
   --resume                       Resume from an existing checkpoint.
   --max-attempts <n>             Positive integer retry attempt limit.
+  --batch-size <n>               Window Mode batch size, integer from 1 to 5. Default: 5.
   --snapshot <path>              Snapshot spreadsheet path. Default: inferred from output path.
   --snapshot-every-units <n>     Positive integer snapshot cadence by completed units.
   --snapshot-every-seconds <n>   Positive integer snapshot cadence by elapsed seconds.
@@ -117,6 +119,10 @@ function assignOption(config, name, value, flag = `--${name}`) {
     config.maxAttempts = optionValue;
     return;
   }
+  if (name === "batch-size") {
+    config.batchSize = optionValue;
+    return;
+  }
   if (name === "snapshot") {
     config.snapshotPath = path.resolve(optionValue);
     return;
@@ -143,6 +149,7 @@ function parseArgs(argv) {
     artifactsPath: "",
     resume: false,
     maxAttempts: "",
+    batchSize: "",
     snapshotPath: "",
     snapshotEveryUnits: "",
     snapshotEverySeconds: "",
@@ -216,6 +223,9 @@ function parseArgs(argv) {
   if (config.maxAttempts && !isPositiveInteger(config.maxAttempts)) {
     throw new Error("--max-attempts must be a positive integer.");
   }
+  if (config.batchSize && !isIntegerInRange(config.batchSize, 1, 5)) {
+    throw new Error("--batch-size must be an integer from 1 to 5.");
+  }
   if (
     config.snapshotEveryUnits &&
     !isPositiveInteger(config.snapshotEveryUnits)
@@ -234,6 +244,11 @@ function parseArgs(argv) {
 
 function isPositiveInteger(value) {
   return Number.isInteger(Number(value)) && Number(value) > 0;
+}
+
+function isIntegerInRange(value, min, max) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= min && parsed <= max;
 }
 
 async function loadRunner() {
@@ -259,6 +274,7 @@ try {
     artifactsPath: config.artifactsPath || undefined,
     resume: config.resume,
     maxAttempts: config.maxAttempts ? Number(config.maxAttempts) : undefined,
+    batchSize: config.batchSize ? Number(config.batchSize) : undefined,
     snapshotPath: config.snapshotPath || undefined,
     snapshotEveryUnits: config.snapshotEveryUnits
       ? Number(config.snapshotEveryUnits)

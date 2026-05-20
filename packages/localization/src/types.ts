@@ -31,6 +31,7 @@ export interface TranslateUnitsOptions {
   mode?: LocalizationMode;
   includeReferences?: boolean;
   maxConcurrency?: number;
+  batchSize?: number;
   providerOverride?: string;
   mt?: MTModuleOptions;
 }

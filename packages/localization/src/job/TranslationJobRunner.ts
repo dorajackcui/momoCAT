@@ -125,7 +125,7 @@ export class TranslationJobRunner {
     const scheduledResults = await runBounded(
       tasks,
       async (task) => {
-        const taskResult = await this.executeTaskWithAttempts(job, task, maxAttempts);
+        const taskResult = await this.executeTaskWithAttempts(job, task, maxAttempts, resultMap);
         await enqueuePersistence(() =>
           this.persistTaskResult(job, task, taskResult, resultMap, throttle),
         );
@@ -166,15 +166,18 @@ export class TranslationJobRunner {
     job: TranslationJob,
     task: TranslationTask,
     maxAttempts: number,
+    resultMap: ReadonlyMap<string, UnitResult>,
   ): Promise<TaskExecutionResult> {
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
+        const completedResults = new Map(resultMap);
         const result = await this.taskExecutor(task, {
           job,
           attempt,
           captureArtifacts: Boolean(this.artifactStore),
+          completedResults,
         });
 
         return {

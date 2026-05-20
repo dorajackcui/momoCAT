@@ -102,6 +102,7 @@ export interface TaskExecutionContext {
   job: TranslationJob;
   attempt: number;
   captureArtifacts?: boolean;
+  completedResults?: ReadonlyMap<string, UnitResult>;
 }
 
 export interface TaskExecutionResult {

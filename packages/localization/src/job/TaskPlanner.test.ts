@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SnapshotThrottle } from './SnapshotThrottle';
-import { OneUnitTaskPlanner } from './TaskPlanner';
+import { OneUnitTaskPlanner, WindowModeTaskPlanner } from './TaskPlanner';
 import type { JobUnit } from './types';
 
 describe('OneUnitTaskPlanner', () => {
@@ -26,6 +26,48 @@ describe('OneUnitTaskPlanner', () => {
 
     expect(planner.plan([])).toEqual([]);
   });
+});
+
+describe('WindowModeTaskPlanner', () => {
+  it('creates default batches of five in input order', () => {
+    const units = Array.from({ length: 12 }, (_, index) =>
+      makeUnit({ unitId: `unit-${index + 1}` }),
+    );
+    const planner = new WindowModeTaskPlanner();
+
+    const tasks = planner.plan(units);
+
+    expect(tasks).toEqual([
+      { taskId: 'window-task-1', units: units.slice(0, 5) },
+      { taskId: 'window-task-2', units: units.slice(5, 10) },
+      { taskId: 'window-task-3', units: units.slice(10, 12) },
+    ]);
+  });
+
+  it('creates custom-sized batches in input order', () => {
+    const units = [
+      makeUnit({ unitId: 'unit-1' }),
+      makeUnit({ unitId: 'unit-2' }),
+      makeUnit({ unitId: 'unit-3' }),
+    ];
+    const planner = new WindowModeTaskPlanner({ batchSize: 2 });
+
+    const tasks = planner.plan(units);
+
+    expect(tasks).toEqual([
+      { taskId: 'window-task-1', units: units.slice(0, 2) },
+      { taskId: 'window-task-2', units: units.slice(2, 3) },
+    ]);
+  });
+
+  it.each([0, -1, 1.5, Number.NaN, 6])(
+    'rejects invalid batch size %s',
+    (batchSize) => {
+      expect(() => new WindowModeTaskPlanner({ batchSize })).toThrow(
+        'Window Mode batchSize must be an integer from 1 to 5.',
+      );
+    },
+  );
 });
 
 describe('SnapshotThrottle', () => {

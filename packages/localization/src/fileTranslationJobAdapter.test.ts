@@ -10,7 +10,12 @@ import {
   translateSpreadsheetFileJob,
 } from './fileTranslationJobAdapter';
 import { computeSourceHash } from './job/sourceHash';
-import type { TranslationTaskExecutor, UnitResult } from './job/types';
+import type {
+  TranslationJob,
+  TranslationTask,
+  TranslationTaskExecutor,
+  UnitResult,
+} from './job/types';
 
 describe('fileTranslationJobAdapter', () => {
   it('converts xlsx rows into job units with source hashes', async () => {
@@ -350,7 +355,7 @@ describe('fileTranslationJobAdapter', () => {
       );
 
       expect(result.summary).toEqual({ total: 2, translated: 1, skipped: 0, failed: 1 });
-      expect(executor).toHaveBeenCalledTimes(2);
+      expect(executor).toHaveBeenCalledTimes(1);
       const rows = readRows(outputPath);
       expect(rows[1][1]).toBe('Bonjour');
       expect(rows[2][1]).toBe('Existing target');
@@ -567,7 +572,54 @@ describe('fileTranslationJobAdapter', () => {
     }
   });
 
-  it('passes input maxConcurrency first and then adapter default to the runner job', async () => {
+  it('uses Window Mode planner with configured batch size and ordered job concurrency', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
+    try {
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      writeWorkbook(inputPath, [
+        ['source', 'target'],
+        ['One', ''],
+        ['Two', ''],
+        ['Three', ''],
+      ]);
+      let plannedUnitIds: string[][] = [];
+      let seenJob: TranslationJob | undefined;
+
+      await translateSpreadsheetFileJob(
+        {
+          projectId: 7,
+          inputPath,
+          outputPath,
+          options: { batchSize: 2, maxConcurrency: 8 },
+        },
+        {
+          taskExecutor: async () => ({ results: [] }),
+          runnerFactory: (dependencies) => ({
+            run: async (job) => {
+              seenJob = job;
+              plannedUnitIds = dependencies.taskPlanner
+                .plan(job.units)
+                .map((task: TranslationTask) => task.units.map((unit) => unit.unitId));
+
+              return {
+                jobId: job.id,
+                summary: { total: 3, translated: 0, skipped: 0, reused: 0, failed: 0 },
+                results: [],
+              };
+            },
+          }),
+        },
+      );
+
+      expect(seenJob?.options?.maxConcurrency).toBe(1);
+      expect(plannedUnitIds).toEqual([['row-2', 'row-3'], ['row-4']]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('forces ordered Window Mode job concurrency regardless of legacy concurrency options', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
     try {
       const inputPath = join(root, 'mt.xlsx');
@@ -625,7 +677,7 @@ describe('fileTranslationJobAdapter', () => {
         },
       );
 
-      expect(seenMaxConcurrency).toEqual([3, 5]);
+      expect(seenMaxConcurrency).toEqual([1, 1]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

@@ -13,6 +13,7 @@ export interface TranslateFileCommandConfig {
   artifactsPath?: string;
   resume?: boolean;
   maxAttempts?: number;
+  batchSize?: number;
   snapshotPath?: string;
   snapshotEveryUnits?: number;
   snapshotEverySeconds?: number;
@@ -29,6 +30,7 @@ export async function runTranslateFileCommand(config: TranslateFileCommandConfig
       outputPath: config.outputPath,
       options: {
         targetScope: config.targetScope,
+        batchSize: config.batchSize,
       },
       job: {
         checkpointPath: config.checkpointPath,

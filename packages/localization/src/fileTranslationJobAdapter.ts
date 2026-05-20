@@ -5,7 +5,7 @@ import { CheckpointStore } from './job/CheckpointStore';
 import { EventSink } from './job/EventSink';
 import { ArtifactStore } from './job/ArtifactStore';
 import { computeSourceHash } from './job/sourceHash';
-import { OneUnitTaskPlanner } from './job/TaskPlanner';
+import { WindowModeTaskPlanner } from './job/TaskPlanner';
 import {
   TranslationJobRunner,
   type TranslationJobRunResult,
@@ -96,14 +96,14 @@ export async function translateSpreadsheetFileJob(
   const prepared = await prepareFileTranslationJob(input);
   prepared.job.options = {
     ...prepared.job.options,
-    maxConcurrency: input.options?.maxConcurrency ?? options.defaultMaxConcurrency,
+    maxConcurrency: 1,
   };
   const runnerDependencies: TranslationJobRunnerDependencies = {
     checkpointStore: new CheckpointStore(prepared.sidecarPaths.checkpointPath),
     eventSink: new EventSink(prepared.sidecarPaths.eventsPath, {
       stdout: input.job?.progressStdout,
     }),
-    taskPlanner: new OneUnitTaskPlanner(),
+    taskPlanner: new WindowModeTaskPlanner({ batchSize: input.options?.batchSize }),
     taskExecutor: options.taskExecutor,
     writeSnapshot: async (results) => {
       await writeTranslatedSpreadsheet(

@@ -26,8 +26,12 @@ export type {
   TranslationJobRunnerDependencies,
   TranslationJobSummary,
 } from './job/TranslationJobRunner';
-export { OneUnitTaskPlanner } from './job/TaskPlanner';
-export type { TaskPlanner } from './job/TaskPlanner';
+export {
+  OneUnitTaskPlanner,
+  WindowModeTaskPlanner,
+  normalizeWindowModeBatchSize,
+} from './job/TaskPlanner';
+export type { TaskPlanner, WindowModeTaskPlannerOptions } from './job/TaskPlanner';
 export { createTransientSegment, toTransientSegmentId } from './transientSegment';
 export type { TransientSegment, TransientSegmentContext } from './transientSegment';
 export {
