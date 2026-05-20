@@ -5,6 +5,14 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: '@cat/localization',
+        replacement: resolve(__dirname, 'packages/localization/src'),
+      },
+      {
+        find: /^@cat\/localization\/(.+)$/,
+        replacement: resolve(__dirname, 'packages/localization/src/$1'),
+      },
+      {
         find: '@cat/core',
         replacement: resolve(__dirname, 'packages/core/src'),
       },

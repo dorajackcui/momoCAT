@@ -15,6 +15,8 @@
     "baseUrl": ".",
     "paths": {
       "@renderer/*": ["src/renderer/src/*"],
+      "@cat/localization": ["../../packages/localization/src"],
+      "@cat/localization/*": ["../../packages/localization/src/*"],
       "@cat/core": ["../../packages/core/src"],
       "@cat/core/*": ["../../packages/core/src/*"],
       "@cat/db": ["../../packages/db/src"]
@@ -22,5 +24,9 @@
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"],
-  "references": [{ "path": "../../packages/core" }, { "path": "../../packages/db" }]
+  "references": [
+    { "path": "../../packages/localization" },
+    { "path": "../../packages/core" },
+    { "path": "../../packages/db" }
+  ]
 }
