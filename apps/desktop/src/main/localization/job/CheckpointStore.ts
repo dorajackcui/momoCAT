@@ -38,7 +38,7 @@ export class CheckpointIndex {
       return undefined;
     }
 
-    if (record.status !== 'translated' && record.status !== 'skipped') {
+    if (record.status !== 'translated') {
       return undefined;
     }
 

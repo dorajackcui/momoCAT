@@ -44,6 +44,9 @@ Results:
 - After quality review found that mounted TM entry updates could keep resource `updatedAt` and entry count unchanged, entry-level resource fingerprinting passed:
   - `npx vitest run apps/desktop/src/main/localization/LocalizationEngine.test.ts apps/desktop/src/main/localization/fileTranslationJobAdapter.test.ts apps/desktop/src/main/localization/job/sourceHash.test.ts apps/desktop/src/main/localization/job/stores.test.ts packages/db/src/index.test.ts packages/db/src/currentSchema.test.ts`: 6 files passed, 88 tests passed.
   - `npm run typecheck --workspace=apps/desktop`: passed.
+- After final review found that reusable skipped checkpoints could overwrite target-only edits in `blank-only` mode, skipped checkpoint reuse was disabled and passed:
+  - `npx vitest run apps/desktop/src/main/localization/fileTranslationJobAdapter.test.ts apps/desktop/src/main/localization/job/stores.test.ts apps/desktop/src/main/localization/LocalizationEngine.test.ts apps/desktop/src/main/localization/job/TranslationJobRunner.test.ts`: 4 files passed, 46 tests passed.
+  - `npm run typecheck --workspace=apps/desktop`: passed.
 
 Notes:
 
@@ -57,6 +60,7 @@ Existing automated coverage in `apps/desktop/src/main/localization/job/Translati
 - `re-executes a unit when the checkpoint hash does not match`: changed/missing work is retried instead of reused.
 - `passes reused and newly completed results to the final callback`: final output receives both checkpoint-reused and newly translated results.
 - `treats failed checkpoint records as pending`: failed units are not considered reusable checkpoints.
+- `treats skipped checkpoint records as pending`: skipped units are re-evaluated so current non-empty targets in `blank-only` mode cannot be overwritten by stale checkpoint targets.
 - `retries thrown tasks and writes failed checkpoints and events after max attempts`: retry and failure checkpoint/event behavior is recorded.
 - Adapter coverage verifies final XLSX writing does not overwrite failed units and snapshot XLSX writing works before final output.
 

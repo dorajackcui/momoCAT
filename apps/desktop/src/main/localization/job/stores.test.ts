@@ -107,6 +107,25 @@ describe('CheckpointStore', () => {
     expect(index.isPending(unit)).toBe(true);
   });
 
+  it('treats skipped checkpoint records as pending', async () => {
+    const dir = await makeTempDir();
+    const store = new CheckpointStore(join(dir, 'checkpoint.jsonl'));
+    const unit = makeUnit({ sourceHash: 'hash-1' });
+
+    await store.append(
+      makeCheckpoint({
+        status: 'skipped',
+        hash: 'hash-1',
+        target: 'old skipped target',
+      }),
+    );
+
+    const index = await store.load('job-1');
+
+    expect(index.getReusableRecord(unit)).toBeUndefined();
+    expect(index.isPending(unit)).toBe(true);
+  });
+
   it('loads usable checkpoints around invalid JSON and invalid records', async () => {
     const dir = await makeTempDir();
     const filePath = join(dir, 'checkpoint.jsonl');

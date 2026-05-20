@@ -303,6 +303,78 @@ describe('fileTranslationJobAdapter', () => {
     }
   });
 
+  it('does not reuse skipped checkpoints that could overwrite target-only edits', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
+    try {
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      const checkpointPath = join(root, 'same.checkpoint.jsonl');
+      writeWorkbook(inputPath, [
+        ['source', 'target'],
+        ['Hello', 'Existing target'],
+      ]);
+      const executor = vi
+        .fn<TranslationTaskExecutor>()
+        .mockImplementationOnce(async (task, context) => ({
+          results: task.units.map((unit) => ({
+            jobId: context.job.id,
+            documentId: unit.documentId,
+            unitId: unit.unitId,
+            sourceHash: unit.sourceHash,
+            status: 'skipped',
+            source: unit.source,
+            target: unit.target,
+            metadata: unit.metadata,
+          })),
+        }))
+        .mockImplementationOnce(async (task, context) => ({
+          results: task.units.map((unit) => ({
+            jobId: context.job.id,
+            documentId: unit.documentId,
+            unitId: unit.unitId,
+            sourceHash: unit.sourceHash,
+            status: 'skipped',
+            source: unit.source,
+            target: unit.target,
+            metadata: unit.metadata,
+          })),
+        }));
+
+      await translateSpreadsheetFileJob(
+        {
+          projectId: 7,
+          inputPath,
+          outputPath,
+          options: { targetScope: 'blank-only' },
+          job: { jobId: 'same-job', checkpointPath, maxAttempts: 1 },
+        },
+        { taskExecutor: executor },
+      );
+      writeWorkbook(inputPath, [
+        ['source', 'target'],
+        ['Hello', 'Corrected target'],
+      ]);
+      const second = await translateSpreadsheetFileJob(
+        {
+          projectId: 7,
+          inputPath,
+          outputPath,
+          options: { targetScope: 'blank-only' },
+          job: { jobId: 'same-job', checkpointPath, resume: true, maxAttempts: 1 },
+        },
+        { taskExecutor: executor },
+      );
+
+      expect(executor).toHaveBeenCalledTimes(2);
+      expect(second.summary).toEqual({ total: 1, translated: 0, skipped: 1, failed: 0 });
+      expect(second.results[0]?.status).toBe('skipped');
+      expect(second.results[0]?.target).toBe('Corrected target');
+      expect(readRows(outputPath)[1][1]).toBe('Corrected target');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('can write a snapshot xlsx before the final output', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
     try {
