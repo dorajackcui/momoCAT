@@ -142,7 +142,11 @@ function listSourceFiles(rootDir) {
 
 function getImportSpecifiers(sourceFile) {
   return sourceFile.statements
-    .filter((statement) => ts.isImportDeclaration(statement))
+    .filter(
+      (statement) =>
+        ts.isImportDeclaration(statement) ||
+        (ts.isExportDeclaration(statement) && statement.moduleSpecifier),
+    )
     .map((statement) => statement.moduleSpecifier.text)
     .filter((specifier) => typeof specifier === "string");
 }
@@ -162,6 +166,14 @@ function resolveImportTarget(fromFile, specifier) {
 
 function toPosixPath(value) {
   return value.split(path.sep).join("/");
+}
+
+function isPathInside(root, candidate) {
+  const relativePath = path.relative(path.normalize(root), path.normalize(candidate));
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
+  );
 }
 
 function validateProjectService() {
@@ -367,7 +379,7 @@ function validateForbiddenImports() {
           continue;
         }
 
-        if (path.normalize(resolvedTarget).startsWith(path.normalize(forbiddenTargetRoot))) {
+        if (isPathInside(forbiddenTargetRoot, resolvedTarget)) {
           errors.push(`${relativeFilePath} imports forbidden target "${specifier}"; ${rule.message}`);
         }
       }
