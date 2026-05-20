@@ -143,6 +143,12 @@ describe("Window Mode strict JSON parser", () => {
       /unexpected top-level field/i,
     ],
     [
+      JSON.stringify({
+        translations: [{ id: "row-2", text: "A", note: "extra" }],
+      }),
+      /unexpected translation field/i,
+    ],
+    [
       JSON.stringify({ translations: [{ id: "row-9", text: "A" }] }),
       /unknown translation id/i,
     ],
@@ -170,6 +176,7 @@ describe("Window Mode strict JSON parser", () => {
   });
 
   it.each([
+    [[], /requires at least one expected translation id/i],
     [[" "], /expected translation id must be non-empty/i],
     [["row-2", "row-2"], /duplicate expected translation id/i],
   ])("rejects invalid expected ids %#", (expectedIds, message) => {

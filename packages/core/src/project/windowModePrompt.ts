@@ -194,6 +194,12 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 }
 
 function normalizeExpectedIds(expectedIds: string[]): string[] {
+  if (expectedIds.length === 0) {
+    throw new Error(
+      "Window Mode requires at least one expected translation id.",
+    );
+  }
+
   const seenIds = new Set<string>();
   return expectedIds.map((expectedId) => {
     const id = expectedId.trim();
@@ -247,6 +253,14 @@ export function parseAIWindowModeResponse(
   for (const entry of parsed.translations) {
     if (!isJsonObject(entry) || typeof entry.id !== "string" || !entry.id) {
       throw new Error("Missing translation id.");
+    }
+    const unexpectedEntryField = Object.keys(entry).find(
+      (field) => field !== "id" && field !== "text",
+    );
+    if (unexpectedEntryField) {
+      throw new Error(
+        `Unexpected translation field "${unexpectedEntryField}" for id "${entry.id}".`,
+      );
     }
     if (!expectedIdSet.has(entry.id)) {
       throw new Error(`Unknown translation id "${entry.id}".`);
