@@ -111,6 +111,64 @@ describe("Window Mode prompt builder", () => {
       "Validation feedback\nThe previous attempt omitted a marker.",
     );
   });
+
+  it("uses custom project system prompt semantics for Window Mode", () => {
+    const bundle = buildAIWindowModePromptBundle({
+      projectType: "custom",
+      srcLang: "en",
+      tgtLang: "fr",
+      projectPrompt: "Classify sentiment.",
+      currentSegments: [{ id: "row-2", sourcePayload: "Great work" }],
+    });
+
+    expect(bundle.systemPrompt).toContain("Classify sentiment.");
+    expect(bundle.systemPrompt).toContain("Return strict JSON only");
+    expect(bundle.systemPrompt).not.toContain(
+      "You are a professional translator.",
+    );
+    expect(bundle.systemPrompt).not.toContain("From en to fr. Output in fr");
+  });
+
+  it("exposes aggregate reference-only sections separately from current source text", () => {
+    const bundle = buildAIWindowModePromptBundle({
+      srcLang: "en",
+      tgtLang: "fr",
+      currentSegments: [
+        {
+          id: "row-2",
+          sourcePayload: "Save file",
+          context: "Toolbar label",
+          tmReferences: [
+            {
+              similarity: 100,
+              tmName: "Main TM",
+              sourceText: "Save file",
+              targetText: "Enregistrer le fichier",
+            },
+          ],
+          tbReferences: [
+            {
+              srcTerm: "Save",
+              tgtTerm: "Enregistrer",
+              note: "Use the UI verb.",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(bundle.sections.tmPromptBlock).toContain("Main TM");
+    expect(bundle.sections.tmPromptBlock).toContain("Enregistrer le fichier");
+    expect(bundle.sections.tmPromptBlock).not.toContain("Source:");
+    expect(bundle.sections.tbPromptBlock).toContain("Save -> Enregistrer");
+    expect(bundle.sections.tbPromptBlock).not.toContain("Source:");
+    expect(bundle.sections.referencePromptBlock).toContain(
+      bundle.sections.tmPromptBlock,
+    );
+    expect(bundle.sections.referencePromptBlock).toContain(
+      bundle.sections.tbPromptBlock,
+    );
+  });
 });
 
 describe("Window Mode strict JSON parser", () => {

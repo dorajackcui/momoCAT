@@ -17,7 +17,7 @@ function trimOptional(value: string | undefined): string {
 
 function buildSystemPrompt(params: WindowModePromptBundleBuildParams): string {
   return [
-    buildAISystemPrompt("translation", {
+    buildAISystemPrompt(params.projectType ?? "translation", {
       srcLang: params.srcLang,
       tgtLang: params.tgtLang,
       projectPrompt: params.projectPrompt,
@@ -97,6 +97,68 @@ function buildCurrentSegmentsBlock(
   ].join("\n\n");
 }
 
+function buildTMReferenceBlock(segments: WindowModeCurrentSegment[]): string {
+  const parts: string[] = [];
+  for (const segment of segments) {
+    if (!segment.tmReferences || segment.tmReferences.length === 0) {
+      continue;
+    }
+    parts.push(`id: ${segment.id}`);
+    segment.tmReferences.forEach((reference, index) => {
+      parts.push(
+        `${index + 1}. ${reference.similarity}% ${reference.tmName} | ${reference.sourceText} -> ${reference.targetText}`,
+      );
+    });
+  }
+
+  return parts.length > 0 ? ["TM References", ...parts].join("\n") : "";
+}
+
+function buildConcordanceReferenceBlock(
+  segments: WindowModeCurrentSegment[],
+): string {
+  const parts: string[] = [];
+  for (const segment of segments) {
+    if (
+      !segment.concordanceReferences ||
+      segment.concordanceReferences.length === 0
+    ) {
+      continue;
+    }
+    parts.push(`id: ${segment.id}`);
+    segment.concordanceReferences.forEach((reference, index) => {
+      parts.push(
+        `${index + 1}. ${reference.matchedSourceText} (${reference.tmName}) | ${reference.sourceText} -> ${reference.targetText}`,
+      );
+    });
+  }
+
+  return parts.length > 0
+    ? ["Concordance Suggestions", ...parts].join("\n")
+    : "";
+}
+
+function buildTBReferenceBlock(segments: WindowModeCurrentSegment[]): string {
+  const parts: string[] = [];
+  for (const segment of segments) {
+    if (!segment.tbReferences || segment.tbReferences.length === 0) {
+      continue;
+    }
+    parts.push(`id: ${segment.id}`);
+    segment.tbReferences.forEach((reference, index) => {
+      const note = trimOptional(reference.note ?? undefined);
+      const noteSuffix = note ? ` (note: ${note})` : "";
+      parts.push(
+        `${index + 1}. ${reference.srcTerm} -> ${reference.tgtTerm}${noteSuffix}`,
+      );
+    });
+  }
+
+  return parts.length > 0
+    ? ["Terminology References", ...parts].join("\n")
+    : "";
+}
+
 function buildPreviousContextBlock(
   rows: WindowModePromptBundleBuildParams["previousContext"],
 ): string {
@@ -167,6 +229,10 @@ export function buildAIWindowModePromptBundle(
   const sections: WindowModePromptSections = {
     batchBlock: buildBatchBlock(normalizedParams),
     currentSegmentsBlock: buildCurrentSegmentsBlock(currentSegments),
+    tmPromptBlock: buildTMReferenceBlock(currentSegments),
+    concordancePromptBlock: buildConcordanceReferenceBlock(currentSegments),
+    tbPromptBlock: buildTBReferenceBlock(currentSegments),
+    referencePromptBlock: "",
     previousContextBlock: buildPreviousContextBlock(params.previousContext),
     nextContextBlock: buildNextContextBlock(params.nextContext),
     validationFeedbackBlock: buildValidationFeedbackBlock(
@@ -174,6 +240,11 @@ export function buildAIWindowModePromptBundle(
     ),
     jsonFormatBlock: buildJsonFormatBlock(),
   };
+  sections.referencePromptBlock = joinBlocks([
+    sections.tmPromptBlock,
+    sections.concordancePromptBlock,
+    sections.tbPromptBlock,
+  ]);
 
   return {
     systemPrompt: buildSystemPrompt(normalizedParams),

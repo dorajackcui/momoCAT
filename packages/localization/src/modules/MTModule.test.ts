@@ -209,6 +209,11 @@ describe('MTModule', () => {
       expect(artifact.userPrompt).toContain('Next 5 source rows');
       expect(artifact.userPrompt).not.toContain('documentId');
       expect(artifact.userPrompt).not.toContain('doc.xlsx');
+      expect(artifact.tmPromptBlock).toContain('Client Main TM');
+      expect(artifact.tmPromptBlock).toContain('Bonjour le monde');
+      expect(artifact.tmPromptBlock).not.toContain('Source:');
+      expect(artifact.tbPromptBlock).toContain('world -> monde');
+      expect(artifact.tbPromptBlock).not.toContain('Source:');
       expect(transport.createResponse).not.toHaveBeenCalled();
     } finally {
       db.close();
@@ -318,6 +323,49 @@ describe('MTModule', () => {
           tgtLang: 'fr',
         }),
       ).rejects.toThrow(/missing translation id: row-2/i);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('rejects Window Mode invalid strict JSON responses from provider', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Batch Invalid JSON', 'en', 'fr');
+      db.setSetting('openai_api_key', 'test-api-key');
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const row2 = createTransientSegment({ id: 'row-2', source: 'Save file' }, 1);
+      const transport = createTransport('```json\n{"translations":[]}\n```');
+      const module = createModule(db, transport);
+      const config = await module.resolveConfig(project);
+
+      await expect(
+        module.translateBatch({
+          taskId: 'window-task-1',
+          project,
+          current: [
+            {
+              responseId: 'row-2',
+              documentId: 'doc.xlsx',
+              unitId: 'unit-2',
+              segment: row2,
+              tm: createTMArtifact(row2),
+              tb: createTBArtifact(row2),
+            },
+          ],
+          previousContext: [],
+          nextContext: [],
+          apiKey: config.apiKey,
+          baseUrl: config.provider.baseUrl,
+          model: config.model,
+          reasoningEffort: config.reasoningEffort,
+          provider: config.provider,
+          srcLang: 'en',
+          tgtLang: 'fr',
+        }),
+      ).rejects.toThrow(/invalid strict json/i);
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
     } finally {
       db.close();
     }

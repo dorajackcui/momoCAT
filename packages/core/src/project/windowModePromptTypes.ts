@@ -4,6 +4,8 @@ import type {
   PromptTMReference,
 } from "./aiPromptTypes";
 
+export type WindowModeProjectType = "translation" | "review" | "custom";
+
 export interface WindowModeCurrentSegment {
   id: string;
   sourcePayload: string;
@@ -23,6 +25,7 @@ export interface WindowModeNextContextRow {
 }
 
 export interface WindowModePromptBundleBuildParams {
+  projectType?: WindowModeProjectType;
   srcLang: string;
   tgtLang: string;
   projectPrompt?: string;
@@ -35,6 +38,10 @@ export interface WindowModePromptBundleBuildParams {
 export interface WindowModePromptSections {
   batchBlock: string;
   currentSegmentsBlock: string;
+  tmPromptBlock: string;
+  concordancePromptBlock: string;
+  tbPromptBlock: string;
+  referencePromptBlock: string;
   previousContextBlock: string;
   nextContextBlock: string;
   validationFeedbackBlock: string;

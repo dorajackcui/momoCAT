@@ -263,6 +263,7 @@ export class MTModule {
   composePreparedBatchPrompt(input: PreparedBatchPromptInput): PromptArtifact {
     const promptParams = this.buildBatchPromptParams(input);
     const promptBundle = buildAIWindowModePromptBundle({
+      projectType: promptParams.projectType,
       srcLang: input.srcLang,
       tgtLang: input.tgtLang,
       projectPrompt: promptParams.projectPrompt,
@@ -287,10 +288,10 @@ export class MTModule {
       projectPrompt: promptParams.projectPrompt,
       projectType: promptParams.projectType,
       sourcePayload,
-      tmPromptBlock: promptBundle.sections.currentSegmentsBlock,
-      concordancePromptBlock: promptBundle.sections.currentSegmentsBlock,
-      tbPromptBlock: promptBundle.sections.currentSegmentsBlock,
-      referencePromptBlock: promptBundle.sections.currentSegmentsBlock,
+      tmPromptBlock: promptBundle.sections.tmPromptBlock,
+      concordancePromptBlock: promptBundle.sections.concordancePromptBlock,
+      tbPromptBlock: promptBundle.sections.tbPromptBlock,
+      referencePromptBlock: promptBundle.sections.referencePromptBlock,
       systemPrompt: promptBundle.systemPrompt,
       userPrompt: promptBundle.userPrompt,
       promptChars: {
