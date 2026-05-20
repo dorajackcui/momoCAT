@@ -8,6 +8,7 @@ export default defineConfig({
       alias: {
         '@cat/core': resolve('../../packages/core/src'),
         '@cat/db': resolve('../../packages/db/src'),
+        '@cat/localization': resolve('../../packages/localization/src'),
       },
     },
     build: {

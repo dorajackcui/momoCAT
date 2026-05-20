@@ -7,16 +7,24 @@ import type {
 import type { TBMatch, TMEntry } from '@cat/core/models';
 import type { ReasoningEffort } from './ports';
 
-type TMMatch = TMEntry & {
+type TMMatchBase = TMEntry & {
   kind: 'tm' | 'concordance';
   rank: number;
   tmName: string;
   tmType: 'working' | 'main';
-  similarity?: number;
-  matchedSourceText?: string;
-  sourceCoverage?: number;
-  entryCoverage?: number;
 };
+
+type TMMatch =
+  | (TMMatchBase & {
+      kind: 'tm';
+      similarity: number;
+    })
+  | (TMMatchBase & {
+      kind: 'concordance';
+      matchedSourceText: string;
+      sourceCoverage: number;
+      entryCoverage: number;
+    });
 
 export type InspectUnitStatus = 'ready' | 'skipped-empty-source' | 'error';
 
