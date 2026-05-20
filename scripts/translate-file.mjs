@@ -1,13 +1,11 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
+import { run as defaultRunTranslateFile } from "./translate-file-runner.mjs";
 
-const TEST_NAME = "localization-engine-file-env-run";
-const TEST_PATH =
-  "packages/localization/src/LocalizationEngine.cli.test.ts";
 const OPTION_NAMES = new Set([
   "db",
   "db-path",
@@ -238,101 +236,38 @@ function isPositiveInteger(value) {
   return Number.isInteger(Number(value)) && Number(value) > 0;
 }
 
-function spawnCommandSync(command, args, options = {}) {
-  return spawnSync(command, args, {
-    ...options,
-    shell: process.platform === "win32",
-  });
-}
-
-function buildRunnerEnv(config) {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) {
-    if (key.startsWith("LOCALIZATION_ENGINE_")) {
-      delete env[key];
-    }
+async function loadRunner() {
+  if (!process.env.TRANSLATE_FILE_RUNNER) {
+    return defaultRunTranslateFile;
   }
-
-  Object.assign(env, {
-    LOCALIZATION_ENGINE_FILE_DYNAMIC: "1",
-    LOCALIZATION_ENGINE_DB_PATH: config.dbPath,
-    LOCALIZATION_ENGINE_PROJECT_ID: config.projectId,
-    LOCALIZATION_ENGINE_INPUT_PATH: config.inputPath,
-    LOCALIZATION_ENGINE_OUTPUT_PATH: config.outputPath,
-    LOCALIZATION_ENGINE_JOB_ENABLED: "1",
-  });
-  if (config.targetScope) {
-    env.LOCALIZATION_ENGINE_TARGET_SCOPE = config.targetScope;
-  }
-  if (config.checkpointPath) {
-    env.LOCALIZATION_ENGINE_CHECKPOINT_PATH = config.checkpointPath;
-  }
-  if (config.eventsPath) {
-    env.LOCALIZATION_ENGINE_EVENTS_PATH = config.eventsPath;
-  }
-  if (config.artifactsPath) {
-    env.LOCALIZATION_ENGINE_ARTIFACTS_PATH = config.artifactsPath;
-  }
-  if (config.resume) {
-    env.LOCALIZATION_ENGINE_RESUME = "1";
-  }
-  if (config.maxAttempts) {
-    env.LOCALIZATION_ENGINE_MAX_ATTEMPTS = config.maxAttempts;
-  }
-  if (config.snapshotPath) {
-    env.LOCALIZATION_ENGINE_SNAPSHOT_PATH = config.snapshotPath;
-  }
-  if (config.snapshotEveryUnits) {
-    env.LOCALIZATION_ENGINE_SNAPSHOT_EVERY_UNITS = config.snapshotEveryUnits;
-  }
-  if (config.snapshotEverySeconds) {
-    env.LOCALIZATION_ENGINE_SNAPSHOT_EVERY_SECONDS =
-      config.snapshotEverySeconds;
-  }
-  if (config.progressStdout) {
-    env.LOCALIZATION_ENGINE_PROGRESS_STDOUT = "1";
-  }
-
-  return env;
-}
-
-function runTranslation(config) {
-  const vitestCmd = path.join(
-    process.cwd(),
-    "node_modules",
-    ".bin",
-    process.platform === "win32" ? "vitest.cmd" : "vitest",
-  );
-  if (!fs.existsSync(vitestCmd)) {
-    throw new Error(`Vitest binary not found: ${vitestCmd}`);
-  }
-
-  const result = spawnCommandSync(
-    vitestCmd,
-    [
-      "run",
-      TEST_PATH,
-      "-t",
-      TEST_NAME,
-      "--reporter=verbose",
-      "--testTimeout=3600000",
-    ],
-    {
-      cwd: process.cwd(),
-      env: buildRunnerEnv(config),
-      stdio: "inherit",
-    },
-  );
-
-  if (result.error) {
-    throw new Error(`Failed to start ${vitestCmd}: ${result.error.message}`);
-  }
-
-  process.exit(result.status ?? 1);
+  const runnerUrl = pathToFileURL(path.resolve(process.env.TRANSLATE_FILE_RUNNER));
+  const { run } = await import(runnerUrl.href);
+  return run;
 }
 
 try {
-  runTranslation(parseArgs(process.argv.slice(2)));
+  const config = parseArgs(process.argv.slice(2));
+  const runTranslateFile = await loadRunner();
+  await runTranslateFile({
+    dbPath: config.dbPath,
+    projectId: Number(config.projectId),
+    inputPath: config.inputPath,
+    outputPath: config.outputPath,
+    targetScope: config.targetScope || undefined,
+    checkpointPath: config.checkpointPath || undefined,
+    eventsPath: config.eventsPath || undefined,
+    artifactsPath: config.artifactsPath || undefined,
+    resume: config.resume,
+    maxAttempts: config.maxAttempts ? Number(config.maxAttempts) : undefined,
+    snapshotPath: config.snapshotPath || undefined,
+    snapshotEveryUnits: config.snapshotEveryUnits
+      ? Number(config.snapshotEveryUnits)
+      : undefined,
+    snapshotEverySeconds: config.snapshotEverySeconds
+      ? Number(config.snapshotEverySeconds)
+      : undefined,
+    progressStdout: config.progressStdout,
+  });
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   console.error(message);

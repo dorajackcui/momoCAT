@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -21,7 +20,7 @@ function runScript(args, options = {}) {
 }
 
 function withTempFixture(callback) {
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cat-translate-file-"));
+  const tempRoot = fs.mkdtempSync(path.join(repoRoot, ".tmp-translate-file-"));
   try {
     const dbPath = path.join(tempRoot, "cat.db");
     const inputPath = path.join(tempRoot, "input.xlsx");
@@ -50,59 +49,18 @@ function withTempFixture(callback) {
   }
 }
 
-function installFakeVitest(tempRoot, reportPath) {
-  const binDir = path.join(tempRoot, "node_modules", ".bin");
-  fs.mkdirSync(binDir, { recursive: true });
-
-  const fakeVitestScript = path.join(binDir, "vitest-check.mjs");
+function installFakeRunner(tempRoot, reportPath) {
+  const fakeRunnerScript = path.join(tempRoot, "translate-file-runner.mjs");
   fs.writeFileSync(
-    fakeVitestScript,
+    fakeRunnerScript,
     `import fs from "node:fs";
 
-const names = [
-  "LOCALIZATION_ENGINE_FILE_DYNAMIC",
-  "LOCALIZATION_ENGINE_DB_PATH",
-  "LOCALIZATION_ENGINE_PROJECT_ID",
-  "LOCALIZATION_ENGINE_INPUT_PATH",
-  "LOCALIZATION_ENGINE_OUTPUT_PATH",
-  "LOCALIZATION_ENGINE_TARGET_SCOPE",
-  "LOCALIZATION_ENGINE_JOB_ENABLED",
-  "LOCALIZATION_ENGINE_CHECKPOINT_PATH",
-  "LOCALIZATION_ENGINE_EVENTS_PATH",
-  "LOCALIZATION_ENGINE_ARTIFACTS_PATH",
-  "LOCALIZATION_ENGINE_RESUME",
-  "LOCALIZATION_ENGINE_MAX_ATTEMPTS",
-  "LOCALIZATION_ENGINE_SNAPSHOT_PATH",
-  "LOCALIZATION_ENGINE_SNAPSHOT_EVERY_UNITS",
-  "LOCALIZATION_ENGINE_SNAPSHOT_EVERY_SECONDS",
-  "LOCALIZATION_ENGINE_PROGRESS_STDOUT",
-];
-const report = Object.fromEntries(
-  names.map((name) => [
-    name,
-    {
-      present: Object.prototype.hasOwnProperty.call(process.env, name),
-      value: process.env[name] ?? null,
-    },
-  ]),
-);
-fs.writeFileSync(process.env.ENV_REPORT_PATH, JSON.stringify(report), "utf8");
+export async function run(config) {
+  fs.writeFileSync(${JSON.stringify(reportPath)}, JSON.stringify(config), "utf8");
+}
 `,
   );
-
-  if (process.platform === "win32") {
-    fs.writeFileSync(
-      path.join(binDir, "vitest.cmd"),
-      '@echo off\r\n"%NODE_EXE%" "%~dp0\\vitest-check.mjs"\r\n',
-    );
-  } else {
-    const vitestPath = path.join(binDir, "vitest");
-    fs.writeFileSync(
-      vitestPath,
-      '#!/bin/sh\n"$NODE_EXE" "$(dirname "$0")/vitest-check.mjs"\n',
-    );
-    fs.chmodSync(vitestPath, 0o755);
-  }
+  return fakeRunnerScript;
 }
 
 test("translate file script exposes help", () => {
@@ -160,10 +118,10 @@ test("translate file script rejects unknown args", () => {
   assert.match(result.stderr, /Unknown argument: --wat/);
 });
 
-test("translate file script passes explicit job paths and options to runner env", () => {
+test("translate file script passes explicit job paths and options to runner", () => {
   withTempFixture(({ tempRoot, dbPath, inputPath, outputPath }) => {
-    const reportPath = path.join(tempRoot, "env-report.json");
-    installFakeVitest(tempRoot, reportPath);
+    const reportPath = path.join(tempRoot, "runner-report.json");
+    const runnerPath = installFakeRunner(tempRoot, reportPath);
 
     const checkpointPath = path.join(tempRoot, "custom.checkpoint.jsonl");
     const eventsPath = path.join(tempRoot, "custom.events.jsonl");
@@ -171,8 +129,7 @@ test("translate file script passes explicit job paths and options to runner env"
     const snapshotPath = path.join(tempRoot, "custom.snapshot.xlsx");
     const env = {
       ...process.env,
-      NODE_EXE: process.execPath,
-      ENV_REPORT_PATH: reportPath,
+      TRANSLATE_FILE_RUNNER: runnerPath,
     };
 
     const result = runScript(
@@ -204,28 +161,29 @@ test("translate file script passes explicit job paths and options to runner env"
       `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
     );
     const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
-    assert.equal(report.LOCALIZATION_ENGINE_FILE_DYNAMIC.value, "1");
-    assert.equal(report.LOCALIZATION_ENGINE_DB_PATH.value, dbPath);
-    assert.equal(report.LOCALIZATION_ENGINE_PROJECT_ID.value, "1");
-    assert.equal(report.LOCALIZATION_ENGINE_INPUT_PATH.value, inputPath);
-    assert.equal(report.LOCALIZATION_ENGINE_OUTPUT_PATH.value, outputPath);
-    assert.equal(report.LOCALIZATION_ENGINE_TARGET_SCOPE.value, "blank-only");
-    assert.equal(report.LOCALIZATION_ENGINE_JOB_ENABLED.value, "1");
-    assert.equal(report.LOCALIZATION_ENGINE_CHECKPOINT_PATH.value, checkpointPath);
-    assert.equal(report.LOCALIZATION_ENGINE_EVENTS_PATH.value, eventsPath);
-    assert.equal(report.LOCALIZATION_ENGINE_ARTIFACTS_PATH.value, artifactsPath);
-    assert.equal(report.LOCALIZATION_ENGINE_MAX_ATTEMPTS.value, "3");
-    assert.equal(report.LOCALIZATION_ENGINE_SNAPSHOT_PATH.value, snapshotPath);
-    assert.equal(report.LOCALIZATION_ENGINE_SNAPSHOT_EVERY_UNITS.value, "5");
-    assert.equal(report.LOCALIZATION_ENGINE_SNAPSHOT_EVERY_SECONDS.value, "7");
-    assert.equal(report.LOCALIZATION_ENGINE_PROGRESS_STDOUT.value, "1");
+    assert.deepEqual(report, {
+      dbPath,
+      projectId: 1,
+      inputPath,
+      outputPath,
+      targetScope: "blank-only",
+      checkpointPath,
+      eventsPath,
+      artifactsPath,
+      resume: false,
+      maxAttempts: 3,
+      snapshotPath,
+      snapshotEveryUnits: 5,
+      snapshotEverySeconds: 7,
+      progressStdout: true,
+    });
   });
 });
 
-test("translate file script passes resume flag and sanitizes stale job env vars", () => {
+test("translate file script passes resume flag and omits absent optionals", () => {
   withTempFixture(({ tempRoot, baseArgs }) => {
-    const reportPath = path.join(tempRoot, "env-report.json");
-    installFakeVitest(tempRoot, reportPath);
+    const reportPath = path.join(tempRoot, "runner-report.json");
+    const runnerPath = installFakeRunner(tempRoot, reportPath);
 
     const env = {
       ...process.env,
@@ -237,8 +195,7 @@ test("translate file script passes resume flag and sanitizes stale job env vars"
       LOCALIZATION_ENGINE_SNAPSHOT_EVERY_UNITS: "999",
       LOCALIZATION_ENGINE_SNAPSHOT_EVERY_SECONDS: "999",
       LOCALIZATION_ENGINE_PROGRESS_STDOUT: "1",
-      NODE_EXE: process.execPath,
-      ENV_REPORT_PATH: reportPath,
+      TRANSLATE_FILE_RUNNER: runnerPath,
     };
 
     const result = runScript([...baseArgs, "--resume"], {
@@ -252,15 +209,15 @@ test("translate file script passes resume flag and sanitizes stale job env vars"
       `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
     );
     const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
-    assert.equal(report.LOCALIZATION_ENGINE_JOB_ENABLED.value, "1");
-    assert.equal(report.LOCALIZATION_ENGINE_RESUME.value, "1");
-    assert.equal(report.LOCALIZATION_ENGINE_CHECKPOINT_PATH.present, false);
-    assert.equal(report.LOCALIZATION_ENGINE_EVENTS_PATH.present, false);
-    assert.equal(report.LOCALIZATION_ENGINE_ARTIFACTS_PATH.present, false);
-    assert.equal(report.LOCALIZATION_ENGINE_MAX_ATTEMPTS.present, false);
-    assert.equal(report.LOCALIZATION_ENGINE_SNAPSHOT_PATH.present, false);
-    assert.equal(report.LOCALIZATION_ENGINE_SNAPSHOT_EVERY_UNITS.present, false);
-    assert.equal(report.LOCALIZATION_ENGINE_SNAPSHOT_EVERY_SECONDS.present, false);
-    assert.equal(report.LOCALIZATION_ENGINE_PROGRESS_STDOUT.present, false);
+    assert.equal(report.resume, true);
+    assert.equal(report.targetScope, undefined);
+    assert.equal(report.checkpointPath, undefined);
+    assert.equal(report.eventsPath, undefined);
+    assert.equal(report.artifactsPath, undefined);
+    assert.equal(report.maxAttempts, undefined);
+    assert.equal(report.snapshotPath, undefined);
+    assert.equal(report.snapshotEveryUnits, undefined);
+    assert.equal(report.snapshotEverySeconds, undefined);
+    assert.equal(report.progressStdout, false);
   });
 });

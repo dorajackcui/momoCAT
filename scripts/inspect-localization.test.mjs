@@ -51,6 +51,20 @@ function withTempFixture(callback) {
   }
 }
 
+function installFakeRunner(tempRoot, reportPath) {
+  const fakeRunnerScript = path.join(tempRoot, "inspect-localization-runner.mjs");
+  fs.writeFileSync(
+    fakeRunnerScript,
+    `import fs from "node:fs";
+
+export async function run(config) {
+  fs.writeFileSync(${JSON.stringify(reportPath)}, JSON.stringify(config), "utf8");
+}
+`,
+  );
+  return fakeRunnerScript;
+}
+
 test("inspect localization script exposes help", () => {
   assert.equal(fs.existsSync(scriptPath), true);
 
@@ -126,58 +140,19 @@ test("inspect localization validates common invalid arguments", () => {
   });
 });
 
-test("inspect localization omits optional env vars when options are absent", () => {
+test("inspect localization passes options to runner", () => {
   withTempFixture(({ tempRoot, dbPath, inputPath, outputPath }) => {
-    const binDir = path.join(tempRoot, "node_modules", ".bin");
-    fs.mkdirSync(binDir, { recursive: true });
-
-    const reportPath = path.join(tempRoot, "env-report.json");
-
-    const fakeVitestScript = path.join(binDir, "vitest-check.mjs");
-    fs.writeFileSync(
-      fakeVitestScript,
-      `import fs from "node:fs";
-
-const names = [
-  "LOCALIZATION_INSPECT_JSON_OUTPUT_PATH",
-  "LOCALIZATION_INSPECT_UNIT_LIMIT",
-  "LOCALIZATION_INSPECT_MAX_CELL_CHARS",
-];
-const report = Object.fromEntries(
-  names.map((name) => [
-    name,
-    {
-      present: Object.prototype.hasOwnProperty.call(process.env, name),
-      value: process.env[name] ?? null,
-    },
-  ]),
-);
-fs.writeFileSync(process.env.ENV_REPORT_PATH, JSON.stringify(report), "utf8");
-`,
-    );
-
-    if (process.platform === "win32") {
-      fs.writeFileSync(
-        path.join(binDir, "vitest.cmd"),
-        '@echo off\r\n"%NODE_EXE%" "%~dp0\\vitest-check.mjs"\r\n',
-      );
-    } else {
-      const vitestPath = path.join(binDir, "vitest");
-      fs.writeFileSync(
-        vitestPath,
-        '#!/bin/sh\n"$NODE_EXE" "$(dirname "$0")/vitest-check.mjs"\n',
-      );
-      fs.chmodSync(vitestPath, 0o755);
-    }
+    const reportPath = path.join(tempRoot, "runner-report.json");
+    const runnerPath = installFakeRunner(tempRoot, reportPath);
+    const jsonOutputPath = path.join(tempRoot, "inspect.json");
 
     const env = {
       ...process.env,
       LOCALIZATION_INSPECT_JSON_OUTPUT_PATH: "stale.json",
       LOCALIZATION_INSPECT_UNIT_LIMIT: "999",
       LOCALIZATION_INSPECT_MAX_CELL_CHARS: "999",
+      INSPECT_LOCALIZATION_RUNNER: runnerPath,
     };
-    env.NODE_EXE = process.execPath;
-    env.ENV_REPORT_PATH = reportPath;
 
     const result = runScript(
       [
@@ -189,6 +164,11 @@ fs.writeFileSync(process.env.ENV_REPORT_PATH, JSON.stringify(report), "utf8");
         inputPath,
         "--output",
         outputPath,
+        "--json-output",
+        jsonOutputPath,
+        "--unit-limit",
+        "5",
+        "--max-cell-chars=120",
       ],
       {
         cwd: tempRoot,
@@ -202,8 +182,39 @@ fs.writeFileSync(process.env.ENV_REPORT_PATH, JSON.stringify(report), "utf8");
       `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
     );
     const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
-    assert.equal(report.LOCALIZATION_INSPECT_JSON_OUTPUT_PATH.present, false);
-    assert.equal(report.LOCALIZATION_INSPECT_UNIT_LIMIT.present, false);
-    assert.equal(report.LOCALIZATION_INSPECT_MAX_CELL_CHARS.present, false);
+    assert.deepEqual(report, {
+      dbPath,
+      projectId: 1,
+      inputPath,
+      outputPath,
+      jsonOutputPath,
+      unitLimit: 5,
+      maxCellChars: 120,
+    });
+  });
+});
+
+test("inspect localization omits absent optionals", () => {
+  withTempFixture(({ tempRoot, baseArgs }) => {
+    const reportPath = path.join(tempRoot, "runner-report.json");
+    const runnerPath = installFakeRunner(tempRoot, reportPath);
+
+    const result = runScript(baseArgs, {
+      cwd: tempRoot,
+      env: {
+        ...process.env,
+        INSPECT_LOCALIZATION_RUNNER: runnerPath,
+      },
+    });
+
+    assert.equal(
+      result.status,
+      0,
+      `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+    );
+    const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+    assert.equal(report.jsonOutputPath, undefined);
+    assert.equal(report.unitLimit, undefined);
+    assert.equal(report.maxCellChars, undefined);
   });
 });

@@ -8,6 +8,8 @@ Run commands from the repo root.
 
 ## Commands
 
+The CLI scripts are thin Node entrypoints that call `@cat/localization`; tests verify the same package APIs without serving as the command runtime.
+
 ### Inspect Projects
 
 ```bash

@@ -1,13 +1,11 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
+import { run as defaultRunInspectLocalization } from "./inspect-localization-runner.mjs";
 
-const TEST_NAME = "localization-inspect-env-run";
-const TEST_PATH =
-  "packages/localization/src/LocalizationInspector.cli.test.ts";
 const OPTION_NAMES = new Set([
   "db",
   "db-path",
@@ -166,73 +164,29 @@ function isPositiveInteger(value) {
   return Number.isInteger(Number(value)) && Number(value) > 0;
 }
 
-function spawnCommandSync(command, args, options = {}) {
-  return spawnSync(command, args, {
-    ...options,
-    shell: process.platform === "win32",
-  });
-}
-
-function runInspection(config) {
-  const vitestCmd = path.join(
-    process.cwd(),
-    "node_modules",
-    ".bin",
-    process.platform === "win32" ? "vitest.cmd" : "vitest",
+async function loadRunner() {
+  if (!process.env.INSPECT_LOCALIZATION_RUNNER) {
+    return defaultRunInspectLocalization;
+  }
+  const runnerUrl = pathToFileURL(
+    path.resolve(process.env.INSPECT_LOCALIZATION_RUNNER),
   );
-  if (!fs.existsSync(vitestCmd)) {
-    throw new Error(`Vitest binary not found: ${vitestCmd}`);
-  }
-
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) {
-    if (key.startsWith("LOCALIZATION_INSPECT_")) {
-      delete env[key];
-    }
-  }
-  Object.assign(env, {
-    LOCALIZATION_INSPECT_DYNAMIC: "1",
-    LOCALIZATION_INSPECT_DB_PATH: config.dbPath,
-    LOCALIZATION_INSPECT_PROJECT_ID: config.projectId,
-    LOCALIZATION_INSPECT_INPUT_PATH: config.inputPath,
-    LOCALIZATION_INSPECT_OUTPUT_PATH: config.outputPath,
-  });
-  if (config.jsonOutputPath) {
-    env.LOCALIZATION_INSPECT_JSON_OUTPUT_PATH = config.jsonOutputPath;
-  }
-  if (config.unitLimit) {
-    env.LOCALIZATION_INSPECT_UNIT_LIMIT = config.unitLimit;
-  }
-  if (config.maxCellChars) {
-    env.LOCALIZATION_INSPECT_MAX_CELL_CHARS = config.maxCellChars;
-  }
-
-  const result = spawnCommandSync(
-    vitestCmd,
-    [
-      "run",
-      TEST_PATH,
-      "-t",
-      TEST_NAME,
-      "--reporter=verbose",
-      "--testTimeout=3600000",
-    ],
-    {
-      cwd: process.cwd(),
-      env,
-      stdio: "inherit",
-    },
-  );
-
-  if (result.error) {
-    throw new Error(`Failed to start ${vitestCmd}: ${result.error.message}`);
-  }
-
-  process.exit(result.status ?? 1);
+  const { run } = await import(runnerUrl.href);
+  return run;
 }
 
 try {
-  runInspection(parseArgs(process.argv.slice(2)));
+  const config = parseArgs(process.argv.slice(2));
+  const runInspectLocalization = await loadRunner();
+  await runInspectLocalization({
+    dbPath: config.dbPath,
+    projectId: Number(config.projectId),
+    inputPath: config.inputPath,
+    outputPath: config.outputPath,
+    jsonOutputPath: config.jsonOutputPath || undefined,
+    unitLimit: config.unitLimit ? Number(config.unitLimit) : undefined,
+    maxCellChars: config.maxCellChars ? Number(config.maxCellChars) : undefined,
+  });
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   console.error(message);

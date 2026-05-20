@@ -93,3 +93,7 @@ export type {
   ResolvedMTConfig,
   TranslatePreparedPromptInput,
 } from './modules/MTModule';
+export { runTranslateFileCommand } from './cli/translateFileCommand';
+export type { TranslateFileCommandConfig } from './cli/translateFileCommand';
+export { runInspectLocalizationCommand } from './cli/inspectLocalizationCommand';
+export type { InspectLocalizationCommandConfig } from './cli/inspectLocalizationCommand';
