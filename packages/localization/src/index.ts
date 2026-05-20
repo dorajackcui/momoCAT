@@ -89,12 +89,18 @@ export { TMModule, mapTMEngineReferences } from './modules/TMModule';
 export { TBModule, mapTBEngineReferences } from './modules/TBModule';
 export { MTModule } from './modules/MTModule';
 export type {
+  ComposeBatchPromptInput,
   ComposePromptInput,
+  MTBatchCurrentUnitInput,
+  MTBatchTranslateResult,
+  MTBatchUnitResult,
   MTModuleDependencies,
   MTTranslateResult,
+  PreparedBatchPromptInput,
   PreparedPromptInput,
   PromptMTConfig,
   ResolvedMTConfig,
+  TranslatePreparedBatchPromptInput,
   TranslatePreparedPromptInput,
 } from './modules/MTModule';
 export { runTranslateFileCommand } from './cli/translateFileCommand';

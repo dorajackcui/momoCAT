@@ -1,11 +1,15 @@
 import type { Segment } from '@cat/core/models';
 import {
   DEFAULT_PROJECT_AI_MODEL,
+  buildAIWindowModePromptBundle,
   buildAITextPromptBundle,
   normalizeProjectAIModel,
   normalizeProjectType,
+  parseAIWindowModeResponse,
   type Project,
   type ProjectType,
+  type WindowModeNextContextRow,
+  type WindowModePreviousContextRow,
 } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
 import { parseEditorTextToTokens, serializeTokensToEditorText } from '@cat/core/tag';
@@ -36,6 +40,27 @@ export interface ComposePromptInput {
   projectPromptOverride?: string;
 }
 
+export interface MTBatchCurrentUnitInput {
+  responseId: string;
+  documentId: string;
+  unitId: string;
+  segment: Segment;
+  tm: TMArtifact;
+  tb: TBArtifact;
+  context?: string;
+}
+
+export interface ComposeBatchPromptInput {
+  taskId: string;
+  project: Project;
+  current: MTBatchCurrentUnitInput[];
+  previousContext: WindowModePreviousContextRow[];
+  nextContext: WindowModeNextContextRow[];
+  mtOptions?: LocalizationMTOptions;
+  providerOverride?: string;
+  projectPromptOverride?: string;
+}
+
 export interface ResolvedMTConfig {
   provider: ResolvedAIProviderConfig['provider'];
   apiKey: string;
@@ -59,12 +84,38 @@ export interface PreparedPromptInput extends ComposePromptInput {
   validationFeedback?: string;
 }
 
+export interface PreparedBatchPromptInput extends ComposeBatchPromptInput {
+  baseUrl: string;
+  model: string;
+  reasoningEffort?: ReasoningEffort;
+  srcLang: string;
+  tgtLang: string;
+  provider?: ResolvedAIProviderConfig['provider'];
+  validationFeedback?: string;
+}
+
 export interface TranslatePreparedPromptInput extends PreparedPromptInput {
+  apiKey: string;
+}
+
+export interface TranslatePreparedBatchPromptInput extends PreparedBatchPromptInput {
   apiKey: string;
 }
 
 export interface MTTranslateResult {
   targetTokens: Segment['targetTokens'];
+  prompt: PromptArtifact;
+}
+
+export interface MTBatchUnitResult {
+  documentId: string;
+  unitId: string;
+  responseId: string;
+  targetTokens: Segment['targetTokens'];
+}
+
+export interface MTBatchTranslateResult {
+  results: MTBatchUnitResult[];
   prompt: PromptArtifact;
 }
 
@@ -152,6 +203,24 @@ export class MTModule {
     });
   }
 
+  async composeBatchPrompt(input: ComposeBatchPromptInput): Promise<PromptArtifact> {
+    const config = await this.resolvePromptConfig(
+      input.project,
+      input.mtOptions,
+      input.providerOverride,
+    );
+    const meta = input.current[0]?.segment.meta as SegmentLanguageMeta | undefined;
+    return this.composePreparedBatchPrompt({
+      ...input,
+      baseUrl: config.provider.baseUrl,
+      model: config.model,
+      reasoningEffort: config.reasoningEffort,
+      provider: config.provider,
+      srcLang: meta?.sourceLanguage ? String(meta.sourceLanguage) : input.project.srcLang,
+      tgtLang: meta?.targetLanguage ? String(meta.targetLanguage) : input.project.tgtLang,
+    });
+  }
+
   composePreparedPrompt(input: PreparedPromptInput): PromptArtifact {
     const promptParams = this.buildPromptParams(input);
     const promptBundle = buildAITextPromptBundle(promptParams.projectType, {
@@ -187,6 +256,54 @@ export class MTModule {
         system: promptBundle.systemPrompt.length,
         user: promptBundle.userPrompt.length,
         total: promptBundle.systemPrompt.length + promptBundle.userPrompt.length,
+      },
+    };
+  }
+
+  composePreparedBatchPrompt(input: PreparedBatchPromptInput): PromptArtifact {
+    const promptParams = this.buildBatchPromptParams(input);
+    const promptBundle = buildAIWindowModePromptBundle({
+      srcLang: input.srcLang,
+      tgtLang: input.tgtLang,
+      projectPrompt: promptParams.projectPrompt,
+      currentSegments: promptParams.currentSegments,
+      previousContext: input.previousContext,
+      nextContext: input.nextContext,
+      validationFeedback: promptParams.validationFeedback,
+    });
+    const sourcePayload = promptParams.currentSegments
+      .map((segment) => `${segment.id}: ${segment.sourcePayload}`)
+      .join('\n');
+
+    return {
+      unitId: input.taskId,
+      provider: {
+        id: input.provider?.id ?? null,
+        name: input.provider?.name ?? null,
+        baseUrl: input.baseUrl,
+      },
+      model: input.model,
+      reasoningEffort: input.reasoningEffort ?? null,
+      projectPrompt: promptParams.projectPrompt,
+      projectType: promptParams.projectType,
+      sourcePayload,
+      tmPromptBlock: promptBundle.sections.currentSegmentsBlock,
+      concordancePromptBlock: promptBundle.sections.currentSegmentsBlock,
+      tbPromptBlock: promptBundle.sections.currentSegmentsBlock,
+      referencePromptBlock: promptBundle.sections.currentSegmentsBlock,
+      systemPrompt: promptBundle.systemPrompt,
+      userPrompt: promptBundle.userPrompt,
+      promptChars: {
+        system: promptBundle.systemPrompt.length,
+        user: promptBundle.userPrompt.length,
+        total: promptBundle.systemPrompt.length + promptBundle.userPrompt.length,
+      },
+      batch: {
+        mode: 'window',
+        taskId: input.taskId,
+        currentIds: promptParams.currentSegments.map((segment) => segment.id),
+        previousContextCount: input.previousContext.length,
+        nextContextCount: input.nextContext.length,
       },
     };
   }
@@ -252,6 +369,90 @@ export class MTModule {
     throw new Error('Unexpected translation retry failure');
   }
 
+  async translateBatch(input: TranslatePreparedBatchPromptInput): Promise<MTBatchTranslateResult> {
+    const prompt = this.composePreparedBatchPrompt(input);
+    const promptParams = this.buildBatchPromptParams(input);
+    const currentByResponseId = new Map(input.current.map((unit) => [unit.responseId, unit]));
+    const maxAttempts = 3;
+    let validationFeedback: string | undefined;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const attemptPrompt =
+        attempt === 1
+          ? prompt
+          : this.composePreparedBatchPrompt({
+              ...input,
+              validationFeedback,
+            });
+      const response = await this.aiTransport.createResponse({
+        apiKey: input.apiKey,
+        baseUrl: input.baseUrl,
+        model: input.model,
+        reasoningEffort: input.reasoningEffort ?? 'medium',
+        systemPrompt: attemptPrompt.systemPrompt,
+        userPrompt: attemptPrompt.userPrompt,
+      });
+
+      const translations = this.parseBatchResponse(
+        response.content,
+        input.current.map((unit) => unit.responseId),
+      );
+      const results = translations.map((translation) => {
+        const unit = currentByResponseId.get(translation.id);
+        if (!unit) {
+          throw new Error(`Unknown translation id: ${translation.id}`);
+        }
+        const sourceText = promptParams.sourceTextById.get(translation.id) ?? '';
+        const sourcePayload = promptParams.sourcePayloadById.get(translation.id) ?? '';
+        this.assertChangedTranslation(translation.text.trim(), sourceText, sourcePayload, {
+          projectType: promptParams.projectType,
+          srcLang: input.srcLang,
+          tgtLang: input.tgtLang,
+        });
+
+        return {
+          documentId: unit.documentId,
+          unitId: unit.unitId,
+          responseId: translation.id,
+          targetTokens: parseEditorTextToTokens(translation.text, unit.segment.sourceTokens),
+        };
+      });
+
+      if (promptParams.projectType === 'custom') {
+        return { results, prompt };
+      }
+
+      const validationErrors = results.flatMap((result) => {
+        const unit = currentByResponseId.get(result.responseId);
+        if (!unit) {
+          return [`${result.responseId}: unknown current unit`];
+        }
+        return this.tagValidator
+          .validate(unit.segment.sourceTokens, result.targetTokens)
+          .issues.filter((issue) => issue.severity === 'error')
+          .map((issue) => `${result.responseId}: ${issue.message}`);
+      });
+
+      if (validationErrors.length === 0) {
+        return { results, prompt };
+      }
+
+      if (attempt === maxAttempts) {
+        throw new Error(
+          `Tag validation failed after ${maxAttempts} attempts: ${validationErrors.join('; ')}`,
+        );
+      }
+
+      validationFeedback = [
+        'Previous Window Mode batch translation was invalid.',
+        ...validationErrors.map((error) => `- ${error}`),
+        'Retry only the strict JSON response and preserve marker content and sequence exactly.',
+      ].join('\n');
+    }
+
+    throw new Error('Unexpected batch translation retry failure');
+  }
+
   private buildPromptParams(input: ComposePromptInput & { validationFeedback?: string }): {
     projectPrompt: string;
     projectType: ProjectType;
@@ -294,6 +495,77 @@ export class MTModule {
         tbReferences: tbReferences.length > 0 ? tbReferences : undefined,
       },
     };
+  }
+
+  private buildBatchPromptParams(input: ComposeBatchPromptInput & { validationFeedback?: string }): {
+    projectPrompt: string;
+    projectType: ProjectType;
+    validationFeedback?: string;
+    currentSegments: Array<{
+      id: string;
+      sourcePayload: string;
+      context?: string;
+      tmReferences?: TMArtifact['selectedReferences']['tmReferences'];
+      concordanceReferences?: TMArtifact['selectedReferences']['concordanceReferences'];
+      tbReferences?: TBArtifact['selectedReferences'];
+    }>;
+    sourceTextById: Map<string, string>;
+    sourcePayloadById: Map<string, string>;
+  } {
+    const sourceTextById = new Map<string, string>();
+    const sourcePayloadById = new Map<string, string>();
+    const currentSegments = input.current.map((unit) => {
+      const sourcePayload = serializeTokensToEditorText(
+        unit.segment.sourceTokens,
+        unit.segment.sourceTokens,
+      );
+      sourceTextById.set(unit.responseId, serializeTokensToDisplayText(unit.segment.sourceTokens));
+      sourcePayloadById.set(unit.responseId, sourcePayload);
+
+      const context =
+        unit.context ??
+        (unit.segment.meta?.context ? String(unit.segment.meta.context).trim() : undefined);
+      const tmReferences = unit.tm.selectedReferences.tmReferences;
+      const concordanceReferences = unit.tm.selectedReferences.concordanceReferences;
+      const tbReferences = unit.tb.selectedReferences;
+
+      return {
+        id: unit.responseId,
+        sourcePayload,
+        context,
+        tmReferences: tmReferences.length > 0 ? tmReferences : undefined,
+        concordanceReferences:
+          concordanceReferences.length > 0 ? concordanceReferences : undefined,
+        tbReferences: tbReferences.length > 0 ? tbReferences : undefined,
+      };
+    });
+
+    return {
+      projectPrompt:
+        input.projectPromptOverride ??
+        input.mtOptions?.systemPrompt ??
+        input.project.aiPrompt ??
+        '',
+      projectType: normalizeProjectType(input.project.projectType),
+      validationFeedback: input.validationFeedback,
+      currentSegments,
+      sourceTextById,
+      sourcePayloadById,
+    };
+  }
+
+  private parseBatchResponse(content: string, expectedIds: string[]) {
+    try {
+      return parseAIWindowModeResponse(content, expectedIds);
+    } catch (error) {
+      if (error instanceof Error) {
+        const missing = /^Missing translation id "(.+)"\.$/i.exec(error.message);
+        if (missing) {
+          throw new Error(`Missing translation id: ${missing[1]}`);
+        }
+      }
+      throw error;
+    }
   }
 
   private async resolveReasoningEffort(

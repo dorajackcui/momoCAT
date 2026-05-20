@@ -152,6 +152,176 @@ describe('MTModule', () => {
       db.close();
     }
   });
+
+  it('composes a Window Mode batch prompt without calling provider transport', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Batch Prompt', 'en', 'fr');
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const row2 = createTransientSegment(
+        { id: 'row-2', source: 'Save file', fileName: 'doc.xlsx' },
+        1,
+      );
+      const row3 = createTransientSegment(
+        { id: 'row-3', source: 'Close', fileName: 'doc.xlsx' },
+        2,
+      );
+      const transport = createTransport();
+      const module = createModule(db, transport);
+
+      const artifact = await module.composeBatchPrompt({
+        taskId: 'window-task-1',
+        project,
+        current: [
+          {
+            responseId: 'row-2',
+            documentId: 'doc.xlsx',
+            unitId: 'unit-2',
+            segment: row2,
+            tm: createTMArtifact(row2),
+            tb: createTBArtifact(row2),
+          },
+          {
+            responseId: 'row-3',
+            documentId: 'doc.xlsx',
+            unitId: 'unit-3',
+            segment: row3,
+            tm: createTMArtifact(row3),
+            tb: createTBArtifact(row3),
+          },
+        ],
+        previousContext: [{ source: 'Open', target: 'Ouvrir' }],
+        nextContext: [{ source: 'Preferences' }],
+      });
+
+      expect(artifact.batch).toEqual({
+        mode: 'window',
+        taskId: 'window-task-1',
+        currentIds: ['row-2', 'row-3'],
+        previousContextCount: 1,
+        nextContextCount: 1,
+      });
+      expect(artifact.userPrompt).toContain('Current segments');
+      expect(artifact.userPrompt).toContain('id: row-2');
+      expect(artifact.userPrompt).toContain('Previous 5 translated rows');
+      expect(artifact.userPrompt).toContain('Open -> Ouvrir');
+      expect(artifact.userPrompt).toContain('Next 5 source rows');
+      expect(artifact.userPrompt).not.toContain('documentId');
+      expect(artifact.userPrompt).not.toContain('doc.xlsx');
+      expect(transport.createResponse).not.toHaveBeenCalled();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('translates Window Mode strict JSON responses into per-unit tokens', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Batch Translate', 'en', 'fr');
+      db.setSetting('openai_api_key', 'test-api-key');
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const row2 = createTransientSegment({ id: 'row-2', source: 'Save file' }, 1);
+      const row3 = createTransientSegment({ id: 'row-3', source: 'Close' }, 2);
+      const transport = createTransport(
+        JSON.stringify({
+          translations: [
+            { id: 'row-3', text: 'Fermer' },
+            { id: 'row-2', text: 'Enregistrer le fichier' },
+          ],
+        }),
+      );
+      const module = createModule(db, transport);
+      const config = await module.resolveConfig(project, {
+        model: 'test-model',
+        reasoningEffort: 'medium',
+      });
+
+      const result = await module.translateBatch({
+        taskId: 'window-task-1',
+        project,
+        current: [
+          {
+            responseId: 'row-2',
+            documentId: 'doc.xlsx',
+            unitId: 'unit-2',
+            segment: row2,
+            tm: createTMArtifact(row2),
+            tb: createTBArtifact(row2),
+          },
+          {
+            responseId: 'row-3',
+            documentId: 'doc.xlsx',
+            unitId: 'unit-3',
+            segment: row3,
+            tm: createTMArtifact(row3),
+            tb: createTBArtifact(row3),
+          },
+        ],
+        previousContext: [],
+        nextContext: [],
+        apiKey: config.apiKey,
+        baseUrl: config.provider.baseUrl,
+        model: config.model,
+        reasoningEffort: config.reasoningEffort,
+        provider: config.provider,
+        srcLang: 'en',
+        tgtLang: 'fr',
+      });
+
+      expect(result.results.map((unit) => unit.responseId)).toEqual(['row-2', 'row-3']);
+      expect(serializeTokensToDisplayText(result.results[0].targetTokens)).toBe(
+        'Enregistrer le fichier',
+      );
+      expect(serializeTokensToDisplayText(result.results[1].targetTokens)).toBe('Fermer');
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('rejects Window Mode responses with missing current ids', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Batch Missing', 'en', 'fr');
+      db.setSetting('openai_api_key', 'test-api-key');
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const row2 = createTransientSegment({ id: 'row-2', source: 'Save file' }, 1);
+      const transport = createTransport(JSON.stringify({ translations: [] }));
+      const module = createModule(db, transport);
+      const config = await module.resolveConfig(project);
+
+      await expect(
+        module.translateBatch({
+          taskId: 'window-task-1',
+          project,
+          current: [
+            {
+              responseId: 'row-2',
+              documentId: 'doc.xlsx',
+              unitId: 'unit-2',
+              segment: row2,
+              tm: createTMArtifact(row2),
+              tb: createTBArtifact(row2),
+            },
+          ],
+          previousContext: [],
+          nextContext: [],
+          apiKey: config.apiKey,
+          baseUrl: config.provider.baseUrl,
+          model: config.model,
+          reasoningEffort: config.reasoningEffort,
+          provider: config.provider,
+          srcLang: 'en',
+          tgtLang: 'fr',
+        }),
+      ).rejects.toThrow(/missing translation id: row-2/i);
+    } finally {
+      db.close();
+    }
+  });
 });
 
 function createTransport(content = 'Bonjour'): MockTransport {

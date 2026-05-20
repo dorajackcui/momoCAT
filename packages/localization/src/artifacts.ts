@@ -108,6 +108,14 @@ export interface PromptProviderArtifact {
   baseUrl: string | null;
 }
 
+export interface PromptBatchArtifact {
+  mode: 'window';
+  taskId: string;
+  currentIds: string[];
+  previousContextCount: number;
+  nextContextCount: number;
+}
+
 export interface PromptArtifact {
   unitId: string;
   provider: PromptProviderArtifact;
@@ -127,6 +135,7 @@ export interface PromptArtifact {
     user: number;
     total: number;
   };
+  batch?: PromptBatchArtifact;
 }
 
 export interface InspectTruncatedFields {
