@@ -4,6 +4,21 @@
 
 Provide a deterministic onboarding entrypoint for humans and AI agents to start work in under 10 minutes.
 
+## Branch Design Core
+
+This branch, `agent-first-batch-ai-mvp`, is moving the project toward a CLI-first, agent-first batch localization workstation.
+
+Core direction:
+
+- Treat `LocalizationEngine` as the headless TM + TB + MT engine boundary.
+- Prefer CLI and future API workflows over CAT editor UI changes.
+- Keep external files outside project `files` and `segments` during headless translation.
+- Keep the design modular: File layer, JobRunner, LocalizationEngine, TMModule, TBModule, and MTModule should stay separately understandable and replaceable.
+- Keep normal runs lightweight and clean: output, checkpoint, events, and throttled snapshot by default; full prompt/TM/TB artifacts only for inspect or explicit diagnostic runs.
+- Keep implementation simple and elegant. Avoid piling rules into one place when a small typed boundary or module contract can carry the design.
+
+The existing CAT UI is still present, but it is not the center of this branch's architecture work.
+
 ## When to Read
 
 Read first for every new task, new session, or handoff.
