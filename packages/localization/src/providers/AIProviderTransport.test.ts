@@ -171,6 +171,7 @@ describe('AIProviderTransport', () => {
     const sensitiveBody = [
       'api-key: sk-header-secret',
       'Authorization: Bearer bearer-secret',
+      'Authorization: Basic basic-secret',
       'token: header-token-secret',
     ].join('\n');
     global.fetch = vi.fn().mockResolvedValue(new Response(sensitiveBody, { status: 400 })) as typeof fetch;
@@ -185,6 +186,6 @@ describe('AIProviderTransport', () => {
       }),
     );
 
-    expect(error.message).not.toMatch(/sk-header-secret|bearer-secret|header-token-secret/);
+    expect(error.message).not.toMatch(/sk-header-secret|bearer-secret|basic-secret|header-token-secret/);
   });
 });

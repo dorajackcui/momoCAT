@@ -73,7 +73,7 @@ function sanitizeErrorText(value: string, limit = ERROR_BODY_PREVIEW_LIMIT): str
   const redacted = value
     .replace(/(["']?(?:api[_-]?key|token|password|secret)["']?\s*:\s*["'])([^"'\r\n]+)(["'])/gi, '$1[redacted]$3')
     .replace(/\b((?:api[_-]?key|token|password|secret)\s*:\s*)([^\r\n]+)/gi, '$1[redacted]')
-    .replace(/\b(authorization\s*:\s*Bearer\s+)([^\r\n]+)/gi, '$1[redacted]')
+    .replace(/\b(authorization\s*:\s*)([^\r\n]+)/gi, '$1[redacted]')
     .replace(/(api[_-]?key|token|password|secret)=([^&\s]+)/gi, '$1=[redacted]')
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
     .replace(/(https?:\/\/)([^:@/\s]+):([^@/\s]+)@/gi, '$1[redacted]@')
