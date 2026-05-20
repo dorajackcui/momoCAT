@@ -129,6 +129,50 @@ describe("Window Mode prompt builder", () => {
     expect(bundle.systemPrompt).not.toContain("From en to fr. Output in fr");
   });
 
+  it("uses neutral custom project wording outside the stable JSON schema", () => {
+    const bundle = buildAIWindowModePromptBundle({
+      projectType: "custom",
+      srcLang: "en",
+      tgtLang: "fr",
+      projectPrompt: "Classify sentiment.",
+      currentSegments: [{ id: "row-2", sourcePayload: "Great work" }],
+    });
+    const proseOutsideJsonSchemaLine = bundle.userPrompt
+      .split("\n")
+      .filter((line) => !line.includes('{"translations"'))
+      .join("\n");
+
+    expect(bundle.systemPrompt).toContain("Classify sentiment.");
+    expect(bundle.systemPrompt).not.toContain(
+      "You are a professional translator.",
+    );
+    expect(bundle.systemPrompt).not.toContain(
+      "Translate every current segment",
+    );
+    expect(bundle.systemPrompt).toContain(
+      "Process every current segment exactly once",
+    );
+    expect(bundle.userPrompt).toContain("Current segments to process");
+    expect(bundle.userPrompt).toContain("Batch: process 1 current segment(s)");
+    expect(proseOutsideJsonSchemaLine).not.toMatch(/\btranslate\b/i);
+    expect(proseOutsideJsonSchemaLine).not.toMatch(/translations for ids/i);
+  });
+
+  it("keeps translation wording for translation Window Mode prompts", () => {
+    const bundle = buildAIWindowModePromptBundle({
+      projectType: "translation",
+      srcLang: "en",
+      tgtLang: "fr",
+      currentSegments: [{ id: "row-2", sourcePayload: "Save" }],
+    });
+
+    expect(bundle.systemPrompt).toContain(
+      "Translate every current segment exactly once",
+    );
+    expect(bundle.userPrompt).toContain("Batch: translate 1 current segment(s)");
+    expect(bundle.userPrompt).toContain("Current segments to translate");
+  });
+
   it("exposes aggregate reference-only sections separately from current source text", () => {
     const bundle = buildAIWindowModePromptBundle({
       srcLang: "en",

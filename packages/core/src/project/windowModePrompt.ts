@@ -5,6 +5,7 @@ import type {
   WindowModePromptBundle,
   WindowModePromptBundleBuildParams,
   WindowModePromptSections,
+  WindowModeProjectType,
 } from "./windowModePromptTypes";
 
 function joinBlocks(parts: string[]): string {
@@ -15,9 +16,25 @@ function trimOptional(value: string | undefined): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function getWindowModeProjectType(
+  projectType: WindowModePromptBundleBuildParams["projectType"],
+): WindowModeProjectType {
+  if (projectType === "review" || projectType === "custom") {
+    return projectType;
+  }
+  return "translation";
+}
+
+function isTranslationProject(
+  params: Pick<WindowModePromptBundleBuildParams, "projectType">,
+): boolean {
+  return getWindowModeProjectType(params.projectType) === "translation";
+}
+
 function buildSystemPrompt(params: WindowModePromptBundleBuildParams): string {
+  const translationProject = isTranslationProject(params);
   return [
-    buildAISystemPrompt(params.projectType ?? "translation", {
+    buildAISystemPrompt(getWindowModeProjectType(params.projectType), {
       srcLang: params.srcLang,
       tgtLang: params.tgtLang,
       projectPrompt: params.projectPrompt,
@@ -25,16 +42,21 @@ function buildSystemPrompt(params: WindowModePromptBundleBuildParams): string {
     [
       "Window Mode batch rules:",
       "- Return strict JSON only. Do not include Markdown, code fences, prose, comments, or trailing text.",
-      "- Translate every current segment exactly once and preserve each id exactly as provided.",
+      translationProject
+        ? "- Translate every current segment exactly once and preserve each id exactly as provided."
+        : "- Process every current segment exactly once and preserve each id exactly as provided.",
       "- Preserve all markers, tags, placeholders, variables, and protected spans exactly unless they are natural-language text inside the protected payload.",
-      "- Use per-segment context, translation memory, concordance, and terminology references only for that segment.",
+      translationProject
+        ? "- Use per-segment context, translation memory, concordance, and terminology references only for that segment."
+        : "- Use per-segment context and reference materials only for that segment.",
     ].join("\n"),
   ].join("\n\n");
 }
 
 function buildBatchBlock(params: WindowModePromptBundleBuildParams): string {
+  const action = isTranslationProject(params) ? "translate" : "process";
   return [
-    `Batch: translate ${params.currentSegments.length} current segment(s) from ${params.srcLang} to ${params.tgtLang}.`,
+    `Batch: ${action} ${params.currentSegments.length} current segment(s) from ${params.srcLang} to ${params.tgtLang}.`,
     `Current ids: ${params.currentSegments.map((segment) => segment.id).join(", ")}`,
   ].join("\n");
 }
@@ -88,9 +110,11 @@ function buildCurrentSegmentBlock(segment: WindowModeCurrentSegment): string {
 
 function buildCurrentSegmentsBlock(
   segments: WindowModeCurrentSegment[],
+  projectType: WindowModePromptBundleBuildParams["projectType"],
 ): string {
+  const action = isTranslationProject({ projectType }) ? "translate" : "process";
   return [
-    "Current segments to translate",
+    `Current segments to ${action}`,
     ...segments.map((segment, index) =>
       [`Segment ${index + 1}`, buildCurrentSegmentBlock(segment)].join("\n"),
     ),
@@ -190,12 +214,17 @@ function buildValidationFeedbackBlock(validationFeedback?: string): string {
   return feedback ? `Validation feedback\n${feedback}` : "";
 }
 
-function buildJsonFormatBlock(): string {
+function buildJsonFormatBlock(
+  projectType: WindowModePromptBundleBuildParams["projectType"],
+): string {
+  const textPlaceholder = isTranslationProject({ projectType })
+    ? "<translation>"
+    : "<result>";
   return [
     "Strict JSON format",
-    'Return exactly: {"translations":[{"id":"<id>","text":"<translation>"}]}',
-    "The top-level object must contain only translations.",
-    "translations must include exactly one object for each current id.",
+    `Return exactly: {"translations":[{"id":"<id>","text":"${textPlaceholder}"}]}`,
+    "The top-level object must contain only the translations field.",
+    "The translations array must include exactly one object for each current id.",
   ].join("\n");
 }
 
@@ -228,7 +257,10 @@ export function buildAIWindowModePromptBundle(
 
   const sections: WindowModePromptSections = {
     batchBlock: buildBatchBlock(normalizedParams),
-    currentSegmentsBlock: buildCurrentSegmentsBlock(currentSegments),
+    currentSegmentsBlock: buildCurrentSegmentsBlock(
+      currentSegments,
+      normalizedParams.projectType,
+    ),
     tmPromptBlock: buildTMReferenceBlock(currentSegments),
     concordancePromptBlock: buildConcordanceReferenceBlock(currentSegments),
     tbPromptBlock: buildTBReferenceBlock(currentSegments),
@@ -238,7 +270,7 @@ export function buildAIWindowModePromptBundle(
     validationFeedbackBlock: buildValidationFeedbackBlock(
       params.validationFeedback,
     ),
-    jsonFormatBlock: buildJsonFormatBlock(),
+    jsonFormatBlock: buildJsonFormatBlock(normalizedParams.projectType),
   };
   sections.referencePromptBlock = joinBlocks([
     sections.tmPromptBlock,
