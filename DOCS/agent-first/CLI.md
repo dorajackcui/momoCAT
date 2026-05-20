@@ -90,7 +90,10 @@ Useful options:
 --snapshot-every-seconds <n>
 --progress-stdout
 --artifacts <path>
+--batch-size <n>
 ```
+
+Window Mode is the default request model for `translate:file`. Batch size defaults to 5, accepts values from 1 to 5, and controls how many current units are sent in each provider request. Same-file requests remain ordered and sequential even if older concurrency options are present.
 
 ## Sidecars
 

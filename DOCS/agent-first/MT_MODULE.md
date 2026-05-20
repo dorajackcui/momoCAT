@@ -4,9 +4,13 @@
 
 `MTModule` coordinates machine translation behavior inside the agent-first engine. It resolves provider configuration, calls the provider transport, validates translated tokens, and records prompt artifacts for inspect and diagnostics.
 
-Pure prompt and response capability belongs in `@cat/core`. For the next MT batch mode, contracts, builders, response parsers, and schema validation should be added under `@cat/core/project` initially or a future `@cat/core/mt` slice. `@cat/localization` should consume those pure helpers while owning request orchestration and recovery.
+Pure prompt and response capability belongs in `@cat/core`. Window Mode contracts, builders, response parsers, and schema validation live under `@cat/core/project` initially or a future `@cat/core/mt` slice. `@cat/localization` consumes those pure helpers while owning request orchestration and recovery.
 
-Current next-direction record:
+Current MT Window Mode design:
+
+- `DOCS/superpowers/specs/2026-05-20-mt-window-mode-design.md`
+
+Earlier next-direction record:
 
 - `DOCS/superpowers/specs/2026-05-20-agent-first-cli-mt-next-direction-design.md`
 
@@ -51,7 +55,7 @@ The MT layer receives structured context from the engine:
 
 The important rule is that MT consumes TM/TB artifacts. It should not query TM or TB itself.
 
-For the next batch mode, the MT layer should receive a structured batch input instead of spreadsheet rows:
+For Window Mode, the MT layer receives a structured batch input instead of spreadsheet rows:
 
 - 1 to 5 current units requiring translation.
 - Up to 5 previous translated context units.
@@ -79,7 +83,7 @@ MTModule.translate(...) -> {
 }
 ```
 
-Future batch translation:
+Window Mode translation:
 
 ```text
 MT batch orchestration -> {
@@ -105,17 +109,19 @@ The prompt artifact must not include API keys.
 
 ## Current Request Model
 
-The current MVP task executor accepts one unit per task. The job runner still uses task abstractions so this can evolve.
+`translate:file` job mode now uses Window Mode by default. It plans an ordered file into batches of 1 to 5 current units, sends one provider request at a time for that file, parses a strict JSON response, and writes per-unit results through the existing job surfaces.
 
-Today:
+Current flow:
 
 ```text
-One JobUnit
-  -> one TranslationTask
-  -> one LocalizationEngine task execution
-  -> one MTModule.translate call
-  -> one provider request sequence for that segment
+one ordered file
+  -> WindowModeTaskPlanner batches 1..5 current units
+  -> one provider request at a time
+  -> strict JSON response
+  -> per-unit UnitResult/checkpoints/events/snapshots/final output
 ```
+
+Same-file provider requests are not concurrent. Later batches wait for earlier batches to finish so previous translated context is real target output from completed or skipped units. Next source context comes from following source rows. Each current unit keeps its own TM, TB, Concordance, and surrounding context.
 
 There are two retry layers today:
 
@@ -124,11 +130,11 @@ There are two retry layers today:
 
 If request scheduling changes, keep these two ideas explicit: job-level recovery and MT-level response repair are different concerns.
 
-## Future Batch Request Model
+## Window Mode Request Model
 
-The next MT scheduler should send 1 to 5 current segments in one provider request, plus previous translated context and next source context. That should not require changing the file API or checkpoint format.
+The Window Mode scheduler sends 1 to 5 current segments in one provider request, plus previous translated context and next source context. This does not change the file API or checkpoint format.
 
-Target shape:
+Request shape:
 
 ```text
 Several JobUnits
@@ -148,9 +154,7 @@ Requirements for grouped requests:
 - Keep progress events per unit plus optional task-level events later.
 - Persist prompt artifacts only when artifact capture is enabled.
 - Include batch metadata in artifacts only when useful for diagnostics.
-- Avoid concurrent provider requests in the first batch mode. Reintroduce bounded request concurrency only after a later explicit design.
-
-The job runner already canonicalizes result identity from planned units. The remaining work is to replace the one-unit task executor path with a batch-capable planner and executor.
+- Keep same-file provider requests ordered and sequential. Reintroduce bounded request concurrency only after a later explicit design.
 
 ## Inspect Contract
 

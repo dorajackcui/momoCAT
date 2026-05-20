@@ -36,6 +36,7 @@ Read first for every new task, new session, or handoff.
 - Agent-first engine: `DOCS/agent-first/ARCHITECTURE.md`
 - Agent-first CLI commands: `DOCS/agent-first/CLI.md`
 - MT prompt and request scheduling: `DOCS/agent-first/MT_MODULE.md`
+- MT Window Mode design: `DOCS/superpowers/specs/2026-05-20-mt-window-mode-design.md`
 - Next MT direction decision: `DOCS/superpowers/specs/2026-05-20-agent-first-cli-mt-next-direction-design.md`
 - Completed localization package migration record: `DOCS/superpowers/specs/2026-05-20-localization-package-boundary-design.md`
 
