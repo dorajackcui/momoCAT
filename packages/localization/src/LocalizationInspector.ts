@@ -16,6 +16,7 @@ import { SqliteTMRepository } from './adapters/sqlite/SqliteTMRepository';
 import { DefaultAIRuntimeConfigProvider } from './providers/AIRuntimeConfigService';
 import { AIProviderCatalogService } from './providers/AIProviderCatalogService';
 import { AIProviderTransport } from './providers/AIProviderTransport';
+import type { MTBatchCurrentUnitInput } from './modules/MTModule';
 import type { AIRuntimeConfigProvider, AITransport } from './ports';
 import type {
   FileParseRowArtifact,
@@ -26,11 +27,19 @@ import type {
   TBArtifact,
   TMArtifact,
 } from './artifacts';
-import { parseExternalSpreadsheet, writeInspectSpreadsheet } from './modules/FileModule';
+import {
+  parseExternalSpreadsheet,
+  writeInspectSpreadsheet,
+} from './modules/FileModule';
 import { createTransientSegment } from './transientSegment';
-import type { LocalizationEngineOptions, LocalizationMode, TranslateFileInput } from './types';
+import type {
+  LocalizationEngineOptions,
+  LocalizationMode,
+  TranslateFileInput,
+} from './types';
 
 const DEFAULT_MAX_CELL_CHARS = 30000;
+const INSPECT_BATCH_SIZE = 5;
 
 export interface InspectFileInput extends TranslateFileInput {
   jsonOutputPath?: string;
@@ -50,16 +59,22 @@ export interface LocalizationInspectorOptions extends LocalizationEngineOptions 
   aiRuntimeConfigProvider?: AIRuntimeConfigProvider;
   tmModule?: TMModule;
   tbModule?: TBModule;
-  mtModule?: Pick<MTModule, 'composePrompt'>;
+  mtModule?: Pick<MTModule, 'composePrompt' | 'composeBatchPrompt'>;
 }
 
-type ProjectRecord = NonNullable<ReturnType<SqliteProjectRepository['getProject']>>;
+type ProjectRecord = NonNullable<
+  ReturnType<SqliteProjectRepository['getProject']>
+>;
+type InspectRowWithSegment = {
+  row: FileParseRowArtifact;
+  segment: Segment;
+};
 
 export class LocalizationInspector {
   private readonly projectRepo: SqliteProjectRepository;
   private readonly tmModule: TMModule;
   private readonly tbModule: TBModule;
-  private readonly mtModule: Pick<MTModule, 'composePrompt'>;
+  private readonly mtModule: Pick<MTModule, 'composePrompt' | 'composeBatchPrompt'>;
   private readonly options: LocalizationInspectorOptions;
 
   constructor(db: CATDatabase, options: LocalizationInspectorOptions) {
@@ -72,7 +87,10 @@ export class LocalizationInspector {
     const tmService = new TMService(this.projectRepo, tmRepo);
     const tbService = new TBService(this.projectRepo, tbRepo);
     const aiTransport = options.aiTransport ?? new AIProviderTransport();
-    const providerCatalogService = new AIProviderCatalogService(settingsRepo, aiTransport);
+    const providerCatalogService = new AIProviderCatalogService(
+      settingsRepo,
+      aiTransport,
+    );
     const aiRuntimeConfigProvider =
       options.aiRuntimeConfigProvider ?? new DefaultAIRuntimeConfigProvider();
 
@@ -106,29 +124,46 @@ export class LocalizationInspector {
 
     const mode = this.resolveMode(input.options?.mode);
     if (mode === 'dialogue') {
-      throw new Error('Dialogue mode is not supported for external localization inspection.');
+      throw new Error(
+        'Dialogue mode is not supported for external localization inspection.',
+      );
     }
 
     const unitLimit = validatePositiveInteger(input.unitLimit, 'unitLimit');
     const maxCellChars =
-      validatePositiveInteger(input.maxCellChars, 'maxCellChars') ?? DEFAULT_MAX_CELL_CHARS;
+      validatePositiveInteger(input.maxCellChars, 'maxCellChars') ??
+      DEFAULT_MAX_CELL_CHARS;
     const parsed = await parseExternalSpreadsheet(input);
-    const jsonOutputPath = input.jsonOutputPath ?? inferJsonOutputPath(input.outputPath);
+    const jsonOutputPath =
+      input.jsonOutputPath ?? inferJsonOutputPath(input.outputPath);
     const sourceRows = parsed.artifact.rows.filter((row) => row.source.trim());
-    const limitedRows = unitLimit === undefined ? sourceRows : sourceRows.slice(0, unitLimit);
+    const limitedRows =
+      unitLimit === undefined ? sourceRows : sourceRows.slice(0, unitLimit);
 
-    const units: InspectUnitArtifact[] = [];
-    for (const [index, row] of limitedRows.entries()) {
-      const segment = createTransientSegment(rowToUnit(row, project, parsed.inputPath), index, {
-        projectId: project.id,
-        sourceLanguage: project.srcLang,
-        targetLanguage: project.tgtLang,
-        fileName: basename(parsed.inputPath),
-      });
-      units.push(await this.inspectRow(project, row, segment, index, maxCellChars));
-    }
+    const rowsWithSegments = limitedRows.map((row, index) => {
+      const segment = createTransientSegment(
+        rowToUnit(row, project, parsed.inputPath),
+        index,
+        {
+          projectId: project.id,
+          sourceLanguage: project.srcLang,
+          targetLanguage: project.tgtLang,
+          fileName: basename(parsed.inputPath),
+        },
+      );
+      return { row, segment };
+    });
 
-    const firstReadyPrompt = units.find((unit) => unit.status === 'ready')?.mt.systemPrompt ?? '';
+    const units = await this.inspectRowsWindowMode(
+      project,
+      rowsWithSegments,
+      sourceRows,
+      parsed.inputPath,
+      maxCellChars,
+    );
+
+    const firstReadyPrompt =
+      units.find((unit) => unit.status === 'ready')?.mt.systemPrompt ?? '';
     const truncatedSystemPrompt = truncateForCell(
       firstReadyPrompt,
       maxCellChars,
@@ -157,7 +192,11 @@ export class LocalizationInspector {
     };
 
     await writeInspectSpreadsheet(parsed, artifact, input.outputPath);
-    await writeFile(jsonOutputPath, `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
+    await writeFile(
+      jsonOutputPath,
+      `${JSON.stringify(artifact, null, 2)}\n`,
+      'utf8',
+    );
 
     return {
       artifact,
@@ -175,12 +214,99 @@ export class LocalizationInspector {
     return mode ?? this.options.defaultMode ?? 'standard';
   }
 
-  private async inspectRow(
+  private async inspectRowsWindowMode(
+    project: ProjectRecord,
+    rows: InspectRowWithSegment[],
+    contextRows: FileParseRowArtifact[],
+    inputPath: string,
+    maxCellChars: number,
+  ): Promise<InspectUnitArtifact[]> {
+    const units = await Promise.all(
+      rows.map(({ row, segment }) =>
+        this.inspectRowReferences(project, row, segment),
+      ),
+    );
+    const inputDocumentId = basename(inputPath);
+
+    for (
+      let batchStart = 0;
+      batchStart < rows.length;
+      batchStart += INSPECT_BATCH_SIZE
+    ) {
+      const batchRows = rows.slice(batchStart, batchStart + INSPECT_BATCH_SIZE);
+      const batchUnits = units.slice(
+        batchStart,
+        batchStart + INSPECT_BATCH_SIZE,
+      );
+      const readyRows = batchRows
+        .map((rowWithSegment, index) => ({
+          ...rowWithSegment,
+          unit: batchUnits[index],
+          unitIndex: batchStart + index,
+        }))
+        .filter(
+          (
+            item,
+          ): item is InspectRowWithSegment & {
+            unit: InspectUnitArtifact;
+            unitIndex: number;
+          } => item.unit?.status === 'ready',
+        );
+
+      if (readyRows.length === 0) {
+        continue;
+      }
+
+      try {
+        const current: MTBatchCurrentUnitInput[] = readyRows.map(
+          ({ row, segment, unit }) => ({
+            responseId: batchResponseId(inputDocumentId, row.unitId),
+            documentId: inputDocumentId,
+            unitId: row.unitId,
+            segment,
+            tm: unit.tm,
+            tb: unit.tb,
+            context: row.context,
+          }),
+        );
+        const mt = await this.mtModule.composeBatchPrompt({
+          taskId: `inspect-window-${Math.floor(batchStart / INSPECT_BATCH_SIZE) + 1}`,
+          project,
+          current,
+          previousContext: buildPreviousTranslatedContext(contextRows, readyRows),
+          nextContext: buildNextSourceContext(contextRows, readyRows),
+          mtOptions: this.options.mt,
+          providerOverride: this.options.mt?.providerId,
+        });
+
+        for (const { unitIndex } of readyRows) {
+          units[unitIndex] = {
+            ...units[unitIndex],
+            mt,
+            xlsx: buildXlsxFields(mt, unitIndex, maxCellChars),
+          };
+        }
+      } catch (error) {
+        for (const { row, segment, unitIndex } of readyRows) {
+          units[unitIndex] = buildErrorUnit({
+            row,
+            segment,
+            project,
+            tm: units[unitIndex].tm,
+            tb: units[unitIndex].tb,
+            error: `mt: ${errorMessage(error)}`,
+          });
+        }
+      }
+    }
+
+    return units;
+  }
+
+  private async inspectRowReferences(
     project: ProjectRecord,
     row: FileParseRowArtifact,
     segment: Segment,
-    unitIndex: number,
-    maxCellChars: number,
   ): Promise<InspectUnitArtifact> {
     const [tmResult, tbResult] = await Promise.allSettled([
       this.tmModule.inspect(project.id, segment),
@@ -194,9 +320,10 @@ export class LocalizationInspector {
       tbResult.status === 'fulfilled'
         ? tbResult.value
         : emptyTBArtifact(row.unitId, segment.segmentId);
-    const referenceErrors = [stageError('tm', tmResult), stageError('tb', tbResult)].filter(
-      (error): error is string => Boolean(error),
-    );
+    const referenceErrors = [
+      stageError('tm', tmResult),
+      stageError('tb', tbResult),
+    ].filter((error): error is string => Boolean(error));
 
     if (referenceErrors.length > 0) {
       return buildErrorUnit({
@@ -209,40 +336,23 @@ export class LocalizationInspector {
       });
     }
 
-    try {
-      const mt = await this.mtModule.composePrompt({
-        unitId: row.unitId,
-        project,
-        segment,
-        tm,
-        tb,
-        mtOptions: this.options.mt,
-        providerOverride: this.options.mt?.providerId,
-      });
-
-      return {
-        unit: row,
-        transientSegment: segmentMetadata(segment),
-        tm,
-        tb,
-        mt,
-        xlsx: buildXlsxFields(mt, unitIndex, maxCellChars),
-        status: 'ready',
-      };
-    } catch (error) {
-      return buildErrorUnit({
-        row,
-        segment,
-        project,
-        tm,
-        tb,
-        error: `mt: ${errorMessage(error)}`,
-      });
-    }
+    return {
+      unit: row,
+      transientSegment: segmentMetadata(segment),
+      tm,
+      tb,
+      mt: emptyPromptArtifact(row.unitId, project),
+      xlsx: emptyXlsxFields(),
+      status: 'ready',
+    };
   }
 }
 
-function rowToUnit(row: FileParseRowArtifact, project: Project, inputPath: string) {
+function rowToUnit(
+  row: FileParseRowArtifact,
+  project: Project,
+  inputPath: string,
+) {
   return {
     id: row.unitId,
     source: row.source,
@@ -295,6 +405,67 @@ function buildXlsxFields(
   };
 }
 
+function emptyXlsxFields(): InspectUnitArtifact['xlsx'] {
+  return {
+    tmForMt: '',
+    tbForMt: '',
+    mtUserPrompt: '',
+    truncated: {
+      tmForMt: false,
+      tbForMt: false,
+      mtUserPrompt: false,
+    },
+  };
+}
+
+function buildPreviousTranslatedContext(
+  rows: FileParseRowArtifact[],
+  currentRows: Array<InspectRowWithSegment & { unitIndex: number }>,
+): Array<{ source: string; target: string }> {
+  const currentIndexes = new Set(currentRows.map((row) => row.unitIndex));
+  const candidates = new Set<number>();
+
+  for (const currentIndex of currentIndexes) {
+    for (let index = currentIndex - 1; index >= 0; index -= 1) {
+      if (rows[index].target.trim()) {
+        candidates.add(index);
+      }
+    }
+  }
+
+  return [...candidates]
+    .sort((left, right) => left - right)
+    .slice(-5)
+    .map((index) => ({
+      source: rows[index].source,
+      target: rows[index].target,
+    }));
+}
+
+function buildNextSourceContext(
+  rows: FileParseRowArtifact[],
+  currentRows: Array<InspectRowWithSegment & { unitIndex: number }>,
+): Array<{ source: string }> {
+  const candidates = new Set<number>();
+
+  for (const { unitIndex } of currentRows) {
+    for (let index = unitIndex + 1; index < rows.length; index += 1) {
+      if (rows[index].source.trim()) {
+        candidates.add(index);
+      }
+    }
+  }
+
+  return [...candidates]
+    .sort((left, right) => left - right)
+    .slice(0, 5)
+    .map((index) => ({ source: rows[index].source }));
+}
+
+function batchResponseId(documentId: string, unitId: string): string {
+  return `${encodeURIComponent(documentId)}#${encodeURIComponent(unitId)}`;
+}
+
 function truncateForCell(
   value: string,
   maxCellChars: number,
@@ -309,12 +480,16 @@ function truncateForCell(
 
   const marker = `[TRUNCATED: see ${jsonRef}]`;
   return {
-    value: marker.length <= maxCellChars ? marker : marker.slice(0, maxCellChars),
+    value:
+      marker.length <= maxCellChars ? marker : marker.slice(0, maxCellChars),
     truncated: true,
   };
 }
 
-function validatePositiveInteger(value: number | undefined, name: string): number | undefined {
+function validatePositiveInteger(
+  value: number | undefined,
+  name: string,
+): number | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -326,7 +501,10 @@ function validatePositiveInteger(value: number | undefined, name: string): numbe
   return value;
 }
 
-function stageError<T>(stage: string, result: PromiseSettledResult<T>): string | undefined {
+function stageError<T>(
+  stage: string,
+  result: PromiseSettledResult<T>,
+): string | undefined {
   if (result.status === 'fulfilled') {
     return undefined;
   }
@@ -352,22 +530,15 @@ function buildErrorUnit(params: {
     tm: params.tm,
     tb: params.tb,
     mt: emptyPromptArtifact(params.row.unitId, params.project),
-    xlsx: {
-      tmForMt: '',
-      tbForMt: '',
-      mtUserPrompt: '',
-      truncated: {
-        tmForMt: false,
-        tbForMt: false,
-        mtUserPrompt: false,
-      },
-    },
+    xlsx: emptyXlsxFields(),
     status: 'error',
     error: params.error,
   };
 }
 
-function segmentMetadata(segment: Segment): InspectUnitArtifact['transientSegment'] {
+function segmentMetadata(
+  segment: Segment,
+): InspectUnitArtifact['transientSegment'] {
   return {
     segmentId: segment.segmentId,
     matchKey: segment.matchKey,

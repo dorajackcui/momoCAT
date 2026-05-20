@@ -33,20 +33,24 @@ describe('LocalizationInspector.inspectFile', () => {
         aiRuntimeConfigProvider: runtimeConfigProvider(),
       });
 
-      const result = await inspector.inspectFile({ projectId, inputPath, outputPath });
+      const result = await inspector.inspectFile({
+        projectId,
+        inputPath,
+        outputPath,
+      });
 
       expect(result.summary.ready).toBeGreaterThan(0);
       expect(result.outputPath).toBe(outputPath);
       expect(result.jsonOutputPath).toBe(join(root, 'inspect.json'));
       expect(transport.createResponse).not.toHaveBeenCalled();
       expect(transport.testConnection).not.toHaveBeenCalled();
-      expect(XLSX.read(await readFile(outputPath), { type: 'buffer' }).SheetNames).toEqual([
-        'Segments',
-        'MT_SystemPrompt',
-      ]);
-      expect(JSON.parse(await readFile(result.jsonOutputPath, 'utf8')).units[0].status).toBe(
-        'ready',
-      );
+      expect(
+        XLSX.read(await readFile(outputPath), { type: 'buffer' }).SheetNames,
+      ).toEqual(['Segments', 'MT_SystemPrompt']);
+      expect(
+        JSON.parse(await readFile(result.jsonOutputPath, 'utf8')).units[0]
+          .status,
+      ).toBe('ready');
     } finally {
       db.close();
       await rm(root, { recursive: true, force: true });
@@ -122,12 +126,24 @@ describe('LocalizationInspector.inspectFile', () => {
       expect(segmentRows[1][5]).toContain('Hello world');
       expect(segmentRows[1][6]).toBe('ready');
       expect(segmentRows[1][7]).toBe('#/units/0');
-      expect(segmentRows[2]).toEqual(['', '', 'blank', '', '', '', 'skipped-empty-source', '']);
+      expect(segmentRows[2]).toEqual([
+        '',
+        '',
+        'blank',
+        '',
+        '',
+        '',
+        'skipped-empty-source',
+        '',
+      ]);
 
-      const promptRows = XLSX.utils.sheet_to_json(written.Sheets.MT_SystemPrompt, {
-        header: 1,
-        defval: '',
-      }) as Array<[string, string | number | boolean]>;
+      const promptRows = XLSX.utils.sheet_to_json(
+        written.Sheets.MT_SystemPrompt,
+        {
+          header: 1,
+          defval: '',
+        },
+      ) as Array<[string, string | number | boolean]>;
       expect(promptRows).toContainEqual(['project_id', projectId]);
       expect(promptRows).toContainEqual(['systemPrompt', expect.any(String)]);
     } finally {
@@ -169,8 +185,59 @@ describe('LocalizationInspector.inspectFile', () => {
       expect(json.units[0].mt.tmPromptBlock).toContain('Bonjour le monde');
       expect(json.units[0].mt.concordancePromptBlock).toBe('');
       expect(json.units[0].mt.tbPromptBlock).toContain('monde');
-      expect(json.units[0].mt.referencePromptBlock).toContain(json.units[0].mt.tmPromptBlock);
-      expect(json.units[0].mt.userPrompt).toContain(json.units[0].mt.tmPromptBlock);
+      expect(json.units[0].mt.referencePromptBlock).toContain(
+        json.units[0].mt.tmPromptBlock,
+      );
+      expect(json.units[0].mt.userPrompt).toContain('TM References');
+      expect(json.units[0].mt.userPrompt).toContain('Bonjour le monde');
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('inspects Window Mode batch prompts without provider requests', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Window Inspect', 'en', 'fr');
+      mountReferenceData(db, projectId);
+      const inputPath = writeInputWorkbook(root, [
+        ['source', 'target'],
+        ['Open', 'Ouvrir'],
+        ['Hello world', ''],
+        ['Preferences', ''],
+      ]);
+      const transport = createTransport();
+      const inspector = new LocalizationInspector(db, {
+        aiTransport: transport,
+        aiRuntimeConfigProvider: runtimeConfigProvider(),
+      });
+
+      const result = await inspector.inspectFile({
+        projectId,
+        inputPath,
+        outputPath: join(root, 'inspect.xlsx'),
+      });
+      const json = JSON.parse(await readFile(result.jsonOutputPath, 'utf8'));
+      const helloUnit = json.units.find(
+        (unit: { unit: { source: string } }) =>
+          unit.unit.source === 'Hello world',
+      );
+
+      expect(helloUnit.mt.batch.mode).toBe('window');
+      expect(helloUnit.mt.batch.currentIds).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(helloUnit.unit.unitId),
+        ]),
+      );
+      expect(helloUnit.mt.userPrompt).toContain('Previous 5 translated rows');
+      expect(helloUnit.mt.userPrompt).toContain('Open -> Ouvrir');
+      expect(helloUnit.mt.userPrompt).toContain('Next 5 source rows');
+      expect(helloUnit.mt.userPrompt).toContain('Preferences');
+      expect(helloUnit.mt.userPrompt).not.toContain('documentId');
+      expect(JSON.stringify(json)).not.toMatch(/api[_-]?key/i);
+      expect(transport.createResponse).not.toHaveBeenCalled();
     } finally {
       db.close();
       await rm(root, { recursive: true, force: true });
@@ -191,11 +258,19 @@ describe('LocalizationInspector.inspectFile', () => {
         aiTransport: createTransport(),
         aiRuntimeConfigProvider: runtimeConfigProvider(),
         mtModule: {
-          composePrompt: vi
+          composeBatchPrompt: vi
             .fn()
-            .mockImplementation(({ unitId, project, segment }) =>
+            .mockImplementation(({ taskId, project, current }) =>
               Promise.resolve(
-                createPromptArtifact(unitId, project.projectType, segment, longPrompt),
+                createPromptArtifact(
+                  taskId,
+                  project.projectType,
+                  current[0].segment,
+                  longPrompt,
+                  {
+                    batchCurrentIds: current.map((unit) => unit.responseId),
+                  },
+                ),
               ),
             ),
         },
@@ -208,17 +283,22 @@ describe('LocalizationInspector.inspectFile', () => {
         maxCellChars: 80,
       });
 
-      const written = XLSX.read(await readFile(result.outputPath), { type: 'buffer' });
+      const written = XLSX.read(await readFile(result.outputPath), {
+        type: 'buffer',
+      });
       const segmentRows = XLSX.utils.sheet_to_json(written.Sheets.Segments, {
         header: 1,
         defval: '',
       }) as string[][];
-      expect(segmentRows[1][4]).toContain('[TRUNCATED: see #/units/0/mt/userPrompt]');
+      expect(segmentRows[1][4]).toContain(
+        '[TRUNCATED: see #/units/0/mt/userPrompt]',
+      );
       expect(result.artifact.units[0].xlsx.truncated.mtUserPrompt).toBe(true);
       expect(result.artifact.units[0].mt.userPrompt).toBe(longPrompt);
-      expect(JSON.parse(await readFile(result.jsonOutputPath, 'utf8')).units[0].mt.userPrompt).toBe(
-        longPrompt,
-      );
+      expect(
+        JSON.parse(await readFile(result.jsonOutputPath, 'utf8')).units[0].mt
+          .userPrompt,
+      ).toBe(longPrompt);
     } finally {
       db.close();
       await rm(root, { recursive: true, force: true });
@@ -238,17 +318,27 @@ describe('LocalizationInspector.inspectFile', () => {
         aiTransport: createTransport(),
         aiRuntimeConfigProvider: runtimeConfigProvider(),
         mtModule: {
-          composePrompt: vi.fn().mockImplementation(({ unitId, project, segment }) =>
-            Promise.resolve(
-              createPromptArtifact(unitId, project.projectType, segment, 'FULL_PROMPT', {
-                tmPromptBlock: 'TM prompt block',
-                concordancePromptBlock: 'Concordance Suggestions:\nMatch: world',
-                tbPromptBlock: 'TB prompt block',
-                referencePromptBlock:
-                  'TM prompt block\n\nConcordance Suggestions:\nMatch: world\n\nTB prompt block',
-              }),
+          composeBatchPrompt: vi
+            .fn()
+            .mockImplementation(({ taskId, project, current }) =>
+              Promise.resolve(
+                createPromptArtifact(
+                  taskId,
+                  project.projectType,
+                  current[0].segment,
+                  'FULL_PROMPT',
+                  {
+                    tmPromptBlock: 'TM prompt block',
+                    concordancePromptBlock:
+                      'Concordance Suggestions:\nMatch: world',
+                    tbPromptBlock: 'TB prompt block',
+                    referencePromptBlock:
+                      'TM prompt block\n\nConcordance Suggestions:\nMatch: world\n\nTB prompt block',
+                    batchCurrentIds: current.map((unit) => unit.responseId),
+                  },
+                ),
+              ),
             ),
-          ),
         },
       });
 
@@ -261,7 +351,9 @@ describe('LocalizationInspector.inspectFile', () => {
       expect(result.artifact.units[0].mt.concordancePromptBlock).toContain(
         'Concordance Suggestions:',
       );
-      const written = XLSX.read(await readFile(result.outputPath), { type: 'buffer' });
+      const written = XLSX.read(await readFile(result.outputPath), {
+        type: 'buffer',
+      });
       const segmentRows = XLSX.utils.sheet_to_json(written.Sheets.Segments, {
         header: 1,
         defval: '',
@@ -269,7 +361,9 @@ describe('LocalizationInspector.inspectFile', () => {
       expect(segmentRows[1][2]).toContain('TM prompt block');
       expect(segmentRows[1][2]).toContain('Concordance Suggestions:');
       expect(segmentRows[1][6]).toBe('#/units/0');
-      expect(JSON.parse(await readFile(result.jsonOutputPath, 'utf8')).units[0].mt).toMatchObject({
+      expect(
+        JSON.parse(await readFile(result.jsonOutputPath, 'utf8')).units[0].mt,
+      ).toMatchObject({
         concordancePromptBlock: 'Concordance Suggestions:\nMatch: world',
         referencePromptBlock:
           'TM prompt block\n\nConcordance Suggestions:\nMatch: world\n\nTB prompt block',
@@ -303,7 +397,9 @@ describe('LocalizationInspector.inspectFile', () => {
       });
 
       expect(result.summary).toEqual({ total: 1, ready: 1, error: 0 });
-      const written = XLSX.read(await readFile(result.outputPath), { type: 'buffer' });
+      const written = XLSX.read(await readFile(result.outputPath), {
+        type: 'buffer',
+      });
       const segmentRows = XLSX.utils.sheet_to_json(written.Sheets.Segments, {
         header: 1,
         defval: '',
@@ -330,7 +426,9 @@ describe('LocalizationInspector.inspectFile', () => {
         aiTransport: createTransport(),
         aiRuntimeConfigProvider: runtimeConfigProvider(),
         mtModule: {
-          composePrompt: vi.fn().mockRejectedValue(new Error('controlled compose failure')),
+          composeBatchPrompt: vi
+            .fn()
+            .mockRejectedValue(new Error('controlled compose failure')),
         },
       });
 
@@ -345,7 +443,9 @@ describe('LocalizationInspector.inspectFile', () => {
         status: 'error',
         error: 'mt: controlled compose failure',
       });
-      const written = XLSX.read(await readFile(result.outputPath), { type: 'buffer' });
+      const written = XLSX.read(await readFile(result.outputPath), {
+        type: 'buffer',
+      });
       const segmentRows = XLSX.utils.sheet_to_json(written.Sheets.Segments, {
         header: 1,
         defval: '',
@@ -361,7 +461,11 @@ describe('LocalizationInspector.inspectFile', () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
     const db = new CATDatabase(':memory:');
     try {
-      const projectId = db.createProject('Preserve Stage Artifacts', 'en', 'fr');
+      const projectId = db.createProject(
+        'Preserve Stage Artifacts',
+        'en',
+        'fr',
+      );
       mountReferenceData(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
@@ -371,7 +475,9 @@ describe('LocalizationInspector.inspectFile', () => {
         aiTransport: createTransport(),
         aiRuntimeConfigProvider: runtimeConfigProvider(),
         mtModule: {
-          composePrompt: vi.fn().mockRejectedValue(new Error('controlled compose failure')),
+          composeBatchPrompt: vi
+            .fn()
+            .mockRejectedValue(new Error('controlled compose failure')),
         },
       });
 
@@ -407,26 +513,45 @@ describe('LocalizationInspector.inspectFile', () => {
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
         ['First fails', ''],
+        ['Second fails', ''],
+        ['Third fails', ''],
+        ['Fourth fails', ''],
+        ['Fifth fails', ''],
         ['Second ready', ''],
       ]);
       const inspector = new LocalizationInspector(db, {
         aiTransport: createTransport(),
         aiRuntimeConfigProvider: runtimeConfigProvider(),
         mtModule: {
-          composePrompt: vi.fn().mockImplementation(({ unitId, project, segment }) => {
-            if (unitId === 'row-2') {
-              return Promise.reject(new Error('first compose failure'));
-            }
+          composeBatchPrompt: vi
+            .fn()
+            .mockImplementation(({ taskId, project, current }) => {
+              if (
+                current.some(
+                  (unit: { responseId: string }) => unit.responseId.endsWith('#row-2'),
+                )
+              ) {
+                return Promise.reject(new Error('first compose failure'));
+              }
 
-            return Promise.resolve(
-              createPromptArtifact(unitId, project.projectType, segment, 'SECOND_SYSTEM', {
-                providerId: 'ready-provider',
-                providerName: 'Ready Provider',
-                model: 'ready-model',
-                reasoningEffort: 'high',
-              }),
-            );
-          }),
+              return Promise.resolve(
+                createPromptArtifact(
+                  taskId,
+                  project.projectType,
+                  current[0].segment,
+                  'SECOND_SYSTEM',
+                  {
+                    providerId: 'ready-provider',
+                    providerName: 'Ready Provider',
+                    model: 'ready-model',
+                    reasoningEffort: 'high',
+                    batchCurrentIds: current.map(
+                      (unit: { responseId: string }) => unit.responseId,
+                    ),
+                  },
+                ),
+              );
+            }),
         },
       });
 
@@ -437,11 +562,16 @@ describe('LocalizationInspector.inspectFile', () => {
       });
 
       expect(result.artifact.systemPrompt.value).toBe('SECOND_SYSTEM');
-      const written = XLSX.read(await readFile(result.outputPath), { type: 'buffer' });
-      const promptRows = XLSX.utils.sheet_to_json(written.Sheets.MT_SystemPrompt, {
-        header: 1,
-        defval: '',
-      }) as Array<[string, string | number | boolean]>;
+      const written = XLSX.read(await readFile(result.outputPath), {
+        type: 'buffer',
+      });
+      const promptRows = XLSX.utils.sheet_to_json(
+        written.Sheets.MT_SystemPrompt,
+        {
+          header: 1,
+          defval: '',
+        },
+      ) as Array<[string, string | number | boolean]>;
       expect(promptRows).toContainEqual(['provider_id', 'ready-provider']);
       expect(promptRows).toContainEqual(['provider_name', 'Ready Provider']);
       expect(promptRows).toContainEqual(['model', 'ready-model']);
@@ -508,14 +638,23 @@ function createTransport(): MockTransport {
 
 function runtimeConfigProvider() {
   return {
-    getModelConfig: vi.fn().mockResolvedValue({ reasoningEffort: 'medium' as const }),
+    getModelConfig: vi
+      .fn()
+      .mockResolvedValue({ reasoningEffort: 'medium' as const }),
   };
 }
 
 function writeInputWorkbook(root: string, rows: unknown[][]): string {
-  const inputPath = join(root, `input-${Math.random().toString(16).slice(2)}.xlsx`);
+  const inputPath = join(
+    root,
+    `input-${Math.random().toString(16).slice(2)}.xlsx`,
+  );
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rows), 'Sheet1');
+  XLSX.utils.book_append_sheet(
+    workbook,
+    XLSX.utils.aoa_to_sheet(rows),
+    'Sheet1',
+  );
   XLSX.writeFile(workbook, inputPath);
   return inputPath;
 }
@@ -596,6 +735,7 @@ function createPromptArtifact(
     concordancePromptBlock?: string;
     tbPromptBlock?: string;
     referencePromptBlock?: string;
+    batchCurrentIds?: string[];
   } = {},
 ): PromptArtifact {
   return {
@@ -621,5 +761,14 @@ function createPromptArtifact(
       user: userPrompt.length,
       total: userPrompt.length * 2,
     },
+    batch: overrides.batchCurrentIds
+      ? {
+          mode: 'window',
+          taskId: unitId,
+          currentIds: overrides.batchCurrentIds,
+          previousContextCount: 0,
+          nextContextCount: 0,
+        }
+      : undefined,
   };
 }
