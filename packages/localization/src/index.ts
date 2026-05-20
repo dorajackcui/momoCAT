@@ -57,3 +57,19 @@ export type {
   ConcordanceTMMatch,
 } from './services/TMService';
 export { TBService } from './services/TBService';
+export {
+  AIProviderCatalogService,
+  type AddAIProviderInput,
+  type AIProviderSummary,
+  type AITestProviderResult,
+  type ResolvedAIProviderConfig,
+  type TestAIProviderInput,
+} from './providers/AIProviderCatalogService';
+export {
+  AIRuntimeConfigService,
+  DefaultAIRuntimeConfigProvider,
+  createDefaultAIRuntimeConfig,
+  sanitizeAIRuntimeConfig,
+  type AiRuntimeConfig,
+} from './providers/AIRuntimeConfigService';
+export { AIProviderTransport } from './providers/AIProviderTransport';
