@@ -7,7 +7,7 @@ import process from "node:process";
 
 const TEST_NAME = "localization-engine-file-env-run";
 const TEST_PATH =
-  "apps/desktop/src/main/localization/LocalizationEngine.cli.test.ts";
+  "packages/localization/src/LocalizationEngine.cli.test.ts";
 const OPTION_NAMES = new Set([
   "db",
   "db-path",

@@ -7,7 +7,7 @@ import process from "node:process";
 
 const TEST_NAME = "localization-inspect-env-run";
 const TEST_PATH =
-  "apps/desktop/src/main/localization/LocalizationInspector.cli.test.ts";
+  "packages/localization/src/LocalizationInspector.cli.test.ts";
 const OPTION_NAMES = new Set([
   "db",
   "db-path",
