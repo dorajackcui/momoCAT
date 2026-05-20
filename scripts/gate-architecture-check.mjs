@@ -341,10 +341,45 @@ function validateCatCoreImports() {
   }
 }
 
+function validateForbiddenImports() {
+  const rules = guardrails.forbiddenImports ?? [];
+
+  for (const rule of rules) {
+    const sourceRoot = path.join(ROOT, rule.sourceRoot);
+    const forbiddenTargetRoot = path.join(ROOT, rule.forbiddenTargetRoot);
+
+    if (!fs.existsSync(sourceRoot)) {
+      continue;
+    }
+
+    const files = listSourceFiles(sourceRoot);
+    for (const filePath of files) {
+      const relativeFilePath = toPosixPath(path.relative(ROOT, filePath));
+      const sourceFile = readSourceFile(filePath);
+      const importSpecifiers = getImportSpecifiers(sourceFile);
+
+      for (const specifier of importSpecifiers) {
+        const resolvedTarget = specifier.startsWith(".")
+          ? resolveImportTarget(filePath, specifier)
+          : null;
+
+        if (!resolvedTarget) {
+          continue;
+        }
+
+        if (path.normalize(resolvedTarget).startsWith(path.normalize(forbiddenTargetRoot))) {
+          errors.push(`${relativeFilePath} imports forbidden target "${specifier}"; ${rule.message}`);
+        }
+      }
+    }
+  }
+}
+
 try {
   validateProjectService();
   validateCatDatabase();
   validateCatCoreImports();
+  validateForbiddenImports();
 } catch (error) {
   console.error(
     "[gate:arch] Fatal error:",

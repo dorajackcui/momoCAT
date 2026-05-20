@@ -83,5 +83,12 @@
     ],
     "allowedRootBarrelImportFiles": ["packages/core/src/index.test.ts"],
     "allowedInternalRootIndexImportFiles": ["packages/core/src/index.test.ts"]
-  }
+  },
+  "forbiddenImports": [
+    {
+      "sourceRoot": "packages/localization/src",
+      "forbiddenTargetRoot": "apps/desktop/src/main",
+      "message": "@cat/localization must not import desktop main code"
+    }
+  ]
 }
