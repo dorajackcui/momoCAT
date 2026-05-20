@@ -73,3 +73,15 @@ export {
   type AiRuntimeConfig,
 } from './providers/AIRuntimeConfigService';
 export { AIProviderTransport } from './providers/AIProviderTransport';
+export { TMModule, mapTMEngineReferences } from './modules/TMModule';
+export { TBModule, mapTBEngineReferences } from './modules/TBModule';
+export { MTModule } from './modules/MTModule';
+export type {
+  ComposePromptInput,
+  MTModuleOptions,
+  MTTranslateResult,
+  PreparedPromptInput,
+  PromptMTConfig,
+  ResolvedMTConfig,
+  TranslatePreparedPromptInput,
+} from './modules/MTModule';

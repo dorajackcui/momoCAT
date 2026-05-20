@@ -1,11 +1,11 @@
 import type { Segment, TMEntry } from '@cat/core/models';
 import { serializeTokensToDisplayText } from '@cat/core/text';
-import { CATDatabase } from '../../../../../../packages/db/src';
+import { CATDatabase } from '../../../db/src';
 import { describe, expect, it, vi } from 'vitest';
-import { SqliteProjectRepository } from '../../services/adapters/SqliteProjectRepository';
-import { SqliteTMRepository } from '../../services/adapters/SqliteTMRepository';
-import type { TMRepository } from '../../services/ports';
-import { TMService, type TMMatch } from '../../services/TMService';
+import { SqliteProjectRepository } from '../adapters/sqlite/SqliteProjectRepository';
+import { SqliteTMRepository } from '../adapters/sqlite/SqliteTMRepository';
+import type { TMRepository } from '../ports';
+import { TMService, type TMMatch } from '../services/TMService';
 import { createTransientSegment } from '../transientSegment';
 import {
   MAX_CONCORDANCE_PROMPT_REFERENCES,

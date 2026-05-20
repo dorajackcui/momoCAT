@@ -13,8 +13,8 @@ import { serializeTokensToDisplayText } from '@cat/core/text';
 import {
   AIProviderCatalogService,
   type ResolvedAIProviderConfig,
-} from '../../services/modules/ai/AIProviderCatalogService';
-import type { AIRuntimeConfigProvider, AITransport, ReasoningEffort } from '../../services/ports';
+} from '../providers/AIProviderCatalogService';
+import type { AIRuntimeConfigProvider, AITransport, ReasoningEffort } from '../ports';
 import type { PromptArtifact, TBArtifact, TMArtifact } from '../artifacts';
 import type { MTModuleOptions as LocalizationMTOptions } from '../types';
 

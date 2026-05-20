@@ -1,8 +1,8 @@
 import type { Segment } from '@cat/core/models';
 import type { PromptConcordanceReference, PromptTMReference } from '@cat/core/project';
 import { serializeTokensToDisplayText } from '@cat/core/text';
-import type { TMRepository } from '../../services/ports';
-import { type TMMatch, type TMService } from '../../services/TMService';
+import type { TMRepository } from '../ports';
+import { type TMMatch, type TMService } from '../services/TMService';
 import type { EngineTMReference } from '../types';
 import type { MountedTMArtifact, TMArtifact } from '../artifacts';
 

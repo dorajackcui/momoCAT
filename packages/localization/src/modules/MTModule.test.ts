@@ -1,11 +1,11 @@
 import type { Segment, TBMatch } from '@cat/core/models';
 import { serializeTokensToDisplayText } from '@cat/core/text';
-import { CATDatabase } from '../../../../../../packages/db/src';
+import { CATDatabase } from '../../../db/src';
 import { describe, expect, it, vi } from 'vitest';
-import { SqliteSettingsRepository } from '../../services/adapters/SqliteSettingsRepository';
-import { AIProviderCatalogService } from '../../services/modules/ai/AIProviderCatalogService';
-import type { AIRuntimeConfigProvider, AITransport } from '../../services/ports';
-import type { TMMatch } from '../../services/TMService';
+import { SqliteSettingsRepository } from '../adapters/sqlite/SqliteSettingsRepository';
+import { AIProviderCatalogService } from '../providers/AIProviderCatalogService';
+import type { AIRuntimeConfigProvider, AITransport } from '../ports';
+import type { TMMatch } from '../services/TMService';
 import type { TBArtifact, TMArtifact } from '../artifacts';
 import { createTransientSegment } from '../transientSegment';
 import { MTModule } from './MTModule';

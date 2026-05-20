@@ -1,10 +1,10 @@
 import type { TBMatch } from '@cat/core/models';
-import { CATDatabase } from '../../../../../../packages/db/src';
+import { CATDatabase } from '../../../db/src';
 import { describe, expect, it, vi } from 'vitest';
-import { SqliteProjectRepository } from '../../services/adapters/SqliteProjectRepository';
-import { SqliteTBRepository } from '../../services/adapters/SqliteTBRepository';
-import type { TBRepository } from '../../services/ports';
-import { TBService } from '../../services/TBService';
+import { SqliteProjectRepository } from '../adapters/sqlite/SqliteProjectRepository';
+import { SqliteTBRepository } from '../adapters/sqlite/SqliteTBRepository';
+import type { TBRepository } from '../ports';
+import { TBService } from '../services/TBService';
 import { createTransientSegment } from '../transientSegment';
 import {
   MAX_ENGINE_TB_REFERENCES,
