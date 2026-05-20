@@ -387,8 +387,30 @@ to:
 
 ```ts
 import type { ReasoningEffort } from './ports';
-import type { TMMatch } from './services/TMService';
 ```
+
+Then add this temporary structural type near the top of `artifacts.ts`, after imports:
+
+```ts
+type TMMatch = TMEntry & {
+  kind: 'tm' | 'concordance';
+  rank: number;
+  tmName: string;
+  tmType: 'working' | 'main';
+  similarity?: number;
+  matchedSourceText?: string;
+  sourceCoverage?: number;
+  entryCoverage?: number;
+};
+```
+
+Also add `TMEntry` to the existing core model import:
+
+```ts
+import type { TBMatch, TMEntry } from '@cat/core/models';
+```
+
+This keeps Task 3 buildable before `TMService` moves in Task 5. Task 5 may replace this structural type with the real service export if that improves consistency.
 
 - [ ] **Step 3: Create minimal ports needed by moved types**
 
