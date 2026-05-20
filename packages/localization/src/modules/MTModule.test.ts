@@ -286,6 +286,75 @@ describe('MTModule', () => {
     }
   });
 
+  it('returns the successful Window Mode retry prompt after batch tag validation feedback', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Batch Retry', 'en', 'fr');
+      db.setSetting('openai_api_key', 'test-api-key');
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const row2 = createTransientSegment({ id: 'row-2', source: 'Save {1}' }, 1);
+      const transport = createTransport();
+      transport.createResponse
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            translations: [{ id: 'row-2', text: 'Enregistrer' }],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            translations: [{ id: 'row-2', text: 'Enregistrer {1}' }],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        });
+      const module = createModule(db, transport);
+      const config = await module.resolveConfig(project, {
+        model: 'test-model',
+        reasoningEffort: 'medium',
+      });
+
+      const result = await module.translateBatch({
+        taskId: 'window-task-1',
+        project,
+        current: [
+          {
+            responseId: 'row-2',
+            documentId: 'doc.xlsx',
+            unitId: 'unit-2',
+            segment: row2,
+            tm: createTMArtifact(row2),
+            tb: createTBArtifact(row2),
+          },
+        ],
+        previousContext: [],
+        nextContext: [],
+        apiKey: config.apiKey,
+        baseUrl: config.provider.baseUrl,
+        model: config.model,
+        reasoningEffort: config.reasoningEffort,
+        provider: config.provider,
+        srcLang: 'en',
+        tgtLang: 'fr',
+      });
+
+      expect(transport.createResponse).toHaveBeenCalledTimes(2);
+      const secondRequest = transport.createResponse.mock.calls[1]?.[0];
+      expect(secondRequest.userPrompt).toContain('Validation feedback');
+      expect(secondRequest.userPrompt).toContain('row-2');
+      expect(serializeTokensToDisplayText(result.results[0].targetTokens)).toBe(
+        'Enregistrer {1}',
+      );
+      expect(result.prompt.userPrompt).toBe(secondRequest.userPrompt);
+      expect(result.prompt.userPrompt).toContain('Validation feedback');
+      expect(result.prompt.userPrompt).toContain('row-2');
+    } finally {
+      db.close();
+    }
+  });
+
   it('rejects Window Mode responses with missing current ids', async () => {
     const db = new CATDatabase(':memory:');
     try {

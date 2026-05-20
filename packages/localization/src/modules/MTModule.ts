@@ -420,7 +420,7 @@ export class MTModule {
       });
 
       if (promptParams.projectType === 'custom') {
-        return { results, prompt };
+        return { results, prompt: attemptPrompt };
       }
 
       const validationErrors = results.flatMap((result) => {
@@ -435,7 +435,7 @@ export class MTModule {
       });
 
       if (validationErrors.length === 0) {
-        return { results, prompt };
+        return { results, prompt: attemptPrompt };
       }
 
       if (attempt === maxAttempts) {
