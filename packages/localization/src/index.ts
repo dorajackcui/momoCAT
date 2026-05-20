@@ -49,5 +49,11 @@ export { SqliteSettingsRepository } from './adapters/sqlite/SqliteSettingsReposi
 export { SqliteTBRepository } from './adapters/sqlite/SqliteTBRepository';
 export { SqliteTMRepository } from './adapters/sqlite/SqliteTMRepository';
 export { TMService } from './services/TMService';
-export type { TMMatch, TMMatchKind, StandardTMMatch, ConcordanceTMMatch } from './services/TMService';
+export type {
+  TMMatch,
+  TMMatchBase,
+  TMMatchKind,
+  StandardTMMatch,
+  ConcordanceTMMatch,
+} from './services/TMService';
 export { TBService } from './services/TBService';
