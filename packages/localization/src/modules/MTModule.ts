@@ -18,8 +18,8 @@ import type { AIRuntimeConfigProvider, AITransport, ReasoningEffort } from '../p
 import type { PromptArtifact, TBArtifact, TMArtifact } from '../artifacts';
 import type { MTModuleOptions as LocalizationMTOptions } from '../types';
 
-export interface MTModuleOptions {
-  providerCatalogService: AIProviderCatalogService;
+export interface MTModuleDependencies {
+  providerCatalogService: Pick<AIProviderCatalogService, 'listProviders' | 'resolveProviderConfig'>;
   aiRuntimeConfigProvider: AIRuntimeConfigProvider;
   aiTransport: AITransport;
   tagValidator?: TagValidator;
@@ -74,12 +74,15 @@ type SegmentLanguageMeta = Segment['meta'] & {
 };
 
 export class MTModule {
-  private readonly providerCatalogService: AIProviderCatalogService;
+  private readonly providerCatalogService: Pick<
+    AIProviderCatalogService,
+    'listProviders' | 'resolveProviderConfig'
+  >;
   private readonly aiRuntimeConfigProvider: AIRuntimeConfigProvider;
   private readonly aiTransport: AITransport;
   private readonly tagValidator: TagValidator;
 
-  constructor(options: MTModuleOptions) {
+  constructor(options: MTModuleDependencies) {
     this.providerCatalogService = options.providerCatalogService;
     this.aiRuntimeConfigProvider = options.aiRuntimeConfigProvider;
     this.aiTransport = options.aiTransport;

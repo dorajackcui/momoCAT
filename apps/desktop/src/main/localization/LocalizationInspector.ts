@@ -4,6 +4,7 @@ import type { Segment } from '@cat/core/models';
 import type { Project, ProjectType } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
 import type { CATDatabase } from '@cat/db';
+import { MTModule, TBModule, TMModule } from '@cat/localization';
 import { TBService } from '../services/TBService';
 import { TMService } from '../services/TMService';
 import { SqliteProjectRepository } from '../services/adapters/SqliteProjectRepository';
@@ -23,10 +24,7 @@ import type {
   TBArtifact,
   TMArtifact,
 } from './artifacts';
-import { MTModule } from './modules/MTModule';
-import { TBModule } from './modules/TBModule';
 import { parseExternalSpreadsheet, writeInspectSpreadsheet } from './modules/FileModule';
-import { TMModule } from './modules/TMModule';
 import { createTransientSegment } from './transientSegment';
 import type { LocalizationEngineOptions, LocalizationMode, TranslateFileInput } from './types';
 

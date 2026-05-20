@@ -4,6 +4,14 @@ import { normalizeProjectAIModel } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { CATDatabase } from '@cat/db';
+import {
+  MTModule,
+  type ResolvedMTConfig,
+  TBModule,
+  mapTBEngineReferences,
+  TMModule,
+  mapTMEngineReferences,
+} from '@cat/localization';
 import { TBService } from '../services/TBService';
 import { TMService } from '../services/TMService';
 import { SqliteProjectRepository } from '../services/adapters/SqliteProjectRepository';
@@ -16,9 +24,6 @@ import { resolveBatchTargetScope } from '../services/modules/ai/translationTarge
 import { AIProviderTransport } from '../services/providers/AIProviderTransport';
 import type { AIRuntimeConfigProvider, AITransport } from '../services/ports';
 import { runBounded } from './RequestScheduler';
-import { MTModule, type ResolvedMTConfig } from './modules/MTModule';
-import { TBModule, mapTBEngineReferences } from './modules/TBModule';
-import { TMModule, mapTMEngineReferences } from './modules/TMModule';
 import { translateSpreadsheetFileJob } from './fileTranslationJobAdapter';
 import { translateSpreadsheetFile } from './spreadsheetFileAdapter';
 import { createTransientSegment } from './transientSegment';

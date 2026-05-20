@@ -78,7 +78,7 @@ export { TBModule, mapTBEngineReferences } from './modules/TBModule';
 export { MTModule } from './modules/MTModule';
 export type {
   ComposePromptInput,
-  MTModuleOptions,
+  MTModuleDependencies,
   MTTranslateResult,
   PreparedPromptInput,
   PromptMTConfig,
