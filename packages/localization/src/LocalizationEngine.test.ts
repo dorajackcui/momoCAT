@@ -380,6 +380,93 @@ describe('LocalizationEngine.translateUnits', () => {
 });
 
 describe('LocalizationEngine.translateFile job mode', () => {
+  it('uses Window Mode batches by default and sends later batches only after earlier targets exist', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('External File Window Batches', 'en', 'en');
+      seedApiKey(db);
+      const inputPath = join(root, 'window.xlsx');
+      const outputPath = join(root, 'window.translated.xlsx');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target'],
+          ['One', ''],
+          ['Two', ''],
+          ['Three', ''],
+          ['Four', ''],
+          ['Five', ''],
+          ['Six', ''],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+      const transport = createTransport();
+      transport.createResponse
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            translations: [
+              { id: 'row-2', text: 'Un' },
+              { id: 'row-3', text: 'Deux' },
+              { id: 'row-4', text: 'Trois' },
+              { id: 'row-5', text: 'Quatre' },
+              { id: 'row-6', text: 'Cinq' },
+            ],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        })
+        .mockImplementationOnce(async (request: { userPrompt: string }) => {
+          expect(request.userPrompt).toContain('Previous 5 translated rows');
+          expect(request.userPrompt).toContain('One -> Un');
+          expect(request.userPrompt).toContain('Five -> Cinq');
+          return {
+            content: JSON.stringify({
+              translations: [{ id: 'row-7', text: 'Six' }],
+            }),
+            status: 200,
+            endpoint: '/mock',
+          };
+        });
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+
+      const result = await engine.translateFile({
+        projectId,
+        inputPath,
+        outputPath,
+        job: { maxAttempts: 1 },
+      });
+
+      expect(result.summary).toEqual({ total: 6, translated: 6, skipped: 0, failed: 0 });
+      expect(transport.createResponse).toHaveBeenCalledTimes(2);
+      const firstPrompt = transport.createResponse.mock.calls[0]?.[0].userPrompt;
+      const secondPrompt = transport.createResponse.mock.calls[1]?.[0].userPrompt;
+      expect(firstPrompt).toContain('Current ids: row-2, row-3, row-4, row-5, row-6');
+      expect(secondPrompt).toContain('Current ids: row-7');
+      const written = XLSX.read(await readFile(outputPath), { type: 'buffer' });
+      const rows = XLSX.utils.sheet_to_json(written.Sheets.Sheet1, {
+        header: 1,
+        defval: '',
+      }) as string[][];
+      expect(rows.slice(1).map((row) => row[1])).toEqual([
+        'Un',
+        'Deux',
+        'Trois',
+        'Quatre',
+        'Cinq',
+        'Six',
+      ]);
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('translates spreadsheet files through job units without importing the file into the DB', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
     const db = new CATDatabase(':memory:');
@@ -399,7 +486,11 @@ describe('LocalizationEngine.translateFile job mode', () => {
         'Sheet1',
       );
       XLSX.writeFile(workbook, inputPath);
-      const transport = createTransport('Bonjour');
+      const transport = createTransport(
+        JSON.stringify({
+          translations: [{ id: 'row-2', text: 'Bonjour' }],
+        }),
+      );
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',
         aiTransport: transport,
@@ -591,7 +682,9 @@ describe('LocalizationEngine.translateFile job mode', () => {
           endpoint: '/mock',
         }),
         createResponse: vi.fn(async (request: { model: string }) => ({
-          content: `${request.model} target`,
+          content: JSON.stringify({
+            translations: [{ id: 'row-2', text: `${request.model} target` }],
+          }),
           status: 200,
           endpoint: '/mock',
         })),
@@ -664,7 +757,11 @@ describe('LocalizationEngine.translateFile job mode', () => {
         'Sheet1',
       );
       XLSX.writeFile(workbook, inputPath);
-      const transport = createTransport('First target');
+      const transport = createTransport(
+        JSON.stringify({
+          translations: [{ id: 'row-2', text: 'First target' }],
+        }),
+      );
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',
         aiTransport: transport,
@@ -692,7 +789,9 @@ describe('LocalizationEngine.translateFile job mode', () => {
         newEntryId,
       );
       transport.createResponse.mockResolvedValueOnce({
-        content: 'Second target',
+        content: JSON.stringify({
+          translations: [{ id: 'row-2', text: 'Second target' }],
+        }),
         status: 200,
         endpoint: '/mock',
       });
@@ -747,7 +846,11 @@ describe('LocalizationEngine task executor', () => {
         note: 'Use the common noun.',
       });
 
-      const transport = createTransport('Bonjour le monde');
+      const transport = createTransport(
+        JSON.stringify({
+          translations: [{ id: 'unit-1', text: 'Bonjour le monde' }],
+        }),
+      );
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',
         aiTransport: transport,
@@ -815,7 +918,11 @@ describe('LocalizationEngine task executor', () => {
           ],
         },
         prompt: expect.objectContaining({
-          unitId: 'unit-1',
+          unitId: 'task-1',
+          batch: expect.objectContaining({
+            mode: 'window',
+            currentIds: ['unit-1'],
+          }),
           model: expect.any(String),
           provider: expect.objectContaining({
             id: expect.any(String),
@@ -854,6 +961,12 @@ describe('LocalizationEngine task executor', () => {
           units: [
             {
               documentId: 'doc-1',
+              unitId: 'blank-source',
+              source: '   ',
+              sourceHash: 'hash-blank',
+            },
+            {
+              documentId: 'doc-1',
               unitId: 'already-targeted',
               source: 'Hello',
               target: 'Deja traduit',
@@ -875,12 +988,30 @@ describe('LocalizationEngine task executor', () => {
         expect.objectContaining({
           jobId: 'job-skip',
           documentId: 'doc-1',
+          unitId: 'blank-source',
+          status: 'skipped',
+          target: '',
+        }),
+        expect.objectContaining({
+          jobId: 'job-skip',
+          documentId: 'doc-1',
           unitId: 'already-targeted',
           status: 'skipped',
           target: 'Deja traduit',
         }),
       ]);
       expect(result.artifacts).toEqual([
+        expect.objectContaining({
+          job: 'job-skip',
+          task: 'task-skip',
+          unit: 'blank-source',
+          tm: undefined,
+          tb: undefined,
+          prompt: undefined,
+          result: expect.objectContaining({
+            status: 'skipped',
+          }),
+        }),
         expect.objectContaining({
           job: 'job-skip',
           task: 'task-skip',
@@ -899,46 +1030,110 @@ describe('LocalizationEngine task executor', () => {
     }
   });
 
-  it('rejects multi-unit tasks before provider setup', async () => {
+  it('attaches each current unit own TM and TB references in one Window Mode request', async () => {
     const db = new CATDatabase(':memory:');
     try {
-      const projectId = db.createProject('Task Multi Unit Rejected', 'en', 'fr');
-      const transport = createTransport('Bonjour');
+      const projectId = db.createProject('Task Multi Unit References', 'en', 'fr');
+      seedApiKey(db);
+      const tmId = db.createTM('Client Main TM', 'en', 'fr', 'main');
+      db.mountTMToProject(projectId, tmId, 10, 'read');
+      const saveEntry = createTMEntry({
+        tmId,
+        projectId,
+        sourceText: 'Save file',
+        targetText: 'Enregistrer le fichier',
+      });
+      const saveEntryId = db.upsertTMEntryBySrcHash(saveEntry);
+      db.replaceTMFts(
+        tmId,
+        serializeTokensToDisplayText(saveEntry.sourceTokens),
+        serializeTokensToDisplayText(saveEntry.targetTokens),
+        saveEntryId,
+      );
+      const closeEntry = createTMEntry({
+        tmId,
+        projectId,
+        sourceText: 'Close window',
+        targetText: 'Fermer la fenetre',
+      });
+      const closeEntryId = db.upsertTMEntryBySrcHash(closeEntry);
+      db.replaceTMFts(
+        tmId,
+        serializeTokensToDisplayText(closeEntry.sourceTokens),
+        serializeTokensToDisplayText(closeEntry.targetTokens),
+        closeEntryId,
+      );
+      const tbId = db.createTermBase('Client Terms', 'en', 'fr');
+      db.mountTermBaseToProject(projectId, tbId, 20);
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'term-save',
+        tbId,
+        srcLang: 'en',
+        srcTerm: 'Save',
+        tgtTerm: 'Enregistrer',
+        note: 'Use for file actions.',
+      });
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'term-close',
+        tbId,
+        srcLang: 'en',
+        srcTerm: 'Close',
+        tgtTerm: 'Fermer',
+        note: 'Use for window actions.',
+      });
+      const transport = createTransport(
+        JSON.stringify({
+          translations: [
+            { id: 'unit-1', text: 'Enregistrer le fichier' },
+            { id: 'unit-2', text: 'Fermer la fenetre' },
+          ],
+        }),
+      );
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',
         aiTransport: transport,
       });
 
-      await expect(
-        engine.executeTranslationTask(
-          {
-            taskId: 'task-multi',
-            units: [
-              {
-                documentId: 'doc-1',
-                unitId: 'unit-1',
-                source: 'Hello',
-                sourceHash: 'hash-1',
-              },
-              {
-                documentId: 'doc-1',
-                unitId: 'unit-2',
-                source: 'World',
-                sourceHash: 'hash-2',
-              },
-            ],
-          },
-          {
-            attempt: 1,
-            job: {
-              id: 'job-multi',
-              projectId,
-              units: [],
+      const result = await engine.executeTranslationTask(
+        {
+          taskId: 'task-multi',
+          units: [
+            {
+              documentId: 'doc-1',
+              unitId: 'unit-1',
+              source: 'Save file',
+              sourceHash: 'hash-1',
             },
+            {
+              documentId: 'doc-1',
+              unitId: 'unit-2',
+              source: 'Close window',
+              sourceHash: 'hash-2',
+            },
+          ],
+        },
+        {
+          attempt: 1,
+          job: {
+            id: 'job-multi',
+            projectId,
+            units: [],
           },
-        ),
-      ).rejects.toThrow('LocalizationEngine task executor supports one unit per task in this MVP');
-      expect(transport.createResponse).not.toHaveBeenCalled();
+        },
+      );
+
+      expect(result.results.map((unit) => unit.target)).toEqual([
+        'Enregistrer le fichier',
+        'Fermer la fenetre',
+      ]);
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
+      const prompt = transport.createResponse.mock.calls[0]?.[0].userPrompt;
+      expect(prompt).toMatch(
+        /id: unit-1[\s\S]*Save file[\s\S]*Enregistrer le fichier[\s\S]*Save -> Enregistrer/,
+      );
+      expect(prompt).toMatch(
+        /id: unit-2[\s\S]*Close window[\s\S]*Fermer la fenetre[\s\S]*Close -> Fermer/,
+      );
     } finally {
       db.close();
     }

@@ -4,7 +4,7 @@ import { normalizeProjectAIModel } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { CATDatabase } from '@cat/db';
-import { MTModule, type ResolvedMTConfig } from './modules/MTModule';
+import { MTModule, type MTBatchCurrentUnitInput, type ResolvedMTConfig } from './modules/MTModule';
 import { TBModule, mapTBEngineReferences } from './modules/TBModule';
 import { TMModule, mapTMEngineReferences } from './modules/TMModule';
 import { TBService } from './services/TBService';
@@ -24,6 +24,7 @@ import { translateSpreadsheetFile } from './spreadsheetFileAdapter';
 import { createTransientSegment } from './transientSegment';
 import type {
   ArtifactRecord,
+  JobUnit,
   TaskExecutionContext,
   TaskExecutionResult,
   TranslationTask,
@@ -66,6 +67,11 @@ interface PreparedTranslationArtifacts {
 interface PreparedTranslationResult {
   result: TranslateUnitResult;
   artifacts?: PreparedTranslationArtifacts;
+}
+
+interface PreparedWindowBatchResult {
+  results: UnitResult[];
+  artifacts?: ArtifactRecord[];
 }
 
 type ProjectRecord = NonNullable<ReturnType<SqliteProjectRepository['getProject']>>;
@@ -263,10 +269,6 @@ export class LocalizationEngine {
     task: TranslationTask,
     context: TaskExecutionContext,
   ): Promise<TaskExecutionResult> {
-    if (task.units.length !== 1) {
-      throw new Error('LocalizationEngine task executor supports one unit per task in this MVP');
-    }
-
     const project = this.projectRepo.getProject(context.job.projectId);
     if (!project) {
       throw new Error(`Project not found: ${context.job.projectId}`);
@@ -285,13 +287,14 @@ export class LocalizationEngine {
       this.prepareUnit(jobUnitToExternalUnit(unit), index, project, targetScope),
     );
     const hasTranslatableUnits = preparedUnits.some((prepared) => prepared.kind === 'translatable');
-    const mtOptions = mergeMTOptions(this.options.mt, translationOptions?.mt);
-    const mtConfig = hasTranslatableUnits
-      ? await this.mtModule.resolveConfig(project, mtOptions, translationOptions?.providerOverride)
-      : undefined;
     const captureArtifacts = context.captureArtifacts !== false;
-    const results: UnitResult[] = [];
+    const results: Array<UnitResult | undefined> = [];
     const artifacts: ArtifactRecord[] | undefined = captureArtifacts ? [] : undefined;
+    const skippedResults: UnitResult[] = [];
+    const translatableUnits: Array<{
+      jobUnit: JobUnit;
+      prepared: Extract<PreparedUnit, { kind: 'translatable' }>;
+    }> = [];
 
     for (let index = 0; index < preparedUnits.length; index += 1) {
       const jobUnit = task.units[index];
@@ -303,33 +306,50 @@ export class LocalizationEngine {
 
       if (prepared.kind === 'skipped') {
         const result = toUnitResult(context.job.id, jobUnit, prepared.result);
-        results.push(result);
+        results[index] = result;
+        skippedResults.push(result);
         artifacts?.push(toArtifactRecord(context.job.id, task.taskId, jobUnit, result));
         continue;
       }
 
-      if (!mtConfig) {
-        throw new Error('MT configuration was not resolved for a translatable unit.');
-      }
-
-      const translated = await this.translatePreparedUnitWithArtifacts({
-        unit: prepared.unit,
-        segment: prepared.segment,
-        project,
-        mtConfig,
-        mtOptions,
-        includeReferences: Boolean(translationOptions?.includeReferences),
-        captureArtifacts,
-      });
-      const result = toUnitResult(context.job.id, jobUnit, translated.result);
-
-      results.push(result);
-      artifacts?.push(
-        toArtifactRecord(context.job.id, task.taskId, jobUnit, result, translated.artifacts),
-      );
+      translatableUnits.push({ jobUnit, prepared });
     }
 
-    return { results, artifacts };
+    if (!hasTranslatableUnits || translatableUnits.length === 0) {
+      return { results: results.flatMap((result) => (result ? [result] : [])), artifacts };
+    }
+
+    const mtOptions = mergeMTOptions(this.options.mt, translationOptions?.mt);
+    const mtConfig = await this.mtModule.resolveConfig(
+      project,
+      mtOptions,
+      translationOptions?.providerOverride,
+    );
+    const translated = await this.translatePreparedWindowBatchWithArtifacts({
+      task,
+      context,
+      project,
+      mtConfig,
+      mtOptions,
+      includeReferences: Boolean(translationOptions?.includeReferences),
+      captureArtifacts,
+      translatableUnits,
+      skippedResults,
+    });
+    const translatedByKey = new Map(translated.results.map((result) => [unitKey(result), result]));
+
+    for (let index = 0; index < task.units.length; index += 1) {
+      if (results[index]) {
+        continue;
+      }
+      const translatedResult = translatedByKey.get(unitKey(task.units[index]));
+      if (translatedResult) {
+        results[index] = translatedResult;
+      }
+    }
+    artifacts?.push(...(translated.artifacts ?? []));
+
+    return { results: results.flatMap((result) => (result ? [result] : [])), artifacts };
   }
 
   public async translateFile(input: TranslateFileInput): Promise<TranslateFileResult> {
@@ -503,7 +523,7 @@ export class LocalizationEngine {
     const references =
       projectType === 'translation'
         ? await this.resolveReferences(params.project.id, params.segment)
-        : emptyReferences();
+        : emptyReferencesForUnit({ unitId: params.unit.id }, params.segment);
 
     const { targetTokens, prompt } = await this.mtModule.translate({
       unitId: params.unit.id,
@@ -558,17 +578,181 @@ export class LocalizationEngine {
       tb: tbMatches,
     };
   }
+
+  private async translatePreparedWindowBatchWithArtifacts(params: {
+    task: TranslationTask;
+    context: TaskExecutionContext;
+    project: ProjectRecord;
+    mtConfig: ResolvedMTConfig;
+    mtOptions: NonNullable<LocalizationEngineOptions['mt']>;
+    includeReferences: boolean;
+    captureArtifacts: boolean;
+    translatableUnits: Array<{
+      jobUnit: JobUnit;
+      prepared: Extract<PreparedUnit, { kind: 'translatable' }>;
+    }>;
+    skippedResults: UnitResult[];
+  }): Promise<PreparedWindowBatchResult> {
+    const projectType = params.project.projectType ?? 'translation';
+    const resolvedUnits = await Promise.all(
+      params.translatableUnits.map(async ({ jobUnit, prepared }) => {
+        const references =
+          projectType === 'translation'
+            ? await this.resolveReferences(params.project.id, prepared.segment)
+            : emptyReferencesForUnit(jobUnit, prepared.segment);
+
+        return { jobUnit, prepared, references };
+      }),
+    );
+    const current: MTBatchCurrentUnitInput[] = resolvedUnits.map(
+      ({ jobUnit, prepared, references }) => ({
+        responseId: jobUnit.unitId,
+        documentId: jobUnit.documentId,
+        unitId: jobUnit.unitId,
+        segment: prepared.segment,
+        tm: references.tm,
+        tb: references.tb,
+        context: jobUnit.context,
+      }),
+    );
+    const completedResults = mergeCompletedResults(
+      params.context.completedResults,
+      params.skippedResults,
+    );
+    const previousContext = this.buildPreviousTranslatedContext({
+      task: params.task,
+      jobUnits: params.context.job.units,
+      currentUnits: resolvedUnits.map((unit) => unit.jobUnit),
+      completedResults,
+    });
+    const nextContext = this.buildNextSourceContext({
+      task: params.task,
+      jobUnits: params.context.job.units,
+      currentUnits: resolvedUnits.map((unit) => unit.jobUnit),
+    });
+    const meta = current[0]?.segment.meta as
+      | (Segment['meta'] & { sourceLanguage?: unknown; targetLanguage?: unknown })
+      | undefined;
+    const batch = await this.mtModule.translateBatch({
+      taskId: params.task.taskId,
+      project: params.project,
+      current,
+      previousContext,
+      nextContext,
+      mtOptions: params.mtOptions,
+      apiKey: params.mtConfig.apiKey,
+      baseUrl: params.mtConfig.provider.baseUrl,
+      model: params.mtConfig.model,
+      reasoningEffort: params.mtConfig.reasoningEffort,
+      provider: params.mtConfig.provider,
+      srcLang: meta?.sourceLanguage ? String(meta.sourceLanguage) : params.project.srcLang,
+      tgtLang: meta?.targetLanguage ? String(meta.targetLanguage) : params.project.tgtLang,
+    });
+    const batchResultsByResponseId = new Map(
+      batch.results.map((result) => [result.responseId, result]),
+    );
+    const results: UnitResult[] = [];
+    const artifacts: ArtifactRecord[] | undefined = params.captureArtifacts ? [] : undefined;
+
+    for (const { jobUnit, references } of resolvedUnits) {
+      const batchResult = batchResultsByResponseId.get(jobUnit.unitId);
+      if (!batchResult) {
+        throw new Error(`MT batch did not return a result for unit: ${jobUnit.unitId}`);
+      }
+
+      const result: UnitResult = {
+        jobId: params.context.job.id,
+        documentId: jobUnit.documentId,
+        unitId: jobUnit.unitId,
+        sourceHash: jobUnit.sourceHash,
+        status: 'translated',
+        source: jobUnit.source,
+        target: serializeTokensToDisplayText(batchResult.targetTokens),
+        references: params.includeReferences ? references.engineReferences : undefined,
+        metadata: jobUnit.metadata,
+      };
+      results.push(result);
+      artifacts?.push(
+        toArtifactRecord(params.context.job.id, params.task.taskId, jobUnit, result, {
+          tm: references.tm,
+          tb: references.tb,
+          prompt: batch.prompt,
+        }),
+      );
+    }
+
+    return { results, artifacts };
+  }
+
+  private buildPreviousTranslatedContext(params: {
+    task: TranslationTask;
+    jobUnits: JobUnit[];
+    currentUnits: JobUnit[];
+    completedResults: ReadonlyMap<string, UnitResult>;
+  }): Array<{ source: string; target: string }> {
+    const jobOrder = resolveJobOrder(params.jobUnits, params.task.units, params.currentUnits);
+    const currentKeys = new Set(params.currentUnits.map(unitKey));
+    const firstCurrentIndex = jobOrder.findIndex((unit) => currentKeys.has(unitKey(unit)));
+
+    if (firstCurrentIndex < 0) {
+      return [];
+    }
+
+    const rows: Array<{ source: string; target: string }> = [];
+    for (let index = firstCurrentIndex - 1; index >= 0 && rows.length < 5; index -= 1) {
+      const unit = jobOrder[index];
+      const completed = params.completedResults.get(unitKey(unit));
+      const target = completed?.target;
+
+      if (target?.trim()) {
+        rows.push({ source: unit.source, target });
+      }
+    }
+
+    return rows.reverse();
+  }
+
+  private buildNextSourceContext(params: {
+    task: TranslationTask;
+    jobUnits: JobUnit[];
+    currentUnits: JobUnit[];
+  }): Array<{ source: string }> {
+    const jobOrder = resolveJobOrder(params.jobUnits, params.task.units, params.currentUnits);
+    const currentKeys = new Set(params.currentUnits.map(unitKey));
+    let lastCurrentIndex = -1;
+
+    for (let index = 0; index < jobOrder.length; index += 1) {
+      if (currentKeys.has(unitKey(jobOrder[index]))) {
+        lastCurrentIndex = index;
+      }
+    }
+
+    if (lastCurrentIndex < 0) {
+      return [];
+    }
+
+    const rows: Array<{ source: string }> = [];
+    for (let index = lastCurrentIndex + 1; index < jobOrder.length && rows.length < 5; index += 1) {
+      const source = jobOrder[index].source;
+
+      if (source.trim()) {
+        rows.push({ source });
+      }
+    }
+
+    return rows;
+  }
 }
 
-function emptyReferences(): ResolvedReferences {
+function emptyReferencesForUnit(unit: Pick<JobUnit, 'unitId'>, segment: Segment): ResolvedReferences {
   return {
     engineReferences: {
       tm: [],
       tb: [],
     },
     tm: {
-      unitId: '',
-      segmentId: '',
+      unitId: unit.unitId,
+      segmentId: segment.segmentId,
       mountedTMs: [],
       rawMatches: [],
       selectedReferences: {
@@ -582,8 +766,8 @@ function emptyReferences(): ResolvedReferences {
       diagnostics: [],
     },
     tb: {
-      unitId: '',
-      segmentId: '',
+      unitId: unit.unitId,
+      segmentId: segment.segmentId,
       mountedTBs: [],
       rawMatches: [],
       selectedReferences: [],
@@ -593,6 +777,40 @@ function emptyReferences(): ResolvedReferences {
       diagnostics: [],
     },
   };
+}
+
+function mergeCompletedResults(
+  completedResults: ReadonlyMap<string, UnitResult> | undefined,
+  skippedResults: UnitResult[],
+): Map<string, UnitResult> {
+  const merged = new Map(completedResults);
+
+  for (const result of skippedResults) {
+    if (result.target?.trim()) {
+      merged.set(unitKey(result), result);
+    }
+  }
+
+  return merged;
+}
+
+function resolveJobOrder(
+  jobUnits: JobUnit[],
+  taskUnits: JobUnit[],
+  currentUnits: JobUnit[],
+): JobUnit[] {
+  if (jobUnits.length === 0) {
+    return taskUnits;
+  }
+
+  const jobUnitKeys = new Set(jobUnits.map(unitKey));
+  const allCurrentUnitsExist = currentUnits.every((unit) => jobUnitKeys.has(unitKey(unit)));
+
+  return allCurrentUnitsExist ? jobUnits : taskUnits;
+}
+
+function unitKey(unit: Pick<JobUnit, 'documentId' | 'unitId'>): string {
+  return `${unit.documentId}\u0000${unit.unitId}`;
 }
 
 function hashCanonicalPayload(entries: Array<[string, unknown]>): string {
