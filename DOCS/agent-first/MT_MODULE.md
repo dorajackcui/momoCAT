@@ -6,8 +6,8 @@
 
 Code:
 
-- `apps/desktop/src/main/localization/modules/MTModule.ts`
-- `apps/desktop/src/main/localization/modules/MTModule.test.ts`
+- `packages/localization/src/modules/MTModule.ts`
+- `packages/localization/src/modules/MTModule.test.ts`
 
 ## Boundary
 

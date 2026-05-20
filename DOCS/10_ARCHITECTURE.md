@@ -42,6 +42,7 @@ Core maintainers of `simple-cat-tool`
 
 - `@cat/core`: domain models and pure/domain algorithms.
 - `@cat/db`: persistence, current-schema bootstrap/validation, repositories.
+- `@cat/localization`: agent-first/headless localization orchestration, including file adapters, job runner, checkpoint/events/artifacts, LocalizationEngine, LocalizationInspector, and headless TM/TB/MT adapter modules.
 
 ### `@cat/core` internal slices
 
@@ -157,6 +158,7 @@ renderer components/hooks
 3. Keep IPC types centralized in `apps/desktop/src/shared/ipc.ts`.
 4. Use repository/service abstractions from ports instead of coupling UI to persistence details.
 5. Import `@cat/core` through slice entrypoints in repo code; avoid the root barrel except for explicit compatibility tests.
+6. `@cat/localization` may depend on `@cat/core` and `@cat/db`, but must not import `apps/desktop/src/main/*`. Desktop and CLI code call localization APIs instead of owning headless engine code.
 
 ### Don't
 

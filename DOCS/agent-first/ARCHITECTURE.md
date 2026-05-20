@@ -30,9 +30,9 @@ External files or future API clients
 
 Code:
 
-- `apps/desktop/src/main/localization/modules/FileModule.ts`
-- `apps/desktop/src/main/localization/fileTranslationJobAdapter.ts`
-- `apps/desktop/src/main/localization/spreadsheetFileAdapter.ts`
+- `packages/localization/src/modules/FileModule.ts`
+- `packages/localization/src/fileTranslationJobAdapter.ts`
+- `packages/localization/src/spreadsheetFileAdapter.ts`
 
 Responsibilities:
 
@@ -54,11 +54,11 @@ Non-responsibilities:
 
 Code:
 
-- `apps/desktop/src/main/localization/job/TranslationJobRunner.ts`
-- `apps/desktop/src/main/localization/job/CheckpointStore.ts`
-- `apps/desktop/src/main/localization/job/EventSink.ts`
-- `apps/desktop/src/main/localization/job/ArtifactStore.ts`
-- `apps/desktop/src/main/localization/job/TaskPlanner.ts`
+- `packages/localization/src/job/TranslationJobRunner.ts`
+- `packages/localization/src/job/CheckpointStore.ts`
+- `packages/localization/src/job/EventSink.ts`
+- `packages/localization/src/job/ArtifactStore.ts`
+- `packages/localization/src/job/TaskPlanner.ts`
 
 Responsibilities:
 
@@ -81,7 +81,7 @@ Non-responsibilities:
 
 Code:
 
-- `apps/desktop/src/main/localization/LocalizationEngine.ts`
+- `packages/localization/src/LocalizationEngine.ts`
 
 Responsibilities:
 
@@ -101,9 +101,9 @@ Non-responsibilities:
 
 Code:
 
-- `apps/desktop/src/main/localization/modules/TMModule.ts`
-- `apps/desktop/src/main/localization/modules/TBModule.ts`
-- `apps/desktop/src/main/localization/modules/MTModule.ts`
+- `packages/localization/src/modules/TMModule.ts`
+- `packages/localization/src/modules/TBModule.ts`
+- `packages/localization/src/modules/MTModule.ts`
 
 Responsibilities:
 

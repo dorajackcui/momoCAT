@@ -180,7 +180,7 @@ npx vitest run packages/core/src/TagManager.test.ts
 
 - Renderer root: `apps/desktop/src/renderer/src`
 - Main process root: `apps/desktop/src/main`
-- Agent-first localization: `apps/desktop/src/main/localization`
+- Agent-first localization: `packages/localization/src`
 - Shared IPC contract: `apps/desktop/src/shared/ipc.ts`
 - Core package: `packages/core/src`
 - AI prompt templates: `packages/core/src/project/prompts`
