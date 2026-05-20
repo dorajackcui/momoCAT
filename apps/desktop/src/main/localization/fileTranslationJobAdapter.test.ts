@@ -44,7 +44,7 @@ describe('fileTranslationJobAdapter', () => {
           target: '',
           context: 'Greeting',
           rowNumber: 2,
-          sourceHash: computeSourceHash({ source: 'Hello', context: 'Greeting' }),
+          sourceHash: expect.any(String),
           metadata: { rowIndex: 1, rowNumber: 2 },
         },
         {
@@ -54,10 +54,151 @@ describe('fileTranslationJobAdapter', () => {
           target: 'Monde',
           context: 'Noun',
           rowNumber: 3,
-          sourceHash: computeSourceHash({ source: 'World', context: 'Noun' }),
+          sourceHash: expect.any(String),
           metadata: { rowIndex: 2, rowNumber: 3 },
         },
       ]);
+      expect(prepared.job.units[0]?.sourceHash).not.toBe(
+        computeSourceHash({ source: 'Hello', context: 'Greeting' }),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps default checkpoint identity separate across project ids', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
+    try {
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      writeWorkbook(inputPath, [
+        ['source', 'target'],
+        ['Hello', ''],
+      ]);
+      const executor = vi.fn<TranslationTaskExecutor>(async (task, context) => ({
+        results: task.units.map((unit) => ({
+          jobId: context.job.id,
+          documentId: unit.documentId,
+          unitId: unit.unitId,
+          sourceHash: unit.sourceHash,
+          status: 'translated',
+          source: unit.source,
+          target: `Project ${context.job.projectId}`,
+          metadata: unit.metadata,
+        })),
+      }));
+
+      const first = await translateSpreadsheetFileJob(
+        {
+          projectId: 7,
+          inputPath,
+          outputPath,
+          job: { maxAttempts: 1 },
+        },
+        { taskExecutor: executor },
+      );
+      const second = await translateSpreadsheetFileJob(
+        {
+          projectId: 8,
+          inputPath,
+          outputPath,
+          job: { resume: true, maxAttempts: 1 },
+        },
+        { taskExecutor: executor },
+      );
+
+      expect(executor).toHaveBeenCalledTimes(2);
+      expect(first.results[0]?.status).toBe('translated');
+      expect(first.results[0]?.target).toBe('Project 7');
+      expect(second.results[0]?.status).toBe('translated');
+      expect(second.results[0]?.target).toBe('Project 8');
+      expect(second.summary.reused).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('changes unit source hashes across targetScope policies for explicit job ids', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
+    try {
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      const checkpointPath = join(root, 'same.checkpoint.jsonl');
+      writeWorkbook(inputPath, [
+        ['source', 'target'],
+        ['Hello', 'Existing target'],
+      ]);
+      const executor = vi
+        .fn<TranslationTaskExecutor>()
+        .mockImplementationOnce(async (task, context) => ({
+          results: task.units.map((unit) => ({
+            jobId: context.job.id,
+            documentId: unit.documentId,
+            unitId: unit.unitId,
+            sourceHash: unit.sourceHash,
+            status: 'skipped',
+            source: unit.source,
+            target: unit.target,
+            metadata: unit.metadata,
+          })),
+        }))
+        .mockImplementationOnce(async (task, context) => ({
+          results: task.units.map((unit) => ({
+            jobId: context.job.id,
+            documentId: unit.documentId,
+            unitId: unit.unitId,
+            sourceHash: unit.sourceHash,
+            status: 'translated',
+            source: unit.source,
+            target: 'New target',
+            metadata: unit.metadata,
+          })),
+        }));
+
+      const firstPrepared = await prepareFileTranslationJob({
+        projectId: 7,
+        inputPath,
+        outputPath,
+        options: { targetScope: 'blank-only' },
+        job: { jobId: 'same-job', checkpointPath },
+      });
+      const secondPrepared = await prepareFileTranslationJob({
+        projectId: 7,
+        inputPath,
+        outputPath,
+        options: { targetScope: 'overwrite-non-confirmed' },
+        job: { jobId: 'same-job', checkpointPath },
+      });
+
+      await translateSpreadsheetFileJob(
+        {
+          projectId: 7,
+          inputPath,
+          outputPath,
+          options: { targetScope: 'blank-only' },
+          job: { jobId: 'same-job', checkpointPath, maxAttempts: 1 },
+        },
+        { taskExecutor: executor },
+      );
+      const second = await translateSpreadsheetFileJob(
+        {
+          projectId: 7,
+          inputPath,
+          outputPath,
+          options: { targetScope: 'overwrite-non-confirmed' },
+          job: { jobId: 'same-job', checkpointPath, resume: true, maxAttempts: 1 },
+        },
+        { taskExecutor: executor },
+      );
+
+      expect(firstPrepared.job.id).toBe(secondPrepared.job.id);
+      expect(firstPrepared.job.units[0]?.sourceHash).not.toBe(
+        secondPrepared.job.units[0]?.sourceHash,
+      );
+      expect(executor).toHaveBeenCalledTimes(2);
+      expect(second.results[0]?.status).toBe('translated');
+      expect(second.results[0]?.target).toBe('New target');
+      expect(second.summary.reused).toBeUndefined();
     } finally {
       await rm(root, { recursive: true, force: true });
     }

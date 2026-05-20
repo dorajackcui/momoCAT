@@ -1,4 +1,6 @@
+import { createHash } from 'crypto';
 import { basename, extname, join, parse as parsePath, win32 } from 'path';
+import { resolveBatchTargetScope } from '../services/modules/ai/translationTargetScope';
 import { CheckpointStore } from './job/CheckpointStore';
 import { EventSink } from './job/EventSink';
 import { ArtifactStore } from './job/ArtifactStore';
@@ -46,6 +48,7 @@ export async function prepareFileTranslationJob(
 ): Promise<PreparedFileTranslationJob> {
   const parsed = await parseExternalSpreadsheet(input);
   const documentId = basename(input.inputPath);
+  const resumeFingerprint = computeFileTranslationResumeFingerprint(input);
   const units: JobUnit[] = parsed.artifact.rows
     .filter((row) => row.source.trim())
     .map((row) => ({
@@ -55,7 +58,11 @@ export async function prepareFileTranslationJob(
       target: row.target,
       context: row.context,
       rowNumber: row.rowNumber,
-      sourceHash: computeSourceHash({ source: row.source, context: row.context }),
+      sourceHash: computeSourceHash({
+        source: row.source,
+        context: row.context,
+        resumeFingerprint,
+      }),
       metadata: {
         rowIndex: row.rowIndex,
         rowNumber: row.rowNumber,
@@ -162,7 +169,35 @@ function defaultRunnerFactory(
 
 function defaultFileTranslationJobId(input: TranslateFileInput): string {
   const outputName = basename(input.outputPath, extname(input.outputPath));
-  return `file:${basename(input.inputPath)}:${outputName}`;
+  return `file:${basename(input.inputPath)}:${outputName}:${computeFileTranslationResumeFingerprint(
+    input,
+  )}`;
+}
+
+function computeFileTranslationResumeFingerprint(input: TranslateFileInput): string {
+  return hashCanonicalPayload([
+    ['projectId', String(input.projectId)],
+    ['targetScope', resolveBatchTargetScope(input.options?.targetScope)],
+    ['mode', input.options?.mode ?? 'standard'],
+    ['providerOverride', input.options?.providerOverride],
+    ['mt.providerId', input.options?.mt?.providerId],
+    ['mt.model', input.options?.mt?.model],
+    ['mt.reasoningEffort', input.options?.mt?.reasoningEffort],
+    ['mt.systemPrompt', input.options?.mt?.systemPrompt],
+    ['mt.temperature', normalizeNumberOption(input.options?.mt?.temperature)],
+  ]);
+}
+
+function hashCanonicalPayload(entries: Array<[string, string | undefined]>): string {
+  const payload = entries.filter((entry): entry is [string, string] => entry[1] !== undefined);
+
+  return createHash('sha256')
+    .update(JSON.stringify(payload))
+    .digest('hex');
+}
+
+function normalizeNumberOption(value: number | undefined): string | undefined {
+  return value === undefined ? undefined : String(value);
 }
 
 function jobRunResultToTranslateUnitsResult(
