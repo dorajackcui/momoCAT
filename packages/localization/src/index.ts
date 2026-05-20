@@ -43,3 +43,11 @@ export type {
   TranslateSpreadsheetFileJobOptions,
 } from './fileTranslationJobAdapter';
 export { resolveBatchTargetScope } from './translationTargetScope';
+export type * from './ports';
+export { SqliteProjectRepository } from './adapters/sqlite/SqliteProjectRepository';
+export { SqliteSettingsRepository } from './adapters/sqlite/SqliteSettingsRepository';
+export { SqliteTBRepository } from './adapters/sqlite/SqliteTBRepository';
+export { SqliteTMRepository } from './adapters/sqlite/SqliteTMRepository';
+export { TMService } from './services/TMService';
+export type { TMMatch, TMMatchKind, StandardTMMatch, ConcordanceTMMatch } from './services/TMService';
+export { TBService } from './services/TBService';
