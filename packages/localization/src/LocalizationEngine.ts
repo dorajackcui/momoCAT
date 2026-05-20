@@ -606,7 +606,7 @@ export class LocalizationEngine {
     );
     const current: MTBatchCurrentUnitInput[] = resolvedUnits.map(
       ({ jobUnit, prepared, references }) => ({
-        responseId: jobUnit.unitId,
+        responseId: batchResponseId(jobUnit),
         documentId: jobUnit.documentId,
         unitId: jobUnit.unitId,
         segment: prepared.segment,
@@ -655,7 +655,7 @@ export class LocalizationEngine {
     const artifacts: ArtifactRecord[] | undefined = params.captureArtifacts ? [] : undefined;
 
     for (const { jobUnit, references } of resolvedUnits) {
-      const batchResult = batchResultsByResponseId.get(jobUnit.unitId);
+      const batchResult = batchResultsByResponseId.get(batchResponseId(jobUnit));
       if (!batchResult) {
         throw new Error(`MT batch did not return a result for unit: ${jobUnit.unitId}`);
       }
@@ -811,6 +811,10 @@ function resolveJobOrder(
 
 function unitKey(unit: Pick<JobUnit, 'documentId' | 'unitId'>): string {
   return `${unit.documentId}\u0000${unit.unitId}`;
+}
+
+function batchResponseId(unit: Pick<JobUnit, 'documentId' | 'unitId'>): string {
+  return `${encodeURIComponent(unit.documentId)}#${encodeURIComponent(unit.unitId)}`;
 }
 
 function hashCanonicalPayload(entries: Array<[string, unknown]>): string {

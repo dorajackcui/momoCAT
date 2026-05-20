@@ -408,11 +408,11 @@ describe('LocalizationEngine.translateFile job mode', () => {
         .mockResolvedValueOnce({
           content: JSON.stringify({
             translations: [
-              { id: 'row-2', text: 'Un' },
-              { id: 'row-3', text: 'Deux' },
-              { id: 'row-4', text: 'Trois' },
-              { id: 'row-5', text: 'Quatre' },
-              { id: 'row-6', text: 'Cinq' },
+              { id: 'window.xlsx#row-2', text: 'Un' },
+              { id: 'window.xlsx#row-3', text: 'Deux' },
+              { id: 'window.xlsx#row-4', text: 'Trois' },
+              { id: 'window.xlsx#row-5', text: 'Quatre' },
+              { id: 'window.xlsx#row-6', text: 'Cinq' },
             ],
           }),
           status: 200,
@@ -424,7 +424,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
           expect(request.userPrompt).toContain('Five -> Cinq');
           return {
             content: JSON.stringify({
-              translations: [{ id: 'row-7', text: 'Six' }],
+              translations: [{ id: 'window.xlsx#row-7', text: 'Six' }],
             }),
             status: 200,
             endpoint: '/mock',
@@ -446,8 +446,10 @@ describe('LocalizationEngine.translateFile job mode', () => {
       expect(transport.createResponse).toHaveBeenCalledTimes(2);
       const firstPrompt = transport.createResponse.mock.calls[0]?.[0].userPrompt;
       const secondPrompt = transport.createResponse.mock.calls[1]?.[0].userPrompt;
-      expect(firstPrompt).toContain('Current ids: row-2, row-3, row-4, row-5, row-6');
-      expect(secondPrompt).toContain('Current ids: row-7');
+      expect(firstPrompt).toContain(
+        'Current ids: window.xlsx#row-2, window.xlsx#row-3, window.xlsx#row-4, window.xlsx#row-5, window.xlsx#row-6',
+      );
+      expect(secondPrompt).toContain('Current ids: window.xlsx#row-7');
       const written = XLSX.read(await readFile(outputPath), { type: 'buffer' });
       const rows = XLSX.utils.sheet_to_json(written.Sheets.Sheet1, {
         header: 1,
@@ -488,7 +490,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
       XLSX.writeFile(workbook, inputPath);
       const transport = createTransport(
         JSON.stringify({
-          translations: [{ id: 'row-2', text: 'Bonjour' }],
+          translations: [{ id: 'mt.xlsx#row-2', text: 'Bonjour' }],
         }),
       );
       const engine = new LocalizationEngine(db, {
@@ -683,7 +685,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
         }),
         createResponse: vi.fn(async (request: { model: string }) => ({
           content: JSON.stringify({
-            translations: [{ id: 'row-2', text: `${request.model} target` }],
+            translations: [{ id: 'mt.xlsx#row-2', text: `${request.model} target` }],
           }),
           status: 200,
           endpoint: '/mock',
@@ -759,7 +761,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
       XLSX.writeFile(workbook, inputPath);
       const transport = createTransport(
         JSON.stringify({
-          translations: [{ id: 'row-2', text: 'First target' }],
+          translations: [{ id: 'mt.xlsx#row-2', text: 'First target' }],
         }),
       );
       const engine = new LocalizationEngine(db, {
@@ -790,7 +792,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
       );
       transport.createResponse.mockResolvedValueOnce({
         content: JSON.stringify({
-          translations: [{ id: 'row-2', text: 'Second target' }],
+          translations: [{ id: 'mt.xlsx#row-2', text: 'Second target' }],
         }),
         status: 200,
         endpoint: '/mock',
@@ -848,7 +850,7 @@ describe('LocalizationEngine task executor', () => {
 
       const transport = createTransport(
         JSON.stringify({
-          translations: [{ id: 'unit-1', text: 'Bonjour le monde' }],
+          translations: [{ id: 'doc-1#unit-1', text: 'Bonjour le monde' }],
         }),
       );
       const engine = new LocalizationEngine(db, {
@@ -921,7 +923,7 @@ describe('LocalizationEngine task executor', () => {
           unitId: 'task-1',
           batch: expect.objectContaining({
             mode: 'window',
-            currentIds: ['unit-1'],
+            currentIds: ['doc-1#unit-1'],
           }),
           model: expect.any(String),
           provider: expect.objectContaining({
@@ -1084,8 +1086,8 @@ describe('LocalizationEngine task executor', () => {
       const transport = createTransport(
         JSON.stringify({
           translations: [
-            { id: 'unit-1', text: 'Enregistrer le fichier' },
-            { id: 'unit-2', text: 'Fermer la fenetre' },
+            { id: 'doc-1#unit-1', text: 'Enregistrer le fichier' },
+            { id: 'doc-1#unit-2', text: 'Fermer la fenetre' },
           ],
         }),
       );
@@ -1129,11 +1131,93 @@ describe('LocalizationEngine task executor', () => {
       expect(transport.createResponse).toHaveBeenCalledTimes(1);
       const prompt = transport.createResponse.mock.calls[0]?.[0].userPrompt;
       expect(prompt).toMatch(
-        /id: unit-1[\s\S]*Save file[\s\S]*Enregistrer le fichier[\s\S]*Save -> Enregistrer/,
+        /id: doc-1#unit-1[\s\S]*Save file[\s\S]*Enregistrer le fichier[\s\S]*Save -> Enregistrer/,
       );
       expect(prompt).toMatch(
-        /id: unit-2[\s\S]*Close window[\s\S]*Fermer la fenetre[\s\S]*Close -> Fermer/,
+        /id: doc-1#unit-2[\s\S]*Close window[\s\S]*Fermer la fenetre[\s\S]*Close -> Fermer/,
       );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('uses document-qualified response ids for duplicate unit ids in one Window Mode request', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Task Duplicate Unit Ids', 'en', 'fr');
+      seedApiKey(db);
+      const transport = createTransport();
+      transport.createResponse.mockImplementationOnce(async (request: { userPrompt: string }) => {
+        const currentIds = [...request.userPrompt.matchAll(/^id: (.+)$/gm)].map(
+          (match) => match[1],
+        );
+
+        expect(currentIds).toHaveLength(2);
+        expect(new Set(currentIds).size).toBe(2);
+        expect(currentIds).not.toEqual(['row-2', 'row-2']);
+        expect(request.userPrompt.match(/^id: row-2$/gm) ?? []).toHaveLength(0);
+
+        return {
+          content: JSON.stringify({
+            translations: [
+              { id: currentIds[0], text: 'Enregistrer le fichier' },
+              { id: currentIds[1], text: 'Fermer la fenetre' },
+            ],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        };
+      });
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+
+      const result = await engine.executeTranslationTask(
+        {
+          taskId: 'task-duplicate-unit-ids',
+          units: [
+            {
+              documentId: 'doc-a.xlsx',
+              unitId: 'row-2',
+              source: 'Save file',
+              sourceHash: 'hash-a',
+            },
+            {
+              documentId: 'doc-b.xlsx',
+              unitId: 'row-2',
+              source: 'Close window',
+              sourceHash: 'hash-b',
+            },
+          ],
+        },
+        {
+          attempt: 1,
+          job: {
+            id: 'job-duplicate-unit-ids',
+            projectId,
+            units: [],
+          },
+        },
+      );
+
+      expect(result.results).toEqual([
+        expect.objectContaining({
+          documentId: 'doc-a.xlsx',
+          unitId: 'row-2',
+          source: 'Save file',
+          target: 'Enregistrer le fichier',
+          status: 'translated',
+        }),
+        expect.objectContaining({
+          documentId: 'doc-b.xlsx',
+          unitId: 'row-2',
+          source: 'Close window',
+          target: 'Fermer la fenetre',
+          status: 'translated',
+        }),
+      ]);
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
     } finally {
       db.close();
     }
