@@ -20,3 +20,26 @@ export type {
 } from './job/TranslationJobRunner';
 export { OneUnitTaskPlanner } from './job/TaskPlanner';
 export type { TaskPlanner } from './job/TaskPlanner';
+export { createTransientSegment, toTransientSegmentId } from './transientSegment';
+export type { TransientSegment, TransientSegmentContext } from './transientSegment';
+export {
+  fileRowsToLocalizationUnits,
+  parseExternalSpreadsheet,
+  writeInspectSpreadsheet,
+  writeTranslatedSpreadsheet,
+} from './modules/FileModule';
+export type { ParsedSpreadsheetFile, SheetCell } from './modules/FileModule';
+export { translateSpreadsheetFile } from './spreadsheetFileAdapter';
+export {
+  inferFileTranslationJobSidecarPaths,
+  prepareFileTranslationJob,
+  resolveFileTranslationJobSidecarPaths,
+  translateSpreadsheetFileJob,
+} from './fileTranslationJobAdapter';
+export type {
+  FileTranslationJobRunnerFactory,
+  FileTranslationJobSidecarPaths,
+  PreparedFileTranslationJob,
+  TranslateSpreadsheetFileJobOptions,
+} from './fileTranslationJobAdapter';
+export { resolveBatchTargetScope } from './translationTargetScope';
