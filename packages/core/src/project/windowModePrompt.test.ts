@@ -71,6 +71,46 @@ describe("Window Mode prompt builder", () => {
       "Next 5 source rows\n1. Preferences",
     );
   });
+
+  it.each([
+    [[], /requires at least one current segment/i],
+    [
+      [{ id: " ", sourcePayload: "Save" }],
+      /current segment id must be non-empty/i,
+    ],
+    [
+      [
+        { id: "row-2", sourcePayload: "Save" },
+        { id: "row-2", sourcePayload: "Close" },
+      ],
+      /duplicate current segment id/i,
+    ],
+  ])("rejects invalid current segment ids %#", (currentSegments, message) => {
+    expect(() =>
+      buildAIWindowModePromptBundle({
+        srcLang: "en",
+        tgtLang: "fr",
+        currentSegments,
+      }),
+    ).toThrow(message);
+  });
+
+  it("renders validation feedback when present", () => {
+    const bundle = buildAIWindowModePromptBundle({
+      srcLang: "en",
+      tgtLang: "fr",
+      currentSegments: [{ id: "row-2", sourcePayload: "Save" }],
+      validationFeedback: "The previous attempt omitted a marker.",
+    });
+
+    expect(bundle.userPrompt).toContain("Validation feedback");
+    expect(bundle.userPrompt).toContain(
+      "The previous attempt omitted a marker.",
+    );
+    expect(bundle.sections.validationFeedbackBlock).toBe(
+      "Validation feedback\nThe previous attempt omitted a marker.",
+    );
+  });
 });
 
 describe("Window Mode strict JSON parser", () => {
@@ -126,6 +166,20 @@ describe("Window Mode strict JSON parser", () => {
   ])("rejects invalid response %#", (content, message) => {
     expect(() =>
       parseAIWindowModeResponse(content, ["row-2", "row-3"]),
+    ).toThrow(message);
+  });
+
+  it.each([
+    [[" "], /expected translation id must be non-empty/i],
+    [["row-2", "row-2"], /duplicate expected translation id/i],
+  ])("rejects invalid expected ids %#", (expectedIds, message) => {
+    expect(() =>
+      parseAIWindowModeResponse(
+        JSON.stringify({
+          translations: [{ id: "row-2", text: "Enregistrer" }],
+        }),
+        expectedIds,
+      ),
     ).toThrow(message);
   });
 });

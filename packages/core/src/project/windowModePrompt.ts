@@ -137,16 +137,36 @@ function buildJsonFormatBlock(): string {
   ].join("\n");
 }
 
-export function buildAIWindowModePromptBundle(
-  params: WindowModePromptBundleBuildParams,
-): WindowModePromptBundle {
-  if (params.currentSegments.length === 0) {
+function normalizeCurrentSegments(
+  segments: WindowModeCurrentSegment[],
+): WindowModeCurrentSegment[] {
+  if (segments.length === 0) {
     throw new Error("Window Mode prompt requires at least one current segment.");
   }
 
+  const seenIds = new Set<string>();
+  return segments.map((segment) => {
+    const id = segment.id.trim();
+    if (!id) {
+      throw new Error("Window Mode current segment id must be non-empty.");
+    }
+    if (seenIds.has(id)) {
+      throw new Error(`Window Mode duplicate current segment id "${id}".`);
+    }
+    seenIds.add(id);
+    return { ...segment, id };
+  });
+}
+
+export function buildAIWindowModePromptBundle(
+  params: WindowModePromptBundleBuildParams,
+): WindowModePromptBundle {
+  const currentSegments = normalizeCurrentSegments(params.currentSegments);
+  const normalizedParams = { ...params, currentSegments };
+
   const sections: WindowModePromptSections = {
-    batchBlock: buildBatchBlock(params),
-    currentSegmentsBlock: buildCurrentSegmentsBlock(params.currentSegments),
+    batchBlock: buildBatchBlock(normalizedParams),
+    currentSegmentsBlock: buildCurrentSegmentsBlock(currentSegments),
     previousContextBlock: buildPreviousContextBlock(params.previousContext),
     nextContextBlock: buildNextContextBlock(params.nextContext),
     validationFeedbackBlock: buildValidationFeedbackBlock(
@@ -156,7 +176,7 @@ export function buildAIWindowModePromptBundle(
   };
 
   return {
-    systemPrompt: buildSystemPrompt(params),
+    systemPrompt: buildSystemPrompt(normalizedParams),
     userPrompt: joinBlocks([
       sections.batchBlock,
       sections.currentSegmentsBlock,
@@ -173,10 +193,26 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function normalizeExpectedIds(expectedIds: string[]): string[] {
+  const seenIds = new Set<string>();
+  return expectedIds.map((expectedId) => {
+    const id = expectedId.trim();
+    if (!id) {
+      throw new Error("Window Mode expected translation id must be non-empty.");
+    }
+    if (seenIds.has(id)) {
+      throw new Error(`Window Mode duplicate expected translation id "${id}".`);
+    }
+    seenIds.add(id);
+    return id;
+  });
+}
+
 export function parseAIWindowModeResponse(
   content: string,
   expectedIds: string[],
 ): WindowModeParsedTranslation[] {
+  const normalizedExpectedIds = normalizeExpectedIds(expectedIds);
   const trimmed = content.trim();
   if (!trimmed) {
     throw new Error("AI Window Mode response was empty.");
@@ -205,7 +241,7 @@ export function parseAIWindowModeResponse(
     throw new Error("Window Mode translations must be an array.");
   }
 
-  const expectedIdSet = new Set(expectedIds);
+  const expectedIdSet = new Set(normalizedExpectedIds);
   const translationsById = new Map<string, WindowModeParsedTranslation>();
 
   for (const entry of parsed.translations) {
@@ -224,11 +260,11 @@ export function parseAIWindowModeResponse(
     translationsById.set(entry.id, { id: entry.id, text: entry.text });
   }
 
-  for (const expectedId of expectedIds) {
+  for (const expectedId of normalizedExpectedIds) {
     if (!translationsById.has(expectedId)) {
       throw new Error(`Missing translation id "${expectedId}".`);
     }
   }
 
-  return expectedIds.map((id) => translationsById.get(id)!);
+  return normalizedExpectedIds.map((id) => translationsById.get(id)!);
 }
