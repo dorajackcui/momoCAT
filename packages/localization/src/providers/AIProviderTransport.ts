@@ -1,4 +1,6 @@
-import type { AITransport } from '../ports';
+import type { AITransport, ReasoningEffort } from '../ports';
+
+const ERROR_BODY_PREVIEW_LIMIT = 240;
 
 function extractMessageText(data: unknown): string | null {
   if (!data || typeof data !== 'object') {
@@ -56,10 +58,36 @@ function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.trim().replace(/\/+$/, '');
 }
 
+function redactUrlCredentials(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.username = '';
+    parsed.password = '';
+    return parsed.toString();
+  } catch {
+    return '<invalid endpoint>';
+  }
+}
+
+function sanitizeErrorText(value: string, limit = ERROR_BODY_PREVIEW_LIMIT): string {
+  const redacted = value
+    .replace(/(api[_-]?key|token|password|secret)=([^&\s]+)/gi, '$1=[redacted]')
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+    .replace(/(https?:\/\/)([^:@/\s]+):([^@/\s]+)@/gi, '$1[redacted]@')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (redacted.length <= limit) {
+    return redacted;
+  }
+
+  return `${redacted.slice(0, limit)}... [truncated]`;
+}
+
 export class AIProviderTransport implements AITransport {
   private getProxyHint(): string {
     const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.ALL_PROXY;
-    return proxy ? ` (proxy=${proxy})` : '';
+    return proxy ? ' (proxy configured)' : '';
   }
 
   public async testConnection(params: {
@@ -90,7 +118,7 @@ export class AIProviderTransport implements AITransport {
     apiKey: string;
     baseUrl: string;
     model: string;
-    reasoningEffort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+    reasoningEffort: ReasoningEffort;
     systemPrompt: string;
     userPrompt: string;
   }): Promise<{
@@ -117,6 +145,7 @@ export class AIProviderTransport implements AITransport {
     rawResponseText?: string;
   }> {
     const endpoint = `${normalizeBaseUrl(params.baseUrl)}/chat/completions`;
+    const errorEndpoint = redactUrlCredentials(endpoint);
     const maxRetries = 3;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -138,9 +167,9 @@ export class AIProviderTransport implements AITransport {
           }),
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = sanitizeErrorText(error instanceof Error ? error.message : String(error));
         throw new Error(
-          `AI provider network request failed: ${message}${this.getProxyHint()} endpoint=${endpoint}`,
+          `AI provider network request failed: ${message}${this.getProxyHint()} endpoint=${errorEndpoint}`,
         );
       }
 
@@ -160,14 +189,14 @@ export class AIProviderTransport implements AITransport {
       const rawBody = await response.text();
 
       if (!response.ok) {
-        throw new Error(`AI provider request failed: ${response.status} ${rawBody}`);
+        throw new Error(`AI provider request failed: ${response.status} ${sanitizeErrorText(rawBody)}`);
       }
 
       let data: unknown;
       try {
         data = JSON.parse(rawBody) as unknown;
       } catch {
-        throw new Error(`AI provider response is not valid JSON: ${rawBody}`);
+        throw new Error(`AI provider response is not valid JSON: ${sanitizeErrorText(rawBody)}`);
       }
 
       const content = extractMessageText(data);

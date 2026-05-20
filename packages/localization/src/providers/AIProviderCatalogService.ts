@@ -176,8 +176,8 @@ export class AIProviderCatalogService {
 
     const providers = this.readCustomProviders();
     providers.push(provider);
-    this.writeCustomProviders(providers);
     this.settingsRepo.setSetting(this.buildProviderKey(provider.id), normalized.apiKey);
+    this.writeCustomProviders(providers);
 
     return provider;
   }
