@@ -249,6 +249,44 @@ describe('LocalizationInspector.inspectFile', () => {
     }
   });
 
+  it('uses skipped target rows between current rows as previous Window Mode context', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Window Interleaved Inspect', 'en', 'fr');
+      const inputPath = writeInputWorkbook(root, [
+        ['source', 'target'],
+        ['First', ''],
+        ['Middle', 'Milieu'],
+        ['Last', ''],
+      ]);
+      const inspector = new LocalizationInspector(db, {
+        aiTransport: createTransport(),
+        aiRuntimeConfigProvider: runtimeConfigProvider(),
+      });
+
+      const result = await inspector.inspectFile({
+        projectId,
+        inputPath,
+        outputPath: join(root, 'inspect.xlsx'),
+      });
+      const json = JSON.parse(await readFile(result.jsonOutputPath, 'utf8'));
+      const firstUnit = json.units.find(
+        (unit: { unit: { source: string } }) => unit.unit.source === 'First',
+      );
+
+      expect(firstUnit.mt.batch.currentIds).toContain('row-2');
+      expect(firstUnit.mt.batch.currentIds).toContain('row-4');
+      expect(firstUnit.mt.batch.currentIds).not.toContain('row-3');
+      expect(firstUnit.mt.userPrompt).toContain('Previous 5 translated rows');
+      expect(firstUnit.mt.userPrompt).toContain('Middle -> Milieu');
+      expect(firstUnit.mt.userPrompt).not.toMatch(/^id: row-3$/m);
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('uses source rows after the current chunk as next Window Mode context', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
     const db = new CATDatabase(':memory:');

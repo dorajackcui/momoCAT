@@ -1,4 +1,5 @@
 import { runBounded } from '../RequestScheduler';
+import { resolveBatchTargetScope } from '../translationTargetScope';
 import { SnapshotThrottle } from './SnapshotThrottle';
 import type { TaskPlanner } from './TaskPlanner';
 import type {
@@ -189,14 +190,15 @@ export class TranslationJobRunner {
       }
     }
 
+    const message = errorMessage(lastError);
+    const results = task.units.map((unit) =>
+      makeFallbackResult(job, unit, message, maxAttempts),
+    );
+
     return {
-      results: task.units.map((unit) =>
-        makeFailedResult(job, unit, errorMessage(lastError), maxAttempts),
-      ),
+      results,
       artifacts: this.artifactStore
-        ? task.units.map((unit) =>
-            makeFailedArtifact(job, task, unit, errorMessage(lastError), maxAttempts, this.isoNow()),
-          )
+        ? results.map((result) => makeFallbackArtifact(job, task, result, message, this.isoNow()))
         : undefined,
     };
   }
@@ -339,6 +341,46 @@ function makeFailedResult(
   };
 }
 
+function makeFallbackResult(
+  job: TranslationJob,
+  unit: JobUnit,
+  message: string,
+  attempts: number,
+): UnitResult {
+  if (isIntrinsicallySkippedUnit(job, unit)) {
+    return makeSkippedResult(job, unit, attempts);
+  }
+
+  return makeFailedResult(job, unit, message, attempts);
+}
+
+function makeSkippedResult(
+  job: TranslationJob,
+  unit: JobUnit,
+  attempts: number,
+): UnitResult {
+  return {
+    jobId: job.id,
+    documentId: unit.documentId,
+    unitId: unit.unitId,
+    sourceHash: unit.sourceHash,
+    status: 'skipped',
+    source: unit.source,
+    target: unit.target ?? '',
+    attempts,
+    metadata: unit.metadata,
+  };
+}
+
+function isIntrinsicallySkippedUnit(job: TranslationJob, unit: JobUnit): boolean {
+  if (!unit.source.trim()) {
+    return true;
+  }
+
+  const targetScope = resolveBatchTargetScope(job.translationOptions?.targetScope);
+  return targetScope === 'blank-only' && Boolean(unit.target?.trim());
+}
+
 function canonicalizeArtifact(
   artifact: ArtifactRecord,
   job: TranslationJob,
@@ -360,21 +402,20 @@ function canonicalizeArtifact(
   };
 }
 
-function makeFailedArtifact(
+function makeFallbackArtifact(
   job: TranslationJob,
   task: TranslationTask,
-  unit: JobUnit,
+  result: UnitResult,
   error: string,
-  attempts: number,
   at: string,
 ): ArtifactRecord {
   return {
     job: job.id,
     task: task.taskId,
-    doc: unit.documentId,
-    unit: unit.unitId,
-    error,
-    result: makeFailedResult(job, unit, error, attempts),
+    doc: result.documentId,
+    unit: result.unitId,
+    error: result.status === 'failed' ? error : undefined,
+    result,
     at,
   };
 }

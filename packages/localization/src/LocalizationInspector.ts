@@ -396,20 +396,25 @@ function buildPreviousTranslatedContext(
   rows: FileParseRowArtifact[],
   currentRows: InspectReadyRow[],
 ): Array<{ source: string; target: string }> {
-  const firstCurrentIndex = Math.min(
+  const currentIndexes = new Set(currentRows.map((row) => row.sourceIndex));
+  const lastCurrentIndex = Math.max(
     ...currentRows.map((row) => row.sourceIndex),
   );
 
-  if (!Number.isFinite(firstCurrentIndex)) {
+  if (!Number.isFinite(lastCurrentIndex)) {
     return [];
   }
 
   const candidates: number[] = [];
   for (
-    let index = firstCurrentIndex - 1;
+    let index = lastCurrentIndex - 1;
     index >= 0 && candidates.length < 5;
     index -= 1
   ) {
+    if (currentIndexes.has(index)) {
+      continue;
+    }
+
     if (rows[index].target.trim()) {
       candidates.push(index);
     }

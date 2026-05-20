@@ -566,6 +566,65 @@ describe('LocalizationEngine.translateFile job mode', () => {
     }
   });
 
+  it('preserves skipped target rows when a Window Mode file batch fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('External File Failed Window Skip', 'en', 'fr');
+      seedApiKey(db);
+      const inputPath = join(root, 'fallback.xlsx');
+      const outputPath = join(root, 'fallback.translated.xlsx');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target'],
+          ['First', ''],
+          ['Middle', 'Milieu'],
+          ['Last', ''],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+      const transport = createTransport(
+        JSON.stringify({
+          translations: [{ id: 'fallback.xlsx#row-2', text: 'Premier' }],
+        }),
+      );
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+
+      const result = await engine.translateFile({
+        projectId,
+        inputPath,
+        outputPath,
+        job: { maxAttempts: 1 },
+      });
+
+      expect(result.summary).toEqual({ total: 3, translated: 0, skipped: 1, failed: 2 });
+      expect(result.results).toEqual([
+        expect.objectContaining({ id: 'row-2', status: 'failed' }),
+        expect.objectContaining({
+          id: 'row-3',
+          status: 'skipped',
+          target: 'Milieu',
+        }),
+        expect.objectContaining({ id: 'row-4', status: 'failed' }),
+      ]);
+      const written = XLSX.read(await readFile(outputPath), { type: 'buffer' });
+      const rows = XLSX.utils.sheet_to_json(written.Sheets.Sheet1, {
+        header: 1,
+        defval: '',
+      }) as string[][];
+      expect(rows[2][1]).toBe('Milieu');
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('rejects dialogue mode before starting a file job', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
     const db = new CATDatabase(':memory:');
