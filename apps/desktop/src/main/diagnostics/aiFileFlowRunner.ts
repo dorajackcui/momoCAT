@@ -387,7 +387,7 @@ function previewText(value: string): string {
 
 function defaultProjectsDir(dbPath: string): string {
   if (dbPath === ':memory:') {
-    return path.resolve(process.cwd(), '.tmp', 'headless-projects');
+    return path.resolve(process.cwd(), '.tmp', 'desktop-ai-trace-projects');
   }
   return path.join(path.dirname(path.resolve(dbPath)), 'projects');
 }

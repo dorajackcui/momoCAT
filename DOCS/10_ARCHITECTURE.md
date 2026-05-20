@@ -4,6 +4,8 @@
 
 Describe current system boundaries and module responsibilities so implementation changes stay local and predictable.
 
+For the `agent-first-batch-ai-mvp` branch, architecture decisions should optimize for agent-first CLI/headless workflows and shared localization capability. The legacy desktop UI remains supported, but it is not the primary target for new TM/TB/MT capabilities on this branch.
+
 ## When to Read
 
 Read before modifying module boundaries, cross-layer contracts, or multi-subsystem workflows.
@@ -15,7 +17,7 @@ Read before modifying module boundaries, cross-layer contracts, or multi-subsyst
 
 ## Last Updated
 
-2026-04-16
+2026-05-20
 
 ## Owner
 
@@ -43,6 +45,12 @@ Core maintainers of `simple-cat-tool`
 - `@cat/core`: domain models and pure/domain algorithms.
 - `@cat/db`: persistence, current-schema bootstrap/validation, repositories.
 - `@cat/localization`: agent-first/headless localization orchestration, including file adapters, job runner, checkpoint/events/artifacts, LocalizationEngine, LocalizationInspector, and headless TM/TB/MT adapter modules.
+
+The branch focus is shared core capability plus agent-first orchestration:
+
+- Core capability: TM/TB/MT contracts, tag/protected-marker handling, prompt builders, response parsers, validation helpers, and persistence boundaries.
+- Agent-first operation: CLI commands and headless workflows that are inspectable, resumable, and automation-friendly.
+- Desktop interaction: retained as legacy host/UI surface unless a separate desktop migration is explicitly designed.
 
 ### `@cat/core` internal slices
 
@@ -94,7 +102,7 @@ Internal dependency direction:
 - Use `@cat/core/tag` for tag parsing, markers, display, and signatures.
 - Use `@cat/core/text` for linguistic text serialization and term matching.
 - Use `@cat/core/qa` for QA evaluation and `TagValidator`.
-- Use `@cat/core/project` as the single source of truth for AI prompt builders; desktop main should consume it rather than keep local prompt template copies.
+- Use `@cat/core/project` as the current home for AI prompt builders and future pure MT prompt/response helpers; desktop main and localization should consume pure helpers rather than keep local prompt template copies.
 - Keep root `@cat/core` as a compatibility barrel only; repo code should import from a slice entrypoint instead.
 
 ### Editor domain split (renderer)
@@ -123,11 +131,19 @@ Internal dependency direction:
 
 `EditorRow` -> `useEditor` -> `apiClient` -> IPC handler -> `ProjectService` -> `SegmentService` -> repo/db
 
-### File-level AI translation
+### Legacy desktop file-level AI translation
 
 Renderer action -> `apiClient.aiTranslateFile` -> `ProjectService` -> `AIModule` -> AI orchestration -> segment updates -> job progress events
 
-Standard file processing uses bounded concurrent segment requests for translation default, review, and custom projects. Translation dialogue mode remains serial because each dialogue unit may depend on the previous translated group for consistency context.
+This is the existing CAT editor workflow. Standard file processing uses bounded concurrent segment requests for translation default, review, and custom projects. Translation dialogue mode remains serial because each dialogue unit may depend on the previous translated group for consistency context.
+
+Do not use this desktop workflow as the model for new agent-first MT request scheduling.
+
+### Agent-first file localization
+
+CLI script -> `@cat/localization` command API -> `LocalizationEngine` / `LocalizationInspector` -> file/job adapters -> TM/TB/MT modules -> `@cat/db` + `@cat/core`
+
+Agent-first file translation keeps external spreadsheets out of project `files` and `segments`, writes per-unit checkpoints, and treats prompt artifacts as inspect-only or explicit diagnostic output.
 
 ### TM import and batch match
 
@@ -147,6 +163,7 @@ renderer components/hooks
   -> @cat/db + SQLite
 
 @cat/core is consumed by renderer/main/db for shared domain types and algorithms.
+@cat/localization is consumed by CLI scripts and may be consumed by desktop host code, but it must not depend on desktop code.
 ```
 
 ## Do / Don't Boundary Rules
@@ -159,6 +176,8 @@ renderer components/hooks
 4. Use repository/service abstractions from ports instead of coupling UI to persistence details.
 5. Import `@cat/core` through slice entrypoints in repo code; avoid the root barrel except for explicit compatibility tests.
 6. `@cat/localization` may depend on `@cat/core` and `@cat/db`, but must not import `apps/desktop/src/main/*`. Desktop and CLI code call localization APIs instead of owning headless engine code.
+7. Put pure MT prompt contracts, builders, parsers, and schema validation in `@cat/core`; keep request orchestration in `@cat/localization`.
+8. Design new localization capability for shared packages and agent-first CLI/headless use before considering desktop UI integration.
 
 ### Don't
 
@@ -167,6 +186,8 @@ renderer components/hooks
 3. Don't add cross-repo orchestration into `CATDatabase`.
 4. Don't introduce new large monolithic files when a focused internal service is appropriate.
 5. Don't import `packages/core/src/index.ts` from inside `packages/core`; import the needed slice or sibling module directly.
+6. Don't add new agent-first MT batching behavior to the legacy desktop GUI workflow.
+7. Don't make desktop UI state the source of truth for TM/TB/MT behavior needed by agents or CLI workflows.
 
 ## Architecture Evolution Guidance
 

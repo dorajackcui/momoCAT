@@ -7,7 +7,7 @@ import process from "node:process";
 
 const TRACE_TEST_NAME = "ai-file-flow-env-trace";
 const TRACE_TEST_PATH =
-  "apps/desktop/src/main/headless/aiFileFlowRunner.test.ts";
+  "apps/desktop/src/main/diagnostics/aiFileFlowRunner.test.ts";
 
 function usage() {
   console.log(`Usage:
@@ -17,7 +17,7 @@ Options:
   --db <path>                    SQLite DB path. Default: .cat_data/cat_v1.db
   --project-id <id>              Project id that owns the file and mounted TM/TB resources.
   --project-name <name>          Exact project name to resolve when project id is unknown.
-  --file-id <id>                 Existing file id to translate through the headless AI flow.
+  --file-id <id>                 Existing file id to translate through the legacy desktop AI flow.
   --file <path>                  Spreadsheet path to import into the project before translation.
   --source-col <n>               Optional zero-based source column override for --file.
   --target-col <n>               Optional zero-based target column override for --file.

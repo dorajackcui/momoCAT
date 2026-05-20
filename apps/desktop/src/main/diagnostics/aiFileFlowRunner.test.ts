@@ -99,7 +99,7 @@ describe('runAIFileFlowTrace', () => {
   it('runs mounted TM/TB matching and AI translation for a project file', async () => {
     const db = new CATDatabase(':memory:');
     try {
-      const projectId = db.createProject('Headless AI Flow', 'en', 'zh');
+      const projectId = db.createProject('Desktop AI Flow', 'en', 'zh');
       db.setSetting('openai_api_key', 'test-api-key');
       const fileId = db.createFile(projectId, 'demo.xlsx');
       const segment = createSegment({
@@ -151,7 +151,7 @@ describe('runAIFileFlowTrace', () => {
         db,
         projectId,
         fileId,
-        projectsDir: '.tmp/headless-ai-flow-test',
+        projectsDir: '.tmp/desktop-ai-flow-test',
         previewLimit: 1,
         aiTransport: transport,
         emit: (event) => events.push(event),
@@ -188,7 +188,7 @@ describe('runAIFileFlowTrace', () => {
   });
 
   it('resolves project by name and imports file path using source/target headers', async () => {
-    const rootDir = await mkdtemp(join(tmpdir(), 'cat-headless-ai-file-'));
+    const rootDir = await mkdtemp(join(tmpdir(), 'cat-desktop-ai-file-'));
     const inputPath = join(rootDir, 'mt.xlsx');
     await writeFile(inputPath, 'placeholder workbook');
 

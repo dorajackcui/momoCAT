@@ -1,5 +1,14 @@
 # Localization Package Boundary Design
 
+## Status
+
+Completed migration design and historical decision record.
+
+This document describes the extraction that created `@cat/localization` and removed the agent-first localization engine from desktop ownership. Do not treat the migration steps below as pending work. For the next MT context-window batch mode, use:
+
+- `DOCS/agent-first/MT_MODULE.md`
+- `DOCS/superpowers/specs/2026-05-20-agent-first-cli-mt-next-direction-design.md`
+
 ## Purpose
 
 Extract the agent-first CLI/headless localization workflow from the desktop main process into an orthogonal package before adding the new MT batch prompt mode.

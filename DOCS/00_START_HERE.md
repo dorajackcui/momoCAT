@@ -6,18 +6,22 @@ Provide a deterministic onboarding entrypoint for humans and AI agents to start 
 
 ## Branch Design Core
 
-This branch, `agent-first-batch-ai-mvp`, is moving the project toward a CLI-first, agent-first batch localization workstation.
+This branch, `agent-first-batch-ai-mvp`, is designed around agents as the primary operators. It is moving the project toward a CLI-first, agent-first batch localization workstation where humans and agents can inspect, run, resume, and automate localization work without depending on the legacy desktop editor.
 
 Core direction:
 
+- Design for agent-first workflows first: deterministic CLI commands, inspectable artifacts, resumable jobs, and clean headless orchestration.
+- Keep the legacy desktop CAT UI available, but do not make it the center of new feature work on this branch.
+- Put reusable public localization capability in the shared packages: TM, TB, MT, tag/protected-marker handling, prompt builders, response parsers, validation, and persistence boundaries.
 - Treat `LocalizationEngine` as the headless TM + TB + MT engine boundary.
+- Keep core localization/domain capability in `packages/core` and existing core services. The headless CLI layer is an orchestrator, assembler, and consumer of those capabilities, not the place to bury domain logic.
 - Prefer CLI and future API workflows over CAT editor UI changes.
 - Keep external files outside project `files` and `segments` during headless translation.
 - Keep the design modular: File layer, JobRunner, LocalizationEngine, TMModule, TBModule, and MTModule should stay separately understandable and replaceable.
 - Keep normal runs lightweight and clean: output, checkpoint, events, and throttled snapshot by default; full prompt/TM/TB artifacts only for inspect or explicit diagnostic runs.
 - Keep implementation simple and elegant. Avoid piling rules into one place when a small typed boundary or module contract can carry the design.
 
-The existing CAT UI is still present, but it is not the center of this branch's architecture work.
+The two priority areas are core shared localization capability and agent-first CLI/headless operation. The existing CAT UI is still present, but it is not the center of this branch's architecture work.
 
 ## When to Read
 
@@ -28,7 +32,12 @@ Read first for every new task, new session, or handoff.
 - Runtime behavior: code + tests
 - Process and guardrails: `DOCS/20_ENGINEERING_RUNBOOK.md`
 - Current project status and priorities: `DOCS/40_STATUS_AND_ROADMAP.md`
-- Agent-first LocalizationEngine direction: `DOCS/agent-first/ARCHITECTURE.md`
+- System boundaries: `DOCS/10_ARCHITECTURE.md`
+- Agent-first engine: `DOCS/agent-first/ARCHITECTURE.md`
+- Agent-first CLI commands: `DOCS/agent-first/CLI.md`
+- MT prompt and request scheduling: `DOCS/agent-first/MT_MODULE.md`
+- Next MT direction decision: `DOCS/superpowers/specs/2026-05-20-agent-first-cli-mt-next-direction-design.md`
+- Completed localization package migration record: `DOCS/superpowers/specs/2026-05-20-localization-package-boundary-design.md`
 
 ## Last Updated
 
@@ -45,9 +54,9 @@ Core maintainers of `simple-cat-tool`
 3. Read `DOCS/10_ARCHITECTURE.md` for boundaries and entrypoints.
 4. For agent-first CLI, file translation, inspect, or MT module work, read `DOCS/agent-first/ARCHITECTURE.md`, `DOCS/agent-first/CLI.md`, and `DOCS/agent-first/MT_MODULE.md`.
 5. If data-layer changes are involved, read `DOCS/30_DATA_MODEL.md`.
-6. Implement and validate with the canonical command checklist below.
+6. Implement and validate with the smallest command set that proves the touched boundary.
 
-## Dual-Platform Quick Boot (Windows + macOS)
+## Essential Commands
 
 Run from repo root:
 
@@ -55,77 +64,15 @@ Run from repo root:
 npm ci
 npm run rebuild:electron
 npm run dev
+npm run gate:check
 ```
 
-Package validation by target OS:
+Agent-first CLI:
 
-1. Windows: `npm run pack:win`
-2. macOS: `npm run pack:mac`
-
-Windows note:
-
-- Packaging and Electron rebuild scripts invoke `npm`/`npx` through the Windows shell to avoid `.cmd` spawn failures such as `spawnSync npm.cmd EINVAL` in some PowerShell/Volta setups.
-- Packaging entrypoints rebuild native modules and refresh the production renderer bundle before `electron-builder` runs, so release validation does not rely on stale `out/` artifacts.
-
-AI debug logs:
-
-- Enable prompt debugging with `CAT_AI_DEBUG_PROMPTS=1` before `npm run dev`, or add it to `apps/desktop/proxy.env` / `.cat_data/proxy.env`. In dev, prompt logs are written to `.cat_data/ai_prompt_debug.log` unless `CAT_AI_DEBUG_PROMPTS_FILE` overrides the path.
-- Enable batch workflow diagnostics with `CAT_AI_DEBUG_BATCH=1`. In dev, JSONL batch logs are written to `.cat_data/ai_batch_translate_debug.log` unless `CAT_AI_DEBUG_BATCH_FILE` overrides the path. `CAT_AI_DEBUG_PROMPTS=1` also enables batch diagnostics.
-- For batch AI translate blank-line triage, run one translation pass, then inspect `segment_start`, `segment_translated`, `segment_write_success`, and `segment_failed` events. `stage=translate` means provider/prompt/validation failed before writeback; `stage=write` means translated tokens existed but persistence failed.
-- Leave these flags unset for normal work because prompt logs may contain source text, target text, TM/TB references, and provider response context.
-
-TM match workflow diagnostics:
-
-- For active TM panel recall/scoring/ranking triage, run `npm run trace:tm-flow -- --project-id <id> --source "<source text>"` or `npm run trace:tm-flow -- --project-id <id> --segment-id <segment id>`.
-- Add `--focus-src-hash <hash[,hash]>` when checking whether specific TM entries were recalled, scored, or dropped before the final top results.
-- Read `DOCS/20_ENGINEERING_RUNBOOK.md` -> "TM match workflow triage" for how to interpret the trace.
-
-Headless AI file flow diagnostics:
-
-- To run a project file through mounted TM/TB reference preview and the existing AI batch translation workflow, run `npm run trace:ai-file -- --project-id <id> --file-id <id>`.
-- To import an external spreadsheet first, run `npm run trace:ai-file -- --project-name "<name>" --file <path>`. The import path auto-detects `source` and `target` header columns by default.
-- The command writes translations back through the normal segment update path. Use `--target-scope overwrite-non-confirmed` only when replacing non-confirmed target text is intended.
-- Use `--source-col <n>` and `--target-col <n>` only when overriding header detection for `--file`; column indexes are zero-based.
-- Use `--preview-limit <n>` to control how many leading segments print TM/TB reference preview events before translation starts.
-- The command emits JSONL-style events from the dynamic Vitest runner: `ai_file_flow_start`, `ai_file_flow_resources`, `ai_file_flow_reference_preview`, `ai_file_flow_progress`, and `ai_file_flow_complete`.
-
-Agent-first CLI / LocalizationEngine:
-
-- Start with `DOCS/agent-first/ARCHITECTURE.md` for the headless engine layers.
-- Use `DOCS/agent-first/CLI.md` for `inspect:projects`, `inspect:localization`, and `translate:file`.
-- Use `DOCS/agent-first/MT_MODULE.md` before changing prompt composition or MT request scheduling.
-- Quick project check: `npm run inspect:projects -- --db <path> --project-id <id>`.
-- No-request prompt inspection: `npm run inspect:localization -- --db <path> --project-id <id> --input <path> --output <inspect.xlsx>`.
-- Resumable file translation: `npm run translate:file -- --db <path> --project-id <id> --input <path> --output <translated.xlsx>`.
-- External files are not imported into project `files` or `segments` during agent-first file translation.
-- Full prompt/TM/TB translation artifacts are opt-in with `--artifacts <path>`; inspect flows remain the preferred no-request debugging path.
-
-## Platform Command Matrix
-
-Run from repo root `simple-cat-tool`.
-
-| Task                          | When to use                                                          | Command                                                 | Platform        | Expected result                                                 |
-| ----------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------- | --------------- | --------------------------------------------------------------- |
-| Start local development       | First boot or manual app verification                                | `npm ci` -> `npm run rebuild:electron` -> `npm run dev` | Windows + macOS | Electron app starts with native module rebuilt for current host |
-| Run unit/integration baseline | Any code change before deeper validation                             | `npm test`                                              | Windows + macOS | Vitest suites pass                                              |
-| Run repo quality gate         | Default cross-platform baseline before pack guesses                  | `npm run gate:check`                                    | Windows + macOS | Typecheck + guardrails + lint + smoke gate pass                 |
-| Run desktop smoke e2e         | UI/editor behavior changed, need fastest desktop confidence          | `npm run test:e2e:smoke --workspace=apps/desktop`       | Windows + macOS | Smoke Playwright suite passes against built desktop app         |
-| Run full desktop e2e          | Smoke is not enough or broader desktop regression coverage is needed | `npm run test:e2e --workspace=apps/desktop`             | Windows + macOS | Full Playwright suite passes                                    |
-| Validate Windows packaging    | Need native Windows installer artifact validation                    | `npm run pack:win`                                      | Windows only    | `.exe` packaging flow completes on Windows host                 |
-| Validate macOS packaging      | Need native macOS installer artifact validation                      | `npm run pack:mac`                                      | macOS only      | `.dmg` packaging flow completes on macOS host                   |
-
-Notes:
-
-- `npm run pack` only packages for the current host platform; do not treat it as Win/mac release signoff.
-- CI covers `npm ci` -> `npm run rebuild:electron` -> `npm run gate:check` on both Windows and macOS, but platform packaging still requires native hosts.
-
-## Agent Guardrails
-
-1. Start with `npm run gate:check` for cross-platform baseline validation; do not guess packaging commands first.
-2. Use `npm run test:e2e:smoke --workspace=apps/desktop` before full e2e when you need desktop behavior confidence quickly.
-3. Never mix `pack:win` and `pack:mac` across hosts; packaging validation is platform-native only.
-4. If Windows/macOS commands behave differently, run `npm run rebuild:electron` before deeper debugging.
-5. On Windows, do not rely on PowerShell's default text encoding for non-ASCII files or output. Read files with explicit UTF-8 such as `Get-Content -Raw -Encoding UTF8 <path>`, prefer patch/editor tools for writes, and if PowerShell must write text, specify UTF-8 (`-Encoding utf8NoBOM` in PowerShell 7 or `-Encoding UTF8` in Windows PowerShell) and verify with `git diff`.
+- Project check: `npm run inspect:projects -- --db <path> --project-id <id>`
+- No-request prompt inspection: `npm run inspect:localization -- --db <path> --project-id <id> --input <path> --output <inspect.xlsx>`
+- Resumable file translation: `npm run translate:file -- --db <path> --project-id <id> --input <path> --output <translated.xlsx>`
+- Real translation artifacts are opt-in with `--artifacts <path>`; inspect is the preferred prompt-debug path.
 
 ## If Task Is X, Open Y
 
@@ -141,33 +88,9 @@ Notes:
 | Priorities and risk decisions        | `DOCS/40_STATUS_AND_ROADMAP.md`                                |
 | Historical context for old decisions | `DOCS/90_HISTORY_CONSOLIDATED.md`                              |
 
-## Canonical Command Checklist
+## Targeted Validation
 
-Run from repo root `simple-cat-tool`.
-
-```bash
-npm run gate:check
-npm run test:e2e:smoke --workspace=apps/desktop
-```
-
-Targeted tests (run when touching corresponding areas):
-
-```bash
-npx vitest run apps/desktop/src/main/services/modules/AIModule.test.ts
-npx vitest run apps/desktop/src/main/services/modules/ai/AITranslationWorkflows.test.ts
-npx vitest run apps/desktop/src/main/services/modules/TMModule.test.ts
-npm run test:tm-flow
-npx vitest run apps/desktop/src/renderer/src/hooks/useEditor.test.ts
-npx vitest run apps/desktop/src/renderer/src/hooks/projectDetail/useProjectAI.test.ts
-npx vitest run apps/desktop/src/renderer/src/hooks/projectDetail/useProjectAI.behavior.test.ts
-npx vitest run apps/desktop/src/renderer/src/hooks/useEditorFilters.test.ts
-npx vitest run apps/desktop/src/renderer/src/hooks/useEditorFilters.behavior.test.ts
-npx vitest run apps/desktop/src/renderer/src/components/EditorRow.integration.test.ts
-npx vitest run apps/desktop/src/renderer/src/components/editor-row/useEditorRowDisplayModel.test.ts
-npx vitest run apps/desktop/src/renderer/src/components/editor-row/useEditorRowCommandHandlers.test.ts
-npx vitest run packages/db/src/currentSchema.test.ts
-npx vitest run packages/core/src/TagManager.test.ts
-```
+Use `npm run gate:check` as the broad repo gate. For focused validation, use the touched document or module's linked runbook; do not copy long test matrices into this entrypoint.
 
 ## Test Layout
 
@@ -183,7 +106,7 @@ npx vitest run packages/core/src/TagManager.test.ts
 - Agent-first localization: `packages/localization/src`
 - Shared IPC contract: `apps/desktop/src/shared/ipc.ts`
 - Core package: `packages/core/src`
-- AI prompt templates: `packages/core/src/project/prompts`
+- AI prompt templates and future pure MT builders: `packages/core/src/project`
 - DB package: `packages/db/src`
 
 ## Documentation Rules

@@ -2,7 +2,9 @@
 
 ## Purpose
 
-This branch treats the project as an agent-first localization engine. The existing CAT UI can remain, but the new center of gravity is a headless workflow that lets agents and humans run, inspect, resume, and automate translation jobs.
+This branch treats the project as an agent-first localization engine. Agents are primary operators for this branch: they should be able to inspect state, run translation jobs, resume interrupted work, and automate localization through deterministic CLI/headless workflows.
+
+The existing CAT desktop UI can remain, but it is legacy surface area for this phase. New capability should first land in shared TM/TB/MT/core packages or in the agent-first CLI/headless orchestration path, not as desktop-only UI behavior.
 
 The core product shape is:
 
@@ -15,8 +17,16 @@ External files or future API clients
   -> existing DB, services, and AI provider transport
 ```
 
+The design focus is:
+
+- Core public localization capability: TM, TB, MT, protected marker/tag handling, prompt contracts, response parsing, validation, and persistence boundaries.
+- Agent-first operation: CLI commands, headless file translation, inspectable artifacts, resumable checkpoints, and lightweight progress events.
+- Desktop compatibility: keep the legacy editor usable, but do not let it own new agent-first capabilities.
+
 ## Design Principles
 
+- Put reusable capability in `@cat/core`, `@cat/db`, and `@cat/localization`; keep CLI and desktop layers thin.
+- Prefer agent-readable inputs and outputs over UI-only state.
 - Keep normal runs lightweight. Persist only results, checkpoints, progress events, and throttled snapshots by default.
 - Keep diagnostic detail opt-in. Full prompt/TM/TB artifacts are written only by inspect flows or `translate:file --artifacts <path>`.
 - Keep files external. External spreadsheets are not imported into project `files` or `segments` tables during headless translation.

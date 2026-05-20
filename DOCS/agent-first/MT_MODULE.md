@@ -2,7 +2,13 @@
 
 ## Purpose
 
-`MTModule` owns machine translation behavior inside the agent-first engine. It is the right place to change prompt composition, provider request shape, response validation, and future request grouping.
+`MTModule` coordinates machine translation behavior inside the agent-first engine. It resolves provider configuration, calls the provider transport, validates translated tokens, and records prompt artifacts for inspect and diagnostics.
+
+Pure prompt and response capability belongs in `@cat/core`. For the next MT batch mode, contracts, builders, response parsers, and schema validation should be added under `@cat/core/project` initially or a future `@cat/core/mt` slice. `@cat/localization` should consume those pure helpers while owning request orchestration and recovery.
+
+Current next-direction record:
+
+- `DOCS/superpowers/specs/2026-05-20-agent-first-cli-mt-next-direction-design.md`
 
 Code:
 
@@ -14,13 +20,16 @@ Code:
 `MTModule` owns:
 
 - Provider configuration resolution.
-- Prompt composition from structured inputs.
+- Prompt orchestration from structured inputs and core prompt builders.
 - Provider request dispatch through the AI transport.
-- Response trimming, parsing, and tag validation.
+- Response trimming and tag validation.
 - Prompt artifacts for inspect and opt-in diagnostics.
 
 `MTModule` does not own:
 
+- Pure prompt template contracts.
+- Pure batch prompt builders.
+- Pure response JSON parsers or schema validators.
 - File parsing or file writing.
 - TM lookup.
 - TB lookup.
@@ -42,6 +51,17 @@ The MT layer receives structured context from the engine:
 
 The important rule is that MT consumes TM/TB artifacts. It should not query TM or TB itself.
 
+For the next batch mode, the MT layer should receive a structured batch input instead of spreadsheet rows:
+
+- 1 to 5 current units requiring translation.
+- Up to 5 previous translated context units.
+- Up to 5 next source context units.
+- Per-current-unit TM artifacts.
+- Per-current-unit TB artifacts.
+- Stable `documentId + unitId` identifiers for response mapping.
+
+Context units are prompt context only. They must not require provider output.
+
 ## Outputs
 
 Prompt-only inspect:
@@ -55,6 +75,15 @@ Real translation:
 ```text
 MTModule.translate(...) -> {
   targetTokens,
+  prompt
+}
+```
+
+Future batch translation:
+
+```text
+MT batch orchestration -> {
+  results: Array<{ documentId, unitId, targetTokens }>,
   prompt
 }
 ```
@@ -97,7 +126,7 @@ If request scheduling changes, keep these two ideas explicit: job-level recovery
 
 ## Future Batch Request Model
 
-A future MT scheduler may send five segments in one provider request. That should not require changing the file API or checkpoint format.
+The next MT scheduler should send 1 to 5 current segments in one provider request, plus previous translated context and next source context. That should not require changing the file API or checkpoint format.
 
 Target shape:
 
@@ -111,12 +140,15 @@ Several JobUnits
 
 Requirements for grouped requests:
 
+- Include up to 5 previous translated context units and up to 5 next source context units.
+- Include TM/TB references for each current unit.
 - Return one result per requested unit, identified by `documentId + unitId`.
 - Allow results to arrive out of order.
 - Keep checkpoint writes per unit.
 - Keep progress events per unit plus optional task-level events later.
 - Persist prompt artifacts only when artifact capture is enabled.
 - Include batch metadata in artifacts only when useful for diagnostics.
+- Avoid concurrent provider requests in the first batch mode. Reintroduce bounded request concurrency only after a later explicit design.
 
 The job runner already canonicalizes result identity from planned units. The remaining work is to replace the one-unit task executor path with a batch-capable planner and executor.
 
@@ -141,6 +173,7 @@ Normal translation should stay clean:
 
 When changing prompt composition or request mode:
 
+- Update or add `@cat/core` prompt/response tests for pure builders, parsers, and validators.
 - Update `MTModule.test.ts`.
 - Run `LocalizationInspector.test.ts` if prompt artifacts changed.
 - Run `LocalizationEngine.test.ts` if task execution changed.
@@ -151,6 +184,8 @@ When changing prompt composition or request mode:
 ## Design Guardrails
 
 - Do not make prompt composition depend on spreadsheet row shape.
+- Do not make CLI scripts assemble TM/TB references, prompt policy, or provider response parsing.
+- Do not put new agent-first MT batching behavior into the legacy desktop GUI workflow.
 - Do not let provider request batching change the external file API.
 - Do not write large prompt payloads to progress events.
 - Do not use artifacts for resume decisions.
