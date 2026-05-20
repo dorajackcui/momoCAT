@@ -98,6 +98,10 @@ export {
   buildAIUserPrompt,
   normalizeProjectType,
 } from "./aiPromptTemplates";
+export {
+  buildAIWindowModePromptBundle,
+  parseAIWindowModeResponse,
+} from "./windowModePrompt";
 export type {
   DialoguePromptBundle,
   DialoguePromptBundleBuildParams,
@@ -113,3 +117,12 @@ export type {
   TextPromptSections,
   UserPromptBuildParams,
 } from "./aiPromptTypes";
+export type {
+  WindowModeCurrentSegment,
+  WindowModeNextContextRow,
+  WindowModeParsedTranslation,
+  WindowModePreviousContextRow,
+  WindowModePromptBundle,
+  WindowModePromptBundleBuildParams,
+  WindowModePromptSections,
+} from "./windowModePromptTypes";
