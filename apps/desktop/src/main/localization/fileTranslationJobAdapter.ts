@@ -185,6 +185,7 @@ function computeFileTranslationResumeFingerprint(input: TranslateFileInput): str
     ['mt.reasoningEffort', input.options?.mt?.reasoningEffort],
     ['mt.systemPrompt', input.options?.mt?.systemPrompt],
     ['mt.temperature', normalizeNumberOption(input.options?.mt?.temperature)],
+    ['resolved', input.job?.resumeFingerprint],
   ]);
 }
 

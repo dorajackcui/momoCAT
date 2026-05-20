@@ -41,6 +41,7 @@ export interface TranslateFileJobOptions {
   eventsPath?: string;
   artifactsPath?: string;
   snapshotPath?: string;
+  resumeFingerprint?: string;
   resume?: boolean;
   maxAttempts?: number;
   snapshotEveryUnits?: number;

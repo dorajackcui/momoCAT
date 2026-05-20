@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import type { Segment } from '@cat/core/models';
 import { normalizeProjectAIModel } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
@@ -335,10 +336,25 @@ export class LocalizationEngine {
         throw new Error('Dialogue mode is not supported for external translation units.');
       }
 
-      return translateSpreadsheetFileJob(input, {
-        taskExecutor: this.createTaskExecutor(),
-        defaultMaxConcurrency: this.options.maxConcurrency,
-      });
+      const project = this.projectRepo.getProject(input.projectId);
+      if (!project) {
+        throw new Error(`Project not found: ${input.projectId}`);
+      }
+      const resumeFingerprint = await this.buildFileTranslationResumeFingerprint(input, project);
+
+      return translateSpreadsheetFileJob(
+        {
+          ...input,
+          job: {
+            ...input.job,
+            resumeFingerprint,
+          },
+        },
+        {
+          taskExecutor: this.createTaskExecutor(),
+          defaultMaxConcurrency: this.options.maxConcurrency,
+        },
+      );
     }
 
     return translateSpreadsheetFile(input, (units) =>
@@ -352,6 +368,67 @@ export class LocalizationEngine {
 
   private resolveMode(mode?: LocalizationMode): LocalizationMode {
     return mode ?? this.options.defaultMode ?? 'standard';
+  }
+
+  private async buildFileTranslationResumeFingerprint(
+    input: TranslateFileInput,
+    project: ProjectRecord,
+  ): Promise<string> {
+    const targetScope = resolveBatchTargetScope(
+      input.options?.targetScope ?? this.options.defaultTargetScope,
+    );
+    const mode = this.resolveMode(input.options?.mode);
+    const mtOptions = mergeMTOptions(this.options.mt, input.options?.mt);
+    const mtConfig = await this.mtModule.resolvePromptConfig(
+      project,
+      mtOptions,
+      input.options?.providerOverride,
+    );
+    const mountedTMs = this.tmRepo
+      .getProjectMountedTMs(project.id)
+      .map((tm) => ({
+        id: tm.id,
+        srcLang: tm.srcLang,
+        tgtLang: tm.tgtLang,
+        type: tm.type,
+        priority: tm.priority,
+        permission: tm.permission,
+        isEnabled: tm.isEnabled,
+        updatedAt: tm.updatedAt,
+        entryCount: this.tmRepo.getTMStats(tm.id).entryCount,
+      }))
+      .sort(compareResourceFingerprint);
+    const mountedTBs = this.tbRepo
+      .getProjectMountedTermBases(project.id)
+      .map((tb) => ({
+        id: tb.id,
+        srcLang: tb.srcLang,
+        tgtLang: tb.tgtLang,
+        priority: tb.priority,
+        isEnabled: tb.isEnabled,
+        updatedAt: tb.updatedAt,
+        entryCount: this.tbRepo.getTermBaseStats(tb.id).entryCount,
+      }))
+      .sort(compareResourceFingerprint);
+
+    return hashCanonicalPayload([
+      ['project.id', project.id],
+      ['project.srcLang', project.srcLang],
+      ['project.tgtLang', project.tgtLang],
+      ['project.type', project.projectType ?? 'translation'],
+      ['targetScope', targetScope],
+      ['mode', mode],
+      ['provider.id', mtConfig.provider.id],
+      ['provider.kind', mtConfig.provider.kind],
+      ['provider.protocol', mtConfig.provider.protocol],
+      ['provider.baseUrl', mtConfig.provider.baseUrl],
+      ['model', mtConfig.model],
+      ['reasoningEffort', mtConfig.reasoningEffort],
+      ['temperature', mtOptions.temperature],
+      ['projectPrompt', mtOptions.systemPrompt ?? project.aiPrompt ?? ''],
+      ['mountedTMs', mountedTMs],
+      ['mountedTBs', mountedTBs],
+    ]);
   }
 
   private prepareUnit(
@@ -502,6 +579,19 @@ function emptyReferences(): ResolvedReferences {
       diagnostics: [],
     },
   };
+}
+
+function hashCanonicalPayload(entries: Array<[string, unknown]>): string {
+  const payload = entries.filter(([, value]) => value !== undefined);
+
+  return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+}
+
+function compareResourceFingerprint(
+  left: { id: string; priority: number },
+  right: { id: string; priority: number },
+): number {
+  return left.priority - right.priority || left.id.localeCompare(right.id);
 }
 
 function jobUnitToExternalUnit(unit: {

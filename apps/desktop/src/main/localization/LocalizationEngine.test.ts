@@ -558,6 +558,71 @@ describe('LocalizationEngine.translateFile job mode', () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it('does not reuse explicit-job checkpoints when resolved MT defaults change', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('External File Resolved Fingerprint', 'en', 'fr');
+      seedApiKey(db);
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      const checkpointPath = join(root, 'mt.checkpoint.jsonl');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target'],
+          ['Hello', ''],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+      const transport: MockTransport = {
+        testConnection: vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          endpoint: '/mock',
+        }),
+        createResponse: vi.fn(async (request: { model: string }) => ({
+          content: `${request.model} target`,
+          status: 200,
+          endpoint: '/mock',
+        })),
+      } as unknown as MockTransport;
+      const firstEngine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+        mt: { model: 'model-a' },
+      });
+      const secondEngine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+        mt: { model: 'model-b' },
+      });
+
+      await firstEngine.translateFile({
+        projectId,
+        inputPath,
+        outputPath,
+        job: { jobId: 'same-job', checkpointPath, maxAttempts: 1 },
+      });
+      const second = await secondEngine.translateFile({
+        projectId,
+        inputPath,
+        outputPath,
+        job: { jobId: 'same-job', checkpointPath, resume: true, maxAttempts: 1 },
+      });
+
+      expect(transport.createResponse).toHaveBeenCalledTimes(2);
+      expect(second.summary).toEqual({ total: 1, translated: 1, skipped: 0, failed: 0 });
+      expect(second.results[0]?.status).toBe('translated');
+      expect(second.results[0]?.target).toBe('model-b target');
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('LocalizationEngine task executor', () => {
