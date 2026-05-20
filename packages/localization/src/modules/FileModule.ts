@@ -230,10 +230,11 @@ function buildRawRowsThroughLastSource(
     return columns.hasHeader ? [buildRowFromCellRows(rows, 0)] : [];
   }
 
-  const maxColumnIndex = findMaxColumnIndex(cells, lastSourceRowIndex, columns);
+  const endRowIndex = findLastContiguousContentRowIndex(rows, lastSourceRowIndex);
+  const maxColumnIndex = findMaxColumnIndex(cells, endRowIndex, columns);
   const rawRows: SheetCell[][] = [];
 
-  for (let rowIndex = 0; rowIndex <= lastSourceRowIndex; rowIndex += 1) {
+  for (let rowIndex = 0; rowIndex <= endRowIndex; rowIndex += 1) {
     rawRows.push(buildRowFromCellRows(rows, rowIndex, maxColumnIndex));
   }
 
@@ -258,6 +259,27 @@ function findLastSourceRowIndex(
   }
 
   return lastSourceRowIndex;
+}
+
+function findLastContiguousContentRowIndex(
+  rows: WorksheetCellRows,
+  lastSourceRowIndex: number,
+): number {
+  let rowIndex = lastSourceRowIndex + 1;
+  let endRowIndex = lastSourceRowIndex;
+
+  while (true) {
+    const cells = rows.get(rowIndex);
+    if (!cells) break;
+
+    const hasContent = Array.from(cells.values()).some((value) => cellToText(value).trim());
+    if (!hasContent) break;
+
+    endRowIndex = rowIndex;
+    rowIndex += 1;
+  }
+
+  return endRowIndex;
 }
 
 function findMaxColumnIndex(

@@ -4,17 +4,19 @@ import type { Segment } from '@cat/core/models';
 import type { Project, ProjectType } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
 import type { CATDatabase } from '@cat/db';
-import { MTModule, TBModule, TMModule } from '@cat/localization';
-import { TBService } from '../services/TBService';
-import { TMService } from '../services/TMService';
-import { SqliteProjectRepository } from '../services/adapters/SqliteProjectRepository';
-import { SqliteSettingsRepository } from '../services/adapters/SqliteSettingsRepository';
-import { SqliteTBRepository } from '../services/adapters/SqliteTBRepository';
-import { SqliteTMRepository } from '../services/adapters/SqliteTMRepository';
-import { DefaultAIRuntimeConfigProvider } from '../services/modules/ai/AIRuntimeConfigService';
-import { AIProviderCatalogService } from '../services/modules/ai/AIProviderCatalogService';
-import { AIProviderTransport } from '../services/providers/AIProviderTransport';
-import type { AIRuntimeConfigProvider, AITransport } from '../services/ports';
+import { MTModule } from './modules/MTModule';
+import { TBModule } from './modules/TBModule';
+import { TMModule } from './modules/TMModule';
+import { TBService } from './services/TBService';
+import { TMService } from './services/TMService';
+import { SqliteProjectRepository } from './adapters/sqlite/SqliteProjectRepository';
+import { SqliteSettingsRepository } from './adapters/sqlite/SqliteSettingsRepository';
+import { SqliteTBRepository } from './adapters/sqlite/SqliteTBRepository';
+import { SqliteTMRepository } from './adapters/sqlite/SqliteTMRepository';
+import { DefaultAIRuntimeConfigProvider } from './providers/AIRuntimeConfigService';
+import { AIProviderCatalogService } from './providers/AIProviderCatalogService';
+import { AIProviderTransport } from './providers/AIProviderTransport';
+import type { AIRuntimeConfigProvider, AITransport } from './ports';
 import type {
   FileParseRowArtifact,
   InspectArtifact,

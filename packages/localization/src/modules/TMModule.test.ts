@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SqliteProjectRepository } from '../adapters/sqlite/SqliteProjectRepository';
 import { SqliteTMRepository } from '../adapters/sqlite/SqliteTMRepository';
 import type { TMRepository } from '../ports';
-import { TMService, type TMMatch } from '../services/TMService';
+import { TMService, type TMMatch } from '../internalServices';
 import { createTransientSegment } from '../transientSegment';
 import {
   MAX_CONCORDANCE_PROMPT_REFERENCES,

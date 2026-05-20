@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SqliteSettingsRepository } from '../adapters/sqlite/SqliteSettingsRepository';
 import { AIProviderCatalogService } from '../providers/AIProviderCatalogService';
 import type { AIRuntimeConfigProvider, AITransport } from '../ports';
-import type { TMMatch } from '../services/TMService';
+import type { TMMatch } from '../internalServices';
 import type { TBArtifact, TMArtifact } from '../artifacts';
 import { createTransientSegment } from '../transientSegment';
 import { MTModule } from './MTModule';

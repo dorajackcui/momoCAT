@@ -1,7 +1,7 @@
 import type { Segment, TBMatch } from '@cat/core/models';
 import type { PromptTBReference } from '@cat/core/project';
 import type { TBRepository } from '../ports';
-import type { TBService } from '../services/TBService';
+import type { TBService } from '../internalServices';
 import type { MountedTBArtifact, TBArtifact } from '../artifacts';
 import type { EngineTBReference } from '../types';
 

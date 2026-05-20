@@ -1,5 +1,13 @@
 export { runBounded } from './RequestScheduler';
 export type { RunBoundedOptions, ScheduledResult } from './RequestScheduler';
+export { LocalizationEngine } from './LocalizationEngine';
+export type { LocalizationEngineConstructorOptions } from './LocalizationEngine';
+export { LocalizationInspector } from './LocalizationInspector';
+export type {
+  InspectFileInput,
+  InspectFileResult,
+  LocalizationInspectorOptions,
+} from './LocalizationInspector';
 export type * from './artifacts';
 export type * from './types';
 export type * from './job/types';

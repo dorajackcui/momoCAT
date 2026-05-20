@@ -322,7 +322,8 @@ describe('FileModule', () => {
         'ready',
         '#/units/0',
       ]);
-      expect(segmentRows).toHaveLength(2);
+      expect(segmentRows[2]).toEqual(['', '', 'blank', '', '', '', 'skipped-empty-source', '']);
+      expect(segmentRows).toHaveLength(3);
 
       const promptRows = XLSX.utils.sheet_to_json(written.Sheets.MT_SystemPrompt, {
         header: 1,

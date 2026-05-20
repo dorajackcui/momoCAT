@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CATDatabase } from '../../../../../packages/db/src';
+import { CATDatabase } from '../../db/src';
 import { LocalizationInspector } from './LocalizationInspector';
 
 const runDynamic = process.env.LOCALIZATION_INSPECT_DYNAMIC === '1';

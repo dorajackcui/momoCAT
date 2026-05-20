@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CATDatabase } from '../../../../../packages/db/src';
+import { CATDatabase } from '../../db/src';
 import { LocalizationEngine } from './LocalizationEngine';
 import type { LocalizationTargetScope, TranslateFileJobOptions } from './types';
 

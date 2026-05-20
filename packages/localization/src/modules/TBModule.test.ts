@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SqliteProjectRepository } from '../adapters/sqlite/SqliteProjectRepository';
 import { SqliteTBRepository } from '../adapters/sqlite/SqliteTBRepository';
 import type { TBRepository } from '../ports';
-import { TBService } from '../services/TBService';
+import { TBService } from '../internalServices';
 import { createTransientSegment } from '../transientSegment';
 import {
   MAX_ENGINE_TB_REFERENCES,
