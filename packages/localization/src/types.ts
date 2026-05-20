@@ -1,4 +1,4 @@
-import type { ReasoningEffort } from '../services/ports';
+import type { ReasoningEffort } from './ports';
 
 export type LocalizationTargetScope = 'blank-only' | 'overwrite-non-confirmed';
 

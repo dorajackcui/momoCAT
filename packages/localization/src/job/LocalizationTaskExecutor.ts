@@ -1,8 +1,11 @@
-import type { LocalizationEngine } from '../LocalizationEngine';
 import type { TranslationTaskExecutor } from './types';
 
+type LocalizationTaskExecutorHost = {
+  executeTranslationTask: TranslationTaskExecutor;
+};
+
 export function createLocalizationTaskExecutor(
-  engine: Pick<LocalizationEngine, 'executeTranslationTask'>,
+  engine: LocalizationTaskExecutorHost,
 ): TranslationTaskExecutor {
   return (task, context) => engine.executeTranslationTask(task, context);
 }

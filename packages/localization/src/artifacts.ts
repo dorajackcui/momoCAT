@@ -4,9 +4,19 @@ import type {
   PromptTMReference,
   ProjectType,
 } from '@cat/core/project';
-import type { TBMatch } from '@cat/core/models';
-import type { ReasoningEffort } from '../services/ports';
-import type { TMMatch } from '../services/TMService';
+import type { TBMatch, TMEntry } from '@cat/core/models';
+import type { ReasoningEffort } from './ports';
+
+type TMMatch = TMEntry & {
+  kind: 'tm' | 'concordance';
+  rank: number;
+  tmName: string;
+  tmType: 'working' | 'main';
+  similarity?: number;
+  matchedSourceText?: string;
+  sourceCoverage?: number;
+  entryCoverage?: number;
+};
 
 export type InspectUnitStatus = 'ready' | 'skipped-empty-source' | 'error';
 
