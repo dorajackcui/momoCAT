@@ -16,6 +16,7 @@ import { SqliteTMRepository } from './adapters/sqlite/SqliteTMRepository';
 import { DefaultAIRuntimeConfigProvider } from './providers/AIRuntimeConfigService';
 import { AIProviderCatalogService } from './providers/AIProviderCatalogService';
 import { AIProviderTransport } from './providers/AIProviderTransport';
+import { resolveBatchTargetScope } from './translationTargetScope';
 import type { MTBatchCurrentUnitInput } from './modules/MTModule';
 import type { AIRuntimeConfigProvider, AITransport } from './ports';
 import type {
@@ -35,6 +36,7 @@ import { createTransientSegment } from './transientSegment';
 import type {
   LocalizationEngineOptions,
   LocalizationMode,
+  LocalizationTargetScope,
   TranslateFileInput,
 } from './types';
 
@@ -68,6 +70,11 @@ type ProjectRecord = NonNullable<
 type InspectRowWithSegment = {
   row: FileParseRowArtifact;
   segment: Segment;
+  sourceIndex: number;
+};
+type InspectReadyRow = InspectRowWithSegment & {
+  unit: InspectUnitArtifact;
+  unitIndex: number;
 };
 
 export class LocalizationInspector {
@@ -136,6 +143,9 @@ export class LocalizationInspector {
     const parsed = await parseExternalSpreadsheet(input);
     const jsonOutputPath =
       input.jsonOutputPath ?? inferJsonOutputPath(input.outputPath);
+    const targetScope = resolveBatchTargetScope(
+      input.options?.targetScope ?? this.options.defaultTargetScope,
+    );
     const sourceRows = parsed.artifact.rows.filter((row) => row.source.trim());
     const limitedRows =
       unitLimit === undefined ? sourceRows : sourceRows.slice(0, unitLimit);
@@ -151,7 +161,7 @@ export class LocalizationInspector {
           fileName: basename(parsed.inputPath),
         },
       );
-      return { row, segment };
+      return { row, segment, sourceIndex: index };
     });
 
     const units = await this.inspectRowsWindowMode(
@@ -160,6 +170,7 @@ export class LocalizationInspector {
       sourceRows,
       parsed.inputPath,
       maxCellChars,
+      targetScope,
     );
 
     const firstReadyPrompt =
@@ -220,11 +231,25 @@ export class LocalizationInspector {
     contextRows: FileParseRowArtifact[],
     inputPath: string,
     maxCellChars: number,
+    targetScope: LocalizationTargetScope,
   ): Promise<InspectUnitArtifact[]> {
+    const translatableRows = rows.filter(({ row }) =>
+      isTranslatableUnderTargetScope(row, targetScope),
+    );
     const units = await Promise.all(
-      rows.map(({ row, segment }) =>
+      translatableRows.map(({ row, segment }) =>
         this.inspectRowReferences(project, row, segment),
       ),
+    );
+    const readyRowByUnitId = new Map(
+      translatableRows.map((rowWithSegment, unitIndex) => [
+        rowWithSegment.row.unitId,
+        {
+          ...rowWithSegment,
+          unit: units[unitIndex],
+          unitIndex,
+        },
+      ]),
     );
     const inputDocumentId = basename(inputPath);
 
@@ -234,23 +259,13 @@ export class LocalizationInspector {
       batchStart += INSPECT_BATCH_SIZE
     ) {
       const batchRows = rows.slice(batchStart, batchStart + INSPECT_BATCH_SIZE);
-      const batchUnits = units.slice(
-        batchStart,
-        batchStart + INSPECT_BATCH_SIZE,
-      );
       const readyRows = batchRows
-        .map((rowWithSegment, index) => ({
-          ...rowWithSegment,
-          unit: batchUnits[index],
-          unitIndex: batchStart + index,
-        }))
+        .map((rowWithSegment) =>
+          readyRowByUnitId.get(rowWithSegment.row.unitId),
+        )
         .filter(
-          (
-            item,
-          ): item is InspectRowWithSegment & {
-            unit: InspectUnitArtifact;
-            unitIndex: number;
-          } => item.unit?.status === 'ready',
+          (item): item is InspectReadyRow =>
+            item !== undefined && item.unit.status === 'ready',
         );
 
       if (readyRows.length === 0) {
@@ -420,22 +435,29 @@ function emptyXlsxFields(): InspectUnitArtifact['xlsx'] {
 
 function buildPreviousTranslatedContext(
   rows: FileParseRowArtifact[],
-  currentRows: Array<InspectRowWithSegment & { unitIndex: number }>,
+  currentRows: InspectReadyRow[],
 ): Array<{ source: string; target: string }> {
-  const currentIndexes = new Set(currentRows.map((row) => row.unitIndex));
-  const candidates = new Set<number>();
+  const firstCurrentIndex = Math.min(
+    ...currentRows.map((row) => row.sourceIndex),
+  );
 
-  for (const currentIndex of currentIndexes) {
-    for (let index = currentIndex - 1; index >= 0; index -= 1) {
-      if (rows[index].target.trim()) {
-        candidates.add(index);
-      }
+  if (!Number.isFinite(firstCurrentIndex)) {
+    return [];
+  }
+
+  const candidates: number[] = [];
+  for (
+    let index = firstCurrentIndex - 1;
+    index >= 0 && candidates.length < 5;
+    index -= 1
+  ) {
+    if (rows[index].target.trim()) {
+      candidates.push(index);
     }
   }
 
-  return [...candidates]
-    .sort((left, right) => left - right)
-    .slice(-5)
+  return candidates
+    .reverse()
     .map((index) => ({
       source: rows[index].source,
       target: rows[index].target,
@@ -444,22 +466,36 @@ function buildPreviousTranslatedContext(
 
 function buildNextSourceContext(
   rows: FileParseRowArtifact[],
-  currentRows: Array<InspectRowWithSegment & { unitIndex: number }>,
+  currentRows: InspectReadyRow[],
 ): Array<{ source: string }> {
-  const candidates = new Set<number>();
+  const lastCurrentIndex = Math.max(
+    ...currentRows.map((row) => row.sourceIndex),
+  );
 
-  for (const { unitIndex } of currentRows) {
-    for (let index = unitIndex + 1; index < rows.length; index += 1) {
-      if (rows[index].source.trim()) {
-        candidates.add(index);
-      }
+  if (!Number.isFinite(lastCurrentIndex)) {
+    return [];
+  }
+
+  const candidates: number[] = [];
+  for (
+    let index = lastCurrentIndex + 1;
+    index < rows.length && candidates.length < 5;
+    index += 1
+  ) {
+    if (rows[index].source.trim()) {
+      candidates.push(index);
     }
   }
 
-  return [...candidates]
-    .sort((left, right) => left - right)
-    .slice(0, 5)
+  return candidates
     .map((index) => ({ source: rows[index].source }));
+}
+
+function isTranslatableUnderTargetScope(
+  row: FileParseRowArtifact,
+  targetScope: LocalizationTargetScope,
+): boolean {
+  return targetScope === 'overwrite-non-confirmed' || !row.target.trim();
 }
 
 function truncateForCell(
