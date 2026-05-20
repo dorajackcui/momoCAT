@@ -1,7 +1,7 @@
 import { writeFile } from 'fs/promises';
 import { basename, extname, join, parse } from 'path';
 import type { Segment } from '@cat/core/models';
-import type { Project, ProjectType } from '@cat/core/project';
+import type { Project } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
 import type { CATDatabase } from '@cat/db';
 import { MTModule } from './modules/MTModule';
@@ -22,12 +22,20 @@ import type { AIRuntimeConfigProvider, AITransport } from './ports';
 import type {
   FileParseRowArtifact,
   InspectArtifact,
-  InspectTruncatedFields,
   InspectUnitArtifact,
-  PromptArtifact,
-  TBArtifact,
-  TMArtifact,
 } from './artifacts';
+import {
+  buildErrorUnit,
+  buildXlsxFields,
+  emptyPromptArtifact,
+  emptyTBArtifact,
+  emptyTMArtifact,
+  emptyXlsxFields,
+  errorMessage,
+  segmentMetadata,
+  stageError,
+  truncateForCell,
+} from './LocalizationInspectorArtifacts';
 import {
   parseExternalSpreadsheet,
   writeInspectSpreadsheet,
@@ -384,55 +392,6 @@ function rowToUnit(
   };
 }
 
-function buildXlsxFields(
-  mt: PromptArtifact,
-  unitIndex: number,
-  maxCellChars: number,
-): InspectUnitArtifact['xlsx'] {
-  const tmPromptInput = [mt.tmPromptBlock, mt.concordancePromptBlock]
-    .filter((block) => block.length > 0)
-    .join('\n\n');
-  const tmForMt = truncateForCell(
-    tmPromptInput,
-    maxCellChars,
-    `#/units/${unitIndex}/mt/userPrompt`,
-  );
-  const tbForMt = truncateForCell(
-    mt.tbPromptBlock,
-    maxCellChars,
-    `#/units/${unitIndex}/mt/tbPromptBlock`,
-  );
-  const mtUserPrompt = truncateForCell(
-    mt.userPrompt,
-    maxCellChars,
-    `#/units/${unitIndex}/mt/userPrompt`,
-  );
-
-  return {
-    tmForMt: tmForMt.value,
-    tbForMt: tbForMt.value,
-    mtUserPrompt: mtUserPrompt.value,
-    truncated: {
-      tmForMt: tmForMt.truncated,
-      tbForMt: tbForMt.truncated,
-      mtUserPrompt: mtUserPrompt.truncated,
-    },
-  };
-}
-
-function emptyXlsxFields(): InspectUnitArtifact['xlsx'] {
-  return {
-    tmForMt: '',
-    tbForMt: '',
-    mtUserPrompt: '',
-    truncated: {
-      tmForMt: false,
-      tbForMt: false,
-      mtUserPrompt: false,
-    },
-  };
-}
-
 function buildPreviousTranslatedContext(
   rows: FileParseRowArtifact[],
   currentRows: InspectReadyRow[],
@@ -498,26 +457,6 @@ function isTranslatableUnderTargetScope(
   return targetScope === 'overwrite-non-confirmed' || !row.target.trim();
 }
 
-function truncateForCell(
-  value: string,
-  maxCellChars: number,
-  jsonRef: string,
-): {
-  value: string;
-  truncated: boolean;
-} {
-  if (value.length <= maxCellChars) {
-    return { value, truncated: false };
-  }
-
-  const marker = `[TRUNCATED: see ${jsonRef}]`;
-  return {
-    value:
-      marker.length <= maxCellChars ? marker : marker.slice(0, maxCellChars),
-    truncated: true,
-  };
-}
-
 function validatePositiveInteger(
   value: number | undefined,
   name: string,
@@ -531,114 +470,6 @@ function validatePositiveInteger(
   }
 
   return value;
-}
-
-function stageError<T>(
-  stage: string,
-  result: PromiseSettledResult<T>,
-): string | undefined {
-  if (result.status === 'fulfilled') {
-    return undefined;
-  }
-
-  return `${stage}: ${errorMessage(result.reason)}`;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function buildErrorUnit(params: {
-  row: FileParseRowArtifact;
-  segment: Segment;
-  project: ProjectRecord;
-  tm: TMArtifact;
-  tb: TBArtifact;
-  error: string;
-}): InspectUnitArtifact {
-  return {
-    unit: params.row,
-    transientSegment: segmentMetadata(params.segment),
-    tm: params.tm,
-    tb: params.tb,
-    mt: emptyPromptArtifact(params.row.unitId, params.project),
-    xlsx: emptyXlsxFields(),
-    status: 'error',
-    error: params.error,
-  };
-}
-
-function segmentMetadata(
-  segment: Segment,
-): InspectUnitArtifact['transientSegment'] {
-  return {
-    segmentId: segment.segmentId,
-    matchKey: segment.matchKey,
-    srcHash: segment.srcHash,
-    tagsSignature: segment.tagsSignature,
-  };
-}
-
-function emptyTMArtifact(unitId: string, segmentId: string): TMArtifact {
-  return {
-    unitId,
-    segmentId,
-    mountedTMs: [],
-    rawMatches: [],
-    selectedReferences: {
-      tmReferences: [],
-      concordanceReferences: [],
-    },
-    selectionPolicy: {
-      maxTmReferences: 0,
-      maxConcordanceReferences: 0,
-    },
-    diagnostics: [],
-  };
-}
-
-function emptyTBArtifact(unitId: string, segmentId: string): TBArtifact {
-  return {
-    unitId,
-    segmentId,
-    mountedTBs: [],
-    rawMatches: [],
-    selectedReferences: [],
-    selectionPolicy: {
-      maxTbReferences: 0,
-    },
-    diagnostics: [],
-  };
-}
-
-function emptyPromptArtifact(
-  unitId: string,
-  project: Pick<Project, 'projectType'>,
-): PromptArtifact {
-  return {
-    unitId,
-    provider: {
-      id: null,
-      name: null,
-      baseUrl: null,
-    },
-    model: null,
-    reasoningEffort: null,
-    projectPrompt: '',
-    projectType: (project.projectType ?? 'translation') as ProjectType,
-    sourcePayload: '',
-    tmPromptBlock: '',
-    concordancePromptBlock: '',
-    tbPromptBlock: '',
-    referencePromptBlock: '',
-    systemPrompt: '',
-    userPrompt: '',
-    promptChars: {
-      system: 0,
-      user: 0,
-      total: 0,
-    },
-  };
 }
 
 function inferJsonOutputPath(outputPath: string): string {

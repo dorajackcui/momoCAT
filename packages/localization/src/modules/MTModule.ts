@@ -8,116 +8,42 @@ import {
   parseAIWindowModeResponse,
   type Project,
   type ProjectType,
-  type WindowModeNextContextRow,
-  type WindowModePreviousContextRow,
 } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
 import { parseEditorTextToTokens, serializeTokensToEditorText } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
-import {
-  AIProviderCatalogService,
-  type ResolvedAIProviderConfig,
-} from '../providers/AIProviderCatalogService';
+import type { AIProviderCatalogService } from '../providers/AIProviderCatalogService';
 import type { AIRuntimeConfigProvider, AITransport, ReasoningEffort } from '../ports';
 import type { PromptArtifact, TBArtifact, TMArtifact } from '../artifacts';
 import type { MTModuleOptions as LocalizationMTOptions } from '../types';
-
-export interface MTModuleDependencies {
-  providerCatalogService: Pick<AIProviderCatalogService, 'listProviders' | 'resolveProviderConfig'>;
-  aiRuntimeConfigProvider: AIRuntimeConfigProvider;
-  aiTransport: AITransport;
-  tagValidator?: TagValidator;
-}
-
-export interface ComposePromptInput {
-  unitId: string;
-  project: Project;
-  segment: Segment;
-  tm: TMArtifact;
-  tb: TBArtifact;
-  mtOptions?: LocalizationMTOptions;
-  providerOverride?: string;
-  projectPromptOverride?: string;
-}
-
-export interface MTBatchCurrentUnitInput {
-  responseId: string;
-  documentId: string;
-  unitId: string;
-  segment: Segment;
-  tm: TMArtifact;
-  tb: TBArtifact;
-  context?: string;
-}
-
-export interface ComposeBatchPromptInput {
-  taskId: string;
-  project: Project;
-  current: MTBatchCurrentUnitInput[];
-  previousContext: WindowModePreviousContextRow[];
-  nextContext: WindowModeNextContextRow[];
-  mtOptions?: LocalizationMTOptions;
-  providerOverride?: string;
-  projectPromptOverride?: string;
-}
-
-export interface ResolvedMTConfig {
-  provider: ResolvedAIProviderConfig['provider'];
-  apiKey: string;
-  model: string;
-  reasoningEffort: ReasoningEffort;
-}
-
-export interface PromptMTConfig {
-  provider: ResolvedAIProviderConfig['provider'];
-  model: string;
-  reasoningEffort: ReasoningEffort;
-}
-
-export interface PreparedPromptInput extends ComposePromptInput {
-  baseUrl: string;
-  model: string;
-  reasoningEffort?: ReasoningEffort;
-  srcLang: string;
-  tgtLang: string;
-  provider?: ResolvedAIProviderConfig['provider'];
-  validationFeedback?: string;
-}
-
-export interface PreparedBatchPromptInput extends ComposeBatchPromptInput {
-  baseUrl: string;
-  model: string;
-  reasoningEffort?: ReasoningEffort;
-  srcLang: string;
-  tgtLang: string;
-  provider?: ResolvedAIProviderConfig['provider'];
-  validationFeedback?: string;
-}
-
-export interface TranslatePreparedPromptInput extends PreparedPromptInput {
-  apiKey: string;
-}
-
-export interface TranslatePreparedBatchPromptInput extends PreparedBatchPromptInput {
-  apiKey: string;
-}
-
-export interface MTTranslateResult {
-  targetTokens: Segment['targetTokens'];
-  prompt: PromptArtifact;
-}
-
-export interface MTBatchUnitResult {
-  documentId: string;
-  unitId: string;
-  responseId: string;
-  targetTokens: Segment['targetTokens'];
-}
-
-export interface MTBatchTranslateResult {
-  results: MTBatchUnitResult[];
-  prompt: PromptArtifact;
-}
+import type {
+  ComposeBatchPromptInput,
+  ComposePromptInput,
+  MTBatchTranslateResult,
+  MTModuleDependencies,
+  MTTranslateResult,
+  PreparedBatchPromptInput,
+  PreparedPromptInput,
+  PromptMTConfig,
+  ResolvedMTConfig,
+  TranslatePreparedBatchPromptInput,
+  TranslatePreparedPromptInput,
+} from './MTModuleTypes';
+export type {
+  ComposeBatchPromptInput,
+  ComposePromptInput,
+  MTBatchCurrentUnitInput,
+  MTBatchTranslateResult,
+  MTBatchUnitResult,
+  MTModuleDependencies,
+  MTTranslateResult,
+  PreparedBatchPromptInput,
+  PreparedPromptInput,
+  PromptMTConfig,
+  ResolvedMTConfig,
+  TranslatePreparedBatchPromptInput,
+  TranslatePreparedPromptInput,
+} from './MTModuleTypes';
 
 type SegmentLanguageMeta = Segment['meta'] & {
   sourceLanguage?: unknown;
