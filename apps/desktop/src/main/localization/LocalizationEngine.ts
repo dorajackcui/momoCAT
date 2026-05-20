@@ -386,29 +386,37 @@ export class LocalizationEngine {
     );
     const mountedTMs = this.tmRepo
       .getProjectMountedTMs(project.id)
-      .map((tm) => ({
-        id: tm.id,
-        srcLang: tm.srcLang,
-        tgtLang: tm.tgtLang,
-        type: tm.type,
-        priority: tm.priority,
-        permission: tm.permission,
-        isEnabled: tm.isEnabled,
-        updatedAt: tm.updatedAt,
-        entryCount: this.tmRepo.getTMStats(tm.id).entryCount,
-      }))
+      .map((tm) => {
+        const stats = this.tmRepo.getTMStats(tm.id);
+        return {
+          id: tm.id,
+          srcLang: tm.srcLang,
+          tgtLang: tm.tgtLang,
+          type: tm.type,
+          priority: tm.priority,
+          permission: tm.permission,
+          isEnabled: tm.isEnabled,
+          updatedAt: tm.updatedAt,
+          entryCount: stats.entryCount,
+          maxEntryUpdatedAt: stats.maxEntryUpdatedAt,
+        };
+      })
       .sort(compareResourceFingerprint);
     const mountedTBs = this.tbRepo
       .getProjectMountedTermBases(project.id)
-      .map((tb) => ({
-        id: tb.id,
-        srcLang: tb.srcLang,
-        tgtLang: tb.tgtLang,
-        priority: tb.priority,
-        isEnabled: tb.isEnabled,
-        updatedAt: tb.updatedAt,
-        entryCount: this.tbRepo.getTermBaseStats(tb.id).entryCount,
-      }))
+      .map((tb) => {
+        const stats = this.tbRepo.getTermBaseStats(tb.id);
+        return {
+          id: tb.id,
+          srcLang: tb.srcLang,
+          tgtLang: tb.tgtLang,
+          priority: tb.priority,
+          isEnabled: tb.isEnabled,
+          updatedAt: tb.updatedAt,
+          entryCount: stats.entryCount,
+          maxEntryUpdatedAt: stats.maxEntryUpdatedAt,
+        };
+      })
       .sort(compareResourceFingerprint);
 
     return hashCanonicalPayload([

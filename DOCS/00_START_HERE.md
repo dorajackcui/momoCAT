@@ -86,7 +86,7 @@ External LocalizationEngine file translation:
 - The input file is not modified in place. The translated spreadsheet is written to `--output`.
 - By default, the file adapter detects `source` and `target` headers and translates only blank targets.
 - Resumable jobs write sidecars next to the output by default: `<output base>.checkpoint.jsonl`, `<output base>.events.jsonl`, `<output base>.artifacts.jsonl`, and `<output base>.snapshot.xlsx`. Override them with `--checkpoint`, `--events`, `--artifacts`, and `--snapshot` when writing to a dedicated smoke/output directory.
-- Default resume identity includes the input filename, output basename, project id, and resolved translation policy fingerprint. Unit checkpoint hashes also include that fingerprint, so `--resume` ignores stale records when project, target-scope, mode, resolved provider/model, reasoning, temperature, effective prompt, or mounted TM/TB resources change.
+- Default resume identity includes the input filename, output basename, project id, and resolved translation policy fingerprint. Unit checkpoint hashes also include that fingerprint, so `--resume` ignores stale records when project, target-scope, mode, resolved provider/model, reasoning, temperature, effective prompt, mounted TM/TB resources, or mounted TM/TB entry versions change.
 
 LocalizationEngine inspection:
 

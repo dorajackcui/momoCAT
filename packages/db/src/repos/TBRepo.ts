@@ -45,10 +45,16 @@ export class TBRepo {
   }
 
   public getTermBaseStats(tbId: string) {
-    const count = this.db.prepare('SELECT COUNT(*) as count FROM tb_entries WHERE tbId = ?').get(tbId) as {
+    const row = this.db
+      .prepare('SELECT COUNT(*) as count, MAX(updatedAt) as maxUpdatedAt FROM tb_entries WHERE tbId = ?')
+      .get(tbId) as {
       count: number;
+      maxUpdatedAt: string | null;
     };
-    return { entryCount: count.count };
+    return {
+      entryCount: row.count,
+      maxEntryUpdatedAt: row.maxUpdatedAt,
+    };
   }
 
   public mountTermBaseToProject(projectId: number, tbId: string, priority: number = 10) {

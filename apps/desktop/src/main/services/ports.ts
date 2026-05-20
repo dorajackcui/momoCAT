@@ -103,7 +103,7 @@ export interface TMRepository {
   createTM(name: string, srcLang: string, tgtLang: string, type: TMType): string;
   deleteTM(id: string): void;
   getTM(tmId: string): TMRecord | undefined;
-  getTMStats(tmId: string): { entryCount: number };
+  getTMStats(tmId: string): { entryCount: number; maxEntryUpdatedAt?: string | null };
   getProjectMountedTMs(projectId: number): MountedTMRecord[];
   mountTMToProject(projectId: number, tmId: string, priority?: number, permission?: string): void;
   unmountTMFromProject(projectId: number, tmId: string): void;
@@ -114,7 +114,7 @@ export interface TBRepository {
   createTermBase(name: string, srcLang: string, tgtLang: string): string;
   deleteTermBase(id: string): void;
   getTermBase(tbId: string): TBRecord | undefined;
-  getTermBaseStats(tbId: string): { entryCount: number };
+  getTermBaseStats(tbId: string): { entryCount: number; maxEntryUpdatedAt?: string | null };
   getProjectMountedTermBases(projectId: number): MountedTBRecord[];
   mountTermBaseToProject(projectId: number, tbId: string, priority?: number): void;
   unmountTermBaseFromProject(projectId: number, tbId: string): void;

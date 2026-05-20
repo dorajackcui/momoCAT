@@ -41,6 +41,9 @@ Results:
 - After quality review found that the fingerprint also needed engine-resolved defaults and project/provider state, the resolved fingerprint fix passed:
   - `npx vitest run apps/desktop/src/main/localization/LocalizationEngine.test.ts apps/desktop/src/main/localization/fileTranslationJobAdapter.test.ts apps/desktop/src/main/localization/job/sourceHash.test.ts apps/desktop/src/main/localization/job/stores.test.ts`: 4 files passed, 39 tests passed.
   - `npm run typecheck --workspace=apps/desktop`: passed.
+- After quality review found that mounted TM entry updates could keep resource `updatedAt` and entry count unchanged, entry-level resource fingerprinting passed:
+  - `npx vitest run apps/desktop/src/main/localization/LocalizationEngine.test.ts apps/desktop/src/main/localization/fileTranslationJobAdapter.test.ts apps/desktop/src/main/localization/job/sourceHash.test.ts apps/desktop/src/main/localization/job/stores.test.ts packages/db/src/index.test.ts packages/db/src/currentSchema.test.ts`: 6 files passed, 88 tests passed.
+  - `npm run typecheck --workspace=apps/desktop`: passed.
 
 Notes:
 
@@ -165,34 +168,34 @@ Hardened resume identity:
 
 - Default file job identity now includes the input filename, output basename, project id, and a translation-policy fingerprint.
 - Unit checkpoint hashes include the same fingerprint, so an explicit job id cannot silently reuse records when project or translation policy changes.
-- For LocalizationEngine/CLI runs, the fingerprint includes engine-resolved target scope, mode, provider id/base URL/protocol, model, reasoning effort, temperature, effective project/system prompt, and mounted TM/TB resource metadata without including API keys.
+- For LocalizationEngine/CLI runs, the fingerprint includes engine-resolved target scope, mode, provider id/base URL/protocol, model, reasoning effort, temperature, effective project/system prompt, mounted TM/TB resource metadata, and mounted TM/TB entry count plus max entry update timestamp without including API keys.
 
-Post-resolved-hardening real translate smoke:
+Post-resource-hardening real translate smoke:
 
 ```bash
-npm run translate:file -- --db "C:\Users\yizhi003\AppData\Roaming\simple-cat-tool\cat_v1.db" --project-id 3 --input "C:\Users\yizhi003\Downloads\memoQ上传\vibe\mt.xlsx" --output "C:\tmp\task8-resumable-mt.hardened-resolved.translated.xlsx" --checkpoint "C:\tmp\task8-resumable-mt.hardened-resolved.checkpoint.jsonl" --events "C:\tmp\task8-resumable-mt.hardened-resolved.events.jsonl" --artifacts "C:\tmp\task8-resumable-mt.hardened-resolved.artifacts.jsonl" --snapshot "C:\tmp\task8-resumable-mt.hardened-resolved.snapshot.xlsx" --snapshot-every-units 2 --progress-stdout
+npm run translate:file -- --db "C:\Users\yizhi003\AppData\Roaming\simple-cat-tool\cat_v1.db" --project-id 3 --input "C:\Users\yizhi003\Downloads\memoQ上传\vibe\mt.xlsx" --output "C:\tmp\task8-resumable-mt.hardened-resource.translated.xlsx" --checkpoint "C:\tmp\task8-resumable-mt.hardened-resource.checkpoint.jsonl" --events "C:\tmp\task8-resumable-mt.hardened-resource.events.jsonl" --artifacts "C:\tmp\task8-resumable-mt.hardened-resource.artifacts.jsonl" --snapshot "C:\tmp\task8-resumable-mt.hardened-resource.snapshot.xlsx" --snapshot-every-units 2 --progress-stdout
 ```
 
-Post-resolved-hardening result:
+Post-resource-hardening result:
 
 - Passed.
 - Summary event: total `9`, translated `9`, skipped `0`, failed `0`.
-- Job id included resolved policy fingerprint: `file:mt.xlsx:task8-resumable-mt.hardened-resolved.translated:16a4ff3dc73846b2fd41790a544de9a7f280ef7e8937b768c6b9a9c3e4c5a150`.
+- Job id included resolved policy/resource fingerprint: `file:mt.xlsx:task8-resumable-mt.hardened-resource.translated:0861c61e8b713ff7273f0893736d98640fdfcf77c3b8b0ece51ec3539891666a`.
 - Output workbook: `Sheet2`, `A1:B10`, source `9`, target `9`, blank target `0`.
 - Checkpoint JSONL: `9` lines, status translated `9`, attempts `1`.
 - Events JSONL: `15` lines, `job_start: 1`, `unit_done: 9`, `snapshot: 4`, `job_done: 1`.
 - Artifacts JSONL: `9` lines, status translated `9`.
 
-Post-resolved-hardening same-job resume:
+Post-resource-hardening same-job resume:
 
 ```bash
-npm run translate:file -- --db "C:\Users\yizhi003\AppData\Roaming\simple-cat-tool\cat_v1.db" --project-id 3 --input "C:\Users\yizhi003\Downloads\memoQ上传\vibe\mt.xlsx" --output "C:\tmp\task8-resumable-mt.hardened-resolved.translated.xlsx" --checkpoint "C:\tmp\task8-resumable-mt.hardened-resolved.checkpoint.jsonl" --events "C:\tmp\task8-resumable-mt.hardened-resolved.resume.events.jsonl" --artifacts "C:\tmp\task8-resumable-mt.hardened-resolved.resume.artifacts.jsonl" --snapshot "C:\tmp\task8-resumable-mt.hardened-resolved.resume.snapshot.xlsx" --resume --progress-stdout
+npm run translate:file -- --db "C:\Users\yizhi003\AppData\Roaming\simple-cat-tool\cat_v1.db" --project-id 3 --input "C:\Users\yizhi003\Downloads\memoQ上传\vibe\mt.xlsx" --output "C:\tmp\task8-resumable-mt.hardened-resource.translated.xlsx" --checkpoint "C:\tmp\task8-resumable-mt.hardened-resource.checkpoint.jsonl" --events "C:\tmp\task8-resumable-mt.hardened-resource.resume.events.jsonl" --artifacts "C:\tmp\task8-resumable-mt.hardened-resource.resume.artifacts.jsonl" --snapshot "C:\tmp\task8-resumable-mt.hardened-resource.resume.snapshot.xlsx" --resume --progress-stdout
 ```
 
-Post-resolved-hardening same-job resume result:
+Post-resource-hardening same-job resume result:
 
 - Passed.
 - Resume events: `11` lines, `job_start: 1`, `unit_done: 9`, `job_done: 1`.
 - Progress events emitted `9` unit completions with status `reused`.
 - Final summary: total `9`, translated `0`, skipped `0`, failed `0`, reused `9`.
-- The dynamic test body completed in `130ms`, consistent with checkpoint reuse rather than provider retranslation.
+- The dynamic test body completed in `845ms`, consistent with checkpoint reuse rather than provider retranslation.

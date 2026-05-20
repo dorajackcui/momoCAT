@@ -1222,10 +1222,16 @@ export class TMRepo {
   }
 
   public getTMStats(tmId: string) {
-    const count = this.db.prepare('SELECT COUNT(*) as count FROM tm_entries WHERE tmId = ?').get(tmId) as {
+    const row = this.db
+      .prepare('SELECT COUNT(*) as count, MAX(updatedAt) as maxUpdatedAt FROM tm_entries WHERE tmId = ?')
+      .get(tmId) as {
       count: number;
+      maxUpdatedAt: string | null;
     };
-    return { entryCount: count.count };
+    return {
+      entryCount: row.count,
+      maxEntryUpdatedAt: row.maxUpdatedAt,
+    };
   }
 
   public getTM(tmId: string): TMRecord | undefined {

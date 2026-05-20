@@ -21,7 +21,7 @@ export class SqliteTBRepository implements TBRepository {
     return this.db.getTermBase(tbId);
   }
 
-  getTermBaseStats(tbId: string): { entryCount: number } {
+  getTermBaseStats(tbId: string): { entryCount: number; maxEntryUpdatedAt?: string | null } {
     return this.db.getTermBaseStats(tbId);
   }
 

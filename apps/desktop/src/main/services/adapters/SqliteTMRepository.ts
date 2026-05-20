@@ -84,7 +84,7 @@ export class SqliteTMRepository implements TMRepository {
     return this.db.getTM(tmId);
   }
 
-  getTMStats(tmId: string): { entryCount: number } {
+  getTMStats(tmId: string): { entryCount: number; maxEntryUpdatedAt?: string | null } {
     return this.db.getTMStats(tmId);
   }
 

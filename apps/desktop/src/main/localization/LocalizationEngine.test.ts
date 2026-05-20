@@ -35,6 +35,12 @@ function seedApiKey(db: CATDatabase): void {
   db.setSetting('openai_api_key', 'test-api-key');
 }
 
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 function createTMEntry(params: {
   tmId: string;
   projectId: number;
@@ -618,6 +624,89 @@ describe('LocalizationEngine.translateFile job mode', () => {
       expect(second.summary).toEqual({ total: 1, translated: 1, skipped: 0, failed: 0 });
       expect(second.results[0]?.status).toBe('translated');
       expect(second.results[0]?.target).toBe('model-b target');
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not reuse explicit-job checkpoints when mounted TM entries change', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('External File TM Fingerprint', 'en', 'fr');
+      seedApiKey(db);
+      const tmId = db.createTM('Client Main TM', 'en', 'fr', 'main');
+      db.mountTMToProject(projectId, tmId, 10, 'read');
+      const oldEntry = createTMEntry({
+        tmId,
+        projectId,
+        sourceText: 'Hello',
+        targetText: 'Old reference',
+      });
+      const oldEntryId = db.upsertTMEntryBySrcHash(oldEntry);
+      db.replaceTMFts(
+        tmId,
+        serializeTokensToDisplayText(oldEntry.sourceTokens),
+        serializeTokensToDisplayText(oldEntry.targetTokens),
+        oldEntryId,
+      );
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      const checkpointPath = join(root, 'mt.checkpoint.jsonl');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target'],
+          ['Hello', ''],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+      const transport = createTransport('First target');
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+
+      await engine.translateFile({
+        projectId,
+        inputPath,
+        outputPath,
+        job: { jobId: 'same-job', checkpointPath, maxAttempts: 1 },
+      });
+
+      await delay(20);
+      const newEntry = createTMEntry({
+        tmId,
+        projectId,
+        sourceText: 'Hello',
+        targetText: 'New reference',
+      });
+      const newEntryId = db.upsertTMEntryBySrcHash(newEntry);
+      db.replaceTMFts(
+        tmId,
+        serializeTokensToDisplayText(newEntry.sourceTokens),
+        serializeTokensToDisplayText(newEntry.targetTokens),
+        newEntryId,
+      );
+      transport.createResponse.mockResolvedValueOnce({
+        content: 'Second target',
+        status: 200,
+        endpoint: '/mock',
+      });
+      const second = await engine.translateFile({
+        projectId,
+        inputPath,
+        outputPath,
+        job: { jobId: 'same-job', checkpointPath, resume: true, maxAttempts: 1 },
+      });
+
+      expect(transport.createResponse).toHaveBeenCalledTimes(2);
+      expect(second.summary).toEqual({ total: 1, translated: 1, skipped: 0, failed: 0 });
+      expect(second.results[0]?.status).toBe('translated');
+      expect(second.results[0]?.target).toBe('Second target');
     } finally {
       db.close();
       await rm(root, { recursive: true, force: true });
