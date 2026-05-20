@@ -44,7 +44,7 @@ export interface TranslationJobRunnerDependencies {
   eventSink: {
     append(record: ProgressEventRecord): Promise<void>;
   };
-  artifactStore: {
+  artifactStore?: {
     append(record: ArtifactRecord): Promise<void>;
   };
   taskPlanner: TaskPlanner;
@@ -60,7 +60,7 @@ export interface TranslationJobRunnerDependencies {
 export class TranslationJobRunner {
   private readonly checkpointStore: TranslationJobRunnerDependencies['checkpointStore'];
   private readonly eventSink: TranslationJobRunnerDependencies['eventSink'];
-  private readonly artifactStore: TranslationJobRunnerDependencies['artifactStore'];
+  private readonly artifactStore?: TranslationJobRunnerDependencies['artifactStore'];
   private readonly taskPlanner: TaskPlanner;
   private readonly taskExecutor: TranslationTaskExecutor;
   private readonly clock: () => Date;
@@ -171,7 +171,11 @@ export class TranslationJobRunner {
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
-        const result = await this.taskExecutor(task, { job, attempt });
+        const result = await this.taskExecutor(task, {
+          job,
+          attempt,
+          captureArtifacts: Boolean(this.artifactStore),
+        });
 
         return {
           results: normalizeTaskResults(job, task, result.results, attempt),
@@ -186,9 +190,11 @@ export class TranslationJobRunner {
       results: task.units.map((unit) =>
         makeFailedResult(job, unit, errorMessage(lastError), maxAttempts),
       ),
-      artifacts: task.units.map((unit) =>
-        makeFailedArtifact(job, task, unit, errorMessage(lastError), maxAttempts, this.isoNow()),
-      ),
+      artifacts: this.artifactStore
+        ? task.units.map((unit) =>
+            makeFailedArtifact(job, task, unit, errorMessage(lastError), maxAttempts, this.isoNow()),
+          )
+        : undefined,
     };
   }
 
@@ -199,18 +205,13 @@ export class TranslationJobRunner {
     resultMap: Map<string, UnitResult>,
     throttle: SnapshotThrottle,
   ): Promise<void> {
-    const artifactsByUnit = new Map<string, ArtifactRecord[]>();
-
-    for (const artifact of taskResult.artifacts ?? []) {
-      const key = unitKeyFromParts(artifact.doc, artifact.unit);
-      const artifacts = artifactsByUnit.get(key) ?? [];
-      artifacts.push(artifact);
-      artifactsByUnit.set(key, artifacts);
-    }
+    const artifactsByUnit = this.artifactStore
+      ? groupArtifactsByUnit(taskResult.artifacts)
+      : new Map<string, ArtifactRecord[]>();
 
     for (const result of taskResult.results) {
       for (const artifact of artifactsByUnit.get(unitKeyFromParts(result.documentId, result.unitId)) ?? []) {
-        await this.artifactStore.append(canonicalizeArtifact(artifact, job, task, result));
+        await this.artifactStore?.append(canonicalizeArtifact(artifact, job, task, result));
       }
 
       const checkpoint = resultToCheckpoint(result, this.isoNow());
@@ -430,6 +431,19 @@ function normalizeMaxAttempts(value: number | undefined): number {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function groupArtifactsByUnit(artifacts: ArtifactRecord[] | undefined): Map<string, ArtifactRecord[]> {
+  const artifactsByUnit = new Map<string, ArtifactRecord[]>();
+
+  for (const artifact of artifacts ?? []) {
+    const key = unitKeyFromParts(artifact.doc, artifact.unit);
+    const unitArtifacts = artifactsByUnit.get(key) ?? [];
+    unitArtifacts.push(artifact);
+    artifactsByUnit.set(key, unitArtifacts);
+  }
+
+  return artifactsByUnit;
 }
 
 function unitKey(unit: Pick<JobUnit, 'documentId' | 'unitId'>): string {

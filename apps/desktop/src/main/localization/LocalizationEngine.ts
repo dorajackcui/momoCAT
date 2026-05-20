@@ -65,7 +65,7 @@ interface PreparedTranslationArtifacts {
 
 interface PreparedTranslationResult {
   result: TranslateUnitResult;
-  artifacts: PreparedTranslationArtifacts;
+  artifacts?: PreparedTranslationArtifacts;
 }
 
 type ProjectRecord = NonNullable<ReturnType<SqliteProjectRepository['getProject']>>;
@@ -229,6 +229,7 @@ export class LocalizationEngine {
             mtConfig,
             mtOptions,
             includeReferences: Boolean(input.options?.includeReferences),
+            captureArtifacts: false,
           })
         ).result;
       },
@@ -288,8 +289,9 @@ export class LocalizationEngine {
     const mtConfig = hasTranslatableUnits
       ? await this.mtModule.resolveConfig(project, mtOptions, translationOptions?.providerOverride)
       : undefined;
+    const captureArtifacts = context.captureArtifacts !== false;
     const results: UnitResult[] = [];
-    const artifacts: ArtifactRecord[] = [];
+    const artifacts: ArtifactRecord[] | undefined = captureArtifacts ? [] : undefined;
 
     for (let index = 0; index < preparedUnits.length; index += 1) {
       const jobUnit = task.units[index];
@@ -302,7 +304,7 @@ export class LocalizationEngine {
       if (prepared.kind === 'skipped') {
         const result = toUnitResult(context.job.id, jobUnit, prepared.result);
         results.push(result);
-        artifacts.push(toArtifactRecord(context.job.id, task.taskId, jobUnit, result));
+        artifacts?.push(toArtifactRecord(context.job.id, task.taskId, jobUnit, result));
         continue;
       }
 
@@ -317,11 +319,12 @@ export class LocalizationEngine {
         mtConfig,
         mtOptions,
         includeReferences: Boolean(translationOptions?.includeReferences),
+        captureArtifacts,
       });
       const result = toUnitResult(context.job.id, jobUnit, translated.result);
 
       results.push(result);
-      artifacts.push(
+      artifacts?.push(
         toArtifactRecord(context.job.id, task.taskId, jobUnit, result, translated.artifacts),
       );
     }
@@ -493,6 +496,7 @@ export class LocalizationEngine {
     mtConfig: ResolvedMTConfig;
     mtOptions: NonNullable<LocalizationEngineOptions['mt']>;
     includeReferences: boolean;
+    captureArtifacts: boolean;
   }): Promise<PreparedTranslationResult> {
     const source = params.unit.source;
     const projectType = params.project.projectType ?? 'translation';
@@ -526,11 +530,13 @@ export class LocalizationEngine {
         references: params.includeReferences ? references.engineReferences : undefined,
         metadata: params.unit.metadata,
       },
-      artifacts: {
-        tm: references.tm,
-        tb: references.tb,
-        prompt,
-      },
+      artifacts: params.captureArtifacts
+        ? {
+            tm: references.tm,
+            tb: references.tb,
+            prompt,
+          }
+        : undefined,
     };
   }
 

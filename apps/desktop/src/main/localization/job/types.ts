@@ -101,6 +101,7 @@ export interface ArtifactRecord {
 export interface TaskExecutionContext {
   job: TranslationJob;
   attempt: number;
+  captureArtifacts?: boolean;
 }
 
 export interface TaskExecutionResult {

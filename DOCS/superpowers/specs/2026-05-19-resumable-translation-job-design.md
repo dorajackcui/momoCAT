@@ -193,9 +193,9 @@ The same event object can be appended to `events.jsonl` and optionally emitted t
 
 ## Artifact Records
 
-Artifacts explain what happened. They are not used for resume.
+Artifacts explain what happened. They are not used for resume and should be opt-in for translation jobs so normal output directories stay lightweight.
 
-Default artifact detail is complete prompt artifacts without secrets:
+When artifact capture is enabled, artifact detail is complete prompt artifacts without secrets:
 
 ```json
 {"job":"j1","task":"task-7","doc":"mt.xlsx","unit":"row-33","tm":{},"tb":{},"prompt":{},"result":{},"at":"2026-05-19T00:00:00.000Z"}
@@ -295,7 +295,8 @@ The existing `translate:file` CLI should gain a small set of options:
 
 Defaults should keep the command easy to run:
 
-- checkpoint/events/artifacts inferred from output path
+- checkpoint/events/snapshot inferred from output path
+- artifacts disabled unless `--artifacts <path>` is provided
 - `maxAttempts=3`
 - `snapshotEveryUnits=10`
 - `snapshotEverySeconds=60`

@@ -87,6 +87,32 @@ describe('TranslationJobRunner', () => {
       'unit_done',
       'job_done',
     ]);
+    expect(executor.mock.calls[0]?.[1].captureArtifacts).toBe(true);
+  });
+
+  it('does not request or write artifacts without an artifact store', async () => {
+    const harness = await makeHarness();
+    const executor = vi.fn<TranslationTaskExecutor>(async (task, context) => ({
+      results: [
+        makeResult({
+          unitId: task.units[0].unitId,
+          target: 'Bonjour',
+          attempts: context.attempt,
+        }),
+      ],
+      artifacts: [
+        makeArtifact({
+          task: task.taskId,
+          unit: task.units[0].unitId,
+        }),
+      ],
+    }));
+    const runner = harness.makeRunner(executor, { persistArtifacts: false });
+
+    await runner.run(makeJob());
+
+    expect(executor.mock.calls[0]?.[1].captureArtifacts).toBe(false);
+    expect((await readJsonlRecords<ArtifactRecord>(harness.artifactsPath)).records).toEqual([]);
   });
 
   it('retries thrown tasks and writes failed checkpoints and events after max attempts', async () => {
@@ -472,7 +498,7 @@ async function makeHarness(): Promise<{
     options?: Pick<
       ConstructorParameters<typeof TranslationJobRunner>[0],
       'writeSnapshot' | 'writeFinal' | 'taskPlanner'
-    >,
+    > & { persistArtifacts?: boolean },
   ) => TranslationJobRunner;
   events: () => Promise<ProgressEventRecord[]>;
 }> {
@@ -487,17 +513,23 @@ async function makeHarness(): Promise<{
     eventsPath,
     artifactsPath,
     checkpointStore,
-    makeRunner: (taskExecutor, options = {}) =>
-      new TranslationJobRunner({
+    makeRunner: (taskExecutor, options = {}) => {
+      const dependencies: ConstructorParameters<typeof TranslationJobRunner>[0] = {
         checkpointStore,
         eventSink: new EventSink(eventsPath),
-        artifactStore: new ArtifactStore(artifactsPath),
         taskPlanner: options.taskPlanner ?? new OneUnitTaskPlanner(),
         taskExecutor,
         clock: () => new Date('2026-05-19T00:00:00.000Z'),
         writeSnapshot: options.writeSnapshot,
         writeFinal: options.writeFinal,
-      }),
+      };
+
+      if (options.persistArtifacts !== false) {
+        dependencies.artifactStore = new ArtifactStore(artifactsPath);
+      }
+
+      return new TranslationJobRunner(dependencies);
+    },
     events: async () => (await readJsonlRecords<ProgressEventRecord>(eventsPath)).records,
   };
 }

@@ -1,3 +1,4 @@
+import { existsSync } from 'fs';
 import { mkdtemp, readFile, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join, win32 } from 'path';
@@ -209,7 +210,6 @@ describe('fileTranslationJobAdapter', () => {
     expect(inferFileTranslationJobSidecarPaths(outputPath)).toEqual({
       checkpointPath: win32.join('C:\\tmp', 'mt.translated.checkpoint.jsonl'),
       eventsPath: win32.join('C:\\tmp', 'mt.translated.events.jsonl'),
-      artifactsPath: win32.join('C:\\tmp', 'mt.translated.artifacts.jsonl'),
       snapshotPath: win32.join('C:\\tmp', 'mt.translated.snapshot.xlsx'),
     });
 
@@ -239,6 +239,62 @@ describe('fileTranslationJobAdapter', () => {
         artifactsPath,
         snapshotPath,
       });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not persist prompt artifacts unless an artifact path is provided', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
+    try {
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      const inferredArtifactPath = join(root, 'mt.translated.artifacts.jsonl');
+      writeWorkbook(inputPath, [
+        ['source', 'target'],
+        ['Hello', ''],
+      ]);
+      const executor = vi.fn<TranslationTaskExecutor>(async (task, context) => {
+        expect(context.captureArtifacts).toBe(false);
+        const unit = task.units[0];
+
+        return {
+          results: [
+            {
+              jobId: context.job.id,
+              documentId: unit.documentId,
+              unitId: unit.unitId,
+              sourceHash: unit.sourceHash,
+              status: 'translated',
+              source: unit.source,
+              target: 'Bonjour',
+              metadata: unit.metadata,
+            },
+          ],
+          artifacts: [
+            {
+              job: context.job.id,
+              task: task.taskId,
+              doc: unit.documentId,
+              unit: unit.unitId,
+              at: '2026-05-19T00:00:00.000Z',
+            },
+          ],
+        };
+      });
+
+      await translateSpreadsheetFileJob(
+        {
+          projectId: 7,
+          inputPath,
+          outputPath,
+          job: { maxAttempts: 1 },
+        },
+        { taskExecutor: executor },
+      );
+
+      expect(executor).toHaveBeenCalledTimes(1);
+      expect(existsSync(inferredArtifactPath)).toBe(false);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

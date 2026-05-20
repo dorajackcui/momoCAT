@@ -11,7 +11,7 @@ Status: `DONE`
 ## Docs Updated
 
 - `DOCS/00_START_HERE.md` now documents `translate:file --resume`.
-- The same section documents the generated checkpoint, events, artifacts, and snapshot sidecars.
+- The same section documents generated checkpoint/events/snapshot sidecars and opt-in diagnostic artifacts.
 
 ## Focused Verification
 

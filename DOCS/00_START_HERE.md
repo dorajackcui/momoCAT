@@ -13,10 +13,11 @@ Read first for every new task, new session, or handoff.
 - Runtime behavior: code + tests
 - Process and guardrails: `DOCS/20_ENGINEERING_RUNBOOK.md`
 - Current project status and priorities: `DOCS/40_STATUS_AND_ROADMAP.md`
+- Agent-first LocalizationEngine direction: `DOCS/agent-first/ARCHITECTURE.md`
 
 ## Last Updated
 
-2026-05-08
+2026-05-20
 
 ## Owner
 
@@ -27,8 +28,9 @@ Core maintainers of `simple-cat-tool`
 1. Read `DOCS/40_STATUS_AND_ROADMAP.md` (current status, current risks, now/next/later).
 2. Read `DOCS/20_ENGINEERING_RUNBOOK.md` (workflow rules, gates, PR checklist).
 3. Read `DOCS/10_ARCHITECTURE.md` for boundaries and entrypoints.
-4. If data-layer changes are involved, read `DOCS/30_DATA_MODEL.md`.
-5. Implement and validate with the canonical command checklist below.
+4. For agent-first CLI, file translation, inspect, or MT module work, read `DOCS/agent-first/ARCHITECTURE.md`, `DOCS/agent-first/CLI.md`, and `DOCS/agent-first/MT_MODULE.md`.
+5. If data-layer changes are involved, read `DOCS/30_DATA_MODEL.md`.
+6. Implement and validate with the canonical command checklist below.
 
 ## Dual-Platform Quick Boot (Windows + macOS)
 
@@ -72,30 +74,16 @@ Headless AI file flow diagnostics:
 - Use `--preview-limit <n>` to control how many leading segments print TM/TB reference preview events before translation starts.
 - The command emits JSONL-style events from the dynamic Vitest runner: `ai_file_flow_start`, `ai_file_flow_resources`, `ai_file_flow_reference_preview`, `ai_file_flow_progress`, and `ai_file_flow_complete`.
 
-Headless project/API inspection:
+Agent-first CLI / LocalizationEngine:
 
-- To list projects with mounted TM/TB resources, files, target coverage, and AI provider status, run `npm run inspect:projects -- --db <path>`.
-- Use `--project-id <id>` to narrow the output and `--json` for automation-friendly output.
-- The command opens SQLite read-only and only prints API key status plus last four characters; it never prints full API keys.
-
-External LocalizationEngine file translation:
-
-- To translate an external spreadsheet through a project as a TM+TB+MT engine without importing the file into the project, run `npm run translate:file -- --db <path> --project-id <id> --input <path> --output <path>`.
-- To resume a file translation after interruption, rerun with the same output/sidecar paths and `--resume`, for example `npm run translate:file -- --db <db> --project-id <id> --input mt.xlsx --output mt.translated.xlsx --resume`.
-- The command reads project settings, mounted TM/TB resources, and AI provider configuration, but does not create `files` or `segments` records.
-- The input file is not modified in place. The translated spreadsheet is written to `--output`.
-- By default, the file adapter detects `source` and `target` headers and translates only blank targets.
-- Resumable jobs write sidecars next to the output by default: `<output base>.checkpoint.jsonl`, `<output base>.events.jsonl`, `<output base>.artifacts.jsonl`, and `<output base>.snapshot.xlsx`. Override them with `--checkpoint`, `--events`, `--artifacts`, and `--snapshot` when writing to a dedicated smoke/output directory.
-- Default resume identity includes the input filename, output basename, project id, and resolved translation policy fingerprint. Unit checkpoint hashes also include that fingerprint, so `--resume` ignores stale records when project, target-scope, mode, resolved provider/model, reasoning, temperature, effective prompt, mounted TM/TB resources, or mounted TM/TB entry versions change.
-- Resume reuses translated checkpoints only. Skipped rows are re-evaluated so current target-cell edits remain authoritative in `blank-only` mode.
-
-LocalizationEngine inspection:
-
-- To inspect an external spreadsheet through a project as a TM+TB+MT prompt preview without importing or translating it, run `npm run inspect:localization -- --db <path> --project-id <id> --input <path> --output <inspect.xlsx>`.
-- The command writes an inspect workbook with `Segments` and `MT_SystemPrompt` sheets, plus a JSON sidecar next to the `.xlsx` output.
-- `Segments` preserves the original rows and appends `_tm_for_mt`, `_tb_for_mt`, `_mt_user_prompt`, `_inspect_status`, and `_inspect_json_ref`.
-- The command reads project settings and mounted TM/TB resources, but does not create project `files` or `segments` records and does not send API requests.
-- Use `--unit-limit <n>` to cap inspected units, `--json-output <path>` to override the sidecar path, and `--max-cell-chars <n>` to cap large workbook cell values.
+- Start with `DOCS/agent-first/ARCHITECTURE.md` for the headless engine layers.
+- Use `DOCS/agent-first/CLI.md` for `inspect:projects`, `inspect:localization`, and `translate:file`.
+- Use `DOCS/agent-first/MT_MODULE.md` before changing prompt composition or MT request scheduling.
+- Quick project check: `npm run inspect:projects -- --db <path> --project-id <id>`.
+- No-request prompt inspection: `npm run inspect:localization -- --db <path> --project-id <id> --input <path> --output <inspect.xlsx>`.
+- Resumable file translation: `npm run translate:file -- --db <path> --project-id <id> --input <path> --output <translated.xlsx>`.
+- External files are not imported into project `files` or `segments` during agent-first file translation.
+- Full prompt/TM/TB translation artifacts are opt-in with `--artifacts <path>`; inspect flows remain the preferred no-request debugging path.
 
 ## Platform Command Matrix
 
@@ -130,6 +118,8 @@ Notes:
 | ------------------------------------ | -------------------------------------------------------------- |
 | New feature touching renderer flow   | `DOCS/10_ARCHITECTURE.md`                                      |
 | Main process service/module changes  | `DOCS/10_ARCHITECTURE.md`                                      |
+| Agent-first CLI or LocalizationEngine | `DOCS/agent-first/ARCHITECTURE.md` and `DOCS/agent-first/CLI.md` |
+| MT prompt or request scheduling      | `DOCS/agent-first/MT_MODULE.md`                                |
 | IPC contract changes                 | `DOCS/10_ARCHITECTURE.md` and `DOCS/20_ENGINEERING_RUNBOOK.md` |
 | Schema/repo SQL work                 | `DOCS/30_DATA_MODEL.md`                                        |
 | Build/test/gate failures             | `DOCS/20_ENGINEERING_RUNBOOK.md`                               |
@@ -175,6 +165,7 @@ npx vitest run packages/core/src/TagManager.test.ts
 
 - Renderer root: `apps/desktop/src/renderer/src`
 - Main process root: `apps/desktop/src/main`
+- Agent-first localization: `apps/desktop/src/main/localization`
 - Shared IPC contract: `apps/desktop/src/shared/ipc.ts`
 - Core package: `packages/core/src`
 - AI prompt templates: `packages/core/src/project/prompts`

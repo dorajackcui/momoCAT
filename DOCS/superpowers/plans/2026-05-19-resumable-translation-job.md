@@ -21,7 +21,7 @@ In scope:
 - Unit-level checkpoint recovery.
 - Task-level execution abstraction.
 - One-unit task planner for MVP.
-- JSONL checkpoint/events/artifacts.
+- JSONL checkpoint/events, with optional diagnostic artifacts.
 - File-driven snapshot/final XLSX writers.
 - CLI options for checkpoint/resume/progress.
 - Tests proving resume does not re-request completed units.
@@ -532,7 +532,7 @@ Sanitize stale `LOCALIZATION_ENGINE_*` job env vars before assigning new values,
 
 - [ ] **Step 4: Enable job mode by default in CLI**
 
-CLI should produce checkpoint/events/artifacts by default using inferred paths, even when the user does not pass explicit paths.
+CLI should produce checkpoint/events/snapshot sidecars by default using inferred paths, even when the user does not pass explicit paths. Diagnostic prompt artifacts are opt-in through `--artifacts <path>`.
 
 `--progress-stdout` should control live NDJSON event output. If implementation chooses default stdout progress, document it clearly and test it.
 
@@ -603,7 +603,7 @@ project 3
 Procedure:
 
 1. Run inspect.
-2. Run translate with checkpoint/events/artifacts.
+2. Run translate with checkpoint/events, adding `--artifacts` only for diagnostic capture.
 3. If interrupted, rerun with `--resume`.
 4. Verify final xlsx source/target counts.
 5. Verify events and checkpoint summaries explain any missing target rows.
@@ -626,9 +626,9 @@ Use small commits by task or logical milestone. Do not squash away the plan trac
 
 ## Completion Criteria
 
-- `translate:file` can produce checkpoint/events/artifacts sidecars.
+- `translate:file` can produce checkpoint/events sidecars and opt-in diagnostic artifact sidecars.
 - A resumed run does not call MT for already translated units whose source hash still matches.
 - A failed unit is retried by default on resume, bounded by `maxAttempts`.
 - Snapshot/final XLSX files are written through the existing file module and compact range behavior.
 - Events are understandable as NDJSON by both humans and agents.
-- Artifacts contain complete prompts for prompt debugging without secrets.
+- Opt-in artifacts contain complete prompts for prompt debugging without secrets.

@@ -39,7 +39,7 @@ Options:
   --target-scope <scope>         blank-only or overwrite-non-confirmed. Default: engine default.
   --checkpoint <path>            Checkpoint JSONL path. Default: inferred from output path.
   --events <path>                Event JSONL path. Default: inferred from output path.
-  --artifacts <path>             Artifact JSONL path. Default: inferred from output path.
+  --artifacts <path>             Enable diagnostic prompt artifact JSONL at this path.
   --resume                       Resume from an existing checkpoint.
   --max-attempts <n>             Positive integer retry attempt limit.
   --snapshot <path>              Snapshot spreadsheet path. Default: inferred from output path.

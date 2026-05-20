@@ -23,7 +23,7 @@ import type {
 export interface FileTranslationJobSidecarPaths {
   checkpointPath: string;
   eventsPath: string;
-  artifactsPath: string;
+  artifactsPath?: string;
   snapshotPath: string;
 }
 
@@ -98,12 +98,11 @@ export async function translateSpreadsheetFileJob(
     ...prepared.job.options,
     maxConcurrency: input.options?.maxConcurrency ?? options.defaultMaxConcurrency,
   };
-  const runner = (options.runnerFactory ?? defaultRunnerFactory)({
+  const runnerDependencies: TranslationJobRunnerDependencies = {
     checkpointStore: new CheckpointStore(prepared.sidecarPaths.checkpointPath),
     eventSink: new EventSink(prepared.sidecarPaths.eventsPath, {
       stdout: input.job?.progressStdout,
     }),
-    artifactStore: new ArtifactStore(prepared.sidecarPaths.artifactsPath),
     taskPlanner: new OneUnitTaskPlanner(),
     taskExecutor: options.taskExecutor,
     writeSnapshot: async (results) => {
@@ -122,7 +121,13 @@ export async function translateSpreadsheetFileJob(
         input.format,
       );
     },
-  });
+  };
+
+  if (prepared.sidecarPaths.artifactsPath) {
+    runnerDependencies.artifactStore = new ArtifactStore(prepared.sidecarPaths.artifactsPath);
+  }
+
+  const runner = (options.runnerFactory ?? defaultRunnerFactory)(runnerDependencies);
   const runResult = await runner.run(prepared.job);
   const translation = jobRunResultToTranslateUnitsResult(runResult);
 
@@ -141,8 +146,8 @@ export function resolveFileTranslationJobSidecarPaths(
   return {
     checkpointPath: input.job?.checkpointPath ?? inferred.checkpointPath,
     eventsPath: input.job?.eventsPath ?? inferred.eventsPath,
-    artifactsPath: input.job?.artifactsPath ?? inferred.artifactsPath,
     snapshotPath: input.job?.snapshotPath ?? inferred.snapshotPath,
+    ...(input.job?.artifactsPath ? { artifactsPath: input.job.artifactsPath } : {}),
   };
 }
 
@@ -156,7 +161,6 @@ export function inferFileTranslationJobSidecarPaths(
   return {
     checkpointPath: `${basePath}.checkpoint.jsonl`,
     eventsPath: `${basePath}.events.jsonl`,
-    artifactsPath: `${basePath}.artifacts.jsonl`,
     snapshotPath: `${basePath}.snapshot.xlsx`,
   };
 }
