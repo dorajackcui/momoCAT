@@ -142,4 +142,49 @@ describe('AIProviderTransport', () => {
     expect(error.message).toMatch(/not valid json/i);
     expect(error.message).not.toMatch(/secret-token|y{300}/);
   });
+
+  it('redacts json-style secrets in provider errors', async () => {
+    const sensitiveBody = JSON.stringify({
+      error: {
+        message: 'request failed',
+        api_key: 'sk-json-secret',
+        token: 'json-token-secret',
+      },
+    });
+    global.fetch = vi.fn().mockResolvedValue(new Response(sensitiveBody, { status: 400 })) as typeof fetch;
+
+    const transport = new AIProviderTransport();
+
+    const error = await captureError(() =>
+      transport.testConnection({
+        apiKey: 'secret',
+        baseUrl: 'https://example.com/v1',
+        model: 'gpt-demo',
+      }),
+    );
+
+    expect(error.message).toMatch(/request failed/);
+    expect(error.message).not.toMatch(/sk-json-secret|json-token-secret/);
+  });
+
+  it('redacts header-style secrets in provider errors', async () => {
+    const sensitiveBody = [
+      'api-key: sk-header-secret',
+      'Authorization: Bearer bearer-secret',
+      'token: header-token-secret',
+    ].join('\n');
+    global.fetch = vi.fn().mockResolvedValue(new Response(sensitiveBody, { status: 400 })) as typeof fetch;
+
+    const transport = new AIProviderTransport();
+
+    const error = await captureError(() =>
+      transport.testConnection({
+        apiKey: 'secret',
+        baseUrl: 'https://example.com/v1',
+        model: 'gpt-demo',
+      }),
+    );
+
+    expect(error.message).not.toMatch(/sk-header-secret|bearer-secret|header-token-secret/);
+  });
 });

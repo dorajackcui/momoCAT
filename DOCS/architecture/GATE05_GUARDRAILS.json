@@ -88,7 +88,20 @@
     {
       "sourceRoot": "packages/localization/src",
       "forbiddenTargetRoot": "apps/desktop/src/main",
+      "forbiddenSpecifierPatterns": [
+        "^apps/desktop/src/main(?:/|$)",
+        "^@desktop/main(?:/|$)"
+      ],
       "message": "@cat/localization must not import desktop main code"
+    },
+    {
+      "sourceRoot": "packages/localization/src",
+      "forbiddenTargetRoot": "apps/desktop/src/shared",
+      "forbiddenSpecifierPatterns": [
+        "^apps/desktop/src/shared(?:/|$)",
+        "^@desktop/shared(?:/|$)"
+      ],
+      "message": "@cat/localization must not import desktop shared IPC code"
     }
   ]
 }

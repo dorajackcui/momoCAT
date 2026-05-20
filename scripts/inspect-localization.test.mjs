@@ -89,6 +89,16 @@ test("inspect localization script validates missing db", () => {
   assert.match(result.stderr, /Missing --db/);
 });
 
+test("inspect localization real runner loads built localization package", async () => {
+  const { loadLocalizationPackage } = await import(
+    "./inspect-localization-runner.mjs"
+  );
+
+  const localizationPackage = await loadLocalizationPackage();
+
+  assert.equal(typeof localizationPackage.runInspectLocalizationCommand, "function");
+});
+
 test("inspect localization validates empty equals values", () => {
   for (const [flag, pattern] of [
     ["--db=", /Missing value for --db\./],

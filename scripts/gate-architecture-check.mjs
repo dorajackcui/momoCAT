@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 const ROOT = process.cwd();
@@ -174,6 +175,10 @@ function isPathInside(root, candidate) {
     relativePath === "" ||
     (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
   );
+}
+
+export function matchesForbiddenSpecifierPatterns(specifier, patterns = []) {
+  return patterns.some((pattern) => new RegExp(pattern).test(specifier));
 }
 
 function validateProjectService() {
@@ -371,6 +376,16 @@ function validateForbiddenImports() {
       const importSpecifiers = getImportSpecifiers(sourceFile);
 
       for (const specifier of importSpecifiers) {
+        if (
+          matchesForbiddenSpecifierPatterns(
+            specifier,
+            rule.forbiddenSpecifierPatterns ?? [],
+          )
+        ) {
+          errors.push(`${relativeFilePath} imports forbidden target "${specifier}"; ${rule.message}`);
+          continue;
+        }
+
         const resolvedTarget = specifier.startsWith(".")
           ? resolveImportTarget(filePath, specifier)
           : null;
@@ -387,25 +402,31 @@ function validateForbiddenImports() {
   }
 }
 
-try {
-  validateProjectService();
-  validateCatDatabase();
-  validateCatCoreImports();
-  validateForbiddenImports();
-} catch (error) {
-  console.error(
-    "[gate:arch] Fatal error:",
-    error instanceof Error ? error.message : String(error),
-  );
-  process.exit(1);
-}
-
-if (errors.length > 0) {
-  console.error("[gate:arch] Architecture guard failed:");
-  for (const error of errors) {
-    console.error(`- ${error}`);
+function runArchitectureCheck() {
+  try {
+    validateProjectService();
+    validateCatDatabase();
+    validateCatCoreImports();
+    validateForbiddenImports();
+  } catch (error) {
+    console.error(
+      "[gate:arch] Fatal error:",
+      error instanceof Error ? error.message : String(error),
+    );
+    process.exit(1);
   }
-  process.exit(1);
+
+  if (errors.length > 0) {
+    console.error("[gate:arch] Architecture guard failed:");
+    for (const error of errors) {
+      console.error(`- ${error}`);
+    }
+    process.exit(1);
+  }
+
+  console.log("[gate:arch] Architecture guard passed.");
 }
 
-console.log("[gate:arch] Architecture guard passed.");
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  runArchitectureCheck();
+}

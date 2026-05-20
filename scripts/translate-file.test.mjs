@@ -108,6 +108,16 @@ test("localization cli npm scripts build package before entrypoints", () => {
   }
 });
 
+test("translate file real runner loads built localization package", async () => {
+  const { loadLocalizationPackage } = await import(
+    "./translate-file-runner.mjs"
+  );
+
+  const localizationPackage = await loadLocalizationPackage();
+
+  assert.equal(typeof localizationPackage.runTranslateFileCommand, "function");
+});
+
 test("translate file script validates invalid numeric options", () => {
   withTempFixture(({ baseArgs }) => {
     const cases = [
