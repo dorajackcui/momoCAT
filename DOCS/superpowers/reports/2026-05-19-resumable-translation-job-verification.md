@@ -2,9 +2,11 @@
 
 Date: 2026-05-19
 
+Updated: 2026-05-20
+
 Branch: `agent-first-batch-ai-mvp`
 
-Status: `DONE_WITH_CONCERNS`
+Status: `DONE`
 
 ## Docs Updated
 
@@ -30,6 +32,9 @@ Results:
 - LocalizationEngine tests: 2 files passed, 16 tests passed, 1 skipped.
 - Translate file CLI Node tests: 5 tests passed.
 - Desktop typecheck: passed.
+- After the real resume smoke exposed that reused checkpoint results were summarized as skipped, focused verification passed again:
+  - `npx vitest run apps/desktop/src/main/localization/fileTranslationJobAdapter.test.ts apps/desktop/src/main/localization/LocalizationEngine.cli.test.ts`: 2 files passed, 9 tests passed, 1 skipped.
+  - `npm run typecheck --workspace=apps/desktop`: passed.
 
 Notes:
 
@@ -85,23 +90,71 @@ Local source workbook count:
 }
 ```
 
-Translate command prepared but not run:
+Translate command:
 
 ```bash
 npm run translate:file -- --db "C:\Users\yizhi003\AppData\Roaming\simple-cat-tool\cat_v1.db" --project-id 3 --input "C:\Users\yizhi003\Downloads\memoQ上传\vibe\mt.xlsx" --output "C:\tmp\task8-resumable-mt.translated.xlsx" --checkpoint "C:\tmp\task8-resumable-mt.translated.checkpoint.jsonl" --events "C:\tmp\task8-resumable-mt.translated.events.jsonl" --artifacts "C:\tmp\task8-resumable-mt.translated.artifacts.jsonl" --snapshot "C:\tmp\task8-resumable-mt.translated.snapshot.xlsx" --snapshot-every-units 2
 ```
 
-Concern/blocker:
+Translate result:
 
-- The translate smoke was not executed because the escalation reviewer rejected it as a private-data export risk: the source workbook has 9 blank target rows, so the command would likely send spreadsheet content and DB-derived TM/TB/prompt context to the configured MT provider.
-- No translated XLSX/checkpoint/events/artifacts/snapshot files were produced.
-- The source input was not overwritten.
+- Passed after explicit user approval to send the 9 source segments plus DB-derived TM/TB/prompt context to the configured MT provider.
+- Summary event: `localization_file_complete`, total `9`, translated `9`, skipped `0`, failed `0`.
+- Output XLSX: `C:\tmp\task8-resumable-mt.translated.xlsx`
+- Checkpoint JSONL: `C:\tmp\task8-resumable-mt.translated.checkpoint.jsonl`
+- Events JSONL: `C:\tmp\task8-resumable-mt.translated.events.jsonl`
+- Artifacts JSONL: `C:\tmp\task8-resumable-mt.translated.artifacts.jsonl`
+- Snapshot XLSX: `C:\tmp\task8-resumable-mt.translated.snapshot.xlsx`
+- Source input was not overwritten.
 
-Expected output paths for a future approved real translate smoke:
+Output verification:
 
-- `C:\tmp\task8-resumable-mt.translated.xlsx`
-- `C:\tmp\task8-resumable-mt.translated.checkpoint.jsonl`
-- `C:\tmp\task8-resumable-mt.translated.events.jsonl`
-- `C:\tmp\task8-resumable-mt.translated.artifacts.jsonl`
-- `C:\tmp\task8-resumable-mt.translated.snapshot.xlsx`
+```json
+{
+  "workbook": {
+    "sheets": ["Sheet2"],
+    "ref": "A1:B10",
+    "rows": 10,
+    "source": 9,
+    "target": 9,
+    "blankTarget": 0,
+    "sourceIdx": 0,
+    "targetIdx": 1
+  },
+  "checkpoint": {
+    "lines": 9,
+    "status": { "translated": 9 },
+    "attempts": { "1": 9 }
+  },
+  "events": {
+    "lines": 15,
+    "event": {
+      "job_start": 1,
+      "unit_done": 9,
+      "snapshot": 4,
+      "job_done": 1
+    }
+  },
+  "artifacts": {
+    "lines": 9,
+    "status": { "translated": 9 }
+  }
+}
+```
 
+Same-job resume command:
+
+```bash
+npm run translate:file -- --db "C:\Users\yizhi003\AppData\Roaming\simple-cat-tool\cat_v1.db" --project-id 3 --input "C:\Users\yizhi003\Downloads\memoQ上传\vibe\mt.xlsx" --output "C:\tmp\task8-resumable-mt.translated.xlsx" --checkpoint "C:\tmp\task8-resumable-mt.translated.checkpoint.jsonl" --events "C:\tmp\task8-resumable-mt.same-job-resume-after-fix.events.jsonl" --artifacts "C:\tmp\task8-resumable-mt.same-job-resume-after-fix.artifacts.jsonl" --snapshot "C:\tmp\task8-resumable-mt.same-job-resume-after-fix.snapshot.xlsx" --resume --progress-stdout
+```
+
+Same-job resume result:
+
+- Passed.
+- Progress events emitted `9` unit completions with status `reused`.
+- Final summary: total `9`, translated `0`, skipped `0`, failed `0`, reused `9`.
+- The dynamic test body completed in `65ms`, consistent with checkpoint reuse rather than provider retranslation.
+
+Resume identity note:
+
+- Default file job identity is derived from the input filename and output basename. A probe that changed the output basename while reusing the checkpoint path was treated as a different job and retranslated. For current CLI usage, resume with the same output path.

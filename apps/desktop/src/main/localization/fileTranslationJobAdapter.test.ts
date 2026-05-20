@@ -207,6 +207,53 @@ describe('fileTranslationJobAdapter', () => {
     }
   });
 
+  it('reports reused checkpoint results separately from skipped rows', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
+    try {
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      writeWorkbook(inputPath, [
+        ['source', 'target'],
+        ['Hello', ''],
+      ]);
+      const reused = makeResult('row-2', 'Hello', 'Bonjour', { rowIndex: 1, rowNumber: 2 }, 'reused');
+
+      const result = await translateSpreadsheetFileJob(
+        {
+          projectId: 7,
+          inputPath,
+          outputPath,
+          job: { resume: true },
+        },
+        {
+          taskExecutor: async () => ({ results: [] }),
+          runnerFactory: (dependencies) => ({
+            run: async (job) => {
+              await dependencies.writeFinal?.([reused], { job, resultMap: new Map() });
+              return {
+                jobId: job.id,
+                summary: { total: 1, translated: 0, skipped: 0, reused: 1, failed: 0 },
+                results: [reused],
+              };
+            },
+          }),
+        },
+      );
+
+      expect(result.summary).toEqual({
+        total: 1,
+        translated: 0,
+        skipped: 0,
+        failed: 0,
+        reused: 1,
+      });
+      expect(result.results[0]?.status).toBe('reused');
+      expect(readRows(outputPath)[1][1]).toBe('Bonjour');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('keeps the compact worksheet range fix for job-mode output', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
     try {
@@ -335,13 +382,14 @@ function makeResult(
   source: string,
   target: string,
   metadata: Record<string, unknown>,
+  status: UnitResult['status'] = 'translated',
 ): UnitResult {
   return {
     jobId: 'job-1',
     documentId: 'mt.xlsx',
     unitId,
     sourceHash: computeSourceHash({ source }),
-    status: 'translated',
+    status,
     source,
     target,
     metadata,

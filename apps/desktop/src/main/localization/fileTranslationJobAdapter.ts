@@ -173,14 +173,20 @@ function jobRunResultToTranslateUnitsResult(
 
 function unitResultsToTranslateUnitsResult(results: UnitResult[]): TranslateUnitsResult {
   const translatedResults = results.map(unitResultToTranslateUnitResult);
+  const reused = translatedResults.filter((result) => result.status === 'reused').length;
+  const summary: TranslateUnitsResult['summary'] = {
+    total: translatedResults.length,
+    translated: translatedResults.filter((result) => result.status === 'translated').length,
+    skipped: translatedResults.filter((result) => result.status === 'skipped').length,
+    failed: translatedResults.filter((result) => result.status === 'failed').length,
+  };
+
+  if (reused > 0) {
+    summary.reused = reused;
+  }
 
   return {
-    summary: {
-      total: translatedResults.length,
-      translated: translatedResults.filter((result) => result.status === 'translated').length,
-      skipped: translatedResults.filter((result) => result.status === 'skipped').length,
-      failed: translatedResults.filter((result) => result.status === 'failed').length,
-    },
+    summary,
     results: translatedResults,
   };
 }
@@ -202,7 +208,10 @@ function unitResultToTranslateUnitResult(result: UnitResult): TranslateUnitResul
     id: result.unitId,
     source: result.source,
     target: result.target ?? '',
-    status: result.status === 'translated' ? 'translated' : 'skipped',
+    status:
+      result.status === 'translated' || result.status === 'reused'
+        ? result.status
+        : 'skipped',
     references: result.references,
     metadata: result.metadata,
   };

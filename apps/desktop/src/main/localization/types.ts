@@ -82,7 +82,7 @@ export interface TranslateUnitSuccess {
   id: string;
   source: string;
   target: string;
-  status: 'translated' | 'skipped';
+  status: 'translated' | 'skipped' | 'reused';
   references?: TranslateUnitReferences;
   metadata?: Record<string, unknown>;
 }
@@ -107,6 +107,7 @@ export interface TranslateUnitsResult {
     translated: number;
     skipped: number;
     failed: number;
+    reused?: number;
   };
   results: TranslateUnitResult[];
 }
