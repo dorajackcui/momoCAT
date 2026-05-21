@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runCli } from './cli';
+import { isDirectRun } from './index';
 
 function createHarness() {
   const stdout: string[] = [];
@@ -51,5 +52,23 @@ describe('momocat CLI dispatch', () => {
     expect(exitCode).toBe(1);
     expect(harness.stderr.join('')).toContain('Unknown command: nope');
     expect(harness.stderr.join('')).toContain('Run: momocat --help');
+  });
+
+  it('detects direct execution through resolved real paths', () => {
+    const realpath = (filePath: string) => {
+      const normalized = filePath.replaceAll('\\', '/');
+      if (normalized === 'D:/repo/node_modules/.bin/momocat') {
+        return 'D:/repo/apps/cli/dist/index.mjs';
+      }
+      return normalized;
+    };
+
+    expect(
+      isDirectRun(
+        'D:/repo/node_modules/.bin/momocat',
+        'file:///D:/repo/apps/cli/dist/index.mjs',
+        realpath,
+      ),
+    ).toBe(true);
   });
 });
