@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { CATDatabase } from '@cat/db';
 import type { Segment } from '@cat/core/models';
 import { runInspectProjectsCommand } from './inspectProjectsCommand';
@@ -160,6 +160,57 @@ describe('runInspectProjectsCommand', () => {
 
       expect(result.projects).toEqual([]);
     } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('aggregates file status counts across bounded segment pages', () => {
+    const { dbPath, projectId, tempRoot } = createFixtureDb();
+    const db = new CATDatabase(dbPath);
+    let fileId = 0;
+    try {
+      fileId = db.createFile(projectId, 'paged.xlsx');
+      db.bulkInsertSegments(
+        Array.from({ length: 1001 }, (_, index) => {
+          const row = index + 1;
+          return createSegment(
+            fileId,
+            row + 100,
+            index % 2 === 0 ? `Target ${row}` : '',
+            index % 3 === 0 ? 'confirmed' : 'translated',
+          );
+        }),
+      );
+    } finally {
+      db.close();
+    }
+
+    const pageSpy = vi.spyOn(CATDatabase.prototype, 'getSegmentsPage');
+    try {
+      const result = runInspectProjectsCommand({
+        dbPath,
+        projectId,
+        generatedAt: () => '2026-05-21T00:00:00.000Z',
+      });
+      const file = result.projects[0].files.find((entry) => entry.name === 'paged.xlsx');
+
+      expect(file).toMatchObject({
+        totalSegments: 1001,
+        targetRows: 501,
+        statusCounts: {
+          confirmed: 334,
+          translated: 667,
+        },
+      });
+      const pagedFileCalls = pageSpy.mock.calls.filter(([calledFileId]) => calledFileId === fileId);
+      expect(pagedFileCalls.map(([, offset, limit]) => [offset, limit])).toEqual([
+        [0, 500],
+        [500, 500],
+        [1000, 500],
+        [1500, 500],
+      ]);
+    } finally {
+      pageSpy.mockRestore();
       fs.rmSync(tempRoot, { recursive: true, force: true });
     }
   });

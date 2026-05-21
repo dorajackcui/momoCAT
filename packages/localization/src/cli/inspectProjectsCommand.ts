@@ -11,6 +11,7 @@ const PROVIDER_CATALOG_KEY = 'ai_provider_catalog_v1';
 const PROVIDER_KEY_PREFIX = 'ai_provider_key::';
 const OPENAI_API_KEY = 'openai_api_key';
 const BUILTIN_OPENAI_BASE_URL = 'https://api.openai.com/v1';
+const SEGMENT_PAGE_SIZE = 500;
 
 export interface InspectProjectsCommandConfig {
   dbPath: string;
@@ -202,27 +203,42 @@ function inspectFile(
   db: CATDatabase,
   file: ReturnType<CATDatabase['listFiles']>[number],
 ): InspectProjectFileSummary {
-  const segments = file.totalSegments > 0 ? db.getSegmentsPage(file.id, 0, file.totalSegments) : [];
+  const segmentSummary = summarizeFileSegments(db, file.id);
   return {
     id: file.id,
     name: file.name,
     totalSegments: file.totalSegments,
-    targetRows: countTargetRows(segments),
+    targetRows: segmentSummary.targetRows,
     confirmedSegments: file.confirmedSegments,
-    statusCounts: countStatuses(segments),
+    statusCounts: segmentSummary.statusCounts,
   };
 }
 
-function countTargetRows(segments: Segment[]): number {
-  return segments.filter((segment) => segment.targetTokens.length > 0).length;
+function summarizeFileSegments(
+  db: CATDatabase,
+  fileId: number,
+): { targetRows: number; statusCounts: Record<string, number> } {
+  let targetRows = 0;
+  const statusCounts: Record<string, number> = {};
+
+  for (let offset = 0; ; offset += SEGMENT_PAGE_SIZE) {
+    const segments = db.getSegmentsPage(fileId, offset, SEGMENT_PAGE_SIZE);
+    if (segments.length === 0) {
+      break;
+    }
+    for (const segment of segments) {
+      if (hasTargetTokens(segment)) {
+        targetRows += 1;
+      }
+      statusCounts[segment.status] = (statusCounts[segment.status] ?? 0) + 1;
+    }
+  }
+
+  return { targetRows, statusCounts };
 }
 
-function countStatuses(segments: Segment[]): Record<string, number> {
-  const counts: Record<string, number> = {};
-  for (const segment of segments) {
-    counts[segment.status] = (counts[segment.status] ?? 0) + 1;
-  }
-  return counts;
+function hasTargetTokens(segment: Segment): boolean {
+  return segment.targetTokens.length > 0;
 }
 
 function readCustomProviders(settings: Map<string, string>): InspectProviderSummary[] {
