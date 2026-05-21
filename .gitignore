@@ -51,5 +51,6 @@ Thumbs.db
 *.tmp
 *_translated.xlsx
 *_translated.csv
+testoutput/
 test-data/
 testExcel/
