@@ -4,7 +4,7 @@ import { normalizeProjectAIModel } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { CATDatabase } from '@cat/db';
-import { MTModule, type ResolvedMTConfig } from './modules/MTModule';
+import { MTModule } from './modules/MTModule';
 import { TBModule } from './modules/TBModule';
 import { TMModule } from './modules/TMModule';
 import { TBService } from './services/TBService';
@@ -18,7 +18,6 @@ import { AIProviderCatalogService } from './providers/AIProviderCatalogService';
 import { resolveBatchTargetScope } from './translationTargetScope';
 import { AIProviderTransport } from './providers/AIProviderTransport';
 import type { AIRuntimeConfigProvider, AITransport } from './ports';
-import { runBounded } from './RequestScheduler';
 import { translateSpreadsheetFileJob } from './fileTranslationJobAdapter';
 import { translateSpreadsheetFile } from './spreadsheetFileAdapter';
 import { createTransientSegment } from './transientSegment';
@@ -29,16 +28,9 @@ import {
   toArtifactRecord,
   toUnitResult,
 } from './requestModes/shared/results';
-import {
-  emptyReferencesForUnit,
-  resolveRequestModeReferences,
-} from './requestModes/shared/references';
-import type {
-  PreparedTranslatableJobUnit,
-  PreparedTranslationArtifacts,
-  ResolvedReferences,
-} from './requestModes/types';
+import type { PreparedTranslatableJobUnit } from './requestModes/types';
 import { WindowModeSequentialBatchStrategy } from './requestModes/windowSequentialBatch/WindowModeSequentialBatchStrategy';
+import { LegacySingleUnitConcurrentStrategy } from './requestModes/legacySingleUnitConcurrent/LegacySingleUnitConcurrentStrategy';
 import type {
   ArtifactRecord,
   TaskExecutionContext,
@@ -64,11 +56,6 @@ export interface LocalizationEngineConstructorOptions extends LocalizationEngine
   dbPath: string;
   aiTransport?: AITransport;
   aiRuntimeConfigProvider?: AIRuntimeConfigProvider;
-}
-
-interface PreparedTranslationResult {
-  result: TranslateUnitResult;
-  artifacts?: PreparedTranslationArtifacts;
 }
 
 type ProjectRecord = NonNullable<ReturnType<SqliteProjectRepository['getProject']>>;
@@ -97,6 +84,7 @@ export class LocalizationEngine {
   private readonly tbModule: TBModule;
   private readonly mtModule: MTModule;
   private readonly windowModeStrategy: WindowModeSequentialBatchStrategy;
+  private readonly legacyStrategy: LegacySingleUnitConcurrentStrategy;
   private readonly options: LocalizationEngineConstructorOptions;
 
   constructor(db: CATDatabase, options: LocalizationEngineConstructorOptions) {
@@ -127,6 +115,11 @@ export class LocalizationEngine {
       tagValidator: new TagValidator(),
     });
     this.windowModeStrategy = new WindowModeSequentialBatchStrategy({
+      tmModule: this.tmModule,
+      tbModule: this.tbModule,
+      mtModule: this.mtModule,
+    });
+    this.legacyStrategy = new LegacySingleUnitConcurrentStrategy({
       tmModule: this.tmModule,
       tbModule: this.tbModule,
       mtModule: this.mtModule,
@@ -223,42 +216,31 @@ export class LocalizationEngine {
       input.options?.providerOverride,
     );
 
-    const scheduledResults = await runBounded(
-      preparedUnits,
-      async (prepared) => {
-        if (prepared.kind === 'skipped') {
-          return prepared.result;
-        }
-
-        return (
-          await this.translatePreparedUnitWithArtifacts({
-            unit: prepared.unit,
-            segment: prepared.segment,
-            project,
-            mtConfig,
-            mtOptions,
-            includeReferences: Boolean(input.options?.includeReferences),
-            captureArtifacts: false,
-          })
-        ).result;
-      },
-      { maxConcurrency },
+    const translatableUnits = preparedUnits.flatMap((prepared) =>
+      prepared.kind === 'translatable'
+        ? [{ unit: prepared.unit, segment: prepared.segment }]
+        : [],
     );
-
-    const results = scheduledResults.map((result, index): TranslateUnitResult => {
-      if (result.status === 'fulfilled') {
-        return result.value;
+    const translated = await this.legacyStrategy.translateUnits({
+      project,
+      mtConfig,
+      mtOptions,
+      includeReferences: Boolean(input.options?.includeReferences),
+      maxConcurrency,
+      units: translatableUnits,
+    });
+    const translatedResults = [...translated.results];
+    const results = preparedUnits.map((prepared): TranslateUnitResult => {
+      if (prepared.kind === 'skipped') {
+        return prepared.result;
       }
 
-      const unit = input.units[index];
-      return {
-        id: unit.id,
-        source: unit.source,
-        target: unit.target,
-        status: 'failed',
-        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-        metadata: unit.metadata,
-      };
+      const translatedResult = translatedResults.shift();
+      if (!translatedResult) {
+        throw new Error(`Legacy MT strategy did not return a result for unit: ${prepared.unit.id}`);
+      }
+
+      return translatedResult;
     });
 
     return buildTranslateUnitsResult(results);
@@ -507,69 +489,6 @@ export class LocalizationEngine {
       unit,
       segment,
     };
-  }
-
-  private async translatePreparedUnitWithArtifacts(params: {
-    unit: ExternalTranslationUnit;
-    segment: Segment;
-    project: ProjectRecord;
-    mtConfig: ResolvedMTConfig;
-    mtOptions: NonNullable<LocalizationEngineOptions['mt']>;
-    includeReferences: boolean;
-    captureArtifacts: boolean;
-  }): Promise<PreparedTranslationResult> {
-    const source = params.unit.source;
-    const projectType = params.project.projectType ?? 'translation';
-    const references =
-      projectType === 'translation'
-        ? await this.resolveReferences(params.project.id, params.segment)
-        : emptyReferencesForUnit({ unitId: params.unit.id }, params.segment);
-
-    const { targetTokens, prompt } = await this.mtModule.translate({
-      unitId: params.unit.id,
-      project: params.project,
-      segment: params.segment,
-      tm: references.tm,
-      tb: references.tb,
-      mtOptions: params.mtOptions,
-      apiKey: params.mtConfig.apiKey,
-      baseUrl: params.mtConfig.provider.baseUrl,
-      model: params.mtConfig.model,
-      reasoningEffort: params.mtConfig.reasoningEffort,
-      provider: params.mtConfig.provider,
-      srcLang: params.unit.sourceLanguage ?? params.project.srcLang,
-      tgtLang: params.unit.targetLanguage ?? params.project.tgtLang,
-    });
-
-    return {
-      result: {
-        id: params.unit.id,
-        source,
-        target: serializeTokensToDisplayText(targetTokens),
-        status: 'translated',
-        references: params.includeReferences ? references.engineReferences : undefined,
-        metadata: params.unit.metadata,
-      },
-      artifacts: params.captureArtifacts
-        ? {
-            tm: references.tm,
-            tb: references.tb,
-            prompt,
-          }
-        : undefined,
-    };
-  }
-
-  private async resolveReferences(
-    projectId: number,
-    segment: Segment,
-  ): Promise<ResolvedReferences> {
-    return resolveRequestModeReferences({
-      projectId,
-      segment,
-      tmModule: this.tmModule,
-      tbModule: this.tbModule,
-    });
   }
 
 }

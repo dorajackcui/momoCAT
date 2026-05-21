@@ -377,6 +377,47 @@ describe('LocalizationEngine.translateUnits', () => {
       db.close();
     }
   });
+
+  it('keeps legacy translateUnits on bounded single-unit concurrency', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Legacy Concurrency', 'en', 'fr');
+      seedApiKey(db);
+      let active = 0;
+      let maxActive = 0;
+      const transport = createTransport();
+      transport.createResponse.mockImplementation(async () => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await delay(20);
+        active -= 1;
+        return {
+          content: 'Bonjour',
+          status: 200,
+          endpoint: '/mock',
+        };
+      });
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+
+      await engine.translateUnits({
+        projectId,
+        units: [
+          { id: 'unit-1', source: 'Hello 1' },
+          { id: 'unit-2', source: 'Hello 2' },
+          { id: 'unit-3', source: 'Hello 3' },
+        ],
+        options: { maxConcurrency: 2 },
+      });
+
+      expect(transport.createResponse).toHaveBeenCalledTimes(3);
+      expect(maxActive).toBe(2);
+    } finally {
+      db.close();
+    }
+  });
 });
 
 describe('LocalizationEngine.translateFile job mode', () => {
