@@ -155,15 +155,13 @@ describe('momocat CLI dispatch', () => {
       [
         'inspect',
         'localization',
-        '--db',
-        'cat.db',
+        '--db-path=cat.db',
         '--project-id=7',
-        '--input',
-        'input.xlsx',
+        '--input=input.xlsx',
         '--output=inspect.xlsx',
-        '--json-output',
-        'inspect.json',
-        '--unit-limit=12',
+        '--json-output=inspect.json',
+        '--unit-limit',
+        '12',
         '--max-cell-chars',
         '5000',
       ],
@@ -284,6 +282,54 @@ describe('momocat CLI dispatch', () => {
     expect(exitCode).toBe(1);
     expect(harness.calls).toEqual([]);
     expect(harness.stderr.join('')).toContain('Unknown argument: --surprise');
+  });
+
+  it('reports inspect localization unknown equals arguments before missing values', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      [
+        'inspect',
+        'localization',
+        '--db',
+        'cat.db',
+        '--project-id',
+        '7',
+        '--input',
+        'input.xlsx',
+        '--output',
+        'inspect.xlsx',
+        '--surprise=',
+      ],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toContain('Unknown argument: --surprise');
+  });
+
+  it('reports inspect localization known empty equals options as missing values', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      [
+        'inspect',
+        'localization',
+        '--db-path=',
+        '--project-id',
+        '7',
+        '--input',
+        'input.xlsx',
+        '--output',
+        'inspect.xlsx',
+      ],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toContain('Missing value for --db-path.');
   });
 
   it('prints translate file help from the temporary stub', async () => {

@@ -37,9 +37,14 @@ function parseInspectLocalizationArgs(
     }
 
     if (equalsIndex !== -1) {
+      const name = arg.slice(2, equalsIndex);
+      if (!isKnownOption(name)) {
+        throw new Error(`Unknown argument: ${arg.slice(0, equalsIndex)}`);
+      }
+
       assignOption(
         config,
-        arg.slice(2, equalsIndex),
+        name,
         arg.slice(equalsIndex + 1),
         io,
         arg.slice(0, equalsIndex),
