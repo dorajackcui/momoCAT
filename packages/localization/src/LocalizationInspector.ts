@@ -16,9 +16,12 @@ import { SqliteTMRepository } from './adapters/sqlite/SqliteTMRepository';
 import { DefaultAIRuntimeConfigProvider } from './providers/AIRuntimeConfigService';
 import { AIProviderCatalogService } from './providers/AIProviderCatalogService';
 import { AIProviderTransport } from './providers/AIProviderTransport';
+import { computeSourceHash } from './job/sourceHash';
+import type { JobUnit, TranslationTask } from './job/types';
 import { resolveBatchTargetScope } from './translationTargetScope';
 import type { MTBatchCurrentUnitInput } from './modules/MTModule';
 import type { AIRuntimeConfigProvider, AITransport } from './ports';
+import { buildWindowModeContext } from './requestModes/shared/contextWindowBuilder';
 import type {
   FileParseRowArtifact,
   InspectArtifact,
@@ -296,8 +299,7 @@ export class LocalizationInspector {
           taskId: `inspect-window-${Math.floor(batchStart / INSPECT_BATCH_SIZE) + 1}`,
           project,
           current,
-          previousContext: buildPreviousTranslatedContext(contextRows, readyRows),
-          nextContext: buildNextSourceContext(contextRows, readyRows),
+          ...buildInspectWindowContext(contextRows, readyRows, inputDocumentId),
           mtOptions: this.options.mt,
           providerOverride: this.options.mt?.providerId,
         });
@@ -392,67 +394,70 @@ function rowToUnit(
   };
 }
 
-function buildPreviousTranslatedContext(
+function readyRowsToJobUnits(
   rows: FileParseRowArtifact[],
-  currentRows: InspectReadyRow[],
-): Array<{ source: string; target: string }> {
-  const currentIndexes = new Set(currentRows.map((row) => row.sourceIndex));
-  const lastCurrentIndex = Math.max(
-    ...currentRows.map((row) => row.sourceIndex),
-  );
-
-  if (!Number.isFinite(lastCurrentIndex)) {
-    return [];
-  }
-
-  const candidates: number[] = [];
-  for (
-    let index = lastCurrentIndex - 1;
-    index >= 0 && candidates.length < 5;
-    index -= 1
-  ) {
-    if (currentIndexes.has(index)) {
-      continue;
-    }
-
-    if (rows[index].target.trim()) {
-      candidates.push(index);
-    }
-  }
-
-  return candidates
-    .reverse()
-    .map((index) => ({
-      source: rows[index].source,
-      target: rows[index].target,
+  documentId: string,
+): JobUnit[] {
+  return rows
+    .filter((row) => row.source.trim())
+    .map((row) => ({
+      documentId,
+      unitId: row.unitId,
+      source: row.source,
+      target: row.target,
+      context: row.context,
+      rowNumber: row.rowNumber,
+      sourceHash: computeSourceHash({
+        source: row.source,
+        context: row.context,
+        resumeFingerprint: 'inspect',
+      }),
+      metadata: {
+        rowIndex: row.rowIndex,
+        rowNumber: row.rowNumber,
+      },
     }));
 }
 
-function buildNextSourceContext(
+function buildInspectWindowContext(
   rows: FileParseRowArtifact[],
   currentRows: InspectReadyRow[],
-): Array<{ source: string }> {
-  const lastCurrentIndex = Math.max(
-    ...currentRows.map((row) => row.sourceIndex),
+  documentId: string,
+): ReturnType<typeof buildWindowModeContext> {
+  const jobUnits = readyRowsToJobUnits(rows, documentId);
+  const jobUnitsByUnitId = new Map(jobUnits.map((unit) => [unit.unitId, unit]));
+  const currentUnits = currentRows.flatMap((row) => {
+    const unit = jobUnitsByUnitId.get(row.row.unitId);
+    return unit ? [unit] : [];
+  });
+  const completedResults = new Map(
+    jobUnits
+      .filter((unit) => unit.target?.trim())
+      .map((unit) => [
+        `${unit.documentId}\u0000${unit.unitId}`,
+        {
+          jobId: 'inspect',
+          documentId: unit.documentId,
+          unitId: unit.unitId,
+          sourceHash: unit.sourceHash,
+          status: 'skipped' as const,
+          source: unit.source,
+          target: unit.target,
+          metadata: unit.metadata,
+        },
+      ]),
   );
+  const task: TranslationTask = {
+    taskId: 'inspect-window-context',
+    units: currentUnits,
+  };
 
-  if (!Number.isFinite(lastCurrentIndex)) {
-    return [];
-  }
-
-  const candidates: number[] = [];
-  for (
-    let index = lastCurrentIndex + 1;
-    index < rows.length && candidates.length < 5;
-    index += 1
-  ) {
-    if (rows[index].source.trim()) {
-      candidates.push(index);
-    }
-  }
-
-  return candidates
-    .map((index) => ({ source: rows[index].source }));
+  return buildWindowModeContext({
+    task,
+    jobUnits,
+    currentUnits,
+    completedResults,
+  });
 }
 
 function isTranslatableUnderTargetScope(

@@ -287,6 +287,43 @@ describe('LocalizationInspector.inspectFile', () => {
     }
   });
 
+  it('uses the shared Window Mode context rules for previous translated rows', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Shared Context Inspect', 'en', 'fr');
+      const inputPath = writeInputWorkbook(root, [
+        ['source', 'target'],
+        ['Open', 'Ouvrir'],
+        ['Blank target', ''],
+        ['Current A', ''],
+        ['Current B', ''],
+      ]);
+      const inspector = new LocalizationInspector(db, {
+        aiTransport: createTransport(),
+        aiRuntimeConfigProvider: runtimeConfigProvider(),
+      });
+
+      const result = await inspector.inspectFile({
+        projectId,
+        inputPath,
+        outputPath: join(root, 'inspect.xlsx'),
+      });
+      const json = JSON.parse(await readFile(result.jsonOutputPath, 'utf8'));
+      const currentA = json.units.find(
+        (unit: { unit: { source: string } }) => unit.unit.source === 'Current A',
+      );
+
+      expect(currentA.mt.userPrompt).toContain('Previous 5 translated rows');
+      expect(currentA.mt.userPrompt).toContain('Open -> Ouvrir');
+      expect(currentA.mt.userPrompt).not.toContain('Blank target ->');
+      expect(currentA.mt.userPrompt).not.toMatch(/^id: row-2$/m);
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('uses source rows after the current chunk as next Window Mode context', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
     const db = new CATDatabase(':memory:');
