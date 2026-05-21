@@ -5,8 +5,8 @@ import { TagValidator } from '@cat/core/qa';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { CATDatabase } from '@cat/db';
 import { MTModule, type MTBatchCurrentUnitInput, type ResolvedMTConfig } from './modules/MTModule';
-import { TBModule, mapTBEngineReferences } from './modules/TBModule';
-import { TMModule, mapTMEngineReferences } from './modules/TMModule';
+import { TBModule } from './modules/TBModule';
+import { TMModule } from './modules/TMModule';
 import { TBService } from './services/TBService';
 import { TMService } from './services/TMService';
 import { SqliteProjectRepository } from './adapters/sqlite/SqliteProjectRepository';
@@ -22,6 +22,22 @@ import { runBounded } from './RequestScheduler';
 import { translateSpreadsheetFileJob } from './fileTranslationJobAdapter';
 import { translateSpreadsheetFile } from './spreadsheetFileAdapter';
 import { createTransientSegment } from './transientSegment';
+import { batchResponseId, unitKey } from './requestModes/shared/unitIdentity';
+import {
+  buildTranslateUnitsResult,
+  jobUnitToExternalUnit,
+  toArtifactRecord,
+  toUnitResult,
+} from './requestModes/shared/results';
+import {
+  emptyReferencesForUnit,
+  resolveRequestModeReferences,
+} from './requestModes/shared/references';
+import type {
+  PreparedTranslationArtifacts,
+  PreparedWindowBatchResult,
+  ResolvedReferences,
+} from './requestModes/types';
 import type {
   ArtifactRecord,
   JobUnit,
@@ -30,7 +46,6 @@ import type {
   TranslationTask,
   TranslationTaskExecutor,
   UnitResult,
-  UnitResultStatus,
 } from './job/types';
 import type {
   ExternalTranslationUnit,
@@ -40,7 +55,6 @@ import type {
   LocalizationTargetScope,
   TranslateFileInput,
   TranslateFileResult,
-  TranslateUnitReferences,
   TranslateUnitResult,
   TranslateUnitsInput,
   TranslateUnitsResult,
@@ -52,26 +66,9 @@ export interface LocalizationEngineConstructorOptions extends LocalizationEngine
   aiRuntimeConfigProvider?: AIRuntimeConfigProvider;
 }
 
-interface ResolvedReferences {
-  engineReferences: TranslateUnitReferences;
-  tm: Awaited<ReturnType<TMModule['inspect']>>;
-  tb: Awaited<ReturnType<TBModule['inspect']>>;
-}
-
-interface PreparedTranslationArtifacts {
-  tm: ResolvedReferences['tm'];
-  tb: ResolvedReferences['tb'];
-  prompt: Awaited<ReturnType<MTModule['translate']>>['prompt'];
-}
-
 interface PreparedTranslationResult {
   result: TranslateUnitResult;
   artifacts?: PreparedTranslationArtifacts;
-}
-
-interface PreparedWindowBatchResult {
-  results: UnitResult[];
-  artifacts?: ArtifactRecord[];
 }
 
 type ProjectRecord = NonNullable<ReturnType<SqliteProjectRepository['getProject']>>;
@@ -564,19 +561,12 @@ export class LocalizationEngine {
     projectId: number,
     segment: Segment,
   ): Promise<ResolvedReferences> {
-    const [tmMatches, tbMatches] = await Promise.all([
-      this.tmModule.inspect(projectId, segment),
-      this.tbModule.inspect(projectId, segment),
-    ]);
-
-    return {
-      engineReferences: {
-        tm: mapTMEngineReferences(tmMatches.rawMatches),
-        tb: mapTBEngineReferences(tbMatches.rawMatches),
-      },
-      tm: tmMatches,
-      tb: tbMatches,
-    };
+    return resolveRequestModeReferences({
+      projectId,
+      segment,
+      tmModule: this.tmModule,
+      tbModule: this.tbModule,
+    });
   }
 
   private async translatePreparedWindowBatchWithArtifacts(params: {
@@ -754,41 +744,6 @@ export class LocalizationEngine {
   }
 }
 
-function emptyReferencesForUnit(unit: Pick<JobUnit, 'unitId'>, segment: Segment): ResolvedReferences {
-  return {
-    engineReferences: {
-      tm: [],
-      tb: [],
-    },
-    tm: {
-      unitId: unit.unitId,
-      segmentId: segment.segmentId,
-      mountedTMs: [],
-      rawMatches: [],
-      selectedReferences: {
-        tmReferences: [],
-        concordanceReferences: [],
-      },
-      selectionPolicy: {
-        maxTmReferences: 0,
-        maxConcordanceReferences: 0,
-      },
-      diagnostics: [],
-    },
-    tb: {
-      unitId: unit.unitId,
-      segmentId: segment.segmentId,
-      mountedTBs: [],
-      rawMatches: [],
-      selectedReferences: [],
-      selectionPolicy: {
-        maxTbReferences: 0,
-      },
-      diagnostics: [],
-    },
-  };
-}
-
 function mergeCompletedResults(
   completedResults: ReadonlyMap<string, UnitResult> | undefined,
   skippedResults: UnitResult[],
@@ -819,14 +774,6 @@ function resolveJobOrder(
   return allCurrentUnitsExist ? jobUnits : taskUnits;
 }
 
-function unitKey(unit: Pick<JobUnit, 'documentId' | 'unitId'>): string {
-  return `${unit.documentId}\u0000${unit.unitId}`;
-}
-
-function batchResponseId(unit: Pick<JobUnit, 'documentId' | 'unitId'>): string {
-  return `${encodeURIComponent(unit.documentId)}#${encodeURIComponent(unit.unitId)}`;
-}
-
 function hashCanonicalPayload(entries: Array<[string, unknown]>): string {
   const payload = entries.filter(([, value]) => value !== undefined);
 
@@ -838,76 +785,6 @@ function compareResourceFingerprint(
   right: { id: string; priority: number },
 ): number {
   return left.priority - right.priority || left.id.localeCompare(right.id);
-}
-
-function jobUnitToExternalUnit(unit: {
-  unitId: string;
-  source: string;
-  target?: string;
-  context?: string;
-  rowNumber?: number;
-  metadata?: Record<string, unknown>;
-}): ExternalTranslationUnit {
-  return {
-    id: unit.unitId,
-    source: unit.source,
-    target: unit.target,
-    context: unit.context,
-    rowNumber: unit.rowNumber,
-    metadata: unit.metadata,
-  };
-}
-
-function toUnitResult(
-  jobId: string,
-  unit: TranslationTask['units'][number],
-  result: TranslateUnitResult,
-): UnitResult {
-  return {
-    jobId,
-    documentId: unit.documentId,
-    unitId: unit.unitId,
-    sourceHash: unit.sourceHash,
-    status: result.status as UnitResultStatus,
-    source: unit.source,
-    target: result.target,
-    error: result.status === 'failed' ? result.error : undefined,
-    references: result.references,
-    metadata: unit.metadata,
-  };
-}
-
-function toArtifactRecord(
-  jobId: string,
-  taskId: string,
-  unit: TranslationTask['units'][number],
-  result: UnitResult,
-  artifacts?: PreparedTranslationArtifacts,
-): ArtifactRecord {
-  return {
-    job: jobId,
-    task: taskId,
-    doc: unit.documentId,
-    unit: unit.unitId,
-    tm: artifacts?.tm,
-    tb: artifacts?.tb,
-    prompt: artifacts?.prompt,
-    result,
-    error: result.error,
-    at: new Date().toISOString(),
-  };
-}
-
-function buildTranslateUnitsResult(results: TranslateUnitResult[]): TranslateUnitsResult {
-  return {
-    summary: {
-      total: results.length,
-      translated: results.filter((result) => result.status === 'translated').length,
-      skipped: results.filter((result) => result.status === 'skipped').length,
-      failed: results.filter((result) => result.status === 'failed').length,
-    },
-    results,
-  };
 }
 
 function mergeMTOptions(
