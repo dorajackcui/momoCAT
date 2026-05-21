@@ -92,7 +92,6 @@ export class CATDatabase {
     progress: number;
     fileCount: number;
   })[] {
-    console.log("[DB] Listing projects");
     const projects = this.projectRepo.listProjects();
 
     return projects.map((project) => {

@@ -107,3 +107,13 @@ export { runTranslateFileCommand } from './cli/translateFileCommand';
 export type { TranslateFileCommandConfig } from './cli/translateFileCommand';
 export { runInspectLocalizationCommand } from './cli/inspectLocalizationCommand';
 export type { InspectLocalizationCommandConfig } from './cli/inspectLocalizationCommand';
+export { runInspectProjectsCommand } from './cli/inspectProjectsCommand';
+export type {
+  InspectMountedTBSummary,
+  InspectMountedTMSummary,
+  InspectProjectFileSummary,
+  InspectProjectSummary,
+  InspectProjectsCommandConfig,
+  InspectProjectsResult,
+  InspectProviderSummary,
+} from './cli/inspectProjectsCommand';
