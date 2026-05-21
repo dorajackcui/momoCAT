@@ -6,6 +6,7 @@
 
 # Monorepo Build Outputs
 packages/*/dist/
+apps/cli/dist/
 apps/desktop/out/
 apps/desktop/dist/
 release/

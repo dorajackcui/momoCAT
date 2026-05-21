@@ -54,6 +54,30 @@ describe('momocat CLI dispatch', () => {
     expect(harness.stderr.join('')).toContain('Run: momocat --help');
   });
 
+  it('prints inspect projects help from the temporary stub', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(['inspect', 'projects', '--help'], harness.deps, harness.io);
+
+    expect(exitCode).toBe(0);
+    expect(harness.stdout.join('')).toContain('Usage: momocat inspect projects');
+  });
+
+  it('prints inspect localization help from the temporary stub', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(['inspect', 'localization', '--help'], harness.deps, harness.io);
+
+    expect(exitCode).toBe(0);
+    expect(harness.stdout.join('')).toContain('Usage: momocat inspect localization');
+  });
+
+  it('prints translate file help from the temporary stub', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(['translate', 'file', '--help'], harness.deps, harness.io);
+
+    expect(exitCode).toBe(0);
+    expect(harness.stdout.join('')).toContain('Usage: momocat translate file');
+  });
+
   it('detects direct execution through resolved real paths', () => {
     const realpath = (filePath: string) => {
       const normalized = filePath.replaceAll('\\', '/');
@@ -70,5 +94,21 @@ describe('momocat CLI dispatch', () => {
         realpath,
       ),
     ).toBe(true);
+  });
+
+  it('does not detect direct execution without an argv entry', () => {
+    expect(isDirectRun(undefined, 'file:///D:/repo/apps/cli/dist/index.mjs')).toBe(false);
+  });
+
+  it('does not detect direct execution for mismatched paths', () => {
+    const realpath = (filePath: string) => filePath.replaceAll('\\', '/');
+
+    expect(
+      isDirectRun(
+        'D:/repo/node_modules/.bin/other',
+        'file:///D:/repo/apps/cli/dist/index.mjs',
+        realpath,
+      ),
+    ).toBe(false);
   });
 });
