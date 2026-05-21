@@ -22,6 +22,7 @@ import { resolveBatchTargetScope } from './translationTargetScope';
 import type { MTBatchCurrentUnitInput } from './modules/MTModule';
 import type { AIRuntimeConfigProvider, AITransport } from './ports';
 import { buildWindowModeContext } from './requestModes/shared/contextWindowBuilder';
+import { unitKey } from './requestModes/shared/unitIdentity';
 import type {
   FileParseRowArtifact,
   InspectArtifact,
@@ -394,7 +395,7 @@ function rowToUnit(
   };
 }
 
-function readyRowsToJobUnits(
+function inspectRowsToJobUnits(
   rows: FileParseRowArtifact[],
   documentId: string,
 ): JobUnit[] {
@@ -424,7 +425,7 @@ function buildInspectWindowContext(
   currentRows: InspectReadyRow[],
   documentId: string,
 ): ReturnType<typeof buildWindowModeContext> {
-  const jobUnits = readyRowsToJobUnits(rows, documentId);
+  const jobUnits = inspectRowsToJobUnits(rows, documentId);
   const jobUnitsByUnitId = new Map(jobUnits.map((unit) => [unit.unitId, unit]));
   const currentUnits = currentRows.flatMap((row) => {
     const unit = jobUnitsByUnitId.get(row.row.unitId);
@@ -434,7 +435,7 @@ function buildInspectWindowContext(
     jobUnits
       .filter((unit) => unit.target?.trim())
       .map((unit) => [
-        `${unit.documentId}\u0000${unit.unitId}`,
+        unitKey(unit),
         {
           jobId: 'inspect',
           documentId: unit.documentId,
