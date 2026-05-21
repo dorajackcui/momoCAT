@@ -54,12 +54,66 @@ describe('momocat CLI dispatch', () => {
     expect(harness.stderr.join('')).toContain('Run: momocat --help');
   });
 
-  it('prints inspect projects help from the temporary stub', async () => {
+  it('prints inspect projects help', async () => {
     const harness = createHarness();
     const exitCode = await runCli(['inspect', 'projects', '--help'], harness.deps, harness.io);
 
     expect(exitCode).toBe(0);
     expect(harness.stdout.join('')).toContain('Usage: momocat inspect projects');
+    expect(harness.stdout.join('')).toContain('--project-id <id>');
+    expect(harness.stdout.join('')).toContain('--json');
+  });
+
+  it('maps inspect projects options to the localization command API', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      ['inspect', 'projects', '--db', 'cat.db', '--project-id', '7'],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(harness.calls).toEqual([
+      {
+        name: 'inspectProjects',
+        config: {
+          dbPath: 'cat.db',
+          projectId: 7,
+        },
+      },
+    ]);
+    expect(harness.stdout.join('')).toContain('Database: fixture.db');
+  });
+
+  it('prints inspect projects JSON without extra text', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      ['inspect', 'projects', '--db=cat.db', '--json'],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(harness.stderr.join('')).toBe('');
+    expect(JSON.parse(harness.stdout.join(''))).toEqual({
+      dbPath: 'fixture.db',
+      generatedAt: '2026-05-21T00:00:00.000Z',
+      providers: [],
+      projects: [],
+    });
+  });
+
+  it('reports inspect projects missing database paths before calling localization', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      ['inspect', 'projects', '--db', 'missing.db'],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toContain('Database does not exist: missing.db');
   });
 
   it('prints inspect localization help from the temporary stub', async () => {
