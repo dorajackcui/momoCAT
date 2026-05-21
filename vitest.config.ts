@@ -20,6 +20,14 @@ export default defineConfig({
         find: /^@cat\/core\/(.+)$/,
         replacement: resolve(__dirname, 'packages/core/src/$1'),
       },
+      {
+        find: '@cat/db',
+        replacement: resolve(__dirname, 'packages/db/src'),
+      },
+      {
+        find: /^@cat\/db\/(.+)$/,
+        replacement: resolve(__dirname, 'packages/db/src/$1'),
+      },
     ],
   },
   test: {

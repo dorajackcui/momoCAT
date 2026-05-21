@@ -1,4 +1,4 @@
-import { CATDatabase } from '../../../db/src';
+import { CATDatabase } from '@cat/db';
 import type { Segment } from '@cat/core/models';
 import {
   BUILTIN_OPENAI_PROVIDER_MODELS,

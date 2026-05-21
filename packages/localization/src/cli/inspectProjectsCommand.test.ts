@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CATDatabase } from '../../../db/src';
+import { CATDatabase } from '@cat/db';
 import type { Segment } from '@cat/core/models';
 import { runInspectProjectsCommand } from './inspectProjectsCommand';
 
