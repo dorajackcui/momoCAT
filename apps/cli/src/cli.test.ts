@@ -136,12 +136,154 @@ describe('momocat CLI dispatch', () => {
     expect(harness.stderr.join('')).toContain('Database does not exist: missing.db');
   });
 
-  it('prints inspect localization help from the temporary stub', async () => {
+  it('prints inspect localization help', async () => {
     const harness = createHarness();
     const exitCode = await runCli(['inspect', 'localization', '--help'], harness.deps, harness.io);
 
     expect(exitCode).toBe(0);
     expect(harness.stdout.join('')).toContain('Usage: momocat inspect localization');
+    expect(harness.stdout.join('')).toContain('--db <path>, --db-path <path>');
+    expect(harness.stdout.join('')).toContain('--project-id <id>');
+    expect(harness.stdout.join('')).toContain('--json-output <path>');
+    expect(harness.stdout.join('')).toContain('--unit-limit <n>');
+    expect(harness.stdout.join('')).toContain('--max-cell-chars <n>');
+  });
+
+  it('maps inspect localization options to the localization command API', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      [
+        'inspect',
+        'localization',
+        '--db',
+        'cat.db',
+        '--project-id=7',
+        '--input',
+        'input.xlsx',
+        '--output=inspect.xlsx',
+        '--json-output',
+        'inspect.json',
+        '--unit-limit=12',
+        '--max-cell-chars',
+        '5000',
+      ],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(harness.stdout.join('')).toBe('');
+    expect(harness.calls).toEqual([
+      {
+        name: 'inspectLocalization',
+        config: {
+          dbPath: 'cat.db',
+          projectId: 7,
+          inputPath: 'input.xlsx',
+          outputPath: 'inspect.xlsx',
+          jsonOutputPath: 'inspect.json',
+          unitLimit: 12,
+          maxCellChars: 5000,
+        },
+      },
+    ]);
+  });
+
+  it('reports inspect localization invalid project id before calling localization', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      [
+        'inspect',
+        'localization',
+        '--db',
+        'cat.db',
+        '--project-id',
+        '0',
+        '--input',
+        'input.xlsx',
+        '--output',
+        'inspect.xlsx',
+      ],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toContain('--project-id must be a positive integer.');
+  });
+
+  it('reports inspect localization missing database paths before calling localization', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      [
+        'inspect',
+        'localization',
+        '--db',
+        'missing.db',
+        '--project-id',
+        '7',
+        '--input',
+        'input.xlsx',
+        '--output',
+        'inspect.xlsx',
+      ],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toContain('Database does not exist: missing.db');
+  });
+
+  it('reports inspect localization missing input files before calling localization', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      [
+        'inspect',
+        'localization',
+        '--db',
+        'cat.db',
+        '--project-id',
+        '7',
+        '--input',
+        'missing.xlsx',
+        '--output',
+        'inspect.xlsx',
+      ],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toContain('Input file does not exist: missing.xlsx');
+  });
+
+  it('reports inspect localization unknown arguments before calling localization', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      [
+        'inspect',
+        'localization',
+        '--db',
+        'cat.db',
+        '--project-id',
+        '7',
+        '--input',
+        'input.xlsx',
+        '--output',
+        'inspect.xlsx',
+        '--surprise',
+      ],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toContain('Unknown argument: --surprise');
   });
 
   it('prints translate file help from the temporary stub', async () => {
