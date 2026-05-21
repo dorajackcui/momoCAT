@@ -4,6 +4,7 @@ import {
   buildWindowModeContext,
   mergeCompletedResults,
 } from './contextWindowBuilder';
+import { batchResponseId, unitKey } from './unitIdentity';
 
 function unit(row: number, source: string, target = ''): JobUnit {
   return {
@@ -145,6 +146,45 @@ describe('buildWindowModeContext', () => {
       }).nextContext,
     ).toEqual([{ source: 'Next' }]);
   });
+
+  it('honors explicit previous and next row limits', () => {
+    const jobUnits = [
+      unit(1, 'Previous 1'),
+      unit(2, 'Previous 2'),
+      unit(3, 'Previous 3'),
+      unit(4, 'Current'),
+      unit(5, 'Next 1'),
+      unit(6, 'Next 2'),
+      unit(7, 'Next 3'),
+    ];
+    const task: TranslationTask = {
+      taskId: 'limited-window',
+      units: [jobUnits[3]],
+    };
+    const completedResults = new Map(
+      jobUnits.slice(0, 3).map((jobUnit, index) => [
+        unitKey(jobUnit),
+        result(jobUnit, `Target ${index + 1}`),
+      ]),
+    );
+
+    expect(
+      buildWindowModeContext({
+        task,
+        jobUnits,
+        currentUnits: task.units,
+        completedResults,
+        maxPreviousRows: 2,
+        maxNextRows: 1,
+      }),
+    ).toEqual({
+      previousContext: [
+        { source: 'Previous 2', target: 'Target 2' },
+        { source: 'Previous 3', target: 'Target 3' },
+      ],
+      nextContext: [{ source: 'Next 1' }],
+    });
+  });
 });
 
 describe('mergeCompletedResults', () => {
@@ -162,5 +202,28 @@ describe('mergeCompletedResults', () => {
       ['row-1', 'Premier'],
       ['row-2', 'Deja traduit'],
     ]);
+  });
+});
+
+describe('unit identity helpers', () => {
+  it('builds unit keys from both document id and unit id', () => {
+    const first = unit(1, 'First');
+    const sameRowInOtherDocument = {
+      ...first,
+      documentId: 'appendix.xlsx',
+    };
+
+    expect(unitKey(first)).toBe('book.xlsx\u0000row-1');
+    expect(unitKey(sameRowInOtherDocument)).toBe('appendix.xlsx\u0000row-1');
+    expect(unitKey(first)).not.toBe(unitKey(sameRowInOtherDocument));
+  });
+
+  it('URL-encodes document id and unit id for batch response ids', () => {
+    expect(
+      batchResponseId({
+        documentId: 'folder/book 1.xlsx',
+        unitId: 'row #1/2',
+      }),
+    ).toBe('folder%2Fbook%201.xlsx#row%20%231%2F2');
   });
 });
