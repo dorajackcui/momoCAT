@@ -1,5 +1,7 @@
 import type { InspectProjectsResult, InspectProviderSummary } from '@cat/localization';
 
+const STATUS_ORDER = ['new', 'draft', 'translated', 'reviewed', 'confirmed'];
+
 export function formatProjectsInspection(summary: InspectProjectsResult): string {
   const lines: string[] = [];
   lines.push(`Database: ${summary.dbPath}`);
@@ -11,7 +13,7 @@ export function formatProjectsInspection(summary: InspectProjectsResult): string
   } else {
     for (const provider of summary.providers) {
       lines.push(
-        `  - ${provider.id} (${provider.name} / ${provider.model}) apiKey: ${formatKeyStatus(provider)} baseUrl: ${provider.baseUrl}`,
+        `  - ${provider.id} (${provider.name} / ${formatNullable(provider.model, 'unknown')}) apiKey: ${formatKeyStatus(provider)} baseUrl: ${formatNullable(provider.baseUrl, 'not configured')}`,
       );
     }
   }
@@ -65,16 +67,38 @@ function formatKeyStatus(
 
 function formatProjectModel(model: InspectProviderSummary): string {
   const providerLabel = model.model
-    ? `${model.id} (${model.name} / ${model.model})`
+    ? `${model.id} (${model.name} / ${formatNullable(model.model, 'unknown')})`
     : `${model.id} (${model.name})`;
   const fallbackLabel = model.fallbackFrom ? ` fallbackFrom=${model.fallbackFrom}` : '';
   return `${providerLabel}, apiKey: ${formatKeyStatus(model)}${fallbackLabel}`;
 }
 
 function formatStatusCounts(statusCounts: Record<string, number>): string {
-  const entries = Object.entries(statusCounts);
+  const entries = sortStatusCounts(statusCounts);
   if (entries.length === 0) {
     return 'none';
   }
   return entries.map(([status, count]) => `${status}:${count}`).join(', ');
+}
+
+function sortStatusCounts(statusCounts: Record<string, number>): Array<[string, number]> {
+  const statusOrder = new Map(STATUS_ORDER.map((status, index) => [status, index]));
+  return Object.entries(statusCounts).sort(([leftStatus], [rightStatus]) => {
+    const leftOrder = statusOrder.get(leftStatus);
+    const rightOrder = statusOrder.get(rightStatus);
+    if (leftOrder !== undefined && rightOrder !== undefined) {
+      return leftOrder - rightOrder;
+    }
+    if (leftOrder !== undefined) {
+      return -1;
+    }
+    if (rightOrder !== undefined) {
+      return 1;
+    }
+    return leftStatus.localeCompare(rightStatus);
+  });
+}
+
+function formatNullable(value: string | null, fallback: string): string {
+  return value ?? fallback;
 }

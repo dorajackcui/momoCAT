@@ -59,6 +59,12 @@ function parseInspectProjectsArgs(argv: string[], io: CommandIO): InspectProject
       config.dbPath = io.resolvePath(requireOptionValue('--db', arg.slice('--db='.length)));
       continue;
     }
+    if (arg.startsWith('--db-path=')) {
+      config.dbPath = io.resolvePath(
+        requireOptionValue('--db-path', arg.slice('--db-path='.length)),
+      );
+      continue;
+    }
     if (arg === '--project-id') {
       config.projectId = parsePositiveInteger(readValue(argv, index, arg), '--project-id');
       index += 1;

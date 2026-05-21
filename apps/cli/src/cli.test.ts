@@ -85,6 +85,26 @@ describe('momocat CLI dispatch', () => {
     expect(harness.stdout.join('')).toContain('Database: fixture.db');
   });
 
+  it('maps inspect projects --db-path equals option to the localization command API', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      ['inspect', 'projects', '--db-path=cat.db', '--project-id=7'],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(harness.calls).toEqual([
+      {
+        name: 'inspectProjects',
+        config: {
+          dbPath: 'cat.db',
+          projectId: 7,
+        },
+      },
+    ]);
+  });
+
   it('prints inspect projects JSON without extra text', async () => {
     const harness = createHarness();
     const exitCode = await runCli(
