@@ -153,6 +153,40 @@ describe('MTModule', () => {
     }
   });
 
+  it('accepts provider text that is identical to the source text', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Unchanged', 'en', 'fr');
+      db.setSetting('openai_api_key', 'test-api-key');
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const segment = createTransientSegment({ id: 'unit-1', source: 'Hello world' }, 0);
+      const transport = createTransport('Hello world');
+      const module = createModule(db, transport);
+      const config = await module.resolveConfig(project);
+
+      const result = await module.translate({
+        unitId: 'unit-1',
+        project,
+        segment,
+        tm: createTMArtifact(segment),
+        tb: createTBArtifact(segment),
+        apiKey: config.apiKey,
+        baseUrl: config.provider.baseUrl,
+        model: config.model,
+        reasoningEffort: config.reasoningEffort,
+        provider: config.provider,
+        srcLang: 'en',
+        tgtLang: 'fr',
+      });
+
+      expect(serializeTokensToDisplayText(result.targetTokens)).toBe('Hello world');
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
+    } finally {
+      db.close();
+    }
+  });
+
   it('composes a Window Mode batch prompt without calling provider transport', async () => {
     const db = new CATDatabase(':memory:');
     try {
@@ -280,6 +314,53 @@ describe('MTModule', () => {
         'Enregistrer le fichier',
       );
       expect(serializeTokensToDisplayText(result.results[1].targetTokens)).toBe('Fermer');
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('accepts Window Mode translations that are identical to their source text', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Batch Unchanged', 'en', 'fr');
+      db.setSetting('openai_api_key', 'test-api-key');
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const row2 = createTransientSegment({ id: 'row-2', source: 'Save file' }, 1);
+      const transport = createTransport(
+        JSON.stringify({
+          translations: [{ id: 'row-2', text: 'Save file' }],
+        }),
+      );
+      const module = createModule(db, transport);
+      const config = await module.resolveConfig(project);
+
+      const result = await module.translateBatch({
+        taskId: 'window-task-1',
+        project,
+        current: [
+          {
+            responseId: 'row-2',
+            documentId: 'doc.xlsx',
+            unitId: 'unit-2',
+            segment: row2,
+            tm: createTMArtifact(row2),
+            tb: createTBArtifact(row2),
+          },
+        ],
+        previousContext: [],
+        nextContext: [],
+        apiKey: config.apiKey,
+        baseUrl: config.provider.baseUrl,
+        model: config.model,
+        reasoningEffort: config.reasoningEffort,
+        provider: config.provider,
+        srcLang: 'en',
+        tgtLang: 'fr',
+      });
+
+      expect(serializeTokensToDisplayText(result.results[0].targetTokens)).toBe('Save file');
       expect(transport.createResponse).toHaveBeenCalledTimes(1);
     } finally {
       db.close();

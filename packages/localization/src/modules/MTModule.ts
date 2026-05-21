@@ -262,12 +262,6 @@ export class MTModule {
         throw new Error('AI provider response was empty');
       }
 
-      this.assertChangedTranslation(trimmed, promptParams.sourceText, prompt.sourcePayload, {
-        projectType: promptParams.projectType,
-        srcLang: input.srcLang,
-        tgtLang: input.tgtLang,
-      });
-
       const targetTokens = parseEditorTextToTokens(trimmed, input.segment.sourceTokens);
       if (promptParams.projectType === 'custom') {
         return { targetTokens, prompt };
@@ -329,14 +323,6 @@ export class MTModule {
         if (!unit) {
           throw new Error(`Unknown translation id: ${translation.id}`);
         }
-        const sourceText = promptParams.sourceTextById.get(translation.id) ?? '';
-        const sourcePayload = promptParams.sourcePayloadById.get(translation.id) ?? '';
-        this.assertChangedTranslation(translation.text.trim(), sourceText, sourcePayload, {
-          projectType: promptParams.projectType,
-          srcLang: input.srcLang,
-          tgtLang: input.tgtLang,
-        });
-
         return {
           documentId: unit.documentId,
           unitId: unit.unitId,
@@ -436,18 +422,12 @@ export class MTModule {
       concordanceReferences?: TMArtifact['selectedReferences']['concordanceReferences'];
       tbReferences?: TBArtifact['selectedReferences'];
     }>;
-    sourceTextById: Map<string, string>;
-    sourcePayloadById: Map<string, string>;
   } {
-    const sourceTextById = new Map<string, string>();
-    const sourcePayloadById = new Map<string, string>();
     const currentSegments = input.current.map((unit) => {
       const sourcePayload = serializeTokensToEditorText(
         unit.segment.sourceTokens,
         unit.segment.sourceTokens,
       );
-      sourceTextById.set(unit.responseId, serializeTokensToDisplayText(unit.segment.sourceTokens));
-      sourcePayloadById.set(unit.responseId, sourcePayload);
 
       const context =
         unit.context ??
@@ -476,8 +456,6 @@ export class MTModule {
       projectType: normalizeProjectType(input.project.projectType),
       validationFeedback: input.validationFeedback,
       currentSegments,
-      sourceTextById,
-      sourcePayloadById,
     };
   }
 
@@ -507,23 +485,4 @@ export class MTModule {
     return runtimeConfig.reasoningEffort;
   }
 
-  private assertChangedTranslation(
-    trimmed: string,
-    sourceText: string,
-    sourcePayload: string,
-    context: {
-      projectType: ProjectType;
-      srcLang: string;
-      tgtLang: string;
-    },
-  ): void {
-    const allowUnchanged = context.projectType === 'review' || context.projectType === 'custom';
-    if (allowUnchanged || context.srcLang === context.tgtLang) {
-      return;
-    }
-
-    if (trimmed === sourceText.trim() || trimmed === sourcePayload.trim()) {
-      throw new Error(`Model returned source unchanged: ${trimmed}`);
-    }
-  }
 }
