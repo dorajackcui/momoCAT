@@ -4,7 +4,7 @@ import { normalizeProjectAIModel } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { CATDatabase } from '@cat/db';
-import { MTModule, type MTBatchCurrentUnitInput, type ResolvedMTConfig } from './modules/MTModule';
+import { MTModule, type ResolvedMTConfig } from './modules/MTModule';
 import { TBModule } from './modules/TBModule';
 import { TMModule } from './modules/TMModule';
 import { TBService } from './services/TBService';
@@ -22,7 +22,7 @@ import { runBounded } from './RequestScheduler';
 import { translateSpreadsheetFileJob } from './fileTranslationJobAdapter';
 import { translateSpreadsheetFile } from './spreadsheetFileAdapter';
 import { createTransientSegment } from './transientSegment';
-import { batchResponseId, unitKey } from './requestModes/shared/unitIdentity';
+import { unitKey } from './requestModes/shared/unitIdentity';
 import {
   buildTranslateUnitsResult,
   jobUnitToExternalUnit,
@@ -34,13 +34,13 @@ import {
   resolveRequestModeReferences,
 } from './requestModes/shared/references';
 import type {
+  PreparedTranslatableJobUnit,
   PreparedTranslationArtifacts,
-  PreparedWindowBatchResult,
   ResolvedReferences,
 } from './requestModes/types';
+import { WindowModeSequentialBatchStrategy } from './requestModes/windowSequentialBatch/WindowModeSequentialBatchStrategy';
 import type {
   ArtifactRecord,
-  JobUnit,
   TaskExecutionContext,
   TaskExecutionResult,
   TranslationTask,
@@ -96,6 +96,7 @@ export class LocalizationEngine {
   private readonly tmModule: TMModule;
   private readonly tbModule: TBModule;
   private readonly mtModule: MTModule;
+  private readonly windowModeStrategy: WindowModeSequentialBatchStrategy;
   private readonly options: LocalizationEngineConstructorOptions;
 
   constructor(db: CATDatabase, options: LocalizationEngineConstructorOptions) {
@@ -124,6 +125,11 @@ export class LocalizationEngine {
       aiRuntimeConfigProvider: this.aiRuntimeConfigProvider,
       aiTransport,
       tagValidator: new TagValidator(),
+    });
+    this.windowModeStrategy = new WindowModeSequentialBatchStrategy({
+      tmModule: this.tmModule,
+      tbModule: this.tbModule,
+      mtModule: this.mtModule,
     });
   }
 
@@ -288,10 +294,7 @@ export class LocalizationEngine {
     const results: Array<UnitResult | undefined> = [];
     const artifacts: ArtifactRecord[] | undefined = captureArtifacts ? [] : undefined;
     const skippedResults: UnitResult[] = [];
-    const translatableUnits: Array<{
-      jobUnit: JobUnit;
-      prepared: Extract<PreparedUnit, { kind: 'translatable' }>;
-    }> = [];
+    const translatableUnits: PreparedTranslatableJobUnit[] = [];
 
     for (let index = 0; index < preparedUnits.length; index += 1) {
       const jobUnit = task.units[index];
@@ -309,7 +312,7 @@ export class LocalizationEngine {
         continue;
       }
 
-      translatableUnits.push({ jobUnit, prepared });
+      translatableUnits.push({ jobUnit, segment: prepared.segment });
     }
 
     if (!hasTranslatableUnits || translatableUnits.length === 0) {
@@ -322,7 +325,7 @@ export class LocalizationEngine {
       mtOptions,
       translationOptions?.providerOverride,
     );
-    const translated = await this.translatePreparedWindowBatchWithArtifacts({
+    const translated = await this.windowModeStrategy.translate({
       task,
       context,
       project,
@@ -569,209 +572,6 @@ export class LocalizationEngine {
     });
   }
 
-  private async translatePreparedWindowBatchWithArtifacts(params: {
-    task: TranslationTask;
-    context: TaskExecutionContext;
-    project: ProjectRecord;
-    mtConfig: ResolvedMTConfig;
-    mtOptions: NonNullable<LocalizationEngineOptions['mt']>;
-    includeReferences: boolean;
-    captureArtifacts: boolean;
-    translatableUnits: Array<{
-      jobUnit: JobUnit;
-      prepared: Extract<PreparedUnit, { kind: 'translatable' }>;
-    }>;
-    skippedResults: UnitResult[];
-  }): Promise<PreparedWindowBatchResult> {
-    const projectType = params.project.projectType ?? 'translation';
-    const resolvedUnits = await Promise.all(
-      params.translatableUnits.map(async ({ jobUnit, prepared }) => {
-        const references =
-          projectType === 'translation'
-            ? await this.resolveReferences(params.project.id, prepared.segment)
-            : emptyReferencesForUnit(jobUnit, prepared.segment);
-
-        return { jobUnit, prepared, references };
-      }),
-    );
-    const current: MTBatchCurrentUnitInput[] = resolvedUnits.map(
-      ({ jobUnit, prepared, references }) => ({
-        responseId: batchResponseId(jobUnit),
-        documentId: jobUnit.documentId,
-        unitId: jobUnit.unitId,
-        segment: prepared.segment,
-        tm: references.tm,
-        tb: references.tb,
-        context: jobUnit.context,
-      }),
-    );
-    const completedResults = mergeCompletedResults(
-      params.context.completedResults,
-      params.skippedResults,
-    );
-    const previousContext = this.buildPreviousTranslatedContext({
-      task: params.task,
-      jobUnits: params.context.job.units,
-      currentUnits: resolvedUnits.map((unit) => unit.jobUnit),
-      completedResults,
-    });
-    const nextContext = this.buildNextSourceContext({
-      task: params.task,
-      jobUnits: params.context.job.units,
-      currentUnits: resolvedUnits.map((unit) => unit.jobUnit),
-    });
-    const meta = current[0]?.segment.meta as
-      | (Segment['meta'] & { sourceLanguage?: unknown; targetLanguage?: unknown })
-      | undefined;
-    const batch = await this.mtModule.translateBatch({
-      taskId: params.task.taskId,
-      project: params.project,
-      current,
-      previousContext,
-      nextContext,
-      mtOptions: params.mtOptions,
-      apiKey: params.mtConfig.apiKey,
-      baseUrl: params.mtConfig.provider.baseUrl,
-      model: params.mtConfig.model,
-      reasoningEffort: params.mtConfig.reasoningEffort,
-      provider: params.mtConfig.provider,
-      srcLang: meta?.sourceLanguage ? String(meta.sourceLanguage) : params.project.srcLang,
-      tgtLang: meta?.targetLanguage ? String(meta.targetLanguage) : params.project.tgtLang,
-    });
-    const batchResultsByResponseId = new Map(
-      batch.results.map((result) => [result.responseId, result]),
-    );
-    const results: UnitResult[] = [];
-    const artifacts: ArtifactRecord[] | undefined = params.captureArtifacts ? [] : undefined;
-
-    for (const { jobUnit, references } of resolvedUnits) {
-      const batchResult = batchResultsByResponseId.get(batchResponseId(jobUnit));
-      if (!batchResult) {
-        throw new Error(`MT batch did not return a result for unit: ${jobUnit.unitId}`);
-      }
-
-      const result: UnitResult = {
-        jobId: params.context.job.id,
-        documentId: jobUnit.documentId,
-        unitId: jobUnit.unitId,
-        sourceHash: jobUnit.sourceHash,
-        status: 'translated',
-        source: jobUnit.source,
-        target: serializeTokensToDisplayText(batchResult.targetTokens),
-        references: params.includeReferences ? references.engineReferences : undefined,
-        metadata: jobUnit.metadata,
-      };
-      results.push(result);
-      artifacts?.push(
-        toArtifactRecord(params.context.job.id, params.task.taskId, jobUnit, result, {
-          tm: references.tm,
-          tb: references.tb,
-          prompt: batch.prompt,
-        }),
-      );
-    }
-
-    return { results, artifacts };
-  }
-
-  private buildPreviousTranslatedContext(params: {
-    task: TranslationTask;
-    jobUnits: JobUnit[];
-    currentUnits: JobUnit[];
-    completedResults: ReadonlyMap<string, UnitResult>;
-  }): Array<{ source: string; target: string }> {
-    const jobOrder = resolveJobOrder(params.jobUnits, params.task.units, params.currentUnits);
-    const currentKeys = new Set(params.currentUnits.map(unitKey));
-    let lastCurrentIndex = -1;
-
-    for (let index = 0; index < jobOrder.length; index += 1) {
-      if (currentKeys.has(unitKey(jobOrder[index]))) {
-        lastCurrentIndex = index;
-      }
-    }
-
-    if (lastCurrentIndex < 0) {
-      return [];
-    }
-
-    const rows: Array<{ source: string; target: string }> = [];
-    for (let index = lastCurrentIndex - 1; index >= 0 && rows.length < 5; index -= 1) {
-      const unit = jobOrder[index];
-      if (currentKeys.has(unitKey(unit))) {
-        continue;
-      }
-
-      const completed = params.completedResults.get(unitKey(unit));
-      const target = completed?.target;
-
-      if (target?.trim()) {
-        rows.push({ source: unit.source, target });
-      }
-    }
-
-    return rows.reverse();
-  }
-
-  private buildNextSourceContext(params: {
-    task: TranslationTask;
-    jobUnits: JobUnit[];
-    currentUnits: JobUnit[];
-  }): Array<{ source: string }> {
-    const jobOrder = resolveJobOrder(params.jobUnits, params.task.units, params.currentUnits);
-    const currentKeys = new Set(params.currentUnits.map(unitKey));
-    let lastCurrentIndex = -1;
-
-    for (let index = 0; index < jobOrder.length; index += 1) {
-      if (currentKeys.has(unitKey(jobOrder[index]))) {
-        lastCurrentIndex = index;
-      }
-    }
-
-    if (lastCurrentIndex < 0) {
-      return [];
-    }
-
-    const rows: Array<{ source: string }> = [];
-    for (let index = lastCurrentIndex + 1; index < jobOrder.length && rows.length < 5; index += 1) {
-      const source = jobOrder[index].source;
-
-      if (source.trim()) {
-        rows.push({ source });
-      }
-    }
-
-    return rows;
-  }
-}
-
-function mergeCompletedResults(
-  completedResults: ReadonlyMap<string, UnitResult> | undefined,
-  skippedResults: UnitResult[],
-): Map<string, UnitResult> {
-  const merged = new Map(completedResults);
-
-  for (const result of skippedResults) {
-    if (result.target?.trim()) {
-      merged.set(unitKey(result), result);
-    }
-  }
-
-  return merged;
-}
-
-function resolveJobOrder(
-  jobUnits: JobUnit[],
-  taskUnits: JobUnit[],
-  currentUnits: JobUnit[],
-): JobUnit[] {
-  if (jobUnits.length === 0) {
-    return taskUnits;
-  }
-
-  const jobUnitKeys = new Set(jobUnits.map(unitKey));
-  const allCurrentUnitsExist = currentUnits.every((unit) => jobUnitKeys.has(unitKey(unit)));
-
-  return allCurrentUnitsExist ? jobUnits : taskUnits;
 }
 
 function hashCanonicalPayload(entries: Array<[string, unknown]>): string {
