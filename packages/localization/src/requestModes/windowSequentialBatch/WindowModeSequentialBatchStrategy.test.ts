@@ -244,6 +244,42 @@ describe('WindowModeSequentialBatchStrategy', () => {
 
     expect(JSON.stringify(result)).not.toContain('secret-api-key');
   });
+
+  it('rejects when translateBatch omits a requested response id', async () => {
+    const unit = jobUnit('window.xlsx', 'row-2', 'Save file', 'hash-2');
+    const segment = createTransientSegment({ id: 'row-2', source: 'Save file' }, 0);
+    const translateBatch = vi.fn().mockResolvedValue({
+      results: [],
+      prompt: promptArtifact(['window.xlsx#row-2']),
+    });
+    const strategy = new WindowModeSequentialBatchStrategy({
+      tmModule: {
+        inspect: vi
+          .fn()
+          .mockResolvedValueOnce(references('row-2', segment.segmentId, 'Save file', 'Enregistrer').tm),
+      },
+      tbModule: {
+        inspect: vi
+          .fn()
+          .mockResolvedValueOnce(references('row-2', segment.segmentId, 'Save file', 'Enregistrer').tb),
+      },
+      mtModule: { translateBatch },
+    });
+
+    await expect(
+      strategy.translate({
+        task: translationTask([unit]),
+        context: executionContext({ job: { units: [unit] } }),
+        project: project(),
+        mtConfig: resolvedMTConfig(),
+        mtOptions: mtOptions(),
+        includeReferences: false,
+        captureArtifacts: false,
+        translatableUnits: [{ jobUnit: unit, segment }],
+        skippedResults: [],
+      }),
+    ).rejects.toThrow('MT batch did not return a result for unit: row-2');
+  });
 });
 
 function jobUnit(
