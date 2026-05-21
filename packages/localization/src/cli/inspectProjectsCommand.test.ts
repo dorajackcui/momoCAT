@@ -164,6 +164,24 @@ describe('runInspectProjectsCommand', () => {
     }
   });
 
+  it('throws for a missing db path without creating a database file', () => {
+    const tempRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'momocat-inspect-projects-missing-'),
+    );
+    const dbPath = path.join(tempRoot, 'missing.db');
+    try {
+      expect(() =>
+        runInspectProjectsCommand({
+          dbPath,
+          generatedAt: () => '2026-05-21T00:00:00.000Z',
+        }),
+      ).toThrow();
+      expect(fs.existsSync(dbPath)).toBe(false);
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it('aggregates file status counts across bounded segment pages', () => {
     const { dbPath, projectId, tempRoot } = createFixtureDb();
     const db = new CATDatabase(dbPath);

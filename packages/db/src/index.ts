@@ -36,6 +36,11 @@ import { TMRepo } from "./repos/TMRepo";
 export * from "./types";
 export { CURRENT_SCHEMA_VERSION, UnsupportedDatabaseSchemaError } from './currentSchema';
 
+export interface CATDatabaseOptions {
+  readonly?: boolean;
+  fileMustExist?: boolean;
+}
+
 export class CATDatabase {
   private readonly db: Database.Database;
   private readonly projectRepo: ProjectRepo;
@@ -44,12 +49,18 @@ export class CATDatabase {
   private readonly tbRepo: TBRepo;
   private readonly tmRepo: TMRepo;
 
-  constructor(dbPath: string) {
-    this.db = new Database(dbPath);
+  constructor(dbPath: string, options: CATDatabaseOptions = {}) {
+    const readonly = Boolean(options.readonly);
+    this.db = new Database(dbPath, {
+      readonly,
+      fileMustExist: Boolean(options.fileMustExist),
+    });
     this.db.pragma("foreign_keys = ON");
-    this.db.pragma("journal_mode = WAL");
-    this.db.pragma("synchronous = NORMAL");
-    this.db.pragma("temp_store = MEMORY");
+    if (!readonly) {
+      this.db.pragma("journal_mode = WAL");
+      this.db.pragma("synchronous = NORMAL");
+      this.db.pragma("temp_store = MEMORY");
+    }
 
     ensureCurrentSchema(this.db);
 

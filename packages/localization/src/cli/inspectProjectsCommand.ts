@@ -93,7 +93,10 @@ interface StoredCustomProvider {
 export function runInspectProjectsCommand(
   config: InspectProjectsCommandConfig,
 ): InspectProjectsResult {
-  const db = new CATDatabase(config.dbPath);
+  const db = new CATDatabase(config.dbPath, {
+    readonly: true,
+    fileMustExist: true,
+  });
   try {
     const settings = readSettings(db);
     const customProviders = readCustomProviders(settings);
