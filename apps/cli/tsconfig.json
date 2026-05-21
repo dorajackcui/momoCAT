@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "declaration": true,
+    "outDir": "./dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "composite": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@cat/localization": ["../../packages/localization/src"],
+      "@cat/localization/*": ["../../packages/localization/src/*"]
+    }
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"],
+  "references": [{ "path": "../../packages/localization" }]
+}

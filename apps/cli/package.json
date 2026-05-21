@@ -1,0 +1,25 @@
+{
+  "name": "@cat/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "momocat": "./dist/index.mjs"
+  },
+  "main": "./dist/index.mjs",
+  "types": "./dist/src/index.d.ts",
+  "scripts": {
+    "build": "tsc -b && npm run build:bundle",
+    "build:bundle": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node20 --banner:js=\"#!/usr/bin/env node\" --outfile=dist/index.mjs --external:better-sqlite3 --external:xlsx",
+    "cli": "node dist/index.mjs",
+    "test": "vitest run src"
+  },
+  "dependencies": {
+    "@cat/localization": "*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.18"
+  }
+}
