@@ -109,7 +109,7 @@ The prompt artifact must not include API keys.
 
 ## Current Request Model
 
-`translate:file` job mode now uses Window Mode by default. It plans an ordered file into batches of 1 to 5 current units, sends one provider request at a time for that file, parses a strict JSON response, and writes per-unit results through the existing job surfaces.
+`momocat translate file` job mode now uses Window Mode by default. It plans an ordered file into batches of 1 to 5 current units, sends one provider request at a time for that file, parses a strict JSON response, and writes per-unit results through the existing job surfaces.
 
 Current flow:
 
@@ -160,7 +160,7 @@ Requirements for grouped requests:
 
 Inspect flows are the main way to understand prompt changes without sending provider requests.
 
-`inspect:localization` should remain able to show:
+`momocat inspect localization` should remain able to show:
 
 - `_tm_for_mt`
 - `_tb_for_mt`
@@ -171,7 +171,7 @@ Inspect flows are the main way to understand prompt changes without sending prov
 Normal translation should stay clean:
 
 - No prompt artifact JSONL by default.
-- Use `translate:file --artifacts <path>` only for diagnostic translation runs.
+- Use `momocat translate file --artifacts <path>` only for diagnostic translation runs.
 
 ## Refactor Checklist
 
@@ -182,8 +182,8 @@ When changing prompt composition or request mode:
 - Run `LocalizationInspector.test.ts` if prompt artifacts changed.
 - Run `LocalizationEngine.test.ts` if task execution changed.
 - Run `TranslationJobRunner.test.ts` if task/result semantics changed.
-- Smoke with `inspect:localization` before real MT smoke.
-- Use real `translate:file` smoke only when sending source text and TM/TB context to the configured provider is intended.
+- Smoke with `momocat inspect localization` before real MT smoke.
+- Use real `momocat translate file` smoke only when sending source text and TM/TB context to the configured provider is intended.
 
 ## Design Guardrails
 

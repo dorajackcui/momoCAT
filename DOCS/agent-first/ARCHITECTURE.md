@@ -28,7 +28,7 @@ The design focus is:
 - Put reusable capability in `@cat/core`, `@cat/db`, and `@cat/localization`; keep CLI and desktop layers thin.
 - Prefer agent-readable inputs and outputs over UI-only state.
 - Keep normal runs lightweight. Persist only results, checkpoints, progress events, and throttled snapshots by default.
-- Keep diagnostic detail opt-in. Full prompt/TM/TB artifacts are written only by inspect flows or `translate:file --artifacts <path>`.
+- Keep diagnostic detail opt-in. Full prompt/TM/TB artifacts are written only by inspect flows or `momocat translate file --artifacts <path>`.
 - Keep files external. External spreadsheets are not imported into project `files` or `segments` tables during headless translation.
 - Keep modules orthogonal. TM, TB, and MT can change independently as long as their structured contracts stay stable.
 - Keep recovery per segment. Request grouping can change later, but checkpoint identity remains per output unit.
@@ -144,7 +144,7 @@ The MT module consumes structured TM/TB artifacts. TM and TB modules should not 
 
 ## Near-Term Direction
 
-- Keep `translate:file` as the file-driven smoke and regression path.
+- Keep `momocat translate file` as the file-driven smoke and regression path.
 - Add a service/API layer above the same file and job boundary when needed.
 - Move MT prompt orchestration and provider request grouping behind the MT/task boundary.
 - Prepare for multi-file concurrent jobs by keeping job identity, document identity, and unit identity explicit.
