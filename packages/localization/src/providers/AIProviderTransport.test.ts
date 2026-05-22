@@ -82,16 +82,14 @@ describe('AIProviderTransport', () => {
   });
 
   it('lists model ids from OpenAI-compatible models responses', async () => {
+    const rawResponseText = JSON.stringify({
+      data: [
+        { id: 'gpt-5.4', object: 'model' },
+        { id: 'text-embedding-3-large', object: 'model' },
+      ],
+    });
     global.fetch = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          data: [
-            { id: 'gpt-5.4', object: 'model' },
-            { id: 'text-embedding-3-large', object: 'model' },
-          ],
-        }),
-        { status: 200 },
-      ),
+      new Response(rawResponseText, { status: 200 }),
     ) as typeof fetch;
 
     const transport = new AIProviderTransport();
@@ -103,6 +101,7 @@ describe('AIProviderTransport', () => {
     expect(result).toEqual({
       endpoint: 'https://example.com/v1/models',
       models: ['gpt-5.4', 'text-embedding-3-large'],
+      rawResponseText,
       status: 200,
     });
     expect(global.fetch).toHaveBeenCalledWith(
@@ -114,6 +113,47 @@ describe('AIProviderTransport', () => {
         },
       }),
     );
+  });
+
+  it('trims model ids and excludes blank or non-string ids', async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            { id: ' gpt-spaced ' },
+            { id: '   ' },
+            { id: 42 },
+            { id: null },
+            null,
+            {},
+            { id: 'gpt-plain' },
+          ],
+        }),
+        { status: 200 },
+      ),
+    ) as typeof fetch;
+
+    const transport = new AIProviderTransport();
+    const result = await transport.listModels({
+      apiKey: 'secret',
+      baseUrl: 'https://example.com/v1',
+    });
+
+    expect(result.models).toEqual(['gpt-spaced', 'gpt-plain']);
+  });
+
+  it('returns an empty model list for malformed model response data', async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: {} }), { status: 200 }),
+    ) as typeof fetch;
+
+    const transport = new AIProviderTransport();
+    const result = await transport.listModels({
+      apiKey: 'secret',
+      baseUrl: 'https://example.com/v1',
+    });
+
+    expect(result.models).toEqual([]);
   });
 
   it('redacts proxy and endpoint credentials from network errors', async () => {

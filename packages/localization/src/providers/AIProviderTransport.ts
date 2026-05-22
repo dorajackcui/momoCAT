@@ -59,9 +59,20 @@ function extractModelIds(data: unknown): string[] {
     return [];
   }
 
-  const record = data as { data?: Array<{ id?: unknown }> };
-  return (record.data ?? [])
-    .map((item) => (typeof item.id === 'string' ? item.id.trim() : ''))
+  const record = data as { data?: unknown };
+  if (!Array.isArray(record.data)) {
+    return [];
+  }
+
+  return record.data
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return '';
+      }
+
+      const model = item as { id?: unknown };
+      return typeof model.id === 'string' ? model.id.trim() : '';
+    })
     .filter((id) => id.length > 0);
 }
 
@@ -147,6 +158,7 @@ export class AIProviderTransport implements AITransport {
       models: extractModelIds(data),
       status: response.status,
       endpoint,
+      rawResponseText: rawBody.slice(0, 4000),
     };
   }
 
