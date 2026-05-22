@@ -307,6 +307,68 @@ describe('AIProviderCatalogService', () => {
     );
   });
 
+  it('resolves legacy custom providers with their legacy provider key', () => {
+    const settingsRepo = createSettingsRepo({
+      ai_provider_catalog_v1: JSON.stringify([LEGACY_PROVIDER]),
+      'ai_provider_key::custom:legacy': 'legacy-secret-9999',
+    });
+    const service = new AIProviderCatalogService(settingsRepo, createTransport());
+
+    expect(service.resolveProviderConfig('custom:legacy')).toEqual({
+      provider: expect.objectContaining({
+        id: 'custom:legacy',
+        name: 'Legacy Provider',
+        baseUrl: 'https://legacy.example/v1',
+        model: 'gpt-legacy',
+        kind: 'legacy',
+        connectionId: 'legacy:connection:custom:legacy',
+      }),
+      apiKey: 'legacy-secret-9999',
+    });
+  });
+
+  it('resolves legacy custom providers with the global OpenAI key fallback', () => {
+    const settingsRepo = createSettingsRepo({
+      ai_provider_catalog_v1: JSON.stringify([LEGACY_PROVIDER]),
+      openai_api_key: 'global-openai-key-0000',
+    });
+    const service = new AIProviderCatalogService(settingsRepo, createTransport());
+
+    expect(service.resolveProviderConfig('custom:legacy')).toEqual({
+      provider: expect.objectContaining({
+        id: 'custom:legacy',
+        baseUrl: 'https://legacy.example/v1',
+        model: 'gpt-legacy',
+        kind: 'legacy',
+        apiKeyLast4: '0000',
+      }),
+      apiKey: 'global-openai-key-0000',
+    });
+  });
+
+  it('omits configured providers with missing connections but explicit resolve reports the missing connection', () => {
+    const settingsRepo = createSettingsRepo({
+      ai_provider_catalog_v2: JSON.stringify([
+        {
+          id: 'provider:orphan',
+          name: 'Orphan Provider',
+          connectionId: 'connection:missing',
+          model: 'gpt-orphan',
+          protocol: 'chat-completions',
+          kind: 'configured',
+          createdAt: '2026-05-22T00:00:00.000Z',
+          updatedAt: '2026-05-22T00:00:00.000Z',
+        },
+      ]),
+    });
+    const service = new AIProviderCatalogService(settingsRepo, createTransport());
+
+    expect(service.listProviders()).toEqual([]);
+    expect(() => service.resolveProviderConfig('provider:orphan')).toThrow(
+      'AI provider connection is missing.',
+    );
+  });
+
   it('deletes configured providers and protects or deletes connections', async () => {
     const settingsRepo = createSettingsRepo();
     const service = new AIProviderCatalogService(settingsRepo, createTransport());

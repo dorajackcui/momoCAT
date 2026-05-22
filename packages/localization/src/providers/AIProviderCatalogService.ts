@@ -328,31 +328,33 @@ export class AIProviderCatalogService {
 
   public resolveProviderConfig(providerId?: string | null): ResolvedAIProviderConfig {
     const storedProviders = this.readStoredProviders();
+    const connectionsById = new Map(
+      this.readStoredConnections().map((connection) => [connection.id, connection]),
+    );
     const normalizedProviderId = normalizeProjectAIModel(providerId);
-    const provider =
-      storedProviders.find((candidate) => candidate.id === normalizedProviderId) ??
-      (isLegacyOrMissingProviderId(normalizedProviderId) ? storedProviders[0] : undefined);
+    const configuredProvider = storedProviders.find(
+      (candidate) => candidate.id === normalizedProviderId,
+    );
+    if (configuredProvider) {
+      return this.resolveConfiguredProvider(configuredProvider, connectionsById);
+    }
 
-    if (!provider) {
+    const legacyProvider = this.readLegacyProviders().find(
+      (candidate) => candidate.id === normalizedProviderId,
+    );
+    if (legacyProvider) {
+      return this.resolveLegacyProvider(legacyProvider);
+    }
+
+    const fallbackProvider = isLegacyOrMissingProviderId(normalizedProviderId)
+      ? storedProviders.find((candidate) => connectionsById.has(candidate.connectionId))
+      : undefined;
+
+    if (!fallbackProvider) {
       throw new Error('AI provider is not configured.');
     }
 
-    const connection = this.readStoredConnections().find(
-      (candidate) => candidate.id === provider.connectionId,
-    );
-    if (!connection) {
-      throw new Error('AI provider connection is missing.');
-    }
-
-    const apiKey = this.settingsRepo.getSetting(this.buildConnectionKey(connection.id));
-    if (!apiKey) {
-      throw new Error(`API key is missing for connection "${connection.name}".`);
-    }
-
-    return {
-      provider: this.toProviderSummary(provider, connection),
-      apiKey,
-    };
+    return this.resolveConfiguredProvider(fallbackProvider, connectionsById);
   }
 
   private assertUniqueProviderName(name: string): void {
@@ -472,12 +474,24 @@ export class AIProviderCatalogService {
     const connectionsById = new Map(
       this.readStoredConnections().map((connection) => [connection.id, connection]),
     );
-    return this.readStoredProviders().map((provider) =>
-      this.toProviderSummary(provider, connectionsById.get(provider.connectionId)),
-    );
+    return this.readStoredProviders().flatMap((provider) => {
+      const connection = connectionsById.get(provider.connectionId);
+      return connection ? [this.toProviderSummary(provider, connection)] : [];
+    });
   }
 
   private readLegacyProviderSummaries(): AIProviderSummary[] {
+    const globalKeyLast4 = last4(this.settingsRepo.getSetting(OPENAI_API_KEY));
+    return this.readLegacyProviders().map((provider) => {
+      const apiKeyLast4 =
+        last4(this.settingsRepo.getSetting(this.buildLegacyProviderKey(provider.id))) ??
+        provider.apiKeyLast4 ??
+        globalKeyLast4;
+      return this.toLegacyProviderSummary(provider, apiKeyLast4);
+    });
+  }
+
+  private readLegacyProviders(): LegacyCustomProvider[] {
     const raw = this.settingsRepo.getSetting(LEGACY_PROVIDER_CATALOG_KEY);
     if (!raw) {
       return [];
@@ -489,7 +503,6 @@ export class AIProviderCatalogService {
         return [];
       }
 
-      const globalKeyLast4 = last4(this.settingsRepo.getSetting(OPENAI_API_KEY));
       return parsed
         .filter((value): value is LegacyCustomProvider => {
           if (!value || typeof value !== 'object') {
@@ -507,25 +520,17 @@ export class AIProviderCatalogService {
             typeof provider.updatedAt === 'string'
           );
         })
-        .map((provider) => {
-          const apiKeyLast4 =
-            last4(this.settingsRepo.getSetting(this.buildLegacyProviderKey(provider.id))) ??
-            provider.apiKeyLast4 ??
-            globalKeyLast4;
-          return {
-            id: provider.id,
-            name: provider.name,
-            baseUrl: normalizeBaseUrl(provider.baseUrl),
-            model: provider.model,
-            protocol: 'chat-completions' as const,
-            kind: 'legacy' as const,
-            connectionId: `legacy:connection:${provider.id}`,
-            connectionName: provider.name,
-            ...(apiKeyLast4 ? { apiKeyLast4 } : {}),
-            createdAt: provider.createdAt,
-            updatedAt: provider.updatedAt,
-          };
-        });
+        .map((provider) => ({
+          id: provider.id,
+          name: provider.name.trim(),
+          baseUrl: normalizeBaseUrl(provider.baseUrl),
+          model: provider.model.trim(),
+          protocol: 'chat-completions',
+          kind: 'custom',
+          ...(provider.apiKeyLast4 ? { apiKeyLast4: provider.apiKeyLast4 } : {}),
+          createdAt: provider.createdAt,
+          updatedAt: provider.updatedAt,
+        }));
     } catch {
       return [];
     }
@@ -568,6 +573,59 @@ export class AIProviderCatalogService {
       ...(apiKeyLast4 ? { apiKeyLast4 } : {}),
       createdAt: provider.createdAt,
       updatedAt: provider.updatedAt,
+    };
+  }
+
+  private toLegacyProviderSummary(
+    provider: LegacyCustomProvider,
+    apiKeyLast4?: string,
+  ): AIProviderSummary {
+    return {
+      id: provider.id,
+      name: provider.name,
+      baseUrl: provider.baseUrl,
+      model: provider.model,
+      protocol: provider.protocol,
+      kind: 'legacy',
+      connectionId: `legacy:connection:${provider.id}`,
+      connectionName: provider.name,
+      ...(apiKeyLast4 ? { apiKeyLast4 } : {}),
+      createdAt: provider.createdAt,
+      updatedAt: provider.updatedAt,
+    };
+  }
+
+  private resolveConfiguredProvider(
+    provider: StoredAIProvider,
+    connectionsById: Map<string, StoredAIConnection>,
+  ): ResolvedAIProviderConfig {
+    const connection = connectionsById.get(provider.connectionId);
+    if (!connection) {
+      throw new Error('AI provider connection is missing.');
+    }
+
+    const apiKey = this.settingsRepo.getSetting(this.buildConnectionKey(connection.id));
+    if (!apiKey) {
+      throw new Error(`API key is missing for connection "${connection.name}".`);
+    }
+
+    return {
+      provider: this.toProviderSummary(provider, connection),
+      apiKey,
+    };
+  }
+
+  private resolveLegacyProvider(provider: LegacyCustomProvider): ResolvedAIProviderConfig {
+    const apiKey =
+      this.settingsRepo.getSetting(this.buildLegacyProviderKey(provider.id)) ??
+      this.settingsRepo.getSetting(OPENAI_API_KEY);
+    if (!apiKey) {
+      throw new Error(`API key is missing for legacy provider "${provider.name}".`);
+    }
+
+    return {
+      provider: this.toLegacyProviderSummary(provider, last4(apiKey)),
+      apiKey,
     };
   }
 
