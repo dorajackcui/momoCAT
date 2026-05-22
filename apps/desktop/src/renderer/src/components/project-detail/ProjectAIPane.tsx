@@ -137,7 +137,12 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
             }
             className="flex-1"
           />
-          <Button onClick={() => void ai.testPrompt()} size="sm" variant="primary">
+          <Button
+            onClick={() => void ai.testPrompt()}
+            disabled={ai.providerSetupRequired || ai.providerUnavailable}
+            size="sm"
+            variant="primary"
+          >
             Test Prompt
           </Button>
         </div>

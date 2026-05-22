@@ -3,6 +3,7 @@ import {
   buildAISystemPrompt,
   normalizeProjectAIModel as normalizeProjectAIModelCore,
   normalizeProjectType,
+  type ProjectAIModel,
   type ProjectType,
 } from '@cat/core/project';
 import type { AIProviderSummary } from '../../../../../shared/ipc';
@@ -47,6 +48,44 @@ export function deriveProjectAIProviderAvailability(
     providerSetupRequired,
     providerWarning,
   };
+}
+
+export function deriveProjectAIProviderDraftsAfterProviderOptionsChange(input: {
+  projectAIModel: ProjectAIModel | null | undefined;
+  modelDraft: ProjectAIModel;
+  savedModelValue: ProjectAIModel;
+  providerOptions: AIProviderSummary[];
+}): {
+  modelDraft: ProjectAIModel;
+  savedModelValue: ProjectAIModel;
+} {
+  const projectModelValue = normalizeProjectAIModelCore(input.projectAIModel);
+  const firstProviderId = input.providerOptions[0]?.id ?? '';
+  const shouldAdoptFirstProvider =
+    !projectModelValue && !input.modelDraft && !input.savedModelValue && Boolean(firstProviderId);
+
+  if (!shouldAdoptFirstProvider) {
+    return {
+      modelDraft: input.modelDraft,
+      savedModelValue: input.savedModelValue,
+    };
+  }
+
+  return {
+    modelDraft: firstProviderId,
+    savedModelValue: firstProviderId,
+  };
+}
+
+export function getProjectAIProviderActionBlockMessage(input: {
+  providerSetupRequired: boolean;
+  providerUnavailable: boolean;
+  providerWarning: string | null;
+}): string | null {
+  if (!input.providerSetupRequired && !input.providerUnavailable) {
+    return null;
+  }
+  return input.providerWarning ?? 'Choose a configured AI provider before running AI actions.';
 }
 
 export function normalizeProjectAIProviderPersistenceValue(

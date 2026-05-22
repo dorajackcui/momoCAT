@@ -14,7 +14,9 @@ import {
   buildAITestMeta,
   buildProjectAISystemPromptPreview,
   deriveProjectAIProviderAvailability,
+  deriveProjectAIProviderDraftsAfterProviderOptionsChange,
   deriveProjectAIFlags,
+  getProjectAIProviderActionBlockMessage,
   normalizeProjectAIProviderPersistenceValue,
   normalizeProjectAIProviderSelection,
 } from './aiSettingsHelpers';
@@ -116,13 +118,29 @@ export function useProjectAI({
   useEffect(() => {
     if (!project) return;
     const promptValue = project.aiPrompt || '';
-    const modelValue = normalizeProjectAIProviderSelection(project.aiModel, providerOptions);
+    const modelValue = normalizeProjectAIProviderSelection(project.aiModel, []);
 
     setPromptDraft(promptValue);
     setSavedPromptValue(promptValue);
     setModelDraft(modelValue);
     setSavedModelValue(modelValue);
-  }, [project, providerOptions]);
+  }, [project?.aiModel, project?.aiPrompt, project?.id]);
+
+  useEffect(() => {
+    if (!project) return;
+    const nextDrafts = deriveProjectAIProviderDraftsAfterProviderOptionsChange({
+      projectAIModel: project.aiModel,
+      modelDraft,
+      savedModelValue,
+      providerOptions,
+    });
+    if (nextDrafts.modelDraft !== modelDraft) {
+      setModelDraft(nextDrafts.modelDraft);
+    }
+    if (nextDrafts.savedModelValue !== savedModelValue) {
+      setSavedModelValue(nextDrafts.savedModelValue);
+    }
+  }, [modelDraft, project?.aiModel, project?.id, providerOptions, savedModelValue]);
 
   useEffect(() => {
     const unsubscribe = apiClient.onJobProgress((progress: JobProgressEvent) => {
@@ -160,6 +178,7 @@ export function useProjectAI({
     () => deriveProjectAIProviderAvailability(modelDraft, providerOptions),
     [modelDraft, providerOptions],
   );
+  const providerActionBlockMessage = getProjectAIProviderActionBlockMessage(providerAvailability);
   const effectiveSystemPromptPreview = useMemo(() => {
     if (!project) {
       return '';
@@ -216,6 +235,10 @@ export function useProjectAI({
 
   const testPrompt = useCallback(async () => {
     if (!project) return;
+    if (providerActionBlockMessage) {
+      feedbackService.info(providerActionBlockMessage);
+      return;
+    }
     const source = testSource.trim();
     if (!source) {
       feedbackService.info('Please enter test source text.');
@@ -248,7 +271,7 @@ export function useProjectAI({
       setTestError(message);
       setShowTestDetails(true);
     }
-  }, [project, testContext, testSource]);
+  }, [project, providerActionBlockMessage, testContext, testSource]);
 
   const startAITranslateFile = useCallback(
     async (
@@ -263,6 +286,10 @@ export function useProjectAI({
         options: normalizedOptions,
       });
       const shouldConfirm = normalizedOptions.confirm !== false;
+      if (providerActionBlockMessage) {
+        feedbackService.info(providerActionBlockMessage);
+        return;
+      }
 
       if (shouldConfirm) {
         const confirmed = await feedbackService.confirm(
@@ -289,7 +316,7 @@ export function useProjectAI({
         feedbackService.error(`Failed to start AI ${config.actionLabel}: ${message}`);
       }
     },
-    [project?.projectType],
+    [project?.projectType, providerActionBlockMessage],
   );
 
   const getFileJob = useCallback(

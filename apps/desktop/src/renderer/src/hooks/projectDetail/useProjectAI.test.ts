@@ -13,7 +13,9 @@ import {
   upsertTrackedJobOnStart,
 } from './useProjectAI';
 import {
+  deriveProjectAIProviderDraftsAfterProviderOptionsChange,
   deriveProjectAIProviderAvailability,
+  getProjectAIProviderActionBlockMessage,
   normalizeProjectAIProviderPersistenceValue,
   normalizeProjectAIProviderSelection,
 } from './ai/aiSettingsHelpers';
@@ -164,6 +166,71 @@ describe('useProjectAI behavior helpers', () => {
     expect(normalizeProjectAIProviderPersistenceValue(' provider:gpt-demo ')).toBe(
       'provider:gpt-demo',
     );
+  });
+
+  it('adopts the first provider after reload only when the project and drafts are empty', () => {
+    expect(
+      deriveProjectAIProviderDraftsAfterProviderOptionsChange({
+        projectAIModel: null,
+        modelDraft: '',
+        savedModelValue: '',
+        providerOptions: [configuredProvider],
+      }),
+    ).toEqual({
+      modelDraft: 'provider:gpt-demo',
+      savedModelValue: 'provider:gpt-demo',
+    });
+
+    expect(
+      deriveProjectAIProviderDraftsAfterProviderOptionsChange({
+        projectAIModel: null,
+        modelDraft: 'provider:user-choice',
+        savedModelValue: '',
+        providerOptions: [configuredProvider],
+      }),
+    ).toEqual({
+      modelDraft: 'provider:user-choice',
+      savedModelValue: '',
+    });
+
+    expect(
+      deriveProjectAIProviderDraftsAfterProviderOptionsChange({
+        projectAIModel: 'provider:missing',
+        modelDraft: 'provider:missing',
+        savedModelValue: 'provider:missing',
+        providerOptions: [configuredProvider],
+      }),
+    ).toEqual({
+      modelDraft: 'provider:missing',
+      savedModelValue: 'provider:missing',
+    });
+  });
+
+  it('returns an action block message only when provider setup is required or unavailable', () => {
+    expect(
+      getProjectAIProviderActionBlockMessage({
+        providerSetupRequired: true,
+        providerUnavailable: false,
+        providerWarning: 'Add an AI provider in Settings before running AI actions.',
+      }),
+    ).toBe('Add an AI provider in Settings before running AI actions.');
+
+    expect(
+      getProjectAIProviderActionBlockMessage({
+        providerSetupRequired: false,
+        providerUnavailable: true,
+        providerWarning:
+          'The saved AI provider is no longer available. Choose a configured provider and save.',
+      }),
+    ).toBe('The saved AI provider is no longer available. Choose a configured provider and save.');
+
+    expect(
+      getProjectAIProviderActionBlockMessage({
+        providerSetupRequired: false,
+        providerUnavailable: false,
+        providerWarning: null,
+      }),
+    ).toBeNull();
   });
 
   it('upserts unknown job progress with fallback file id', () => {

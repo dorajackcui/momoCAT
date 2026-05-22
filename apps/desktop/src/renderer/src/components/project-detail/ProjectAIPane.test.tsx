@@ -118,6 +118,7 @@ describe('ProjectAIPane', () => {
       screen.getByText('Add an AI provider in Settings before running AI actions.'),
     ).toBeInTheDocument();
     expect(screen.getByLabelText('AI Provider')).toBeDisabled();
+    expect(screen.getByText('Test Prompt')).toBeDisabled();
   });
 
   it('keeps the unavailable selected provider visible as a stable option', () => {
@@ -134,6 +135,7 @@ describe('ProjectAIPane', () => {
       screen.getByRole('option', { name: 'Unavailable provider (provider:missing)' }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText('AI Provider')).toHaveValue('provider:missing');
+    expect(screen.getByText('Test Prompt')).toBeDisabled();
   });
 
   it('shows custom project override copy in the custom prompt section', () => {
