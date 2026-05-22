@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { runCli } from './cli';
 import { isDirectRun } from './index';
@@ -35,6 +36,14 @@ function createHarness() {
 }
 
 describe('momocat CLI dispatch', () => {
+  it('depends only on @cat/localization at runtime', () => {
+    const packageJson = JSON.parse(
+      readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+    ) as { dependencies?: Record<string, string> };
+
+    expect(packageJson.dependencies).toEqual({ '@cat/localization': '*' });
+  });
+
   it('prints top-level help', async () => {
     const harness = createHarness();
     const exitCode = await runCli(['--help'], harness.deps, harness.io);

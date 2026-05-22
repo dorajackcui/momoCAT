@@ -102,6 +102,51 @@
         "^@desktop/shared(?:/|$)"
       ],
       "message": "@cat/localization must not import desktop shared IPC code"
+    },
+    {
+      "sourceRoot": "apps/cli/src",
+      "forbiddenTargetRoot": "apps/desktop/src",
+      "forbiddenSpecifierPatterns": [
+        "^apps/desktop/src(?:/|$)",
+        "^@desktop(?:/|$)"
+      ],
+      "message": "apps/cli must not import desktop code"
+    },
+    {
+      "sourceRoot": "apps/cli/src",
+      "forbiddenTargetRoot": "packages/db/src",
+      "forbiddenSpecifierPatterns": [
+        "^@cat/db(?:/|$)",
+        "^packages/db/src(?:/|$)"
+      ],
+      "message": "apps/cli must depend on @cat/localization, not @cat/db"
+    },
+    {
+      "sourceRoot": "apps/cli/src",
+      "forbiddenTargetRoot": "packages/core/src",
+      "forbiddenSpecifierPatterns": [
+        "^@cat/core(?:/|$)",
+        "^packages/core/src(?:/|$)"
+      ],
+      "message": "apps/cli must depend on @cat/localization, not @cat/core"
+    },
+    {
+      "sourceRoot": "apps/desktop/src",
+      "forbiddenTargetRoot": "apps/cli/src",
+      "forbiddenSpecifierPatterns": [
+        "^apps/cli/src(?:/|$)",
+        "^@cat/cli(?:/|$)"
+      ],
+      "message": "apps/desktop must not import CLI code"
+    },
+    {
+      "sourceRoot": "packages/localization/src",
+      "forbiddenTargetRoot": "apps/cli/src",
+      "forbiddenSpecifierPatterns": [
+        "^apps/cli/src(?:/|$)",
+        "^@cat/cli(?:/|$)"
+      ],
+      "message": "@cat/localization must not import CLI code"
     }
   ]
 }
