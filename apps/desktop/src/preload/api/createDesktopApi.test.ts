@@ -12,18 +12,14 @@ describe('createDesktopApi smoke', () => {
     const ipcRenderer = { invoke, on, removeListener } as unknown as IpcRendererLike;
     const api = createDesktopApi(ipcRenderer);
 
+    expect(Object.prototype.hasOwnProperty.call(api, 'testAIProvider')).toBe(false);
+
     await api.listProjects();
     await api.listTMs();
     await api.listTBs();
     await api.getAISettings();
     await api.listAIConnections();
     await api.listAIProviders();
-    await api.testAIProvider({
-      name: 'Demo Provider',
-      baseUrl: 'https://example.com/v1',
-      apiKey: 'secret',
-      model: 'gpt-demo',
-    });
     await api.testAIConnection({
       name: 'OpenAI',
       baseUrl: 'https://api.openai.com/v1',
@@ -49,12 +45,6 @@ describe('createDesktopApi smoke', () => {
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.getSettings);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.listConnections);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.listProviders);
-    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.testProvider, {
-      name: 'Demo Provider',
-      baseUrl: 'https://example.com/v1',
-      apiKey: 'secret',
-      model: 'gpt-demo',
-    });
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.testConnection, {
       name: 'OpenAI',
       baseUrl: 'https://api.openai.com/v1',

@@ -10,7 +10,6 @@ type AIApiKeys =
   | 'testAIConnection'
   | 'deleteAIConnection'
   | 'listAIProviders'
-  | 'testAIProvider'
   | 'addAIProvider'
   | 'deleteAIProvider'
   | 'getProxySettings'
@@ -42,10 +41,6 @@ export function createAIApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<AIApi
       >,
     listAIProviders: () =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.listProviders) as ReturnType<DesktopApi['listAIProviders']>,
-    testAIProvider: (input) =>
-      ipcRenderer.invoke(IPC_CHANNELS.ai.testProvider, input) as ReturnType<
-        DesktopApi['testAIProvider']
-      >,
     addAIProvider: (input) =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.addProvider, input) as ReturnType<
         DesktopApi['addAIProvider']

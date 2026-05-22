@@ -58,15 +58,6 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
 
   registerHandle(
     { ipcMain, projectService, jobManager },
-    IPC_CHANNELS.ai.testProvider,
-    (_event, ...args) => {
-      const [input] = args as [Parameters<typeof projectService.testAIProvider>[0]];
-      return projectService.testAIProvider(input);
-    },
-  );
-
-  registerHandle(
-    { ipcMain, projectService, jobManager },
     IPC_CHANNELS.ai.addProvider,
     (_event, ...args) => {
       const [input] = args as [Parameters<typeof projectService.addAIProvider>[0]];

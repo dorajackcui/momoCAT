@@ -352,7 +352,6 @@ export interface DesktopApi {
   testAIConnection: (input: TestAIConnectionInput) => Promise<AITestConnectionResult>;
   deleteAIConnection: (connectionId: string) => Promise<void>;
   listAIProviders: () => Promise<AIProviderSummary[]>;
-  testAIProvider: (input: TestAIProviderInput) => Promise<AITestProviderResult>;
   addAIProvider: (input: AddAIProviderInput) => Promise<AIProviderSummary>;
   deleteAIProvider: (providerId: string) => Promise<void>;
   getProxySettings: () => Promise<ProxySettings>;
