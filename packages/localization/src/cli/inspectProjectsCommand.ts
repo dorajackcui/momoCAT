@@ -368,6 +368,10 @@ function buildConnectionKey(connectionId: string): string {
   return `${CONNECTION_KEY_PREFIX}${connectionId}`;
 }
 
+function isLegacyOrMissingProviderId(providerId: string | null): boolean {
+  return !providerId || providerId.startsWith('builtin:openai:');
+}
+
 function resolveProjectModel(
   rawModel: string | null | undefined,
   providers: InspectProviderSummary[],
@@ -384,7 +388,7 @@ function resolveProjectModel(
     };
   }
 
-  const fallback = providers[0];
+  const fallback = isLegacyOrMissingProviderId(configuredId) ? providers[0] : undefined;
   if (fallback) {
     return {
       ...fallback,

@@ -31,13 +31,11 @@ import { SqliteTransactionManager } from './adapters/SqliteTransactionManager';
 import { ProxySettingsManager } from './proxy/ProxySettingsManager';
 import type {
   AIBatchMode,
-  AITestProviderResult,
   AIBatchTargetScope,
   ImportOptions,
   ProxySettings,
   ProxySettingsInput,
   TBImportOptions,
-  TestAIProviderInput,
   TMImportOptions,
 } from '../../shared/ipc';
 import type {
@@ -363,14 +361,6 @@ export class ProjectService {
     return this.aiModule.getAISettings();
   }
 
-  public setAIKey(apiKey: string) {
-    return this.aiModule.setAIKey(apiKey);
-  }
-
-  public clearAIKey() {
-    return this.aiModule.clearAIKey();
-  }
-
   public listAIProviders(): AIProviderSummary[] {
     return this.aiModule.listAIProviders();
   }
@@ -381,10 +371,6 @@ export class ProjectService {
 
   public async testAIConnection(input: TestAIConnectionInput): Promise<AITestConnectionResult> {
     return this.aiModule.testAIConnection(input);
-  }
-
-  public async testAIProvider(input: TestAIProviderInput): Promise<AITestProviderResult> {
-    return this.aiModule.testAIProvider(input);
   }
 
   public async addAIProvider(input: AddAIProviderInput): Promise<AIProviderSummary> {

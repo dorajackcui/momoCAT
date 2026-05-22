@@ -29,6 +29,10 @@ Code:
 - Response trimming and tag validation.
 - Prompt artifacts for inspect and opt-in diagnostics.
 
+MT resolves `projects.aiModel` as a configured provider id, then resolves that
+provider through its connection to obtain `baseUrl`, API key, model, and
+chat-completions protocol.
+
 `MTModule` does not own:
 
 - Pure prompt template contracts.

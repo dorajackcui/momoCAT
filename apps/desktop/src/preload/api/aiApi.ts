@@ -4,8 +4,6 @@ import type { DesktopApiSlice, IpcRendererLike } from './types';
 
 type AIApiKeys =
   | 'getAISettings'
-  | 'setAIKey'
-  | 'clearAIKey'
   | 'listAIConnections'
   | 'testAIConnection'
   | 'deleteAIConnection'
@@ -23,10 +21,6 @@ export function createAIApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<AIApi
   return {
     getAISettings: () =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.getSettings) as ReturnType<DesktopApi['getAISettings']>,
-    setAIKey: (apiKey) =>
-      ipcRenderer.invoke(IPC_CHANNELS.ai.setKey, apiKey) as ReturnType<DesktopApi['setAIKey']>,
-    clearAIKey: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.ai.clearKey) as ReturnType<DesktopApi['clearAIKey']>,
     listAIConnections: () =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.listConnections) as ReturnType<
         DesktopApi['listAIConnections']

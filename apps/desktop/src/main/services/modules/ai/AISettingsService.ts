@@ -1,5 +1,5 @@
 import type { ProxySettings, ProxySettingsInput } from '../../../../shared/ipc';
-import type { AITransport, SettingsRepository } from '../../ports';
+import type { SettingsRepository } from '../../ports';
 import type { ProxySettingsApplier } from '../../proxy/ProxySettingsManager';
 
 export class AISettingsService {
@@ -9,7 +9,6 @@ export class AISettingsService {
 
   constructor(
     private readonly settingsRepo: SettingsRepository,
-    private readonly transport: AITransport,
     private readonly proxySettingsManager: ProxySettingsApplier,
   ) {}
 
@@ -19,14 +18,6 @@ export class AISettingsService {
       return { apiKeySet: false };
     }
     return { apiKeySet: true, apiKeyLast4: apiKey.slice(-4) };
-  }
-
-  public setAIKey(apiKey: string): void {
-    this.settingsRepo.setSetting(AISettingsService.AI_API_KEY, apiKey);
-  }
-
-  public clearAIKey(): void {
-    this.settingsRepo.setSetting(AISettingsService.AI_API_KEY, null);
   }
 
   public getProxySettings(): ProxySettings {
@@ -61,24 +52,6 @@ export class AISettingsService {
       customProxyUrl,
       effectiveProxyUrl: this.proxySettingsManager.getEffectiveProxyUrl(),
     };
-  }
-
-  public async testAIConnection(apiKey?: string): Promise<{ ok: true }> {
-    const key =
-      (apiKey && apiKey.trim()) || this.settingsRepo.getSetting(AISettingsService.AI_API_KEY);
-    if (!key) {
-      throw new Error('API key is not set');
-    }
-    await this.transport.testConnection({
-      apiKey: key,
-      baseUrl: 'https://api.openai.com/v1',
-      model: 'gpt-5.4-mini',
-    });
-    return { ok: true };
-  }
-
-  public getStoredApiKey(): string | undefined {
-    return this.settingsRepo.getSetting(AISettingsService.AI_API_KEY);
   }
 
   private readProxyMode(): ProxySettings['mode'] {

@@ -17,11 +17,12 @@ type MockTransport = AITransport & {
 };
 
 describe('LocalizationInspector.inspectFile', () => {
-  it('inspects a file without an API key and without calling provider transport', async () => {
+  it('inspects a file with a configured provider and without calling provider transport', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('No Key Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
         ['Hello world', ''],
@@ -62,6 +63,7 @@ describe('LocalizationInspector.inspectFile', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('No Writes Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
         ['Hello', ''],
@@ -92,6 +94,7 @@ describe('LocalizationInspector.inspectFile', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Workbook Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target', 'note'],
         ['Hello world', '', 'menu'],
@@ -157,6 +160,7 @@ describe('LocalizationInspector.inspectFile', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Full Json Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
       mountReferenceData(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
@@ -201,6 +205,7 @@ describe('LocalizationInspector.inspectFile', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Window Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
       mountReferenceData(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
@@ -254,6 +259,7 @@ describe('LocalizationInspector.inspectFile', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Window Interleaved Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
         ['First', ''],
@@ -292,6 +298,7 @@ describe('LocalizationInspector.inspectFile', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Shared Context Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
         ['Open', 'Ouvrir'],
@@ -329,6 +336,7 @@ describe('LocalizationInspector.inspectFile', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Window Next Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
         ['Open', 'Ouvrir'],
@@ -374,6 +382,7 @@ describe('LocalizationInspector.inspectFile', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Window Overwrite Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
         ['Open', 'Ouvrir'],
@@ -410,6 +419,7 @@ describe('LocalizationInspector.inspectFile', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Truncate Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
         ['Hello', ''],
@@ -471,6 +481,7 @@ describe('LocalizationInspector.inspectFile', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Concordance Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
         ['Hello world', ''],
@@ -540,6 +551,7 @@ describe('LocalizationInspector.inspectFile', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Limited Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
         ['First', ''],
@@ -579,6 +591,7 @@ describe('LocalizationInspector.inspectFile', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Error Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
         ['Break me', ''],
@@ -627,6 +640,7 @@ describe('LocalizationInspector.inspectFile', () => {
         'en',
         'fr',
       );
+      configureAIProvider(db, projectId);
       mountReferenceData(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
@@ -671,6 +685,7 @@ describe('LocalizationInspector.inspectFile', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Prompt Metadata Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
         ['First fails', ''],
@@ -758,6 +773,7 @@ describe('LocalizationInspector.inspectFile', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject(`Invalid ${field}`, 'en', 'fr');
+      configureAIProvider(db, projectId);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
         ['Hello', ''],
@@ -803,6 +819,47 @@ function runtimeConfigProvider() {
       .fn()
       .mockResolvedValue({ reasoningEffort: 'medium' as const }),
   };
+}
+
+function configureAIProvider(db: CATDatabase, projectId: number): void {
+  const connectionId = 'connection:test-openai';
+  const providerId = 'provider:test-openai';
+  const now = '2026-05-22T00:00:00.000Z';
+  db.setSetting(
+    'ai_connection_catalog_v1',
+    JSON.stringify([
+      {
+        id: connectionId,
+        name: 'Test OpenAI',
+        baseUrl: 'https://api.test/v1',
+        protocol: 'chat-completions',
+        kind: 'openai-compatible',
+        apiKeyLast4: '1234',
+        discoveredModels: ['gpt-test'],
+        lastTestedAt: now,
+        lastRefreshedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]),
+  );
+  db.setSetting(
+    'ai_provider_catalog_v2',
+    JSON.stringify([
+      {
+        id: providerId,
+        name: 'Test OpenAI / gpt-test',
+        connectionId,
+        model: 'gpt-test',
+        protocol: 'chat-completions',
+        kind: 'configured',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]),
+  );
+  db.setSetting(`ai_connection_key::${connectionId}`, 'test-api-key-1234');
+  db.updateProjectAISettings(projectId, null, providerId);
 }
 
 function writeInputWorkbook(root: string, rows: unknown[][]): string {

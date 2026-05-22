@@ -86,7 +86,7 @@ Verification date: 2026-03-25
 ### Later
 
 1. If historical data recovery becomes necessary, build a one-off importer or reset/migrate utility outside the normal startup path.
-2. Resume deeper provider pluggability for AI/TM/TB integrations on top of the simplified current-only baseline.
+2. Resume deeper provider pluggability for AI/TM/TB integrations on top of the simplified current-only baseline. Connection-backed OpenAI-compatible providers replace the old fixed built-in OpenAI model list. Remaining provider work should focus on protocol expansion, not on maintaining a model allowlist.
 3. Expand operational tooling only after current-schema and current-contract boundaries are stable.
 
 ## Update Rules

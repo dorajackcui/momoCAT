@@ -1,11 +1,9 @@
 import { TagValidator } from '@cat/core/qa';
 import type {
   AIBatchMode,
-  AITestProviderResult,
   AIBatchTargetScope,
   ProxySettings,
   ProxySettingsInput,
-  TestAIProviderInput,
 } from '../../../shared/ipc';
 import type {
   AIRuntimeConfigProvider,
@@ -58,7 +56,7 @@ export class AIModule {
       AIModule.SEGMENT_PAGE_SIZE,
     );
 
-    this.settingsService = new AISettingsService(settingsRepo, transport, proxySettingsManager);
+    this.settingsService = new AISettingsService(settingsRepo, proxySettingsManager);
     this.providerCatalogService = new AIProviderCatalogService(settingsRepo, transport);
     this.translationOrchestrator = new AITranslationOrchestrator(
       projectRepo,
@@ -77,14 +75,6 @@ export class AIModule {
     return this.settingsService.getAISettings();
   }
 
-  public setAIKey(apiKey: string): void {
-    this.settingsService.setAIKey(apiKey);
-  }
-
-  public clearAIKey(): void {
-    this.settingsService.clearAIKey();
-  }
-
   public listAIProviders(): AIProviderSummary[] {
     return this.providerCatalogService.listProviders();
   }
@@ -95,23 +85,6 @@ export class AIModule {
 
   public async testAIConnection(input: TestAIConnectionInput): Promise<AITestConnectionResult> {
     return this.providerCatalogService.testConnection(input);
-  }
-
-  public async testAIProvider(input: TestAIProviderInput): Promise<AITestProviderResult> {
-    const result = await this.providerCatalogService.testConnection({
-      name: input.name,
-      baseUrl: input.baseUrl,
-      apiKey: input.apiKey,
-    });
-
-    return {
-      ok: result.ok,
-      ...(result.error ? { error: result.error } : {}),
-      ...(result.status ? { status: result.status } : {}),
-      ...(result.endpoint ? { endpoint: result.endpoint } : {}),
-      model: input.model,
-      ...(result.rawResponseText ? { rawResponseText: result.rawResponseText } : {}),
-    };
   }
 
   public async addAIProvider(input: AddAIProviderInput): Promise<AIProviderSummary> {

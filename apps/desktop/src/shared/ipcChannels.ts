@@ -48,13 +48,10 @@ export const IPC_CHANNELS = {
   },
   ai: {
     getSettings: 'ai-settings-get',
-    setKey: 'ai-settings-set',
-    clearKey: 'ai-settings-clear',
     listConnections: 'ai:list-connections',
     testConnection: 'ai:test-connection',
     deleteConnection: 'ai:delete-connection',
     listProviders: 'ai-providers-list',
-    testProvider: 'ai-provider-test',
     addProvider: 'ai-provider-add',
     deleteProvider: 'ai-provider-delete',
     getProxySettings: 'proxy-settings-get',

@@ -17,19 +17,6 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     projectService.getAISettings(),
   );
 
-  registerHandle(
-    { ipcMain, projectService, jobManager },
-    IPC_CHANNELS.ai.setKey,
-    (_event, ...args) => {
-      const [apiKey] = args as [string];
-      return projectService.setAIKey(apiKey);
-    },
-  );
-
-  registerHandle({ ipcMain, projectService, jobManager }, IPC_CHANNELS.ai.clearKey, () =>
-    projectService.clearAIKey(),
-  );
-
   registerHandle({ ipcMain, projectService, jobManager }, IPC_CHANNELS.ai.listConnections, () =>
     projectService.listAIConnections(),
   );

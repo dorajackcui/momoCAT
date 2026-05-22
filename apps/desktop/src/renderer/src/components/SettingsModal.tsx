@@ -438,13 +438,19 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       {provider.apiKeyLast4 ? `****${provider.apiKeyLast4}` : 'not configured'}
                     </div>
                   </div>
-                  <button
-                    onClick={() => void handleDeleteProvider(provider.id)}
-                    disabled={busy}
-                    className="btn-secondary md:w-auto disabled:opacity-50"
-                  >
-                    {isDeleting ? 'Deleting...' : 'Delete Provider'}
-                  </button>
+                  {provider.kind === 'configured' ? (
+                    <button
+                      onClick={() => void handleDeleteProvider(provider.id)}
+                      disabled={busy}
+                      className="btn-secondary md:w-auto disabled:opacity-50"
+                    >
+                      {isDeleting ? 'Deleting...' : 'Delete Provider'}
+                    </button>
+                  ) : (
+                    <span className="text-[11px] font-medium uppercase tracking-wider text-text-faint">
+                      Read only
+                    </span>
+                  )}
                 </div>
               );
             })

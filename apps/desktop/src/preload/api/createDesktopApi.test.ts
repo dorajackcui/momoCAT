@@ -13,6 +13,8 @@ describe('createDesktopApi smoke', () => {
     const api = createDesktopApi(ipcRenderer);
 
     expect(Object.prototype.hasOwnProperty.call(api, 'testAIProvider')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(api, 'setAIKey')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(api, 'clearAIKey')).toBe(false);
 
     await api.listProjects();
     await api.listTMs();

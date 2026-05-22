@@ -39,18 +39,20 @@ function createAIControllerMock(overrides?: Partial<ProjectAIController>): {
   const ai = {
     providerOptions: [
       {
-        id: 'builtin:openai:gpt-5.4-mini',
+        id: 'provider:gpt-5.4-mini',
         name: 'OpenAI / gpt-5.4-mini',
         baseUrl: 'https://api.openai.com/v1',
         model: 'gpt-5.4-mini',
         protocol: 'chat-completions',
-        kind: 'builtin',
+        kind: 'configured',
+        connectionId: 'connection:openai',
+        connectionName: 'OpenAI',
         apiKeyLast4: '1234',
         createdAt: '1970-01-01T00:00:00.000Z',
         updatedAt: '1970-01-01T00:00:00.000Z',
       },
     ],
-    modelDraft: 'builtin:openai:gpt-5.4-mini',
+    modelDraft: 'provider:gpt-5.4-mini',
     setModelDraft: vi.fn(),
     effectiveSystemPromptPreview: 'You are a professional translator.',
     promptDraft: '',

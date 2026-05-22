@@ -100,7 +100,7 @@ describe('runAIFileFlowTrace', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Desktop AI Flow', 'en', 'zh');
-      db.setSetting('openai_api_key', 'test-api-key');
+      configureAIProvider(db, projectId);
       const fileId = db.createFile(projectId, 'demo.xlsx');
       const segment = createSegment({
         segmentId: 'seg-1',
@@ -195,7 +195,7 @@ describe('runAIFileFlowTrace', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Nikki(zh-fr)', 'zh-CN', 'fr-FR');
-      db.setSetting('openai_api_key', 'test-api-key');
+      configureAIProvider(db, projectId);
       const importSpy = vi.fn(async (_filePath: string, _projectId: number, fileId: number) => [
         createSegment({
           segmentId: 'seg-imported',
@@ -297,6 +297,47 @@ describe('runAIFileFlowTrace', () => {
     }
   });
 });
+
+function configureAIProvider(db: CATDatabase, projectId: number): void {
+  const connectionId = 'connection:test-openai';
+  const providerId = 'provider:test-openai';
+  const now = '2026-05-22T00:00:00.000Z';
+  db.setSetting(
+    'ai_connection_catalog_v1',
+    JSON.stringify([
+      {
+        id: connectionId,
+        name: 'Test OpenAI',
+        baseUrl: 'https://api.test/v1',
+        protocol: 'chat-completions',
+        kind: 'openai-compatible',
+        apiKeyLast4: '1234',
+        discoveredModels: ['gpt-test'],
+        lastTestedAt: now,
+        lastRefreshedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]),
+  );
+  db.setSetting(
+    'ai_provider_catalog_v2',
+    JSON.stringify([
+      {
+        id: providerId,
+        name: 'Test OpenAI / gpt-test',
+        connectionId,
+        model: 'gpt-test',
+        protocol: 'chat-completions',
+        kind: 'configured',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]),
+  );
+  db.setSetting(`ai_connection_key::${connectionId}`, 'test-api-key-1234');
+  db.updateProjectAISettings(projectId, null, providerId);
+}
 
 function readEnvTraceConfig(env: NodeJS.ProcessEnv): EnvTraceConfig | null {
   if (env.AI_FILE_FLOW_DYNAMIC !== '1') return null;

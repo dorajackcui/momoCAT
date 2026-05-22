@@ -214,6 +214,43 @@ describe('runInspectProjectsCommand', () => {
     }
   });
 
+  it('does not fall back when a configured provider id is missing', () => {
+    const { dbPath, projectId, tempRoot } = createFixtureDb();
+    const db = new CATDatabase(dbPath);
+    try {
+      db.updateProjectAISettings(
+        projectId,
+        'Use concise style.',
+        'provider:deleted',
+      );
+    } finally {
+      db.close();
+    }
+
+    try {
+      const result = runInspectProjectsCommand({
+        dbPath,
+        projectId,
+        generatedAt: () => '2026-05-21T00:00:00.000Z',
+      });
+
+      expect(result.providers).toHaveLength(1);
+      expect(result.projects[0].model).toMatchObject({
+        id: 'provider:deleted',
+        name: 'No configured AI provider',
+        baseUrl: null,
+        model: null,
+        kind: 'configured',
+        apiKeySet: false,
+        apiKeyLast4: null,
+        configuredId: 'provider:deleted',
+        fallbackFrom: 'provider:deleted',
+      });
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it('reports no configured AI provider when provider settings are absent', () => {
     const tempRoot = fs.mkdtempSync(
       path.join(os.tmpdir(), 'momocat-inspect-projects-no-provider-'),

@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import type { Segment } from '@cat/core/models';
-import { DEFAULT_PROJECT_AI_MODEL, getBuiltinOpenAIProviderModel } from '@cat/core/project';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import { AIModule } from './AIModule';
 import { AITransport, ProjectRepository, SegmentRepository, SettingsRepository } from '../ports';
@@ -49,6 +48,72 @@ function createDeferred<T>() {
   return { promise, resolve, reject };
 }
 
+const TEST_CONNECTION_ID = 'connection:test-openai';
+const TEST_PROVIDER_ID = 'provider:test-gpt-5-mini';
+const TEST_PROVIDER_MODEL = 'gpt-5-mini';
+const ALT_PROVIDER_ID = 'provider:test-gpt-5.4';
+const ALT_PROVIDER_MODEL = 'gpt-5.4';
+const TEST_PROVIDER_BASE_URL = 'https://api.test/v1';
+const TEST_TIMESTAMP = '2026-01-01T00:00:00.000Z';
+
+function createAISettingsRepository(options?: {
+  apiKey?: string;
+  providers?: Array<{ id: string; name: string; model: string }>;
+}): SettingsRepository {
+  const apiKey = options?.apiKey ?? 'test-api-key';
+  const providers = options?.providers ?? [
+    { id: TEST_PROVIDER_ID, name: 'Test GPT 5 mini', model: TEST_PROVIDER_MODEL },
+  ];
+  const discoveredModels = Array.from(new Set(providers.map((provider) => provider.model)));
+  const settingsStore = new Map<string, string>([
+    [
+      'ai_connection_catalog_v1',
+      JSON.stringify([
+        {
+          id: TEST_CONNECTION_ID,
+          name: 'Test OpenAI',
+          baseUrl: TEST_PROVIDER_BASE_URL,
+          protocol: 'chat-completions',
+          kind: 'openai-compatible',
+          apiKeyLast4: apiKey.slice(-4),
+          discoveredModels,
+          lastTestedAt: TEST_TIMESTAMP,
+          lastRefreshedAt: TEST_TIMESTAMP,
+          createdAt: TEST_TIMESTAMP,
+          updatedAt: TEST_TIMESTAMP,
+        },
+      ]),
+    ],
+    [
+      'ai_provider_catalog_v2',
+      JSON.stringify(
+        providers.map((provider) => ({
+          id: provider.id,
+          name: provider.name,
+          connectionId: TEST_CONNECTION_ID,
+          model: provider.model,
+          protocol: 'chat-completions',
+          kind: 'configured',
+          createdAt: TEST_TIMESTAMP,
+          updatedAt: TEST_TIMESTAMP,
+        })),
+      ),
+    ],
+    [`ai_connection_key::${TEST_CONNECTION_ID}`, apiKey],
+  ]);
+
+  return {
+    getSetting: vi.fn((key: string) => settingsStore.get(key)),
+    setSetting: vi.fn((key: string, value: string | null) => {
+      if (value === null) {
+        settingsStore.delete(key);
+        return;
+      }
+      settingsStore.set(key, value);
+    }),
+  } as unknown as SettingsRepository;
+}
+
 function createTBPromptMatches(count: number) {
   return Array.from({ length: count }, (_, index) => ({
     srcTerm: `t${index + 1}`,
@@ -91,9 +156,7 @@ async function runFileProcessingConcurrencyCase(params: {
     getSegmentsPage: vi.fn().mockReturnValue(segments),
   } as unknown as SegmentRepository;
 
-  const settingsRepo = {
-    getSetting: vi.fn().mockReturnValue('test-api-key'),
-  } as unknown as SettingsRepository;
+  const settingsRepo = createAISettingsRepository();
 
   const segmentService = {
     updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -161,9 +224,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -172,7 +233,7 @@ describe('AIModule.aiTranslateFile', () => {
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn().mockResolvedValue({
-        content: '你好世界',
+        content: '浣犲ソ涓栫晫',
         status: 200,
         endpoint: '/v1/responses',
       }),
@@ -194,7 +255,7 @@ describe('AIModule.aiTranslateFile', () => {
 
     const translatedTokens = (segmentService.updateSegment as ReturnType<typeof vi.fn>).mock
       .calls[0][1];
-    expect(serializeTokensToDisplayText(translatedTokens)).toBe('你好世界');
+    expect(serializeTokensToDisplayText(translatedTokens)).toBe('浣犲ソ涓栫晫');
   });
 
   it('keeps blank-only as default target scope', async () => {
@@ -203,12 +264,12 @@ describe('AIModule.aiTranslateFile', () => {
       createSegment({
         segmentId: 'blank-only-prefilled',
         sourceText: 'Good morning',
-        targetText: '早上好',
+        targetText: 'prefilled target',
       }),
       createSegment({
         segmentId: 'blank-only-confirmed',
         sourceText: 'Confirmed text',
-        targetText: '已确认',
+        targetText: 'confirmed target',
         status: 'confirmed',
       }),
     ];
@@ -229,9 +290,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -240,7 +299,7 @@ describe('AIModule.aiTranslateFile', () => {
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn().mockResolvedValue({
-        content: '你好世界',
+        content: '浣犲ソ涓栫晫',
         status: 200,
         endpoint: '/v1/responses',
       }),
@@ -264,12 +323,12 @@ describe('AIModule.aiTranslateFile', () => {
       createSegment({
         segmentId: 'overwrite-prefilled',
         sourceText: 'Good morning',
-        targetText: '旧译文',
+        targetText: 'old target',
       }),
       createSegment({
         segmentId: 'overwrite-confirmed',
         sourceText: 'Confirmed text',
-        targetText: '已确认',
+        targetText: 'confirmed target',
         status: 'confirmed',
       }),
     ];
@@ -290,9 +349,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -301,7 +358,7 @@ describe('AIModule.aiTranslateFile', () => {
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn().mockResolvedValue({
-        content: '新译文',
+        content: 'new target',
         status: 200,
         endpoint: '/v1/responses',
       }),
@@ -339,13 +396,13 @@ describe('AIModule.aiTranslateFile', () => {
       createSegment({
         segmentId: 'dialogue-overwrite-2',
         sourceText: 'How are you?',
-        targetText: '旧译文',
+        targetText: 'old target',
         context: 'Alice',
       }),
       createSegment({
         segmentId: 'dialogue-overwrite-confirmed',
         sourceText: 'Confirmed',
-        targetText: '已确认',
+        targetText: 'confirmed target',
         context: 'Alice',
         status: 'confirmed',
       }),
@@ -367,9 +424,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -381,8 +436,8 @@ describe('AIModule.aiTranslateFile', () => {
       createResponse: vi.fn().mockResolvedValue({
         content: JSON.stringify({
           translations: [
-            { id: 'dialogue-overwrite-1', text: '你好' },
-            { id: 'dialogue-overwrite-2', text: '你好吗？' },
+            { id: 'dialogue-overwrite-1', text: '浣犲ソ' },
+            { id: 'dialogue-overwrite-2', text: '浣犲ソ鍚楋紵' },
           ],
         }),
         status: 200,
@@ -427,9 +482,7 @@ describe('AIModule.aiTranslateFile', () => {
       ),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -438,7 +491,7 @@ describe('AIModule.aiTranslateFile', () => {
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn().mockResolvedValue({
-        content: '你好世界',
+        content: '浣犲ソ涓栫晫',
         status: 200,
         endpoint: '/v1/responses',
       }),
@@ -473,9 +526,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -484,7 +535,7 @@ describe('AIModule.aiTranslateFile', () => {
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn().mockResolvedValue({
-        content: '你好世界',
+        content: '浣犲ソ涓栫晫',
         status: 200,
         endpoint: '/v1/responses',
       }),
@@ -497,15 +548,15 @@ describe('AIModule.aiTranslateFile', () => {
           similarity: 100,
           tmName: 'Main TM',
           sourceTokens: [{ type: 'text', content: 'Hello world' }],
-          targetTokens: [{ type: 'text', content: '你好世界' }],
+          targetTokens: [{ type: 'text', content: '浣犲ソ涓栫晫' }],
         },
       ]),
     } as unknown as Pick<TMService, 'findMatches'>;
 
     const tbService = {
       findMatches: vi.fn().mockResolvedValue([
-        { srcTerm: 'world', tgtTerm: '世界', note: null },
-        { srcTerm: 'hello', tgtTerm: '你好', note: 'prefer short form' },
+        { srcTerm: 'world', tgtTerm: '涓栫晫', note: null },
+        { srcTerm: 'hello', tgtTerm: '浣犲ソ', note: 'prefer short form' },
       ]),
     } as unknown as Pick<TBService, 'findMatches'>;
 
@@ -529,10 +580,10 @@ describe('AIModule.aiTranslateFile', () => {
     expect(userPrompt).toContain('TM References (top matches):');
     expect(userPrompt).toContain('- Similarity: 100% | TM: Main TM');
     expect(userPrompt).toContain('- Source: Hello world');
-    expect(userPrompt).toContain('- Target: 你好世界');
+    expect(userPrompt).toContain('- Target: 浣犲ソ涓栫晫');
     expect(userPrompt).toContain('Terminology References (hit terms):');
-    expect(userPrompt).toContain('- world => 世界');
-    expect(userPrompt).toContain('- hello => 你好 (note: prefer short form)');
+    expect(userPrompt).toContain('- world => 涓栫晫');
+    expect(userPrompt).toContain('- hello => 浣犲ソ (note: prefer short form)');
     expect(tmService.findMatches).toHaveBeenCalledTimes(1);
     expect(tbService.findMatches).toHaveBeenCalledTimes(1);
   });
@@ -541,7 +592,7 @@ describe('AIModule.aiTranslateFile', () => {
     const segments: Segment[] = [
       createSegment({
         segmentId: 'concordance-ref-1',
-        sourceText: '麦浪农场',
+        sourceText: '楹︽氮鍐滃満',
       }),
     ];
 
@@ -560,9 +611,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -590,8 +639,7 @@ describe('AIModule.aiTranslateFile', () => {
           sourceTokens: [
             {
               type: 'text',
-              content:
-                '据说，叫“麦浪农场”这个名字，是为了纪念一位艺术家在这里画下名作《麦与浪》。',
+              content: 'Long concordance source context.',
             },
           ],
           targetTokens: [{ type: 'text', content: 'Contexte cible' }],
@@ -602,7 +650,7 @@ describe('AIModule.aiTranslateFile', () => {
           rank: 73,
           tmName: 'Main TM',
           tmType: 'main',
-          matchedSourceText: '麦浪农场',
+          matchedSourceText: '楹︽氮鍐滃満',
           sourceCoverage: 100,
           entryCoverage: 10,
         },
@@ -652,9 +700,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -749,9 +795,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -760,7 +804,7 @@ describe('AIModule.aiTranslateFile', () => {
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn().mockResolvedValue({
-        content: '你好世界',
+        content: '浣犲ソ涓栫晫',
         status: 200,
         endpoint: '/v1/responses',
       }),
@@ -820,16 +864,14 @@ describe('AIModule.aiTranslateFile', () => {
       const segmentRepo = {
         getSegmentsPage: vi.fn().mockReturnValue(segments),
       } as unknown as SegmentRepository;
-      const settingsRepo = {
-        getSetting: vi.fn().mockReturnValue('test-api-key'),
-      } as unknown as SettingsRepository;
+      const settingsRepo = createAISettingsRepository();
       const segmentService = {
         updateSegment: vi.fn().mockResolvedValue(undefined),
       } as unknown as SegmentService;
       const transport = {
         testConnection: vi.fn().mockResolvedValue({ ok: true }),
         createResponse: vi.fn().mockResolvedValue({
-          content: '处理结果',
+          content: '澶勭悊缁撴灉',
           status: 200,
           endpoint: '/v1/responses',
         }),
@@ -878,9 +920,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -889,7 +929,7 @@ describe('AIModule.aiTranslateFile', () => {
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn().mockResolvedValue({
-        content: '你好世界',
+        content: '浣犲ソ涓栫晫',
         status: 200,
         endpoint: '/v1/responses',
       }),
@@ -935,7 +975,7 @@ describe('AIModule.aiTranslateFile', () => {
     }
   });
 
-  it('uses project-level aiModel for file translation', async () => {
+  it('uses project-level configured provider for file translation', async () => {
     const segments: Segment[] = [
       createSegment({ segmentId: 'model-1', sourceText: 'Hello world' }),
     ];
@@ -948,7 +988,7 @@ describe('AIModule.aiTranslateFile', () => {
         tgtLang: 'zh',
         aiPrompt: '',
         aiTemperature: 0.2,
-        aiModel: 'gpt-5-mini',
+        aiModel: TEST_PROVIDER_ID,
       }),
     } as unknown as ProjectRepository;
 
@@ -956,9 +996,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -967,7 +1005,7 @@ describe('AIModule.aiTranslateFile', () => {
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn().mockResolvedValue({
-        content: '你好世界',
+        content: '浣犲ソ涓栫晫',
         status: 200,
         endpoint: '/v1/responses',
       }),
@@ -977,10 +1015,11 @@ describe('AIModule.aiTranslateFile', () => {
     await module.aiTranslateFile(1);
 
     const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(request.model).toBe('gpt-5-mini');
+    expect(request.baseUrl).toBe(TEST_PROVIDER_BASE_URL);
+    expect(request.model).toBe(TEST_PROVIDER_MODEL);
   });
 
-  it('prefers request model over project aiModel when request model is valid', async () => {
+  it('prefers request provider over project aiModel when request provider is configured', async () => {
     const segments: Segment[] = [
       createSegment({ segmentId: 'model-2', sourceText: 'Hello world' }),
     ];
@@ -993,7 +1032,7 @@ describe('AIModule.aiTranslateFile', () => {
         tgtLang: 'zh',
         aiPrompt: '',
         aiTemperature: 0.2,
-        aiModel: 'gpt-5-mini',
+        aiModel: TEST_PROVIDER_ID,
       }),
     } as unknown as ProjectRepository;
 
@@ -1001,9 +1040,12 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository({
+      providers: [
+        { id: TEST_PROVIDER_ID, name: 'Test GPT 5 mini', model: TEST_PROVIDER_MODEL },
+        { id: ALT_PROVIDER_ID, name: 'Test GPT 5.4', model: ALT_PROVIDER_MODEL },
+      ],
+    });
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1012,20 +1054,20 @@ describe('AIModule.aiTranslateFile', () => {
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn().mockResolvedValue({
-        content: '你好世界',
+        content: '浣犲ソ涓栫晫',
         status: 200,
         endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
     const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
-    await module.aiTranslateFile(1, { model: 'gpt-5.4' });
+    await module.aiTranslateFile(1, { model: ALT_PROVIDER_ID });
 
     const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(request.model).toBe('gpt-5.4');
+    expect(request.model).toBe(ALT_PROVIDER_MODEL);
   });
 
-  it('falls back to default model when both request and project model are invalid', async () => {
+  it('rejects translation when neither request nor project provider is configured', async () => {
     const segments: Segment[] = [
       createSegment({ segmentId: 'model-3', sourceText: 'Hello world' }),
     ];
@@ -1038,7 +1080,7 @@ describe('AIModule.aiTranslateFile', () => {
         tgtLang: 'zh',
         aiPrompt: '',
         aiTemperature: 0.2,
-        aiModel: 'unsupported-project-model',
+        aiModel: 'provider:missing-project',
       }),
     } as unknown as ProjectRepository;
 
@@ -1046,9 +1088,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1057,17 +1097,17 @@ describe('AIModule.aiTranslateFile', () => {
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn().mockResolvedValue({
-        content: '你好世界',
+        content: '浣犲ソ涓栫晫',
         status: 200,
         endpoint: '/v1/responses',
       }),
     } as unknown as AITransport;
 
     const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
-    await module.aiTranslateFile(1, { model: 'unsupported-request-model' });
-
-    const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(request.model).toBe(getBuiltinOpenAIProviderModel(DEFAULT_PROJECT_AI_MODEL));
+    await expect(module.aiTranslateFile(1, { model: 'provider:missing-request' })).rejects.toThrow(
+      'AI provider is not configured.',
+    );
+    expect(transport.createResponse).not.toHaveBeenCalled();
   });
 
   it('omits context field in user prompt when imported context is missing', async () => {
@@ -1092,9 +1132,7 @@ describe('AIModule.aiTranslateFile', () => {
       ),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1103,7 +1141,7 @@ describe('AIModule.aiTranslateFile', () => {
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn().mockResolvedValue({
-        content: '你好世界',
+        content: '浣犲ソ涓栫晫',
         status: 200,
         endpoint: '/v1/responses',
       }),
@@ -1139,9 +1177,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1187,9 +1223,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1241,9 +1275,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1294,9 +1326,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1338,7 +1368,7 @@ describe('AIModule.aiTranslateFile', () => {
     const { initiallyStarted, result, segmentService } = await runFileProcessingConcurrencyCase({
       projectType: 'translation',
       segmentPrefix: 'translation-concurrent',
-      responseContent: (index) => `译文 ${index + 1}`,
+      responseContent: (index) => `璇戞枃 ${index + 1}`,
     });
 
     expect(initiallyStarted).toBe(4);
@@ -1355,7 +1385,7 @@ describe('AIModule.aiTranslateFile', () => {
         projectType: 'custom',
         aiPrompt: 'Process text',
         aiTemperature: 0.2,
-        aiModel: 'gpt-5.4',
+        aiModel: TEST_PROVIDER_ID,
       }),
     } as unknown as ProjectRepository;
 
@@ -1363,9 +1393,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue([]),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1388,7 +1416,7 @@ describe('AIModule.aiTranslateFile', () => {
     expect(result.systemPrompt).toBe(request.systemPrompt);
     expect(result.userPrompt).toBe(request.userPrompt);
     expect(result.translatedText).toBe('processed');
-    expect(request.model).toBe('gpt-5.4');
+    expect(request.model).toBe(TEST_PROVIDER_MODEL);
     expect(request.userPrompt).toContain('Input:');
     expect(request.userPrompt).toContain('Input text');
     expect(request.userPrompt).toContain('Context: Additional context');
@@ -1403,7 +1431,7 @@ describe('AIModule.aiTranslateFile', () => {
         projectType: 'translation',
         aiPrompt: 'Use concise style.',
         aiTemperature: 0.2,
-        aiModel: 'gpt-5.4',
+        aiModel: TEST_PROVIDER_ID,
       }),
     } as unknown as ProjectRepository;
 
@@ -1411,9 +1439,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue([]),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1446,7 +1472,7 @@ describe('AIModule.aiTranslateFile', () => {
         projectType: 'translation',
         aiPrompt: '',
         aiTemperature: 0.2,
-        aiModel: 'gpt-5.4',
+        aiModel: TEST_PROVIDER_ID,
       }),
     } as unknown as ProjectRepository;
 
@@ -1454,9 +1480,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue([]),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1507,9 +1531,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1522,12 +1544,12 @@ describe('AIModule.aiTranslateFile', () => {
         .fn()
         .mockResolvedValueOnce({
           content:
-            '{"translations":[{"id":"dlg-a1","text":"你好"},{"id":"dlg-a2","text":"你好吗？"}]}',
+            '{"translations":[{"id":"dlg-a1","text":"hello"},{"id":"dlg-a2","text":"how are you"}]}',
           status: 200,
           endpoint: '/v1/responses',
         })
         .mockResolvedValueOnce({
-          content: '{"translations":[{"id":"dlg-b1","text":"我很好。"}]}',
+          content: '{"translations":[{"id":"dlg-b1","text":"I am fine"}]}',
           status: 200,
           endpoint: '/v1/responses',
         }),
@@ -1546,7 +1568,7 @@ describe('AIModule.aiTranslateFile', () => {
       .userPrompt;
     expect(secondPrompt).toContain('Previous Dialogue Group (for consistency):');
     expect(secondPrompt).toContain('speaker: Alice');
-    expect(secondPrompt).toContain('你好');
+    expect(secondPrompt).toContain('hello');
     expect(segmentService.updateSegment).not.toHaveBeenCalled();
   });
 
@@ -1571,9 +1593,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1640,20 +1660,18 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
       updateSegmentsAtomically: vi.fn().mockResolvedValue([]),
     } as unknown as SegmentService;
 
-    const responses = ['not-json', 'still-not-json', 'again-not-json', '第一句', '第二句'];
+    const responses = ['not-json', 'still-not-json', 'again-not-json', 'line one', 'line two'];
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn().mockImplementation(async () => ({
-        content: responses.shift() ?? '默认译文',
+        content: responses.shift() ?? 'default target',
         status: 200,
         endpoint: '/v1/responses',
       })),
@@ -1690,9 +1708,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1717,7 +1733,7 @@ describe('AIModule.aiTranslateFile', () => {
 
     deferred.resolve({
       content:
-        '{"translations":[{"id":"dlg-progress-1","text":"第一句"},{"id":"dlg-progress-2","text":"第二句"}]}',
+        '{"translations":[{"id":"dlg-progress-1","text":"line one"},{"id":"dlg-progress-2","text":"line two"}]}',
       status: 200,
       endpoint: '/v1/responses',
     });
@@ -1758,9 +1774,7 @@ describe('AIModule.aiTranslateFile', () => {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1782,7 +1796,7 @@ describe('AIModule.aiTranslateFile', () => {
       createResponse: vi.fn().mockImplementation(async () => {
         const next = queue.shift();
         if (!next) {
-          return { content: '默认译文', status: 200, endpoint: '/v1/responses' };
+          return { content: 'default target', status: 200, endpoint: '/v1/responses' };
         }
         return next;
       }),
@@ -1799,11 +1813,11 @@ describe('AIModule.aiTranslateFile', () => {
     await Promise.resolve();
     expect(progressEvents).toHaveLength(0);
 
-    fallbackFirst.resolve({ content: '第一句', status: 200, endpoint: '/v1/responses' });
+    fallbackFirst.resolve({ content: 'line one', status: 200, endpoint: '/v1/responses' });
     await new Promise((resolve) => setTimeout(resolve, 80));
     expect(progressEvents.map((event) => event.current)).toEqual([1]);
 
-    fallbackSecond.resolve({ content: '第二句', status: 200, endpoint: '/v1/responses' });
+    fallbackSecond.resolve({ content: 'line two', status: 200, endpoint: '/v1/responses' });
     await task;
     expect(progressEvents.map((event) => event.current)).toEqual([1, 2]);
     expect(progressEvents[1].message).toContain('segment 2 of 2');
@@ -1816,7 +1830,7 @@ describe('AIModule.aiTranslateSegment', () => {
       segmentId: 'single-1',
       sourceText: 'Hello world',
       context: 'UI button label',
-      targetText: '旧译文',
+      targetText: 'old target',
       status: 'draft',
     });
 
@@ -1835,9 +1849,7 @@ describe('AIModule.aiTranslateSegment', () => {
       getSegment: vi.fn().mockReturnValue(segment),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1846,7 +1858,7 @@ describe('AIModule.aiTranslateSegment', () => {
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn().mockResolvedValue({
-        content: '你好世界',
+        content: '浣犲ソ涓栫晫',
         status: 200,
         endpoint: '/v1/responses',
       }),
@@ -1859,13 +1871,13 @@ describe('AIModule.aiTranslateSegment', () => {
           similarity: 99,
           tmName: 'Main TM',
           sourceTokens: [{ type: 'text', content: 'Hello world' }],
-          targetTokens: [{ type: 'text', content: '你好世界' }],
+          targetTokens: [{ type: 'text', content: '浣犲ソ涓栫晫' }],
         },
       ]),
     } as unknown as Pick<TMService, 'findMatches'>;
 
     const tbService = {
-      findMatches: vi.fn().mockResolvedValue([{ srcTerm: 'world', tgtTerm: '世界', note: null }]),
+      findMatches: vi.fn().mockResolvedValue([{ srcTerm: 'world', tgtTerm: '涓栫晫', note: null }]),
     } as unknown as Pick<TBService, 'findMatches'>;
 
     const module = new AIModule(
@@ -1899,7 +1911,7 @@ describe('AIModule.aiTranslateSegment', () => {
     const segment = createSegment({
       segmentId: 'single-review-1',
       sourceText: 'Review this text',
-      targetText: '初稿',
+      targetText: '鍒濈',
       status: 'draft',
     });
 
@@ -1919,9 +1931,7 @@ describe('AIModule.aiTranslateSegment', () => {
       getSegment: vi.fn().mockReturnValue(segment),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1953,7 +1963,7 @@ describe('AIModule.aiRefineSegment', () => {
     const segment = createSegment({
       segmentId: 'refine-1',
       sourceText: 'Hello world',
-      targetText: '你好世界',
+      targetText: '浣犲ソ涓栫晫',
       context: 'UI button label',
       status: 'draft',
     });
@@ -1973,9 +1983,7 @@ describe('AIModule.aiRefineSegment', () => {
       getSegment: vi.fn().mockReturnValue(segment),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -1984,7 +1992,7 @@ describe('AIModule.aiRefineSegment', () => {
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn().mockResolvedValue({
-        content: '你好，世界',
+        content: 'hello world target',
         status: 200,
         endpoint: '/v1/responses',
       }),
@@ -1997,13 +2005,13 @@ describe('AIModule.aiRefineSegment', () => {
           similarity: 99,
           tmName: 'Main TM',
           sourceTokens: [{ type: 'text', content: 'Hello world' }],
-          targetTokens: [{ type: 'text', content: '你好世界' }],
+          targetTokens: [{ type: 'text', content: '浣犲ソ涓栫晫' }],
         },
       ]),
     } as unknown as Pick<TMService, 'findMatches'>;
 
     const tbService = {
-      findMatches: vi.fn().mockResolvedValue([{ srcTerm: 'world', tgtTerm: '世界', note: null }]),
+      findMatches: vi.fn().mockResolvedValue([{ srcTerm: 'world', tgtTerm: '涓栫晫', note: null }]),
     } as unknown as Pick<TBService, 'findMatches'>;
 
     const module = new AIModule(
@@ -2030,7 +2038,7 @@ describe('AIModule.aiRefineSegment', () => {
     const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(request.userPrompt).toContain('Context: UI button label');
     expect(request.userPrompt).toContain('Current Translation:');
-    expect(request.userPrompt).toContain('你好世界');
+    expect(request.userPrompt).toContain('浣犲ソ涓栫晫');
     expect(request.userPrompt).toContain('Refinement Instruction:');
     expect(request.userPrompt).toContain('Make the tone concise');
     expect(request.userPrompt).toContain('TM References (top matches):');
@@ -2061,9 +2069,7 @@ describe('AIModule.aiRefineSegment', () => {
       getSegment: vi.fn().mockReturnValue(segment),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -2110,7 +2116,7 @@ describe('AIModule.aiRefineSegment', () => {
     const segment = createSegment({
       segmentId: 'refine-review-1',
       sourceText: 'Review this text',
-      targetText: '初稿',
+      targetText: '鍒濈',
       status: 'draft',
     });
 
@@ -2130,9 +2136,7 @@ describe('AIModule.aiRefineSegment', () => {
       getSegment: vi.fn().mockReturnValue(segment),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -2141,7 +2145,7 @@ describe('AIModule.aiRefineSegment', () => {
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn().mockResolvedValue({
-        content: '修改后译文',
+        content: 'refined target',
         status: 200,
         endpoint: '/v1/responses',
       }),
@@ -2162,7 +2166,7 @@ describe('AIModule.aiRefineSegment', () => {
     const segment = createSegment({
       segmentId: 'refine-empty-inst-1',
       sourceText: 'Hello',
-      targetText: '你好',
+      targetText: '浣犲ソ',
       status: 'draft',
     });
 
@@ -2181,9 +2185,7 @@ describe('AIModule.aiRefineSegment', () => {
       getSegment: vi.fn().mockReturnValue(segment),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -2226,9 +2228,7 @@ describe('AIModule.aiRefineSegment', () => {
       getSegment: vi.fn().mockReturnValue(segment),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -2254,7 +2254,7 @@ describe('AIModule.segmentAIOperationLock', () => {
     const segment = createSegment({
       segmentId: 'lock-1',
       sourceText: 'Hello world',
-      targetText: '你好世界',
+      targetText: '浣犲ソ涓栫晫',
       status: 'draft',
     });
 
@@ -2274,9 +2274,7 @@ describe('AIModule.segmentAIOperationLock', () => {
       getSegment: vi.fn().mockReturnValue(segment),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -2296,7 +2294,7 @@ describe('AIModule.segmentAIOperationLock', () => {
       'AI request already in progress for this segment',
     );
 
-    pending.resolve({ content: '你好，世界', status: 200, endpoint: '/v1/responses' });
+    pending.resolve({ content: 'hello world target', status: 200, endpoint: '/v1/responses' });
     await firstCall;
     expect(segmentService.updateSegment).toHaveBeenCalledTimes(1);
   });
@@ -2305,7 +2303,7 @@ describe('AIModule.segmentAIOperationLock', () => {
     const segment = createSegment({
       segmentId: 'lock-release-1',
       sourceText: 'Hello world',
-      targetText: '你好世界',
+      targetText: '浣犲ソ涓栫晫',
       status: 'draft',
     });
 
@@ -2325,9 +2323,7 @@ describe('AIModule.segmentAIOperationLock', () => {
       getSegment: vi.fn().mockReturnValue(segment),
     } as unknown as SegmentRepository;
 
-    const settingsRepo = {
-      getSetting: vi.fn().mockReturnValue('test-api-key'),
-    } as unknown as SettingsRepository;
+    const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
       updateSegment: vi.fn().mockResolvedValue(undefined),
@@ -2339,7 +2335,7 @@ describe('AIModule.segmentAIOperationLock', () => {
         .fn()
         .mockRejectedValueOnce(new Error('temporary upstream error'))
         .mockResolvedValueOnce({
-          content: '你好，世界',
+          content: 'hello world target',
           status: 200,
           endpoint: '/v1/responses',
         }),

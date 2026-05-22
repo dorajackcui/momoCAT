@@ -39,10 +39,16 @@ Key fields:
 - `segments.qaIssuesJson`
 - segment token/json payload columns and status/hash keys
 
+AI provider config:
+- Project provider selection is stored in `projects.aiModel`; the value is a configured provider id.
+- AI connections are stored in `app_settings.ai_connection_catalog_v1`.
+- Connection API keys are stored separately with key prefix `ai_connection_key::`.
+- Project-selectable providers are stored in `app_settings.ai_provider_catalog_v2`.
+- Legacy `ai_provider_catalog_v1` and `openai_api_key` are read only for compatibility.
+
 AI runtime config:
-- Runtime model tuning is stored outside SQLite in `userData/ai-runtime.json`
-- Development path resolves to `.cat_data/ai-runtime.json`
-- The runtime config currently stores per-model `reasoningEffort` for `gpt-5.4`, `gpt-5.4-mini`, `gpt-5`, and `gpt-5-mini`
+- Runtime model tuning is stored outside SQLite in `userData/ai-runtime.json`.
+- Development path resolves to `.cat_data/ai-runtime.json`.
 
 ### TM layer
 - `tms`

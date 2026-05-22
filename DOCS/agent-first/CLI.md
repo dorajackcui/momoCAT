@@ -36,6 +36,12 @@ Use this before translation to confirm:
 - File coverage stored in the project DB.
 - AI provider status.
 
+Provider status:
+
+- Reads configured AI providers from connection-backed provider settings.
+- Reports provider id, connection base URL, selected model, and API key status.
+- Does not list hard-coded built-in OpenAI models.
+
 The command reports whether an API key exists but must not print full API keys.
 
 ### Inspect Localization

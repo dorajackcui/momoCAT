@@ -206,7 +206,8 @@ describe('SettingsModal', () => {
     await screen.findByText('OpenAI / gpt-demo');
     expect(screen.getByText('Legacy Provider')).toBeInTheDocument();
     expect(screen.queryByText('Built-in')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Delete Provider')).toHaveLength(2);
+    expect(screen.getAllByText('Delete Provider')).toHaveLength(1);
+    expect(screen.getByText('Read only')).toBeInTheDocument();
   });
 
   it('deletes connections and providers from their rows', async () => {

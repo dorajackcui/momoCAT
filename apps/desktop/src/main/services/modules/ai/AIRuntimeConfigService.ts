@@ -29,12 +29,7 @@ function cloneModelRuntimeConfig(config: AiModelRuntimeConfig): AiModelRuntimeCo
 export function createDefaultAIRuntimeConfig(): AiRuntimeConfig {
   return {
     version: 1,
-    models: {
-      'gpt-5.4': cloneModelRuntimeConfig(DEFAULT_MODEL_RUNTIME_CONFIG),
-      'gpt-5.4-mini': cloneModelRuntimeConfig(DEFAULT_MODEL_RUNTIME_CONFIG),
-      'gpt-5': cloneModelRuntimeConfig(DEFAULT_MODEL_RUNTIME_CONFIG),
-      'gpt-5-mini': cloneModelRuntimeConfig(DEFAULT_MODEL_RUNTIME_CONFIG),
-    },
+    models: {},
   };
 }
 
@@ -49,8 +44,7 @@ function sanitizeModelConfig(
   value: unknown,
   warn: (message: string) => void,
 ): AiModelRuntimeConfig {
-  const fallback =
-    createDefaultAIRuntimeConfig().models[model] ?? cloneModelRuntimeConfig(DEFAULT_MODEL_RUNTIME_CONFIG);
+  const fallback = cloneModelRuntimeConfig(DEFAULT_MODEL_RUNTIME_CONFIG);
   if (!value || typeof value !== 'object') {
     warn(`Invalid runtime config for model "${model}", using defaults.`);
     return fallback;

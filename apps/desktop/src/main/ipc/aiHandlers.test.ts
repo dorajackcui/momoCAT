@@ -20,10 +20,7 @@ describe('ai handlers', () => {
     const updateProgress = vi.fn();
     const projectService = {
       getAISettings: vi.fn(),
-      setAIKey: vi.fn(),
-      clearAIKey: vi.fn(),
       listAIProviders: vi.fn(),
-      testAIProvider: vi.fn(),
       addAIProvider: vi.fn(),
       deleteAIProvider: vi.fn(),
       getProxySettings: vi.fn(),
@@ -78,10 +75,7 @@ describe('ai handlers', () => {
     const { handlers, ipcMain } = createIpcMainStub();
     const projectService = {
       getAISettings: vi.fn(),
-      setAIKey: vi.fn(),
-      clearAIKey: vi.fn(),
       listAIProviders: vi.fn(),
-      testAIProvider: vi.fn(),
       addAIProvider: vi.fn(),
       deleteAIProvider: vi.fn(),
       getProxySettings: vi.fn(),

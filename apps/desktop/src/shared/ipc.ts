@@ -182,26 +182,10 @@ export interface AITestConnectionResult {
   rawResponseText?: string;
 }
 
-export interface TestAIProviderInput {
-  name: string;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-}
-
 export interface AddAIProviderInput {
   name: string;
   connectionId: string;
   model: string;
-}
-
-export interface AITestProviderResult {
-  ok: boolean;
-  error?: string;
-  status?: number;
-  endpoint?: string;
-  model?: string;
-  rawResponseText?: string;
 }
 
 export type ProxyMode = 'off' | 'system' | 'custom';
@@ -346,8 +330,6 @@ export interface DesktopApi {
   importTBEntries: (tbId: string, filePath: string, options: TBImportOptions) => Promise<string>;
 
   getAISettings: () => Promise<AISettings>;
-  setAIKey: (apiKey: string) => Promise<void>;
-  clearAIKey: () => Promise<void>;
   listAIConnections: () => Promise<AIConnectionSummary[]>;
   testAIConnection: (input: TestAIConnectionInput) => Promise<AITestConnectionResult>;
   deleteAIConnection: (connectionId: string) => Promise<void>;
