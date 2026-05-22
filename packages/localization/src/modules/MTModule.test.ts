@@ -106,6 +106,42 @@ describe('MTModule', () => {
     }
   });
 
+  it('falls old built-in provider ids back to the first configured provider at runtime', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Legacy Provider Fallback', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      db.updateProjectAISettings(projectId, null, 'builtin:openai:gpt-5-mini');
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const transport = createTransport();
+      const module = createModule(db, transport);
+
+      const config = await module.resolveConfig(project);
+
+      expect(config.provider).toMatchObject({
+        id: 'provider:gpt-demo',
+        baseUrl: 'https://example.com/v1',
+        model: 'gpt-demo',
+      });
+      expect(config.model).toBe('gpt-demo');
+      expect(config.apiKey).toBe('test-api-key');
+
+      const overrideConfig = await module.resolveConfig(project, {
+        model: 'override-model',
+      });
+      expect(overrideConfig.provider).toMatchObject({
+        id: 'provider:gpt-demo',
+        baseUrl: 'https://example.com/v1',
+        model: 'gpt-demo',
+      });
+      expect(overrideConfig.model).toBe('override-model');
+      expect(overrideConfig.apiKey).toBe('test-api-key');
+    } finally {
+      db.close();
+    }
+  });
+
   it('translates through AITextTranslator and returns provider text as tokens', async () => {
     const db = new CATDatabase(':memory:');
     try {
