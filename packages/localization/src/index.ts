@@ -71,11 +71,13 @@ export type {
 export { TBService } from './services/TBService';
 export {
   AIProviderCatalogService,
+  filterDiscoveredModelIds,
   type AddAIProviderInput,
+  type AIConnectionSummary,
   type AIProviderSummary,
-  type AITestProviderResult,
+  type AITestConnectionResult,
   type ResolvedAIProviderConfig,
-  type TestAIProviderInput,
+  type TestAIConnectionInput,
 } from './providers/AIProviderCatalogService';
 export {
   AIRuntimeConfigService,
