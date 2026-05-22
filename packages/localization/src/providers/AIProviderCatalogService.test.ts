@@ -334,7 +334,14 @@ describe('AIProviderCatalogService', () => {
     });
     const service = new AIProviderCatalogService(settingsRepo, createTransport());
 
-    expect(service.resolveProviderConfig('custom:legacy')).toEqual({
+    const listedProvider = service.listProviders()[0];
+    const resolved = service.resolveProviderConfig('custom:legacy');
+
+    expect(listedProvider).toMatchObject({
+      id: 'custom:legacy',
+      apiKeyLast4: '0000',
+    });
+    expect(resolved).toEqual({
       provider: expect.objectContaining({
         id: 'custom:legacy',
         baseUrl: 'https://legacy.example/v1',
@@ -344,6 +351,7 @@ describe('AIProviderCatalogService', () => {
       }),
       apiKey: 'global-openai-key-0000',
     });
+    expect(listedProvider?.apiKeyLast4).toBe(resolved.provider.apiKeyLast4);
   });
 
   it('omits configured providers with missing connections but explicit resolve reports the missing connection', () => {

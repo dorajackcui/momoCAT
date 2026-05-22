@@ -485,8 +485,8 @@ export class AIProviderCatalogService {
     return this.readLegacyProviders().map((provider) => {
       const apiKeyLast4 =
         last4(this.settingsRepo.getSetting(this.buildLegacyProviderKey(provider.id))) ??
-        provider.apiKeyLast4 ??
-        globalKeyLast4;
+        globalKeyLast4 ??
+        provider.apiKeyLast4;
       return this.toLegacyProviderSummary(provider, apiKeyLast4);
     });
   }
