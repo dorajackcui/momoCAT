@@ -30,9 +30,7 @@ import { SqliteSettingsRepository } from './adapters/SqliteSettingsRepository';
 import { SqliteTransactionManager } from './adapters/SqliteTransactionManager';
 import { ProxySettingsManager } from './proxy/ProxySettingsManager';
 import type {
-  AddAIProviderInput,
   AIBatchMode,
-  AIProviderSummary,
   AITestProviderResult,
   AIBatchTargetScope,
   ImportOptions,
@@ -42,6 +40,13 @@ import type {
   TestAIProviderInput,
   TMImportOptions,
 } from '../../shared/ipc';
+import type {
+  AddAIProviderInput,
+  AIConnectionSummary,
+  AIProviderSummary,
+  AITestConnectionResult,
+  TestAIConnectionInput,
+} from './modules/ai/AIProviderCatalogService';
 
 interface ProjectServiceDependencies {
   filter?: SpreadsheetGateway;
@@ -370,16 +375,28 @@ export class ProjectService {
     return this.aiModule.listAIProviders();
   }
 
+  public listAIConnections(): AIConnectionSummary[] {
+    return this.aiModule.listAIConnections();
+  }
+
+  public async testAIConnection(input: TestAIConnectionInput): Promise<AITestConnectionResult> {
+    return this.aiModule.testAIConnection(input);
+  }
+
   public async testAIProvider(input: TestAIProviderInput): Promise<AITestProviderResult> {
     return this.aiModule.testAIProvider(input);
   }
 
-  public addAIProvider(input: AddAIProviderInput): AIProviderSummary {
+  public async addAIProvider(input: AddAIProviderInput): Promise<AIProviderSummary> {
     return this.aiModule.addAIProvider(input);
   }
 
   public deleteAIProvider(providerId: string) {
     return this.aiModule.deleteAIProvider(providerId);
+  }
+
+  public deleteAIConnection(connectionId: string) {
+    return this.aiModule.deleteAIConnection(connectionId);
   }
 
   public getProxySettings(): ProxySettings {
@@ -388,10 +405,6 @@ export class ProjectService {
 
   public setProxySettings(settings: ProxySettingsInput): ProxySettings {
     return this.aiModule.setProxySettings(settings);
-  }
-
-  public async testAIConnection(apiKey?: string) {
-    return this.aiModule.testAIConnection(apiKey);
   }
 
   public async aiTranslateFile(

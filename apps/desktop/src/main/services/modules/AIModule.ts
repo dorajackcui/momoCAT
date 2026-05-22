@@ -1,8 +1,6 @@
 import { TagValidator } from '@cat/core/qa';
 import type {
-  AddAIProviderInput,
   AIBatchMode,
-  AIProviderSummary,
   AITestProviderResult,
   AIBatchTargetScope,
   ProxySettings,
@@ -20,7 +18,14 @@ import type { ProxySettingsApplier } from '../proxy/ProxySettingsManager';
 import { ProxySettingsManager } from '../proxy/ProxySettingsManager';
 import { SegmentService } from '../SegmentService';
 import { DefaultAIRuntimeConfigProvider } from './ai/AIRuntimeConfigService';
-import { AIProviderCatalogService } from './ai/AIProviderCatalogService';
+import {
+  AIProviderCatalogService,
+  type AddAIProviderInput,
+  type AIConnectionSummary,
+  type AIProviderSummary,
+  type AITestConnectionResult,
+  type TestAIConnectionInput,
+} from './ai/AIProviderCatalogService';
 import { AISettingsService } from './ai/AISettingsService';
 import { AITextTranslator } from './ai/AITextTranslator';
 import { AITranslationOrchestrator } from './ai/AITranslationOrchestrator';
@@ -84,11 +89,32 @@ export class AIModule {
     return this.providerCatalogService.listProviders();
   }
 
-  public async testAIProvider(input: TestAIProviderInput): Promise<AITestProviderResult> {
-    return this.providerCatalogService.testProvider(input);
+  public listAIConnections(): AIConnectionSummary[] {
+    return this.providerCatalogService.listConnections();
   }
 
-  public addAIProvider(input: AddAIProviderInput): AIProviderSummary {
+  public async testAIConnection(input: TestAIConnectionInput): Promise<AITestConnectionResult> {
+    return this.providerCatalogService.testConnection(input);
+  }
+
+  public async testAIProvider(input: TestAIProviderInput): Promise<AITestProviderResult> {
+    const result = await this.providerCatalogService.testConnection({
+      name: input.name,
+      baseUrl: input.baseUrl,
+      apiKey: input.apiKey,
+    });
+
+    return {
+      ok: result.ok,
+      ...(result.error ? { error: result.error } : {}),
+      ...(result.status ? { status: result.status } : {}),
+      ...(result.endpoint ? { endpoint: result.endpoint } : {}),
+      model: input.model,
+      ...(result.rawResponseText ? { rawResponseText: result.rawResponseText } : {}),
+    };
+  }
+
+  public async addAIProvider(input: AddAIProviderInput): Promise<AIProviderSummary> {
     return this.providerCatalogService.addProvider(input);
   }
 
@@ -97,6 +123,13 @@ export class AIModule {
       .listProjects()
       .some((project) => project.aiModel === providerId);
     this.providerCatalogService.deleteProvider(providerId, isInUse);
+  }
+
+  public deleteAIConnection(connectionId: string): void {
+    const hasProvider = this.providerCatalogService
+      .listProviders()
+      .some((provider) => provider.connectionId === connectionId);
+    this.providerCatalogService.deleteConnection(connectionId, hasProvider);
   }
 
   public getProxySettings(): ProxySettings {
@@ -109,10 +142,6 @@ export class AIModule {
 
   public applySavedProxySettings(): ProxySettings {
     return this.settingsService.applySavedProxySettings();
-  }
-
-  public async testAIConnection(apiKey?: string): Promise<{ ok: true }> {
-    return this.settingsService.testAIConnection(apiKey);
   }
 
   public async aiTranslateFile(
