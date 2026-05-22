@@ -433,7 +433,9 @@ describe('momocat CLI dispatch', () => {
     for (const [flag, value, expected] of [
       ['--project-id', '0', '--project-id must be a positive integer.'],
       ['--max-attempts', '0', '--max-attempts must be a positive integer.'],
+      ['--batch-size', '0', '--batch-size must be an integer from 1 to 5.'],
       ['--batch-size', '6', '--batch-size must be an integer from 1 to 5.'],
+      ['--batch-size', '1.5', '--batch-size must be an integer from 1 to 5.'],
       ['--snapshot-every-units', '0', '--snapshot-every-units must be a positive integer.'],
       ['--snapshot-every-seconds', '0', '--snapshot-every-seconds must be a positive integer.'],
     ]) {
@@ -466,7 +468,9 @@ describe('momocat CLI dispatch', () => {
   it('reports translate file missing required paths before calling localization', async () => {
     for (const [args, expected] of [
       [['--project-id', '7', '--input', 'input.xlsx', '--output', 'translated.xlsx'], 'Missing --db.'],
+      [['--db', 'cat.db', '--input', 'input.xlsx', '--output', 'translated.xlsx'], 'Missing --project-id.'],
       [['--db', 'cat.db', '--project-id', '7', '--output', 'translated.xlsx'], 'Missing --input.'],
+      [['--db', 'cat.db', '--project-id', '7', '--input', 'input.xlsx'], 'Missing --output.'],
     ] as const) {
       const harness = createHarness();
       const exitCode = await runCli(['translate', 'file', ...args], harness.deps, harness.io);
@@ -503,28 +507,35 @@ describe('momocat CLI dispatch', () => {
   });
 
   it('reports translate file boolean flag values before calling localization', async () => {
-    const harness = createHarness();
-    const exitCode = await runCli(
-      [
-        'translate',
-        'file',
-        '--db',
-        'cat.db',
-        '--project-id',
-        '7',
-        '--input',
-        'input.xlsx',
-        '--output',
-        'translated.xlsx',
-        '--resume=true',
-      ],
-      harness.deps,
-      harness.io,
-    );
+    for (const [args, expected] of [
+      [['--resume=true'], '--resume does not accept a value.'],
+      [['--resume', 'true'], '--resume does not accept a value.'],
+      [['--progress-stdout=true'], '--progress-stdout does not accept a value.'],
+      [['--progress-stdout', 'true'], '--progress-stdout does not accept a value.'],
+    ] as const) {
+      const harness = createHarness();
+      const exitCode = await runCli(
+        [
+          'translate',
+          'file',
+          '--db',
+          'cat.db',
+          '--project-id',
+          '7',
+          '--input',
+          'input.xlsx',
+          '--output',
+          'translated.xlsx',
+          ...args,
+        ],
+        harness.deps,
+        harness.io,
+      );
 
-    expect(exitCode).toBe(1);
-    expect(harness.calls).toEqual([]);
-    expect(harness.stderr.join('')).toContain('--resume does not accept a value.');
+      expect(exitCode).toBe(1);
+      expect(harness.calls).toEqual([]);
+      expect(harness.stderr.join('')).toContain(expected);
+    }
   });
 
   it('reports translate file missing database and input files before calling localization', async () => {

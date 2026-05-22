@@ -53,6 +53,10 @@ function parseTranslateFileArgs(argv: string[], io: CommandIO): TranslateFileCom
     }
 
     if (isBooleanOption(name)) {
+      const next = argv[index + 1];
+      if (next && !next.startsWith('--')) {
+        throw new Error(`${arg} does not accept a value.`);
+      }
       assignBooleanOption(config, name);
       continue;
     }
