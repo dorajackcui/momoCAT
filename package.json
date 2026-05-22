@@ -27,7 +27,9 @@
     "trace:tm-flow": "npm run rebuild:test && node scripts/tm-match-flow-trace.mjs",
     "trace:tb-flow": "npm run rebuild:test && node scripts/tb-match-flow-trace.mjs",
     "trace:ai-file": "npm run rebuild:test && node scripts/ai-file-flow-trace.mjs",
-    "cli": "npm run build --workspace=packages/localization && npm run build --workspace=apps/cli && node apps/cli/dist/index.mjs",
+    "build:cli": "npm run build --workspace=packages/localization && npm run build --workspace=apps/cli",
+    "cli": "node apps/cli/dist/index.mjs",
+    "smoke:momocat": "npm run build:cli && node scripts/momocat-standard-smoke.mjs",
     "test:watch": "vitest",
     "postinstall": "npm run rebuild:electron",
     "format": "prettier --write ."

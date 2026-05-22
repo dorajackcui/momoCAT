@@ -44,6 +44,20 @@ describe('momocat CLI dispatch', () => {
     expect(packageJson.dependencies).toEqual({ '@cat/localization': '*' });
   });
 
+  it('keeps the root cli helper separate from build output', () => {
+    const rootPackageJson = JSON.parse(
+      readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
+    ) as { scripts?: Record<string, string> };
+
+    expect(rootPackageJson.scripts?.['build:cli']).toBe(
+      'npm run build --workspace=packages/localization && npm run build --workspace=apps/cli',
+    );
+    expect(rootPackageJson.scripts?.cli).toBe('node apps/cli/dist/index.mjs');
+    expect(rootPackageJson.scripts?.['smoke:momocat']).toBe(
+      'npm run build:cli && node scripts/momocat-standard-smoke.mjs',
+    );
+  });
+
   it('prints top-level help', async () => {
     const harness = createHarness();
     const exitCode = await runCli(['--help'], harness.deps, harness.io);
@@ -143,6 +157,7 @@ describe('momocat CLI dispatch', () => {
     expect(exitCode).toBe(1);
     expect(harness.calls).toEqual([]);
     expect(harness.stderr.join('')).toContain('Database does not exist: missing.db');
+    expect(harness.stderr.join('')).toContain('Run: momocat inspect projects --help');
   });
 
   it('prints inspect localization help', async () => {
@@ -218,6 +233,7 @@ describe('momocat CLI dispatch', () => {
     expect(exitCode).toBe(1);
     expect(harness.calls).toEqual([]);
     expect(harness.stderr.join('')).toContain('--project-id must be a positive integer.');
+    expect(harness.stderr.join('')).toContain('Run: momocat inspect localization --help');
   });
 
   it('reports inspect localization missing database paths before calling localization', async () => {
@@ -436,6 +452,7 @@ describe('momocat CLI dispatch', () => {
     expect(harness.stderr.join('')).toContain(
       '--target-scope must be blank-only or overwrite-non-confirmed.',
     );
+    expect(harness.stderr.join('')).toContain('Run: momocat translate file --help');
   });
 
   it('reports translate file invalid project id and numeric options before calling localization', async () => {

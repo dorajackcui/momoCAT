@@ -73,7 +73,8 @@ Agent-first CLI:
 - Project check: `momocat inspect projects --db <path> --project-id <id>`
 - No-request prompt inspection: `momocat inspect localization --db <path> --project-id <id> --input <path> --output <inspect.xlsx>`
 - Resumable file translation: `momocat translate file --db <path> --project-id <id> --input <path> --output <translated.xlsx>`
-- From a source checkout before installing or linking the bin: `npm run cli -- inspect projects --db <path> --project-id <id>`
+- From a source checkout before installing or linking the bin: run `npm run build:cli` after source changes, then use `npm --silent run cli -- inspect projects --db <path> --project-id <id>`
+- Standard local smoke: `npm run smoke:momocat` (uses gitignored `.momocat-smoke.local.json`)
 - Real translation artifacts are opt-in with `--artifacts <path>`; inspect is the preferred prompt-debug path.
 
 ## If Task Is X, Open Y

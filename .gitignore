@@ -1,5 +1,6 @@
 .codex
 .claude
+.momocat-smoke.local.json
 .worktrees/
 # Mac OS
 .DS_Store

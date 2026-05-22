@@ -65,3 +65,36 @@ test("gate architecture rejects raw desktop specifiers in localization", () => {
     fs.rmSync(fixturePath, { force: true });
   }
 });
+
+test("gate architecture rejects dynamic forbidden specifiers in cli", () => {
+  const fixturePath = path.join(
+    repoRoot,
+    "apps",
+    "cli",
+    "src",
+    "__forbidden_dynamic_import_smoke__.ts",
+  );
+
+  fs.writeFileSync(
+    fixturePath,
+    'export async function loadDb() {\n  return import("@cat/db");\n}\n',
+    "utf8",
+  );
+
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [path.join(repoRoot, "scripts", "gate-architecture-check.mjs")],
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+      },
+    );
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /apps\/cli must depend on @cat\/localization, not @cat\/db/);
+    assert.match(result.stderr, /@cat\/db/);
+  } finally {
+    fs.rmSync(fixturePath, { force: true });
+  }
+});

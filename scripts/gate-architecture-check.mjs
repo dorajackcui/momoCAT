@@ -142,14 +142,40 @@ function listSourceFiles(rootDir) {
 }
 
 function getImportSpecifiers(sourceFile) {
-  return sourceFile.statements
-    .filter(
-      (statement) =>
-        ts.isImportDeclaration(statement) ||
-        (ts.isExportDeclaration(statement) && statement.moduleSpecifier),
-    )
-    .map((statement) => statement.moduleSpecifier.text)
-    .filter((specifier) => typeof specifier === "string");
+  const specifiers = [];
+
+  const addSpecifier = (moduleSpecifier) => {
+    if (
+      ts.isStringLiteral(moduleSpecifier) ||
+      ts.isNoSubstitutionTemplateLiteral(moduleSpecifier)
+    ) {
+      specifiers.push(moduleSpecifier.text);
+    }
+  };
+
+  const walk = (node) => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier
+    ) {
+      addSpecifier(node.moduleSpecifier);
+    }
+
+    if (ts.isCallExpression(node) && node.arguments.length > 0) {
+      if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+        addSpecifier(node.arguments[0]);
+      }
+
+      if (ts.isIdentifier(node.expression) && node.expression.text === "require") {
+        addSpecifier(node.arguments[0]);
+      }
+    }
+
+    ts.forEachChild(node, walk);
+  };
+
+  walk(sourceFile);
+  return specifiers;
 }
 
 function resolveImportTarget(fromFile, specifier) {

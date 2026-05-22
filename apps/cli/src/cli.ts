@@ -63,9 +63,23 @@ export async function runCli(
     throw new Error(`Unknown command: ${command}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    io.stderr(`${message}\nRun: momocat --help\n`);
+    io.stderr(`${message}\nRun: ${helpCommandFor(argv)}\n`);
     return 1;
   }
+}
+
+function helpCommandFor(argv: string[]): string {
+  const [domain, action] = argv;
+  if (domain === 'inspect' && action === 'projects') {
+    return 'momocat inspect projects --help';
+  }
+  if (domain === 'inspect' && action === 'localization') {
+    return 'momocat inspect localization --help';
+  }
+  if (domain === 'translate' && action === 'file') {
+    return 'momocat translate file --help';
+  }
+  return 'momocat --help';
 }
 
 function topLevelHelp(): string {

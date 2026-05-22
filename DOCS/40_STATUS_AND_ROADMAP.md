@@ -68,7 +68,7 @@ Verification date: 2026-03-25
    - no new compatibility facades unless they are justified as long-term boundaries.
 2. Keep agent-first commands centered on `apps/cli`:
    - active command surface is `momocat inspect projects`, `momocat inspect localization`, and `momocat translate file`,
-   - root scripts are repo orchestration plus the `npm run cli -- ...` source-checkout helper.
+   - root scripts are repo orchestration plus `build:cli`, `npm --silent run cli -- ...`, and the local-configured `smoke:momocat` helper.
 3. Keep `@cat/core` slice boundaries stable:
    - no new repo imports from root `@cat/core`,
    - no new internal imports from `packages/core/src/index.ts`.

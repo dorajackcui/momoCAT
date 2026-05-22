@@ -6,10 +6,10 @@ The agent-first CLI lets humans and agents inspect projects, preview TM/TB/MT pr
 
 Run commands from the repo root.
 
-When running from a source checkout before installing or linking the bin, use `npm run cli -- <momocat arguments>`, for example:
+When running from a source checkout before installing or linking the bin, run `npm run build:cli` after source changes, then use `npm --silent run cli -- <momocat arguments>`, for example:
 
 ```bash
-npm run cli -- inspect projects --db <path>
+npm --silent run cli -- inspect projects --db <path>
 ```
 
 ## Commands
@@ -113,6 +113,18 @@ Window Mode is the default request model for `momocat translate file`. Batch siz
 Use the same output and sidecar paths with `--resume` after an interrupted run.
 
 ## Recommended Smoke Flow
+
+For the standard local configured smoke, use:
+
+```bash
+npm run smoke:momocat
+```
+
+This command reads `.momocat-smoke.local.json`, which is intentionally gitignored.
+Create it from `.momocat-smoke.example.json` and keep machine paths, project id,
+provider metadata, and model names in the local file.
+
+Use `npm run smoke:momocat -- --dry-run` to print the exact commands, or `npm run smoke:momocat -- --inspect-only` to skip provider calls.
 
 1. Inspect project config.
 

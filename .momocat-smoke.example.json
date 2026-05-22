@@ -1,0 +1,9 @@
+{
+  "inputPath": "C:\\path\\to\\mt.xlsx",
+  "dbPath": "C:\\path\\to\\local-smoke.db",
+  "projectId": 1,
+  "outputDir": "testoutput",
+  "inspectUnitLimit": 10,
+  "maxAttempts": 1,
+  "batchSize": 5
+}
