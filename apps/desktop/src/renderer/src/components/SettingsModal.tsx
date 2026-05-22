@@ -49,6 +49,17 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [deletingProviderId, setDeletingProviderId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
+  const resetTestedConnection = () => {
+    const hadTestedState =
+      testedConnection !== null || selectedModel.length > 0 || providerNameInput.length > 0;
+    setTestedConnection(null);
+    setSelectedModel('');
+    setProviderNameInput('');
+    if (hadTestedState) {
+      setStatus('Connection details changed. Test the connection again.');
+    }
+  };
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -142,7 +153,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       setTestedConnection(result.connection);
       setSelectedModel(firstModel);
       setProviderNameInput(buildProviderName(result.connection, firstModel));
-      await reloadConnectionsAndProviders();
+      try {
+        await reloadConnectionsAndProviders();
+      } catch {
+        // Keep the successful test result usable even if refreshing saved lists fails.
+      }
       setStatus(`Connection tested: ${result.connection.discoveredModels.length} models discovered.`);
     } catch (error) {
       setTestedConnection(null);
@@ -259,7 +274,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               aria-label="Connection Name"
               type="text"
               value={connectionNameInput}
-              onChange={(event) => setConnectionNameInput(event.target.value)}
+              onChange={(event) => {
+                setConnectionNameInput(event.target.value);
+                resetTestedConnection();
+              }}
+              disabled={testingProvider}
               placeholder="OpenAI"
               className="field-input"
             />
@@ -270,7 +289,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               aria-label="API Base URL"
               type="text"
               value={connectionBaseUrlInput}
-              onChange={(event) => setConnectionBaseUrlInput(event.target.value)}
+              onChange={(event) => {
+                setConnectionBaseUrlInput(event.target.value);
+                resetTestedConnection();
+              }}
+              disabled={testingProvider}
               placeholder="https://api.openai.com/v1"
               className="field-input"
             />
@@ -283,7 +306,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             aria-label="API Key"
             type="password"
             value={connectionApiKeyInput}
-            onChange={(event) => setConnectionApiKeyInput(event.target.value)}
+            onChange={(event) => {
+              setConnectionApiKeyInput(event.target.value);
+              resetTestedConnection();
+            }}
+            disabled={testingProvider}
             placeholder="sk-..."
             className="field-input"
           />

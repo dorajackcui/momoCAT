@@ -54,6 +54,11 @@ vi.mock('../services/apiClient', () => ({
   apiClient: apiClientMock,
 }));
 
+async function waitForConnectionsTabReady() {
+  await screen.findByRole('heading', { name: 'AI Connections' });
+  await waitFor(() => expect(screen.getByText('Test Connection')).not.toBeDisabled());
+}
+
 describe('SettingsModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -83,7 +88,7 @@ describe('SettingsModal', () => {
   it('tests a connection, shows discovered models, and creates a provider from the selected model', async () => {
     render(<SettingsModal isOpen onClose={vi.fn()} />);
 
-    await screen.findByRole('heading', { name: 'AI Connections' });
+    await waitForConnectionsTabReady();
 
     fireEvent.change(screen.getByLabelText('Connection Name'), {
       target: { value: 'OpenAI' },
@@ -108,6 +113,79 @@ describe('SettingsModal', () => {
     expect(await screen.findByText('Connection tested: 2 models discovered.')).toBeInTheDocument();
     expect(screen.getByLabelText('Model')).toHaveValue('gpt-demo');
     expect(screen.getByLabelText('Provider Name')).toHaveValue('OpenAI / gpt-demo');
+
+    fireEvent.click(screen.getByText('Add Provider'));
+
+    await waitFor(() =>
+      expect(apiClientMock.addAIProvider).toHaveBeenCalledWith({
+        name: 'OpenAI / gpt-demo',
+        connectionId: 'connection:openai',
+        model: 'gpt-demo',
+      }),
+    );
+  });
+
+  it('invalidates the tested connection when connection inputs change', async () => {
+    render(<SettingsModal isOpen onClose={vi.fn()} />);
+
+    await waitForConnectionsTabReady();
+
+    fireEvent.change(screen.getByLabelText('Connection Name'), {
+      target: { value: 'OpenAI' },
+    });
+    fireEvent.change(screen.getByLabelText('API Base URL'), {
+      target: { value: 'https://api.openai.com/v1' },
+    });
+    fireEvent.change(screen.getByLabelText('API Key'), {
+      target: { value: 'sk-test-1234' },
+    });
+
+    fireEvent.click(screen.getByText('Test Connection'));
+
+    expect(await screen.findByText('Connection tested: 2 models discovered.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Add Provider')).not.toBeDisabled());
+
+    fireEvent.change(screen.getByLabelText('API Base URL'), {
+      target: { value: 'https://example.com/v1' },
+    });
+
+    expect(screen.getByLabelText('Model')).toHaveValue('');
+    expect(screen.getByText('Add Provider')).toBeDisabled();
+
+    fireEvent.click(screen.getByText('Add Provider'));
+
+    expect(apiClientMock.addAIProvider).not.toHaveBeenCalled();
+  });
+
+  it('keeps discovered models available when refreshing lists after a successful test fails', async () => {
+    apiClientMock.listAIConnections
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error('reload failed'))
+      .mockResolvedValue([]);
+    apiClientMock.listAIProviders
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error('reload failed'))
+      .mockResolvedValue([]);
+
+    render(<SettingsModal isOpen onClose={vi.fn()} />);
+
+    await waitForConnectionsTabReady();
+
+    fireEvent.change(screen.getByLabelText('Connection Name'), {
+      target: { value: 'OpenAI' },
+    });
+    fireEvent.change(screen.getByLabelText('API Base URL'), {
+      target: { value: 'https://api.openai.com/v1' },
+    });
+    fireEvent.change(screen.getByLabelText('API Key'), {
+      target: { value: 'sk-test-1234' },
+    });
+
+    fireEvent.click(screen.getByText('Test Connection'));
+
+    expect(await screen.findByText('Connection tested: 2 models discovered.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Model')).toHaveValue('gpt-demo');
+    await waitFor(() => expect(screen.getByText('Add Provider')).not.toBeDisabled());
 
     fireEvent.click(screen.getByText('Add Provider'));
 
@@ -159,6 +237,7 @@ describe('SettingsModal', () => {
 
     fireEvent.click(await screen.findByRole('tab', { name: 'Proxy' }));
     await screen.findByText('Proxy Settings');
+    await waitFor(() => expect(screen.getByText('Save Proxy Settings')).not.toBeDisabled());
 
     fireEvent.click(screen.getByLabelText('Use Custom Proxy URL'));
     fireEvent.change(screen.getByLabelText('Custom Proxy URL'), {
