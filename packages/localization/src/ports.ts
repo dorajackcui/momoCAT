@@ -146,6 +146,15 @@ export interface AIRuntimeConfigProvider {
 }
 
 export interface AITransport {
+  listModels(params: {
+    apiKey: string;
+    baseUrl: string;
+  }): Promise<{
+    models: string[];
+    status: number;
+    endpoint: string;
+    rawResponseText?: string;
+  }>;
   testConnection(params: {
     apiKey: string;
     baseUrl: string;

@@ -81,6 +81,41 @@ describe('AIProviderTransport', () => {
     );
   });
 
+  it('lists model ids from OpenAI-compatible models responses', async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            { id: 'gpt-5.4', object: 'model' },
+            { id: 'text-embedding-3-large', object: 'model' },
+          ],
+        }),
+        { status: 200 },
+      ),
+    ) as typeof fetch;
+
+    const transport = new AIProviderTransport();
+    const result = await transport.listModels({
+      apiKey: 'secret',
+      baseUrl: 'https://example.com/v1/',
+    });
+
+    expect(result).toEqual({
+      endpoint: 'https://example.com/v1/models',
+      models: ['gpt-5.4', 'text-embedding-3-large'],
+      status: 200,
+    });
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://example.com/v1/models',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          Authorization: 'Bearer secret',
+        },
+      }),
+    );
+  });
+
   it('redacts proxy and endpoint credentials from network errors', async () => {
     process.env.HTTPS_PROXY = 'https://proxy-user:proxy-secret@proxy.example.test:8443';
     process.env.HTTP_PROXY = '';
@@ -119,6 +154,23 @@ describe('AIProviderTransport', () => {
     );
 
     expect(error.message).toMatch(/400/);
+    expect(error.message).not.toMatch(/secret-token|x{300}/);
+  });
+
+  it('sanitizes model list failure bodies in errors', async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response('bad request token=secret-token ' + 'x'.repeat(1000), { status: 401 }),
+    ) as typeof fetch;
+
+    const transport = new AIProviderTransport();
+    const error = await captureError(() =>
+      transport.listModels({
+        apiKey: 'secret',
+        baseUrl: 'https://example.com/v1',
+      }),
+    );
+
+    expect(error.message).toMatch(/401/);
     expect(error.message).not.toMatch(/secret-token|x{300}/);
   });
 

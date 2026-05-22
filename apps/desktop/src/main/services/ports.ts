@@ -200,6 +200,15 @@ export interface SegmentsUpdatedPayload {
 export type ProgressEmitter = (payload: ProgressPayload) => void;
 
 export interface AITransport {
+  listModels(params: {
+    apiKey: string;
+    baseUrl: string;
+  }): Promise<{
+    models: string[];
+    status: number;
+    endpoint: string;
+    rawResponseText?: string;
+  }>;
   testConnection(params: {
     apiKey: string;
     baseUrl: string;

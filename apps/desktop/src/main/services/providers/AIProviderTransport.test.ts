@@ -56,6 +56,21 @@ describe('AIProviderTransport', () => {
     );
   });
 
+  it('lists model ids through the desktop transport import path', async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ id: 'gpt-demo' }] }), { status: 200 }),
+    ) as typeof fetch;
+
+    const transport = new AIProviderTransport();
+    const result = await transport.listModels({
+      apiKey: 'secret',
+      baseUrl: 'https://example.com/v1/',
+    });
+
+    expect(result.models).toEqual(['gpt-demo']);
+    expect(result.endpoint).toBe('https://example.com/v1/models');
+  });
+
   it('throws helpful errors for non-json responses', async () => {
     global.fetch = vi.fn().mockResolvedValue(new Response('not-json', { status: 200 })) as typeof fetch;
 

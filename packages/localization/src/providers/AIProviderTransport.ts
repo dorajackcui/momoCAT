@@ -54,6 +54,17 @@ function extractMessageText(data: unknown): string | null {
   return null;
 }
 
+function extractModelIds(data: unknown): string[] {
+  if (!data || typeof data !== 'object') {
+    return [];
+  }
+
+  const record = data as { data?: Array<{ id?: unknown }> };
+  return (record.data ?? [])
+    .map((item) => (typeof item.id === 'string' ? item.id.trim() : ''))
+    .filter((id) => id.length > 0);
+}
+
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.trim().replace(/\/+$/, '');
 }
@@ -91,6 +102,52 @@ export class AIProviderTransport implements AITransport {
   private getProxyHint(): string {
     const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.ALL_PROXY;
     return proxy ? ' (proxy configured)' : '';
+  }
+
+  public async listModels(params: {
+    apiKey: string;
+    baseUrl: string;
+  }): Promise<{
+    models: string[];
+    status: number;
+    endpoint: string;
+    rawResponseText?: string;
+  }> {
+    const endpoint = `${normalizeBaseUrl(params.baseUrl)}/models`;
+    const errorEndpoint = redactUrlCredentials(endpoint);
+    let response: Response;
+
+    try {
+      response = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${params.apiKey}`,
+        },
+      });
+    } catch (error) {
+      const message = sanitizeErrorText(error instanceof Error ? error.message : String(error));
+      throw new Error(
+        `AI provider model discovery failed: ${message}${this.getProxyHint()} endpoint=${errorEndpoint}`,
+      );
+    }
+
+    const rawBody = await response.text();
+    if (!response.ok) {
+      throw new Error(`AI provider model discovery failed: ${response.status} ${sanitizeErrorText(rawBody)}`);
+    }
+
+    let data: unknown;
+    try {
+      data = JSON.parse(rawBody) as unknown;
+    } catch {
+      throw new Error(`AI provider model discovery response is not valid JSON: ${sanitizeErrorText(rawBody)}`);
+    }
+
+    return {
+      models: extractModelIds(data),
+      status: response.status,
+      endpoint,
+    };
   }
 
   public async testConnection(params: {
