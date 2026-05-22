@@ -11,13 +11,13 @@ Read before changing schema, repositories, or SQL-level behavior.
 - Repositories: `packages/db/src/repos/*.ts`
 
 ## Last Updated
-2026-03-30
+2026-05-22
 
 ## Owner
 Core maintainers of `simple-cat-tool`
 
 ## Schema Version
-- Current target schema version: `v14`
+- Current target schema version: `v15`
 - Version table: `schema_version`
 - Bootstrap behavior: create latest schema for empty DBs, allow current-marker DBs, reject unsupported old DBs
 
