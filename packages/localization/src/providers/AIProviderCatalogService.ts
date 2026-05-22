@@ -637,7 +637,7 @@ export class AIProviderCatalogService {
   private optionalTimestamp<TName extends 'lastTestedAt' | 'lastRefreshedAt'>(
     name: TName,
     value: unknown,
-  ): Pick<AIConnectionSummary, TName> {
+  ): Partial<Pick<AIConnectionSummary, TName>> {
     return typeof value === 'string' ? { [name]: value } as Pick<AIConnectionSummary, TName> : {};
   }
 
