@@ -1,10 +1,64 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Project } from '@cat/core/project';
 import type { TMBatchMatchResult } from '../../../../shared/ipc';
-import { createProjectDetailActions } from './useProjectDetailData';
+import { createProjectDetailActions, createProjectDetailDataLoaders } from './useProjectDetailData';
+
+const { apiClientMock } = vi.hoisted(() => ({
+  apiClientMock: {
+    getProject: vi.fn(),
+    getProjectFiles: vi.fn(),
+    getProjectMountedTMs: vi.fn(),
+    listTMs: vi.fn(),
+    getProjectMountedTBs: vi.fn(),
+    listTBs: vi.fn(),
+    mountTMToProject: vi.fn(),
+    unmountTMFromProject: vi.fn(),
+    mountTBToProject: vi.fn(),
+    unmountTBFromProject: vi.fn(),
+    commitToMainTM: vi.fn(),
+    matchFileWithTM: vi.fn(),
+  },
+}));
 
 vi.mock('../../services/apiClient', () => ({
-  apiClient: {},
+  apiClient: apiClientMock,
 }));
+
+const project: Project = {
+  id: 7,
+  uuid: 'project-7',
+  name: 'Project 7',
+  srcLang: 'en',
+  tgtLang: 'zh',
+  projectType: 'translation',
+  aiPrompt: null,
+  aiTemperature: null,
+  aiModel: null,
+  qaSettings: null,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  apiClientMock.getProject.mockResolvedValue(project);
+  apiClientMock.getProjectFiles.mockResolvedValue([]);
+  apiClientMock.getProjectMountedTMs.mockResolvedValue([]);
+  apiClientMock.listTMs.mockResolvedValue([]);
+  apiClientMock.getProjectMountedTBs.mockResolvedValue([]);
+  apiClientMock.listTBs.mockResolvedValue([]);
+  apiClientMock.mountTMToProject.mockResolvedValue(undefined);
+  apiClientMock.unmountTMFromProject.mockResolvedValue(undefined);
+  apiClientMock.mountTBToProject.mockResolvedValue(undefined);
+  apiClientMock.unmountTBFromProject.mockResolvedValue(undefined);
+  apiClientMock.commitToMainTM.mockResolvedValue(0);
+  apiClientMock.matchFileWithTM.mockResolvedValue({
+    total: 0,
+    matched: 0,
+    applied: 0,
+    skipped: 0,
+  });
+});
 
 function createMutationHarness() {
   const order: string[] = [];
@@ -21,6 +75,49 @@ function createMutationHarness() {
 }
 
 describe('useProjectDetailData behavior helpers', () => {
+  it('loads only project and files for the initial files view', async () => {
+    const setters = createDataSetters();
+    const loaders = createProjectDetailDataLoaders({
+      projectId: 7,
+      api: apiClientMock,
+      ...setters,
+    });
+
+    await loaders.loadData();
+
+    expect(apiClientMock.getProject).toHaveBeenCalledWith(7);
+    expect(apiClientMock.getProjectFiles).toHaveBeenCalledWith(7);
+    expect(apiClientMock.getProjectMountedTMs).not.toHaveBeenCalled();
+    expect(apiClientMock.listTMs).not.toHaveBeenCalled();
+    expect(apiClientMock.getProjectMountedTBs).not.toHaveBeenCalled();
+    expect(apiClientMock.listTBs).not.toHaveBeenCalled();
+    expect(setters.setProject).toHaveBeenCalledWith(project);
+    expect(setters.setFiles).toHaveBeenCalledWith([]);
+  });
+
+  it('loads TM and TB reference data on demand', async () => {
+    const setters = createDataSetters();
+    const loaders = createProjectDetailDataLoaders({
+      projectId: 7,
+      api: apiClientMock,
+      ...setters,
+    });
+
+    await loaders.loadTMData();
+
+    expect(apiClientMock.getProjectMountedTMs).toHaveBeenCalledWith(7);
+    expect(apiClientMock.listTMs).toHaveBeenCalledWith('main');
+    expect(setters.setMountedTMs).toHaveBeenCalledWith([]);
+    expect(setters.setAllMainTMs).toHaveBeenCalledWith([]);
+
+    await loaders.loadTBData();
+
+    expect(apiClientMock.getProjectMountedTBs).toHaveBeenCalledWith(7);
+    expect(apiClientMock.listTBs).toHaveBeenCalledWith();
+    expect(setters.setMountedTBs).toHaveBeenCalledWith([]);
+    expect(setters.setAllTBs).toHaveBeenCalledWith([]);
+  });
+
   it('mountTM runs inside mutation and refreshes data', async () => {
     const { order, runMutation, loadData } = createMutationHarness();
     const api = {
@@ -99,3 +196,15 @@ describe('useProjectDetailData behavior helpers', () => {
     expect(loadData).not.toHaveBeenCalled();
   });
 });
+
+function createDataSetters() {
+  return {
+    setProject: vi.fn(),
+    setFiles: vi.fn(),
+    setMountedTMs: vi.fn(),
+    setAllMainTMs: vi.fn(),
+    setMountedTBs: vi.fn(),
+    setAllTBs: vi.fn(),
+    setLoadingData: vi.fn(),
+  };
+}

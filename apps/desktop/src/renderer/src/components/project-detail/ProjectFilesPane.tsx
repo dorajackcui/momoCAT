@@ -10,8 +10,8 @@ import { deriveFileProgressBuckets, toPercent } from './fileProgressStats';
 interface ProjectFilesPaneProps {
   files: ProjectFileRecord[];
   onOpenFile: (fileId: number) => void;
-  onOpenCommitModal: (file: ProjectFileRecord) => void;
-  onOpenMatchModal: (file: ProjectFileRecord) => void;
+  onOpenCommitModal: (file: ProjectFileRecord) => void | Promise<void>;
+  onOpenMatchModal: (file: ProjectFileRecord) => void | Promise<void>;
   onDeleteFile: (fileId: number, fileName: string) => Promise<void>;
   onExportFile: (fileId: number, fileName: string) => Promise<void>;
   onRunFileQA: (fileId: number, fileName: string) => Promise<void>;
@@ -114,7 +114,7 @@ export function ProjectFilesPane({
                 <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   {supportsTMWorkflow && (
                     <Button
-                      onClick={() => onOpenCommitModal(file)}
+                      onClick={() => void onOpenCommitModal(file)}
                       variant="soft"
                       size="sm"
                       className="!bg-info-soft !text-info"
@@ -124,7 +124,7 @@ export function ProjectFilesPane({
                   )}
                   {supportsTMWorkflow && (
                     <Button
-                      onClick={() => onOpenMatchModal(file)}
+                      onClick={() => void onOpenMatchModal(file)}
                       variant="soft"
                       size="sm"
                       className="!bg-info-soft !text-info"

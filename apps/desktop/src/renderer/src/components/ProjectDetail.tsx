@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { DEFAULT_PROJECT_QA_SETTINGS, type ProjectQASettings } from '@cat/core/project';
 import type { ProjectFileRecord } from '../../../shared/ipc';
 import { ColumnSelector } from './ColumnSelector';
@@ -44,6 +44,9 @@ export function ProjectDetail({ projectId, onBack, onOpenFile }: ProjectDetailPr
     allTBs,
     loading,
     loadData,
+    loadMountedTMs,
+    loadTMData,
+    loadTBData,
     runMutation,
     mountTM,
     unmountTM,
@@ -66,8 +69,20 @@ export function ProjectDetail({ projectId, onBack, onOpenFile }: ProjectDetailPr
     runMutation,
   });
 
-  const openCommitModal = (file: ProjectFileRecord) => {
-    const mountedMainTMs = mountedTMs.filter((tm) => tm.type === 'main');
+  useEffect(() => {
+    if (activeTab === 'tm') {
+      void loadTMData();
+      return;
+    }
+
+    if (activeTab === 'tb') {
+      void loadTBData();
+    }
+  }, [activeTab, loadTBData, loadTMData]);
+
+  const openCommitModal = async (file: ProjectFileRecord) => {
+    const currentMountedTMs = await loadMountedTMs();
+    const mountedMainTMs = currentMountedTMs.filter((tm) => tm.type === 'main');
     if (mountedMainTMs.length === 0) {
       feedbackService.info('No mounted Main TM found. Please mount a Main TM first.');
       return;
@@ -89,13 +104,14 @@ export function ProjectDetail({ projectId, onBack, onOpenFile }: ProjectDetailPr
     }
   };
 
-  const openMatchModal = (file: ProjectFileRecord) => {
-    if (mountedTMs.length === 0) {
+  const openMatchModal = async (file: ProjectFileRecord) => {
+    const currentMountedTMs = await loadMountedTMs();
+    if (currentMountedTMs.length === 0) {
       feedbackService.info('No mounted TM found. Please mount a TM first.');
       return;
     }
     setMatchModalFile(file);
-    setMatchTmId(mountedTMs[0].id);
+    setMatchTmId(currentMountedTMs[0].id);
   };
 
   const confirmMatchModal = async () => {
