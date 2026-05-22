@@ -1,6 +1,5 @@
 import type { Segment, SegmentStatus, TBMatch, TMEntry, Token } from '@cat/core/models';
 import type {
-  BuiltinOpenAIProviderId as CoreBuiltinOpenAIProviderId,
   FileQaReport,
   Project,
   ProjectAIModel as CoreProjectAIModel,
@@ -19,7 +18,6 @@ import type {
 export type TMType = DbTMType;
 export type ProjectType = CoreProjectType;
 export type ProjectAIModel = CoreProjectAIModel;
-export type BuiltinOpenAIProviderId = CoreBuiltinOpenAIProviderId;
 
 export interface ImportOptions {
   hasHeader: boolean;
@@ -135,8 +133,23 @@ export interface AISettings {
   apiKeyLast4?: string;
 }
 
-export type AIProviderKind = 'builtin' | 'custom';
+export type AIProviderKind = 'configured' | 'legacy';
+export type AIConnectionKind = 'openai-compatible';
 export type AIProviderProtocol = 'chat-completions';
+
+export interface AIConnectionSummary {
+  id: string;
+  name: string;
+  baseUrl: string;
+  protocol: AIProviderProtocol;
+  kind: AIConnectionKind;
+  apiKeyLast4?: string;
+  discoveredModels: string[];
+  lastTestedAt?: string;
+  lastRefreshedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface AIProviderSummary {
   id: string;
@@ -145,9 +158,28 @@ export interface AIProviderSummary {
   model: string;
   protocol: AIProviderProtocol;
   kind: AIProviderKind;
+  connectionId: string;
+  connectionName: string;
   apiKeyLast4?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TestAIConnectionInput {
+  connectionId?: string;
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+}
+
+export interface AITestConnectionResult {
+  ok: boolean;
+  connection?: AIConnectionSummary;
+  models?: string[];
+  error?: string;
+  status?: number;
+  endpoint?: string;
+  rawResponseText?: string;
 }
 
 export interface TestAIProviderInput {
@@ -157,7 +189,11 @@ export interface TestAIProviderInput {
   model: string;
 }
 
-export type AddAIProviderInput = TestAIProviderInput;
+export interface AddAIProviderInput {
+  name: string;
+  connectionId: string;
+  model: string;
+}
 
 export interface AITestProviderResult {
   ok: boolean;
@@ -312,13 +348,15 @@ export interface DesktopApi {
   getAISettings: () => Promise<AISettings>;
   setAIKey: (apiKey: string) => Promise<void>;
   clearAIKey: () => Promise<void>;
+  listAIConnections: () => Promise<AIConnectionSummary[]>;
+  testAIConnection: (input: TestAIConnectionInput) => Promise<AITestConnectionResult>;
+  deleteAIConnection: (connectionId: string) => Promise<void>;
   listAIProviders: () => Promise<AIProviderSummary[]>;
   testAIProvider: (input: TestAIProviderInput) => Promise<AITestProviderResult>;
   addAIProvider: (input: AddAIProviderInput) => Promise<AIProviderSummary>;
   deleteAIProvider: (providerId: string) => Promise<void>;
   getProxySettings: () => Promise<ProxySettings>;
   setProxySettings: (settings: ProxySettingsInput) => Promise<ProxySettings>;
-  testAIConnection: (apiKey?: string) => Promise<{ ok: true }>;
   aiTranslateSegment: (segmentId: string) => Promise<AISegmentTranslateResult>;
   aiRefineSegment: (segmentId: string, instruction: string) => Promise<AISegmentTranslateResult>;
   aiTranslateFile: (fileId: number, options?: AITranslateFileOptions) => Promise<string>;

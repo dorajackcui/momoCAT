@@ -6,13 +6,15 @@ type AIApiKeys =
   | 'getAISettings'
   | 'setAIKey'
   | 'clearAIKey'
+  | 'listAIConnections'
+  | 'testAIConnection'
+  | 'deleteAIConnection'
   | 'listAIProviders'
   | 'testAIProvider'
   | 'addAIProvider'
   | 'deleteAIProvider'
   | 'getProxySettings'
   | 'setProxySettings'
-  | 'testAIConnection'
   | 'aiTranslateSegment'
   | 'aiRefineSegment'
   | 'aiTranslateFile'
@@ -26,6 +28,18 @@ export function createAIApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<AIApi
       ipcRenderer.invoke(IPC_CHANNELS.ai.setKey, apiKey) as ReturnType<DesktopApi['setAIKey']>,
     clearAIKey: () =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.clearKey) as ReturnType<DesktopApi['clearAIKey']>,
+    listAIConnections: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.ai.listConnections) as ReturnType<
+        DesktopApi['listAIConnections']
+      >,
+    testAIConnection: (input) =>
+      ipcRenderer.invoke(IPC_CHANNELS.ai.testConnection, input) as ReturnType<
+        DesktopApi['testAIConnection']
+      >,
+    deleteAIConnection: (connectionId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.ai.deleteConnection, connectionId) as ReturnType<
+        DesktopApi['deleteAIConnection']
+      >,
     listAIProviders: () =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.listProviders) as ReturnType<DesktopApi['listAIProviders']>,
     testAIProvider: (input) =>
@@ -47,10 +61,6 @@ export function createAIApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<AIApi
     setProxySettings: (settings) =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.setProxySettings, settings) as ReturnType<
         DesktopApi['setProxySettings']
-      >,
-    testAIConnection: (apiKey) =>
-      ipcRenderer.invoke(IPC_CHANNELS.ai.testConnection, apiKey) as ReturnType<
-        DesktopApi['testAIConnection']
       >,
     aiTranslateSegment: (segmentId) =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.translateSegment, segmentId) as ReturnType<

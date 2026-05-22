@@ -30,6 +30,28 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     projectService.clearAIKey(),
   );
 
+  registerHandle({ ipcMain, projectService, jobManager }, IPC_CHANNELS.ai.listConnections, () =>
+    projectService.listAIConnections(),
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.ai.testConnection,
+    (_event, ...args) => {
+      const [input] = args as [Parameters<typeof projectService.testAIConnection>[0]];
+      return projectService.testAIConnection(input);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.ai.deleteConnection,
+    (_event, ...args) => {
+      const [connectionId] = args as [string];
+      return projectService.deleteAIConnection(connectionId);
+    },
+  );
+
   registerHandle({ ipcMain, projectService, jobManager }, IPC_CHANNELS.ai.listProviders, () =>
     projectService.listAIProviders(),
   );
@@ -71,15 +93,6 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     (_event, ...args) => {
       const [settings] = args as [Parameters<typeof projectService.setProxySettings>[0]];
       return projectService.setProxySettings(settings);
-    },
-  );
-
-  registerHandle(
-    { ipcMain, projectService, jobManager },
-    IPC_CHANNELS.ai.testConnection,
-    (_event, ...args) => {
-      const [apiKey] = args as [string | undefined];
-      return projectService.testAIConnection(apiKey);
     },
   );
 

@@ -16,6 +16,7 @@ describe('createDesktopApi smoke', () => {
     await api.listTMs();
     await api.listTBs();
     await api.getAISettings();
+    await api.listAIConnections();
     await api.listAIProviders();
     await api.testAIProvider({
       name: 'Demo Provider',
@@ -23,12 +24,17 @@ describe('createDesktopApi smoke', () => {
       apiKey: 'secret',
       model: 'gpt-demo',
     });
-    await api.addAIProvider({
-      name: 'Demo Provider',
-      baseUrl: 'https://example.com/v1',
+    await api.testAIConnection({
+      name: 'OpenAI',
+      baseUrl: 'https://api.openai.com/v1',
       apiKey: 'secret',
+    });
+    await api.addAIProvider({
+      name: 'OpenAI / gpt-demo',
+      connectionId: 'connection:demo',
       model: 'gpt-demo',
     });
+    await api.deleteAIConnection('connection:demo');
     await api.deleteAIProvider('custom:demo');
     await api.getProxySettings();
     await api.setProxySettings({ mode: 'off' });
@@ -41,6 +47,7 @@ describe('createDesktopApi smoke', () => {
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tm.list, undefined);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tb.list);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.getSettings);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.listConnections);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.listProviders);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.testProvider, {
       name: 'Demo Provider',
@@ -48,12 +55,17 @@ describe('createDesktopApi smoke', () => {
       apiKey: 'secret',
       model: 'gpt-demo',
     });
-    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.addProvider, {
-      name: 'Demo Provider',
-      baseUrl: 'https://example.com/v1',
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.testConnection, {
+      name: 'OpenAI',
+      baseUrl: 'https://api.openai.com/v1',
       apiKey: 'secret',
+    });
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.addProvider, {
+      name: 'OpenAI / gpt-demo',
+      connectionId: 'connection:demo',
       model: 'gpt-demo',
     });
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.deleteConnection, 'connection:demo');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.deleteProvider, 'custom:demo');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.getProxySettings);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.setProxySettings, { mode: 'off' });
