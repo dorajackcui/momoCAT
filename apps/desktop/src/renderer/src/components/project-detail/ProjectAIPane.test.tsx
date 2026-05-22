@@ -8,30 +8,37 @@ function createController(overrides?: Partial<ProjectAIController>): ProjectAICo
   return {
     providerOptions: [
       {
-        id: 'builtin:openai:gpt-5.4-mini',
-        name: 'OpenAI / gpt-5.4-mini',
+        id: 'provider:gpt-demo',
+        name: 'OpenAI / gpt-demo',
         baseUrl: 'https://api.openai.com/v1',
-        model: 'gpt-5.4-mini',
-        protocol: 'chat-completions',
-        kind: 'builtin',
-        apiKeyLast4: '1234',
-        createdAt: '1970-01-01T00:00:00.000Z',
-        updatedAt: '1970-01-01T00:00:00.000Z',
-      },
-      {
-        id: 'custom:demo',
-        name: 'Demo Provider',
-        baseUrl: 'https://example.com/v1',
         model: 'gpt-demo',
         protocol: 'chat-completions',
-        kind: 'custom',
+        kind: 'configured',
+        connectionId: 'connection:openai',
+        connectionName: 'OpenAI',
+        apiKeyLast4: '1234',
+        createdAt: '2026-05-22T00:00:00.000Z',
+        updatedAt: '2026-05-22T00:00:00.000Z',
+      },
+      {
+        id: 'provider:gpt-demo-mini',
+        name: 'OpenAI / gpt-demo-mini',
+        baseUrl: 'https://example.com/v1',
+        model: 'gpt-demo-mini',
+        protocol: 'chat-completions',
+        kind: 'configured',
+        connectionId: 'connection:openai',
+        connectionName: 'OpenAI',
         apiKeyLast4: '9999',
-        createdAt: '2026-03-30T00:00:00.000Z',
-        updatedAt: '2026-03-30T00:00:00.000Z',
+        createdAt: '2026-05-22T00:00:00.000Z',
+        updatedAt: '2026-05-22T00:00:00.000Z',
       },
     ],
-    modelDraft: 'builtin:openai:gpt-5.4-mini',
+    modelDraft: 'provider:gpt-demo',
     setModelDraft: vi.fn(),
+    providerUnavailable: false,
+    providerSetupRequired: false,
+    providerWarning: null,
     effectiveSystemPromptPreview:
       'You are a professional translator.\n\nFrom en to zh. Output in zh ONLY.\nKeep all protected markers exactly as they appear, including forms such as {1>, <2}, {3}\nPreserve all escape sequences exactly as they appear, including \\n and \\r.\nReturn only the translated text, without quotes or extra commentary',
     promptDraft: '',
@@ -77,12 +84,13 @@ describe('ProjectAIPane', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders builtin and custom providers in the provider select', () => {
+  it('renders configured providers in the provider select', () => {
     const controller = createController();
     render(<ProjectAIPane ai={controller} />);
 
-    expect(screen.getByRole('option', { name: 'OpenAI / gpt-5.4-mini' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Demo Provider' })).toBeInTheDocument();
+    expect(screen.getByText('AI Provider')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'OpenAI / gpt-demo' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'OpenAI / gpt-demo-mini' })).toBeInTheDocument();
   });
 
   it('updates the selected provider id when the dropdown changes', () => {
@@ -90,10 +98,42 @@ describe('ProjectAIPane', () => {
     render(<ProjectAIPane ai={controller} />);
 
     fireEvent.change(screen.getByLabelText('AI Provider'), {
-      target: { value: 'custom:demo' },
+      target: { value: 'provider:gpt-demo-mini' },
     });
 
-    expect(controller.setModelDraft).toHaveBeenCalledWith('custom:demo');
+    expect(controller.setModelDraft).toHaveBeenCalledWith('provider:gpt-demo-mini');
+  });
+
+  it('shows setup guidance when no providers are configured', () => {
+    const controller = createController({
+      providerOptions: [],
+      modelDraft: '',
+      providerSetupRequired: true,
+      providerWarning: 'Add an AI provider in Settings before running AI actions.',
+    });
+
+    render(<ProjectAIPane ai={controller} />);
+
+    expect(
+      screen.getByText('Add an AI provider in Settings before running AI actions.'),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('AI Provider')).toBeDisabled();
+  });
+
+  it('keeps the unavailable selected provider visible as a stable option', () => {
+    const controller = createController({
+      modelDraft: 'provider:missing',
+      providerUnavailable: true,
+      providerWarning:
+        'The saved AI provider is no longer available. Choose a configured provider and save.',
+    });
+
+    render(<ProjectAIPane ai={controller} />);
+
+    expect(
+      screen.getByRole('option', { name: 'Unavailable provider (provider:missing)' }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('AI Provider')).toHaveValue('provider:missing');
   });
 
   it('shows custom project override copy in the custom prompt section', () => {

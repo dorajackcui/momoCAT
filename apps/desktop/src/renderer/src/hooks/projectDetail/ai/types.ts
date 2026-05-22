@@ -47,6 +47,9 @@ export interface ProjectAIController {
   providerOptions: AIProviderSummary[];
   modelDraft: ProjectAIModel;
   setModelDraft: Dispatch<SetStateAction<ProjectAIModel>>;
+  providerUnavailable: boolean;
+  providerSetupRequired: boolean;
+  providerWarning: string | null;
   effectiveSystemPromptPreview: string;
   promptDraft: string;
   setPromptDraft: Dispatch<SetStateAction<string>>;

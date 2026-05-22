@@ -13,7 +13,9 @@ import {
   DEFAULT_PROJECT_AI_MODEL,
   buildAITestMeta,
   buildProjectAISystemPromptPreview,
+  deriveProjectAIProviderAvailability,
   deriveProjectAIFlags,
+  normalizeProjectAIProviderPersistenceValue,
   normalizeProjectAIProviderSelection,
 } from './aiSettingsHelpers';
 import { upsertTrackedJobFromProgress, upsertTrackedJobOnStart } from './aiJobTracker';
@@ -154,6 +156,10 @@ export function useProjectAI({
   const normalizedSavedPrompt = aiFlags.normalizedSavedPrompt;
   const hasUnsavedPromptChanges = aiFlags.hasUnsavedPromptChanges;
   const hasTestDetails = aiFlags.hasTestDetails;
+  const providerAvailability = useMemo(
+    () => deriveProjectAIProviderAvailability(modelDraft, providerOptions),
+    [modelDraft, providerOptions],
+  );
   const effectiveSystemPromptPreview = useMemo(() => {
     if (!project) {
       return '';
@@ -179,13 +185,14 @@ export function useProjectAI({
     try {
       await runMutation(async () => {
         const promptValue = normalizedPromptDraft.length > 0 ? normalizedPromptDraft : null;
-        await apiClient.updateProjectAISettings(project.id, promptValue, modelDraft);
+        const providerValue = normalizeProjectAIProviderPersistenceValue(modelDraft);
+        await apiClient.updateProjectAISettings(project.id, promptValue, providerValue);
         setProject((prev: Project | null) => {
           if (!prev) return prev;
           return {
             ...prev,
             aiPrompt: promptValue,
-            aiModel: modelDraft,
+            aiModel: providerValue,
           };
         });
         setSavedPromptValue(normalizedPromptDraft);
@@ -299,6 +306,9 @@ export function useProjectAI({
       providerOptions,
       modelDraft,
       setModelDraft,
+      providerUnavailable: providerAvailability.providerUnavailable,
+      providerSetupRequired: providerAvailability.providerSetupRequired,
+      providerWarning: providerAvailability.providerWarning,
       effectiveSystemPromptPreview,
       promptDraft,
       setPromptDraft,
@@ -327,6 +337,9 @@ export function useProjectAI({
       getFileJob,
       hasTestDetails,
       hasUnsavedPromptChanges,
+      providerAvailability.providerSetupRequired,
+      providerAvailability.providerUnavailable,
+      providerAvailability.providerWarning,
       providerOptions,
       modelDraft,
       effectiveSystemPromptPreview,

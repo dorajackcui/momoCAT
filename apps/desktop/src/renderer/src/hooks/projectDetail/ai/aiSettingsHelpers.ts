@@ -17,9 +17,43 @@ export function normalizeProjectAIProviderSelection(
   providers: AIProviderSummary[],
 ): string {
   const normalized = normalizeProjectAIModelCore(value);
-  return providers.some((provider) => provider.id === normalized)
-    ? normalized
-    : DEFAULT_PROJECT_AI_MODEL;
+  if (!normalized) {
+    return providers[0]?.id ?? '';
+  }
+  return normalized;
+}
+
+export function deriveProjectAIProviderAvailability(
+  modelDraft: string,
+  providerOptions: AIProviderSummary[],
+): {
+  providerUnavailable: boolean;
+  providerSetupRequired: boolean;
+  providerWarning: string | null;
+} {
+  const providerSetupRequired = providerOptions.length === 0;
+  const providerUnavailable =
+    !providerSetupRequired &&
+    Boolean(modelDraft) &&
+    !providerOptions.some((provider) => provider.id === modelDraft);
+  const providerWarning = providerSetupRequired
+    ? 'Add an AI provider in Settings before running AI actions.'
+    : providerUnavailable
+      ? 'The saved AI provider is no longer available. Choose a configured provider and save.'
+      : null;
+
+  return {
+    providerUnavailable,
+    providerSetupRequired,
+    providerWarning,
+  };
+}
+
+export function normalizeProjectAIProviderPersistenceValue(
+  value: string | null | undefined,
+): string | null {
+  const normalized = normalizeProjectAIModelCore(value);
+  return normalized || null;
 }
 
 export function deriveProjectAIFlags(input: ProjectAIFlagsInput): ProjectAIFlags {

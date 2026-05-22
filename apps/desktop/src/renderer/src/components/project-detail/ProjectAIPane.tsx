@@ -10,6 +10,9 @@ interface ProjectAIPaneProps {
 export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPaneProps) {
   const isReviewProject = projectType === 'review';
   const isCustomProject = projectType === 'custom';
+  const shouldShowUnavailableCurrentProvider =
+    Boolean(ai.modelDraft) && !ai.providerOptions.some((provider) => provider.id === ai.modelDraft);
+
   return (
     <Card variant="subtle" className="mb-8 p-5">
       <div className="flex items-center justify-between mb-3">
@@ -59,15 +62,28 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
         </p>
       </div>
       <div className="mb-3">
-        <label className="block text-xs font-bold text-text-faint uppercase tracking-wider mb-1">
-          Model
+        <label
+          htmlFor="project-ai-provider"
+          className="block text-xs font-bold text-text-faint uppercase tracking-wider mb-1"
+        >
+          AI Provider
         </label>
+        {ai.providerWarning && (
+          <Notice tone="warning" className="mb-2 text-xs">
+            {ai.providerWarning}
+          </Notice>
+        )}
         <Select
+          id="project-ai-provider"
           aria-label="AI Provider"
           value={ai.modelDraft}
           onChange={(event) => ai.setModelDraft(event.target.value as typeof ai.modelDraft)}
-          className="w-52"
+          className="w-72"
+          disabled={ai.providerSetupRequired}
         >
+          {shouldShowUnavailableCurrentProvider && (
+            <option value={ai.modelDraft}>Unavailable provider ({ai.modelDraft})</option>
+          )}
           {ai.providerOptions.map((provider) => (
             <option key={provider.id} value={provider.id}>
               {provider.name}

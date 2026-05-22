@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { AIProviderSummary } from '../../../../shared/ipc';
 
 vi.mock('../../services/apiClient', () => ({
   apiClient: {},
@@ -11,14 +12,33 @@ import {
   upsertTrackedJobFromProgress,
   upsertTrackedJobOnStart,
 } from './useProjectAI';
+import {
+  deriveProjectAIProviderAvailability,
+  normalizeProjectAIProviderPersistenceValue,
+  normalizeProjectAIProviderSelection,
+} from './ai/aiSettingsHelpers';
+
+const configuredProvider: AIProviderSummary = {
+  id: 'provider:gpt-demo',
+  name: 'OpenAI / gpt-demo',
+  baseUrl: 'https://api.openai.com/v1',
+  model: 'gpt-demo',
+  protocol: 'chat-completions',
+  kind: 'configured',
+  connectionId: 'connection:openai',
+  connectionName: 'OpenAI',
+  apiKeyLast4: '1234',
+  createdAt: '2026-05-22T00:00:00.000Z',
+  updatedAt: '2026-05-22T00:00:00.000Z',
+};
 
 describe('useProjectAI behavior helpers', () => {
   it('derives prompt dirty state with trim-aware comparison', () => {
     const clean = deriveProjectAIFlags({
       promptDraft: '  Keep style  ',
       savedPromptValue: 'Keep style',
-      modelDraft: 'builtin:openai:gpt-5.4-mini',
-      savedModelValue: 'builtin:openai:gpt-5.4-mini',
+      modelDraft: 'provider:gpt-demo',
+      savedModelValue: 'provider:gpt-demo',
       testMeta: null,
       testUserPrompt: null,
       testSystemPrompt: null,
@@ -29,8 +49,8 @@ describe('useProjectAI behavior helpers', () => {
     const dirty = deriveProjectAIFlags({
       promptDraft: 'Keep style updated',
       savedPromptValue: 'Keep style',
-      modelDraft: 'builtin:openai:gpt-5.4-mini',
-      savedModelValue: 'builtin:openai:gpt-5.4-mini',
+      modelDraft: 'provider:gpt-demo',
+      savedModelValue: 'provider:gpt-demo',
       testMeta: null,
       testUserPrompt: null,
       testSystemPrompt: null,
@@ -43,8 +63,8 @@ describe('useProjectAI behavior helpers', () => {
     const flags = deriveProjectAIFlags({
       promptDraft: 'prompt',
       savedPromptValue: 'prompt',
-      modelDraft: 'builtin:openai:gpt-5.4-mini',
-      savedModelValue: 'builtin:openai:gpt-5.4-mini',
+      modelDraft: 'provider:gpt-demo',
+      savedModelValue: 'provider:gpt-demo',
       testMeta: null,
       testUserPrompt: 'message',
       testSystemPrompt: null,
@@ -59,8 +79,8 @@ describe('useProjectAI behavior helpers', () => {
     const flags = deriveProjectAIFlags({
       promptDraft: 'prompt',
       savedPromptValue: 'prompt',
-      modelDraft: 'builtin:openai:gpt-5',
-      savedModelValue: 'builtin:openai:gpt-5.4-mini',
+      modelDraft: 'provider:gpt-demo-mini',
+      savedModelValue: 'provider:gpt-demo',
       testMeta: null,
       testUserPrompt: null,
       testSystemPrompt: null,
@@ -103,10 +123,47 @@ describe('useProjectAI behavior helpers', () => {
     );
   });
 
-  it('normalizes legacy project ai values and preserves custom provider ids', () => {
-    expect(normalizeProjectAIModel('gpt-5-mini')).toBe('builtin:openai:gpt-5-mini');
-    expect(normalizeProjectAIModel('custom:provider:demo')).toBe('custom:provider:demo');
-    expect(normalizeProjectAIModel(null)).toBe('builtin:openai:gpt-5.4-mini');
+  it('normalizes project ai provider ids as plain configured ids', () => {
+    expect(normalizeProjectAIModel(' provider:gpt-demo ')).toBe('provider:gpt-demo');
+    expect(normalizeProjectAIModel(null)).toBe('');
+  });
+
+  it('preserves unavailable project provider ids instead of selecting a builtin default', () => {
+    expect(normalizeProjectAIProviderSelection('provider:missing', [])).toBe('provider:missing');
+    expect(normalizeProjectAIProviderSelection(null, [])).toBe('');
+    expect(normalizeProjectAIProviderSelection(null, [configuredProvider])).toBe(
+      'provider:gpt-demo',
+    );
+  });
+
+  it('derives setup and unavailable provider warnings', () => {
+    expect(deriveProjectAIProviderAvailability('', [])).toEqual({
+      providerSetupRequired: true,
+      providerUnavailable: false,
+      providerWarning: 'Add an AI provider in Settings before running AI actions.',
+    });
+    expect(
+      deriveProjectAIProviderAvailability('provider:missing', [configuredProvider]),
+    ).toEqual({
+      providerSetupRequired: false,
+      providerUnavailable: true,
+      providerWarning:
+        'The saved AI provider is no longer available. Choose a configured provider and save.',
+    });
+    expect(
+      deriveProjectAIProviderAvailability('provider:gpt-demo', [configuredProvider]),
+    ).toEqual({
+      providerSetupRequired: false,
+      providerUnavailable: false,
+      providerWarning: null,
+    });
+  });
+
+  it('normalizes empty project provider ids to null for persistence', () => {
+    expect(normalizeProjectAIProviderPersistenceValue('')).toBeNull();
+    expect(normalizeProjectAIProviderPersistenceValue(' provider:gpt-demo ')).toBe(
+      'provider:gpt-demo',
+    );
   });
 
   it('upserts unknown job progress with fallback file id', () => {
