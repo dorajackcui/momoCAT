@@ -42,23 +42,39 @@ function createFixtureDb() {
     'zh-CN',
     'translation',
   );
-  db.updateProjectAISettings(projectId, 'Use concise style.', 'custom:test-provider');
+  db.updateProjectAISettings(projectId, 'Use concise style.', 'provider:gpt-demo');
   db.setSetting(
-    'ai_provider_catalog_v1',
+    'ai_connection_catalog_v1',
     JSON.stringify([
       {
-        id: 'custom:test-provider',
-        name: 'Test Provider',
-        baseUrl: 'https://example.invalid/v1/',
-        model: 'test-model',
+        id: 'connection:openai',
+        name: 'OpenAI',
+        baseUrl: 'https://api.openai.com/v1',
         protocol: 'chat-completions',
-        kind: 'custom',
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
+        kind: 'openai-compatible',
+        apiKeyLast4: '1234',
+        discoveredModels: ['gpt-demo'],
+        createdAt: '2026-05-22T00:00:00.000Z',
+        updatedAt: '2026-05-22T00:00:00.000Z',
       },
     ]),
   );
-  db.setSetting('ai_provider_key::custom:test-provider', 'sk-test-1234567890');
+  db.setSetting('ai_connection_key::connection:openai', 'sk-test-1234');
+  db.setSetting(
+    'ai_provider_catalog_v2',
+    JSON.stringify([
+      {
+        id: 'provider:gpt-demo',
+        name: 'OpenAI / gpt-demo',
+        connectionId: 'connection:openai',
+        model: 'gpt-demo',
+        protocol: 'chat-completions',
+        kind: 'configured',
+        createdAt: '2026-05-22T00:00:00.000Z',
+        updatedAt: '2026-05-22T00:00:00.000Z',
+      },
+    ]),
+  );
 
   const tmId = db.createTM('Client Main TM', 'en-US', 'zh-CN', 'main');
   db.mountTMToProject(projectId, tmId, 10, 'read');
@@ -87,15 +103,15 @@ describe('runInspectProjectsCommand', () => {
       expect(result.dbPath).toBe(dbPath);
       expect(result.generatedAt).toBe('2026-05-21T00:00:00.000Z');
       expect(result.providers).toEqual([
-        {
-          id: 'custom:test-provider',
-          name: 'Test Provider',
-          baseUrl: 'https://example.invalid/v1',
-          model: 'test-model',
-          kind: 'custom',
+        expect.objectContaining({
+          id: 'provider:gpt-demo',
+          name: 'OpenAI / gpt-demo',
+          baseUrl: 'https://api.openai.com/v1',
+          model: 'gpt-demo',
+          kind: 'configured',
           apiKeySet: true,
-          apiKeyLast4: '7890',
-        },
+          apiKeyLast4: '1234',
+        }),
       ]);
       expect(result.projects).toHaveLength(1);
       expect(result.projects[0]).toMatchObject({
@@ -106,7 +122,10 @@ describe('runInspectProjectsCommand', () => {
         projectType: 'translation',
         promptChars: 'Use concise style.'.length,
       });
-      expect(result.projects[0].model.id).toBe('custom:test-provider');
+      expect(result.projects[0].model).toMatchObject({
+        id: 'provider:gpt-demo',
+        model: 'gpt-demo',
+      });
       expect(
         result.projects[0].mountedTMs.find((tm) => tm.name === 'Client Main TM'),
       ).toMatchObject({
@@ -142,8 +161,8 @@ describe('runInspectProjectsCommand', () => {
       });
 
       expect(result.projects.map((project) => project.id)).toEqual([projectId]);
-      expect(JSON.stringify(result)).not.toContain('sk-test-1234567890');
-      expect(JSON.stringify(result)).toContain('"apiKeyLast4":"7890"');
+      expect(JSON.stringify(result)).not.toContain('sk-test-1234');
+      expect(JSON.stringify(result)).toContain('"apiKeyLast4":"1234"');
     } finally {
       fs.rmSync(tempRoot, { recursive: true, force: true });
     }
@@ -159,6 +178,75 @@ describe('runInspectProjectsCommand', () => {
       });
 
       expect(result.projects).toEqual([]);
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to the first configured provider for legacy project model ids', () => {
+    const { dbPath, projectId, tempRoot } = createFixtureDb();
+    const db = new CATDatabase(dbPath);
+    try {
+      db.updateProjectAISettings(
+        projectId,
+        'Use concise style.',
+        'builtin:openai:gpt-5-mini',
+      );
+    } finally {
+      db.close();
+    }
+
+    try {
+      const result = runInspectProjectsCommand({
+        dbPath,
+        projectId,
+        generatedAt: () => '2026-05-21T00:00:00.000Z',
+      });
+
+      expect(result.projects[0].model).toMatchObject({
+        id: 'provider:gpt-demo',
+        configuredId: 'builtin:openai:gpt-5-mini',
+        fallbackFrom: 'builtin:openai:gpt-5-mini',
+        resolvedId: 'provider:gpt-demo',
+      });
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('reports no configured AI provider when provider settings are absent', () => {
+    const tempRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'momocat-inspect-projects-no-provider-'),
+    );
+    const dbPath = path.join(tempRoot, 'cat_v1.db');
+    const db = new CATDatabase(dbPath);
+    let projectId = 0;
+    try {
+      projectId = db.createProject('No Provider Project', 'en-US', 'zh-CN');
+      db.updateProjectAISettings(projectId, null, 'provider:gpt-demo');
+    } finally {
+      db.close();
+    }
+
+    try {
+      const result = runInspectProjectsCommand({
+        dbPath,
+        projectId,
+        generatedAt: () => '2026-05-21T00:00:00.000Z',
+      });
+
+      expect(result.providers).toEqual([]);
+      expect(result.projects[0].model).toMatchObject({
+        id: 'provider:gpt-demo',
+        name: 'No configured AI provider',
+        baseUrl: null,
+        model: null,
+        kind: 'configured',
+        apiKeySet: false,
+        apiKeyLast4: null,
+        configuredId: 'provider:gpt-demo',
+        fallbackFrom: 'provider:gpt-demo',
+      });
     } finally {
       fs.rmSync(tempRoot, { recursive: true, force: true });
     }

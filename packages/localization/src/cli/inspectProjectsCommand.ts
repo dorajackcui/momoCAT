@@ -1,16 +1,10 @@
 import { CATDatabase } from '@cat/db';
 import type { Segment } from '@cat/core/models';
-import {
-  BUILTIN_OPENAI_PROVIDER_MODELS,
-  DEFAULT_PROJECT_AI_MODEL,
-  normalizeProjectAIModel,
-  type Project,
-} from '@cat/core/project';
+import type { Project } from '@cat/core/project';
 
-const PROVIDER_CATALOG_KEY = 'ai_provider_catalog_v1';
-const PROVIDER_KEY_PREFIX = 'ai_provider_key::';
-const OPENAI_API_KEY = 'openai_api_key';
-const BUILTIN_OPENAI_BASE_URL = 'https://api.openai.com/v1';
+const CONNECTION_CATALOG_KEY = 'ai_connection_catalog_v1';
+const PROVIDER_CATALOG_KEY = 'ai_provider_catalog_v2';
+const CONNECTION_KEY_PREFIX = 'ai_connection_key::';
 const SEGMENT_PAGE_SIZE = 500;
 
 export interface InspectProjectsCommandConfig {
@@ -24,7 +18,7 @@ export interface InspectProviderSummary {
   name: string;
   baseUrl: string | null;
   model: string | null;
-  kind: 'builtin' | 'custom';
+  kind: 'configured';
   apiKeySet: boolean;
   apiKeyLast4: string | null;
   configuredId?: string | null;
@@ -81,13 +75,22 @@ export interface InspectProjectsResult {
   projects: InspectProjectSummary[];
 }
 
-interface StoredCustomProvider {
+interface StoredAIConnection {
   id: string;
   name: string;
   baseUrl: string;
+  protocol: 'chat-completions';
+  kind: 'openai-compatible';
+  discoveredModels: string[];
+}
+
+interface StoredAIProvider {
+  id: string;
+  name: string;
+  connectionId: string;
   model: string;
   protocol: 'chat-completions';
-  kind: 'custom';
+  kind: 'configured';
 }
 
 export function runInspectProjectsCommand(
@@ -99,12 +102,10 @@ export function runInspectProjectsCommand(
   });
   try {
     const settings = readSettings(db);
-    const customProviders = readCustomProviders(settings);
-    const customProviderById = new Map(
-      customProviders.map((provider) => [provider.id, provider]),
-    );
+    const providers = readConfiguredProviders(settings);
+    const providerById = new Map(providers.map((provider) => [provider.id, provider]));
     const projects = readProjects(db, config.projectId).map((project) =>
-      inspectProject(db, project, settings, customProviderById),
+      inspectProject(db, project, providers, providerById),
     );
 
     return {
@@ -112,7 +113,7 @@ export function runInspectProjectsCommand(
       generatedAt: config.generatedAt
         ? config.generatedAt()
         : new Date().toISOString(),
-      providers: customProviders,
+      providers,
       projects,
     };
   } finally {
@@ -122,14 +123,14 @@ export function runInspectProjectsCommand(
 
 function readSettings(db: CATDatabase): Map<string, string> {
   const settings = new Map<string, string>();
-  for (const key of [PROVIDER_CATALOG_KEY, OPENAI_API_KEY]) {
+  for (const key of [CONNECTION_CATALOG_KEY, PROVIDER_CATALOG_KEY]) {
     const value = db.getSetting(key);
     if (value !== undefined) {
       settings.set(key, value);
     }
   }
 
-  const rawCatalog = settings.get(PROVIDER_CATALOG_KEY);
+  const rawCatalog = settings.get(CONNECTION_CATALOG_KEY);
   if (!rawCatalog) {
     return settings;
   }
@@ -145,9 +146,9 @@ function readSettings(db: CATDatabase): Map<string, string> {
     return settings;
   }
 
-  for (const provider of parsed) {
-    if (isStoredCustomProvider(provider)) {
-      const key = buildProviderKey(provider.id);
+  for (const connection of parsed) {
+    if (isStoredAIConnection(connection)) {
+      const key = buildConnectionKey(connection.id);
       const value = db.getSetting(key);
       if (value !== undefined) {
         settings.set(key, value);
@@ -169,8 +170,8 @@ function readProjects(db: CATDatabase, projectId: number | undefined): Project[]
 function inspectProject(
   db: CATDatabase,
   project: Project,
-  settings: Map<string, string>,
-  customProviderById: Map<string, InspectProviderSummary>,
+  providers: InspectProviderSummary[],
+  providerById: Map<string, InspectProviderSummary>,
 ): InspectProjectSummary {
   return {
     id: project.id,
@@ -179,7 +180,7 @@ function inspectProject(
     tgtLang: project.tgtLang,
     projectType: project.projectType,
     promptChars: project.aiPrompt ? project.aiPrompt.length : 0,
-    model: resolveProjectModel(db, project.aiModel, settings, customProviderById),
+    model: resolveProjectModel(project.aiModel, providers, providerById),
     mountedTMs: db.getProjectMountedTMs(project.id).map((tm) => ({
       id: tm.id,
       name: tm.name,
@@ -244,7 +245,65 @@ function hasTargetTokens(segment: Segment): boolean {
   return segment.targetTokens.length > 0;
 }
 
-function readCustomProviders(settings: Map<string, string>): InspectProviderSummary[] {
+function readConfiguredProviders(settings: Map<string, string>): InspectProviderSummary[] {
+  const connections = readConnections(settings);
+  const providers = readProviders(settings);
+
+  return providers.flatMap((provider) => {
+    const connection = connections.get(provider.connectionId);
+    if (!connection) {
+      return [];
+    }
+    const apiKey = settings.get(buildConnectionKey(connection.id)) ?? '';
+    return [
+      {
+        id: provider.id,
+        name: provider.name,
+        baseUrl: normalizeBaseUrl(connection.baseUrl),
+        model: provider.model,
+        kind: 'configured' as const,
+        apiKeySet: Boolean(apiKey),
+        apiKeyLast4: apiKey ? apiKey.slice(-4) : null,
+      },
+    ];
+  });
+}
+
+function readConnections(settings: Map<string, string>): Map<string, StoredAIConnection> {
+  const raw = settings.get(CONNECTION_CATALOG_KEY);
+  if (!raw) {
+    return new Map();
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return new Map();
+  }
+
+  if (!Array.isArray(parsed)) {
+    return new Map();
+  }
+
+  return new Map(
+    parsed
+      .filter(isStoredAIConnection)
+      .map((connection) => [
+        connection.id,
+        {
+          ...connection,
+          name: connection.name.trim(),
+          baseUrl: normalizeBaseUrl(connection.baseUrl),
+          discoveredModels: connection.discoveredModels.filter(
+            (model): model is string => typeof model === 'string' && model.trim().length > 0,
+          ),
+        },
+      ]),
+  );
+}
+
+function readProviders(settings: Map<string, string>): StoredAIProvider[] {
   const raw = settings.get(PROVIDER_CATALOG_KEY);
   if (!raw) {
     return [];
@@ -261,31 +320,42 @@ function readCustomProviders(settings: Map<string, string>): InspectProviderSumm
     return [];
   }
 
-  return parsed.filter(isStoredCustomProvider).map((provider) => {
-    const apiKey = settings.get(buildProviderKey(provider.id)) ?? '';
-    return {
-      id: provider.id,
-      name: provider.name,
-      baseUrl: normalizeBaseUrl(provider.baseUrl),
-      model: provider.model,
-      kind: 'custom',
-      apiKeySet: Boolean(apiKey),
-      apiKeyLast4: apiKey ? apiKey.slice(-4) : null,
-    };
-  });
+  return parsed.filter(isStoredAIProvider).map((provider) => ({
+    id: provider.id.trim(),
+    name: provider.name.trim(),
+    connectionId: provider.connectionId.trim(),
+    model: provider.model.trim(),
+    protocol: 'chat-completions',
+    kind: 'configured',
+  }));
 }
 
-function isStoredCustomProvider(value: unknown): value is StoredCustomProvider {
+function isStoredAIConnection(value: unknown): value is StoredAIConnection {
   if (!value || typeof value !== 'object') {
     return false;
   }
-  const candidate = value as Partial<StoredCustomProvider>;
+  const candidate = value as Partial<StoredAIConnection>;
   return (
-    candidate.kind === 'custom' &&
+    candidate.kind === 'openai-compatible' &&
     candidate.protocol === 'chat-completions' &&
     typeof candidate.id === 'string' &&
     typeof candidate.name === 'string' &&
     typeof candidate.baseUrl === 'string' &&
+    Array.isArray(candidate.discoveredModels)
+  );
+}
+
+function isStoredAIProvider(value: unknown): value is StoredAIProvider {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const candidate = value as Partial<StoredAIProvider>;
+  return (
+    candidate.kind === 'configured' &&
+    candidate.protocol === 'chat-completions' &&
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.connectionId === 'string' &&
     typeof candidate.model === 'string'
   );
 }
@@ -294,67 +364,45 @@ function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.trim().replace(/\/+$/, '');
 }
 
-function buildProviderKey(providerId: string): string {
-  return `${PROVIDER_KEY_PREFIX}${providerId}`;
+function buildConnectionKey(connectionId: string): string {
+  return `${CONNECTION_KEY_PREFIX}${connectionId}`;
 }
 
 function resolveProjectModel(
-  db: CATDatabase,
   rawModel: string | null | undefined,
-  settings: Map<string, string>,
-  customProviderById: Map<string, InspectProviderSummary>,
+  providers: InspectProviderSummary[],
+  providerById: Map<string, InspectProviderSummary>,
 ): InspectProviderSummary {
   const configuredId =
     typeof rawModel === 'string' && rawModel.trim() ? rawModel.trim() : null;
-  const normalizedId = normalizeProjectAIModel(configuredId);
-  const customProvider = customProviderById.get(normalizedId);
-  if (customProvider) {
+  const provider = configuredId ? providerById.get(configuredId) : undefined;
+  if (provider) {
     return {
-      ...customProvider,
+      ...provider,
       configuredId,
       fallbackFrom: null,
     };
   }
 
-  if (normalizedId.startsWith('custom:')) {
-    const apiKey =
-      settings.get(buildProviderKey(normalizedId)) ??
-      db.getSetting(buildProviderKey(normalizedId)) ??
-      '';
+  const fallback = providers[0];
+  if (fallback) {
     return {
-      id: normalizedId,
+      ...fallback,
       configuredId,
-      name: 'Unknown custom provider',
-      baseUrl: null,
-      model: null,
-      kind: 'custom',
-      apiKeySet: Boolean(apiKey),
-      apiKeyLast4: apiKey ? apiKey.slice(-4) : null,
-      fallbackFrom: normalizedId,
-      resolvedId: DEFAULT_PROJECT_AI_MODEL,
+      fallbackFrom: configuredId,
+      resolvedId: fallback.id,
     };
   }
 
-  const providerId = Object.hasOwn(BUILTIN_OPENAI_PROVIDER_MODELS, normalizedId)
-    ? normalizedId
-    : DEFAULT_PROJECT_AI_MODEL;
-  const model =
-    BUILTIN_OPENAI_PROVIDER_MODELS[
-      providerId as keyof typeof BUILTIN_OPENAI_PROVIDER_MODELS
-    ] ?? BUILTIN_OPENAI_PROVIDER_MODELS[
-      DEFAULT_PROJECT_AI_MODEL as keyof typeof BUILTIN_OPENAI_PROVIDER_MODELS
-    ];
-  const apiKey = settings.get(OPENAI_API_KEY) ?? '';
-
   return {
-    id: providerId,
+    id: configuredId ?? '',
     configuredId,
-    name: `OpenAI / ${model}`,
-    baseUrl: BUILTIN_OPENAI_BASE_URL,
-    model,
-    kind: 'builtin',
-    apiKeySet: Boolean(apiKey),
-    apiKeyLast4: apiKey ? apiKey.slice(-4) : null,
-    fallbackFrom: providerId === normalizedId ? null : normalizedId,
+    name: 'No configured AI provider',
+    baseUrl: null,
+    model: null,
+    kind: 'configured',
+    apiKeySet: false,
+    apiKeyLast4: null,
+    fallbackFrom: configuredId,
   };
 }

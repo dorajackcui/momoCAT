@@ -31,8 +31,40 @@ function createTransport(content = 'Bonjour le monde'): MockTransport {
   } as unknown as MockTransport;
 }
 
-function seedApiKey(db: CATDatabase): void {
-  db.setSetting('openai_api_key', 'test-api-key');
+function seedConfiguredAIProvider(db: CATDatabase, projectId: number): void {
+  db.setSetting(
+    'ai_connection_catalog_v1',
+    JSON.stringify([
+      {
+        id: 'connection:test',
+        name: 'Test Connection',
+        baseUrl: 'https://example.com/v1',
+        protocol: 'chat-completions',
+        kind: 'openai-compatible',
+        apiKeyLast4: 'key',
+        discoveredModels: ['gpt-demo'],
+        createdAt: '2026-05-22T00:00:00.000Z',
+        updatedAt: '2026-05-22T00:00:00.000Z',
+      },
+    ]),
+  );
+  db.setSetting('ai_connection_key::connection:test', 'test-api-key');
+  db.setSetting(
+    'ai_provider_catalog_v2',
+    JSON.stringify([
+      {
+        id: 'provider:gpt-demo',
+        name: 'Test / gpt-demo',
+        connectionId: 'connection:test',
+        model: 'gpt-demo',
+        protocol: 'chat-completions',
+        kind: 'configured',
+        createdAt: '2026-05-22T00:00:00.000Z',
+        updatedAt: '2026-05-22T00:00:00.000Z',
+      },
+    ]),
+  );
+  db.updateProjectAISettings(projectId, null, 'provider:gpt-demo');
 }
 
 async function delay(ms: number): Promise<void> {
@@ -79,7 +111,7 @@ describe('LocalizationEngine.translateUnits', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('External MT', 'en', 'fr');
-      seedApiKey(db);
+      seedConfiguredAIProvider(db, projectId);
       const initialFiles = db.listFiles(projectId);
       const transport = createTransport('Bonjour');
       const engine = new LocalizationEngine(db, {
@@ -120,7 +152,7 @@ describe('LocalizationEngine.translateUnits', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('External References', 'en', 'fr');
-      seedApiKey(db);
+      seedConfiguredAIProvider(db, projectId);
       const tmId = db.createTM('Client Main TM', 'en', 'fr', 'main');
       db.mountTMToProject(projectId, tmId, 10, 'read');
       const tmEntry = createTMEntry({
@@ -206,7 +238,6 @@ describe('LocalizationEngine.translateUnits', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Blank Only', 'en', 'fr');
-      seedApiKey(db);
       const transport = createTransport('Bonjour');
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',
@@ -292,7 +323,7 @@ describe('LocalizationEngine.translateUnits', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Constructor MT Defaults', 'en', 'fr');
-      seedApiKey(db);
+      seedConfiguredAIProvider(db, projectId);
       const transport = createTransport('Salut');
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',
@@ -322,7 +353,7 @@ describe('LocalizationEngine.translateUnits', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Constructor MT Undefined Defaults', 'en', 'fr');
-      seedApiKey(db);
+      seedConfiguredAIProvider(db, projectId);
       const transport = createTransport('Salut');
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',
@@ -382,7 +413,7 @@ describe('LocalizationEngine.translateUnits', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Legacy Concurrency', 'en', 'fr');
-      seedApiKey(db);
+      seedConfiguredAIProvider(db, projectId);
       let active = 0;
       let maxActive = 0;
       const transport = createTransport();
@@ -426,7 +457,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('External File Window Batches', 'en', 'en');
-      seedApiKey(db);
+      seedConfiguredAIProvider(db, projectId);
       const inputPath = join(root, 'window.xlsx');
       const outputPath = join(root, 'window.translated.xlsx');
       const workbook = XLSX.utils.book_new();
@@ -515,7 +546,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('External File Job', 'en', 'fr');
-      seedApiKey(db);
+      seedConfiguredAIProvider(db, projectId);
       const initialFiles = db.listFiles(projectId);
       const inputPath = join(root, 'mt.xlsx');
       const outputPath = join(root, 'mt.translated.xlsx');
@@ -567,6 +598,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('External File Blank Only', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
       const inputPath = join(root, 'mt.xlsx');
       const outputPath = join(root, 'mt.translated.xlsx');
       const workbook = XLSX.utils.book_new();
@@ -612,7 +644,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('External File Failed Window Skip', 'en', 'fr');
-      seedApiKey(db);
+      seedConfiguredAIProvider(db, projectId);
       const inputPath = join(root, 'fallback.xlsx');
       const outputPath = join(root, 'fallback.translated.xlsx');
       const workbook = XLSX.utils.book_new();
@@ -710,7 +742,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('External File MT Override', 'en', 'fr');
-      seedApiKey(db);
+      seedConfiguredAIProvider(db, projectId);
       const inputPath = join(root, 'mt.xlsx');
       const outputPath = join(root, 'mt.translated.xlsx');
       const workbook = XLSX.utils.book_new();
@@ -763,7 +795,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('External File Resolved Fingerprint', 'en', 'fr');
-      seedApiKey(db);
+      seedConfiguredAIProvider(db, projectId);
       const inputPath = join(root, 'mt.xlsx');
       const outputPath = join(root, 'mt.translated.xlsx');
       const checkpointPath = join(root, 'mt.checkpoint.jsonl');
@@ -830,7 +862,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('External File TM Fingerprint', 'en', 'fr');
-      seedApiKey(db);
+      seedConfiguredAIProvider(db, projectId);
       const tmId = db.createTM('Client Main TM', 'en', 'fr', 'main');
       db.mountTMToProject(projectId, tmId, 10, 'read');
       const oldEntry = createTMEntry({
@@ -920,7 +952,7 @@ describe('LocalizationEngine task executor', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Task Executor', 'en', 'fr');
-      seedApiKey(db);
+      seedConfiguredAIProvider(db, projectId);
       const tmId = db.createTM('Client Main TM', 'en', 'fr', 'main');
       db.mountTMToProject(projectId, tmId, 10, 'read');
       const tmEntry = createTMEntry({
@@ -1136,7 +1168,7 @@ describe('LocalizationEngine task executor', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Task Multi Unit References', 'en', 'fr');
-      seedApiKey(db);
+      seedConfiguredAIProvider(db, projectId);
       const tmId = db.createTM('Client Main TM', 'en', 'fr', 'main');
       db.mountTMToProject(projectId, tmId, 10, 'read');
       const saveEntry = createTMEntry({
@@ -1245,7 +1277,7 @@ describe('LocalizationEngine task executor', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Task Duplicate Unit Ids', 'en', 'fr');
-      seedApiKey(db);
+      seedConfiguredAIProvider(db, projectId);
       const transport = createTransport();
       transport.createResponse.mockImplementationOnce(async (request: { userPrompt: string }) => {
         const currentIds = [...request.userPrompt.matchAll(/^id: (.+)$/gm)].map(
@@ -1327,7 +1359,7 @@ describe('LocalizationEngine task executor', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Task Interleaved Skip Context', 'en', 'fr');
-      seedApiKey(db);
+      seedConfiguredAIProvider(db, projectId);
       const transport = createTransport();
       transport.createResponse.mockImplementationOnce(async (request: { userPrompt: string }) => {
         expect(request.userPrompt).toContain(

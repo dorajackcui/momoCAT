@@ -20,7 +20,7 @@ describe('MTModule', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('MT Prompt', 'en', 'fr');
-      db.setSetting('openai_api_key', 'test-api-key');
+      seedConfiguredAIProvider(db, projectId);
       const project = db.getProject(projectId);
       if (!project) throw new Error('Project not created');
       const segment = createTransientSegment({ id: 'unit-1', source: 'Hello world' }, 0, {
@@ -45,9 +45,9 @@ describe('MTModule', () => {
       });
 
       expect(artifact.provider).toMatchObject({
-        id: expect.any(String),
-        name: expect.any(String),
-        baseUrl: 'https://api.openai.com/v1',
+        id: 'provider:gpt-demo',
+        name: 'Test / gpt-demo',
+        baseUrl: 'https://example.com/v1',
       });
       expect(artifact.model).toBe('test-model');
       expect(artifact.reasoningEffort).toBe('low');
@@ -78,6 +78,7 @@ describe('MTModule', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('MT No Transport', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
       const project = db.getProject(projectId);
       if (!project) throw new Error('Project not created');
       const segment = createTransientSegment({ id: 'unit-1', source: 'Hello world' }, 0);
@@ -92,11 +93,11 @@ describe('MTModule', () => {
       });
 
       expect(artifact.provider).toMatchObject({
-        id: expect.any(String),
-        name: expect.any(String),
-        baseUrl: 'https://api.openai.com/v1',
+        id: 'provider:gpt-demo',
+        name: 'Test / gpt-demo',
+        baseUrl: 'https://example.com/v1',
       });
-      expect(artifact.model).toBeTruthy();
+      expect(artifact.model).toBe('gpt-demo');
       expect(artifact.reasoningEffort).toBe('medium');
       expect(transport.createResponse).not.toHaveBeenCalled();
       expect(transport.testConnection).not.toHaveBeenCalled();
@@ -109,7 +110,7 @@ describe('MTModule', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('MT Translate', 'en', 'fr');
-      db.setSetting('openai_api_key', 'test-api-key');
+      seedConfiguredAIProvider(db, projectId);
       const project = db.getProject(projectId);
       if (!project) throw new Error('Project not created');
       const segment = createTransientSegment({ id: 'unit-1', source: 'Hello world' }, 0);
@@ -142,7 +143,7 @@ describe('MTModule', () => {
       const request = transport.createResponse.mock.calls[0]?.[0];
       expect(request).toMatchObject({
         apiKey: 'test-api-key',
-        baseUrl: 'https://api.openai.com/v1',
+        baseUrl: 'https://example.com/v1',
         model: 'test-model',
         reasoningEffort: 'medium',
       });
@@ -157,7 +158,7 @@ describe('MTModule', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('MT Unchanged', 'en', 'fr');
-      db.setSetting('openai_api_key', 'test-api-key');
+      seedConfiguredAIProvider(db, projectId);
       const project = db.getProject(projectId);
       if (!project) throw new Error('Project not created');
       const segment = createTransientSegment({ id: 'unit-1', source: 'Hello world' }, 0);
@@ -191,6 +192,7 @@ describe('MTModule', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('MT Batch Prompt', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
       const project = db.getProject(projectId);
       if (!project) throw new Error('Project not created');
       const row2 = createTransientSegment(
@@ -258,7 +260,7 @@ describe('MTModule', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('MT Batch Translate', 'en', 'fr');
-      db.setSetting('openai_api_key', 'test-api-key');
+      seedConfiguredAIProvider(db, projectId);
       const project = db.getProject(projectId);
       if (!project) throw new Error('Project not created');
       const row2 = createTransientSegment({ id: 'row-2', source: 'Save file' }, 1);
@@ -324,7 +326,7 @@ describe('MTModule', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('MT Batch Unchanged', 'en', 'fr');
-      db.setSetting('openai_api_key', 'test-api-key');
+      seedConfiguredAIProvider(db, projectId);
       const project = db.getProject(projectId);
       if (!project) throw new Error('Project not created');
       const row2 = createTransientSegment({ id: 'row-2', source: 'Save file' }, 1);
@@ -371,7 +373,7 @@ describe('MTModule', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('MT Batch Retry', 'en', 'fr');
-      db.setSetting('openai_api_key', 'test-api-key');
+      seedConfiguredAIProvider(db, projectId);
       const project = db.getProject(projectId);
       if (!project) throw new Error('Project not created');
       const row2 = createTransientSegment({ id: 'row-2', source: 'Save {1}' }, 1);
@@ -440,7 +442,7 @@ describe('MTModule', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('MT Batch Missing', 'en', 'fr');
-      db.setSetting('openai_api_key', 'test-api-key');
+      seedConfiguredAIProvider(db, projectId);
       const project = db.getProject(projectId);
       if (!project) throw new Error('Project not created');
       const row2 = createTransientSegment({ id: 'row-2', source: 'Save file' }, 1);
@@ -482,7 +484,7 @@ describe('MTModule', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('MT Batch Invalid JSON', 'en', 'fr');
-      db.setSetting('openai_api_key', 'test-api-key');
+      seedConfiguredAIProvider(db, projectId);
       const project = db.getProject(projectId);
       if (!project) throw new Error('Project not created');
       const row2 = createTransientSegment({ id: 'row-2', source: 'Save file' }, 1);
@@ -554,6 +556,42 @@ function createModule(
     aiRuntimeConfigProvider: runtimeConfigProvider,
     aiTransport: transport,
   });
+}
+
+function seedConfiguredAIProvider(db: CATDatabase, projectId: number): void {
+  db.setSetting(
+    'ai_connection_catalog_v1',
+    JSON.stringify([
+      {
+        id: 'connection:test',
+        name: 'Test Connection',
+        baseUrl: 'https://example.com/v1',
+        protocol: 'chat-completions',
+        kind: 'openai-compatible',
+        apiKeyLast4: 'key',
+        discoveredModels: ['gpt-demo'],
+        createdAt: '2026-05-22T00:00:00.000Z',
+        updatedAt: '2026-05-22T00:00:00.000Z',
+      },
+    ]),
+  );
+  db.setSetting('ai_connection_key::connection:test', 'test-api-key');
+  db.setSetting(
+    'ai_provider_catalog_v2',
+    JSON.stringify([
+      {
+        id: 'provider:gpt-demo',
+        name: 'Test / gpt-demo',
+        connectionId: 'connection:test',
+        model: 'gpt-demo',
+        protocol: 'chat-completions',
+        kind: 'configured',
+        createdAt: '2026-05-22T00:00:00.000Z',
+        updatedAt: '2026-05-22T00:00:00.000Z',
+      },
+    ]),
+  );
+  db.updateProjectAISettings(projectId, null, 'provider:gpt-demo');
 }
 
 function createTMArtifact(segment: Segment): TMArtifact {
