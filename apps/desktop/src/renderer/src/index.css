@@ -249,6 +249,11 @@
     background-color: rgba(30, 24, 20, 0.32);
   }
 
+  .settings-modal-backdrop {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4;
+    background-color: rgba(30, 24, 20, 0.42);
+  }
+
   .modal-card {
     @apply bg-surface rounded-panel border border-border w-full overflow-hidden;
     box-shadow: var(--shadow-float);

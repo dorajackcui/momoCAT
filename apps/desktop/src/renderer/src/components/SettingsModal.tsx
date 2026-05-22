@@ -52,12 +52,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const resetTestedConnection = () => {
     const hadTestedState =
       testedConnection !== null || selectedModel.length > 0 || providerNameInput.length > 0;
+    if (!hadTestedState) return;
+
     setTestedConnection(null);
     setSelectedModel('');
     setProviderNameInput('');
-    if (hadTestedState) {
-      setStatus('Connection details changed. Test the connection again.');
-    }
+    setStatus('Connection details changed. Test the connection again.');
   };
 
   useEffect(() => {
@@ -158,7 +158,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       } catch {
         // Keep the successful test result usable even if refreshing saved lists fails.
       }
-      setStatus(`Connection tested: ${result.connection.discoveredModels.length} models discovered.`);
+      setStatus(
+        `Connection tested: ${result.connection.discoveredModels.length} models discovered.`,
+      );
     } catch (error) {
       setTestedConnection(null);
       setSelectedModel('');
@@ -391,7 +393,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </div>
                     <div className="text-[11px] text-text-faint">
                       API Key:{' '}
-                      {connectionItem.apiKeyLast4 ? `****${connectionItem.apiKeyLast4}` : 'Not configured'}
+                      {connectionItem.apiKeyLast4
+                        ? `****${connectionItem.apiKeyLast4}`
+                        : 'Not configured'}
                     </div>
                   </div>
                   <button
@@ -507,7 +511,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         />
       )}
 
-      <p className="text-[11px] text-text-muted">Active proxy: {effectiveProxyUrl || 'None (direct)'}</p>
+      <p className="text-[11px] text-text-muted">
+        Active proxy: {effectiveProxyUrl || 'None (direct)'}
+      </p>
 
       <button onClick={handleSaveProxy} disabled={busy} className="btn-secondary w-full">
         {savingProxy ? 'Saving Proxy...' : 'Save Proxy Settings'}
@@ -516,7 +522,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   );
 
   return (
-    <div className="modal-backdrop">
+    <div className="settings-modal-backdrop">
       <div className="modal-card max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
         <div className="modal-header">
           <h2 className="text-xl font-bold text-text">AI & Network Settings</h2>
