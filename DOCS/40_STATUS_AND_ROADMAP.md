@@ -15,7 +15,7 @@ Read at task start, before planning scope, and before merge.
 
 ## Last Updated
 
-2026-03-25
+2026-05-22
 
 ## Owner
 
@@ -27,8 +27,8 @@ This is the only active documentation page that may contain live gate status and
 
 ## Current Phase
 
-- Phase: `Current-Only Simplification`
-- Strategy: current-version-first simplification
+- Phase: `Agent-First CLI App`
+- Strategy: keep shared localization capability behind `@cat/localization` and expose it through the `momocat` CLI app.
 
 ## Current Gate Status (Local Verification)
 
@@ -38,12 +38,13 @@ Verification date: 2026-03-25
 - Included chain: `typecheck`, `gate:arch`, `gate:style`, `gate:file-size`, `lint`, `gate:smoke:large-file`
 - Notes: lint currently has historical warnings; no lint errors in latest verification.
 - `gate:file-size` current warnings: no known `@cat/core` root-barrel hotspot; monitor newly extracted slice files instead.
+- Current task only verified documentation command references with `rg` and whitespace with `git diff --check` on 2026-05-22; no new full gate result is claimed here.
 
 ## Current Top Risks
 
 1. Historical warning backlog still exists in some workspaces.
 2. New `@cat/core` slice boundaries depend on import-discipline and guardrails staying current.
-3. Remaining cleanup follow-through is now mainly residual warning work and keeping slice-local tests/exports aligned.
+3. `apps/cli` must remain a thin `momocat` command surface over `@cat/localization`, without direct desktop, DB, or core coupling.
 
 ## Latest Completed Milestone (2026-03-25)
 
@@ -65,18 +66,22 @@ Verification date: 2026-03-25
 1. Freeze net-new compatibility debt:
    - no new legacy fallbacks,
    - no new compatibility facades unless they are justified as long-term boundaries.
-2. Keep `@cat/core` slice boundaries stable:
+2. Keep agent-first commands centered on `apps/cli`:
+   - active command surface is `momocat inspect projects`, `momocat inspect localization`, and `momocat translate file`,
+   - root scripts are repo orchestration plus the `npm run cli -- ...` source-checkout helper.
+3. Keep `@cat/core` slice boundaries stable:
    - no new repo imports from root `@cat/core`,
    - no new internal imports from `packages/core/src/index.ts`.
-3. Keep targeted regression coverage current for DB bootstrap, TM query flow, renderer file-progress shape, and core slice exports.
+4. Keep targeted regression coverage current for DB bootstrap, TM query flow, renderer file-progress shape, and core slice exports.
 
 ### Next
 
 1. Simplify import surfaces selectively:
    - keep stable entry files that still define useful module boundaries,
    - inline or remove zero-value pass-through wrappers.
-2. Continue core package responsibility cleanup inside individual slices once compatibility noise is reduced.
-3. Reduce historical warning backlog in touched workspaces.
+2. Continue hardening `momocat` help, stdout/stderr, exit codes, and command grammar around the `@cat/localization` APIs.
+3. Continue core package responsibility cleanup inside individual slices once compatibility noise is reduced.
+4. Reduce historical warning backlog in touched workspaces.
 
 ### Later
 

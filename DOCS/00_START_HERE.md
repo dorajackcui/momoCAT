@@ -42,7 +42,7 @@ Read first for every new task, new session, or handoff.
 
 ## Last Updated
 
-2026-05-20
+2026-05-22
 
 ## Owner
 
@@ -70,9 +70,10 @@ npm run gate:check
 
 Agent-first CLI:
 
-- Project check: `npm run inspect:projects -- --db <path> --project-id <id>`
-- No-request prompt inspection: `npm run inspect:localization -- --db <path> --project-id <id> --input <path> --output <inspect.xlsx>`
-- Resumable file translation: `npm run translate:file -- --db <path> --project-id <id> --input <path> --output <translated.xlsx>`
+- Project check: `momocat inspect projects --db <path> --project-id <id>`
+- No-request prompt inspection: `momocat inspect localization --db <path> --project-id <id> --input <path> --output <inspect.xlsx>`
+- Resumable file translation: `momocat translate file --db <path> --project-id <id> --input <path> --output <translated.xlsx>`
+- From a source checkout before installing or linking the bin: `npm run cli -- inspect projects --db <path> --project-id <id>`
 - Real translation artifacts are opt-in with `--artifacts <path>`; inspect is the preferred prompt-debug path.
 
 ## If Task Is X, Open Y

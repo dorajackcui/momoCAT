@@ -6,14 +6,20 @@ The agent-first CLI lets humans and agents inspect projects, preview TM/TB/MT pr
 
 Run commands from the repo root.
 
+When running from a source checkout before installing or linking the bin, use `npm run cli -- <momocat arguments>`, for example:
+
+```bash
+npm run cli -- inspect projects --db <path>
+```
+
 ## Commands
 
-The CLI scripts are thin Node entrypoints that call `@cat/localization`; tests verify the same package APIs without serving as the command runtime.
+`momocat` is owned by `apps/cli` and calls `@cat/localization`; tests verify the same package APIs without serving as the command runtime.
 
 ### Inspect Projects
 
 ```bash
-npm run inspect:projects -- --db <path>
+momocat inspect projects --db <path>
 ```
 
 Useful options:
@@ -35,7 +41,7 @@ The command reports whether an API key exists but must not print full API keys.
 ### Inspect Localization
 
 ```bash
-npm run inspect:localization -- --db <path> --project-id <id> --input <path> --output <inspect.xlsx>
+momocat inspect localization --db <path> --project-id <id> --input <path> --output <inspect.xlsx>
 ```
 
 Useful options:
@@ -64,7 +70,7 @@ The `Segments` sheet preserves original file rows and appends:
 ### Translate File
 
 ```bash
-npm run translate:file -- --db <path> --project-id <id> --input <path> --output <translated.xlsx>
+momocat translate file --db <path> --project-id <id> --input <path> --output <translated.xlsx>
 ```
 
 Default behavior:
@@ -93,7 +99,7 @@ Useful options:
 --batch-size <n>
 ```
 
-Window Mode is the default request model for `translate:file`. Batch size defaults to 5, accepts values from 1 to 5, and controls how many current units are sent in each provider request. Same-file requests remain ordered and sequential even if older concurrency options are present.
+Window Mode is the default request model for `momocat translate file`. Batch size defaults to 5, accepts values from 1 to 5, and controls how many current units are sent in each provider request. Same-file requests remain ordered and sequential even if older concurrency options are present.
 
 ## Sidecars
 
@@ -111,31 +117,31 @@ Use the same output and sidecar paths with `--resume` after an interrupted run.
 1. Inspect project config.
 
 ```bash
-npm run inspect:projects -- --db <db> --project-id <id>
+momocat inspect projects --db <db> --project-id <id>
 ```
 
 2. Inspect prompt artifacts without sending requests.
 
 ```bash
-npm run inspect:localization -- --db <db> --project-id <id> --input <input.xlsx> --output <inspect.xlsx>
+momocat inspect localization --db <db> --project-id <id> --input <input.xlsx> --output <inspect.xlsx>
 ```
 
 3. Run real translation only when provider calls are intended.
 
 ```bash
-npm run translate:file -- --db <db> --project-id <id> --input <input.xlsx> --output <translated.xlsx>
+momocat translate file --db <db> --project-id <id> --input <input.xlsx> --output <translated.xlsx>
 ```
 
 4. Resume with the same paths if needed.
 
 ```bash
-npm run translate:file -- --db <db> --project-id <id> --input <input.xlsx> --output <translated.xlsx> --resume
+momocat translate file --db <db> --project-id <id> --input <input.xlsx> --output <translated.xlsx> --resume
 ```
 
 5. Add diagnostic artifacts only for debug runs.
 
 ```bash
-npm run translate:file -- --db <db> --project-id <id> --input <input.xlsx> --output <translated.xlsx> --artifacts <artifacts.jsonl>
+momocat translate file --db <db> --project-id <id> --input <input.xlsx> --output <translated.xlsx> --artifacts <artifacts.jsonl>
 ```
 
 ## Clean Run Policy

@@ -17,7 +17,7 @@ Read before modifying module boundaries, cross-layer contracts, or multi-subsyst
 
 ## Last Updated
 
-2026-05-20
+2026-05-22
 
 ## Owner
 
@@ -40,7 +40,14 @@ Core maintainers of `simple-cat-tool`
 - `ProjectService` is the application facade.
 - Domain logic lives in modules/services, not IPC handlers.
 
-4. Packages
+4. CLI (`apps/cli`)
+
+- Exposes the `momocat` app.
+- Owns command grammar, argument parsing, help text, stdout/stderr behavior, and exit codes.
+- Calls `@cat/localization` for agent-first workflows.
+- Must not import `apps/desktop`, `@cat/db`, or `@cat/core` directly.
+
+5. Packages
 
 - `@cat/core`: domain models and pure/domain algorithms.
 - `@cat/db`: persistence, current-schema bootstrap/validation, repositories.
@@ -141,7 +148,7 @@ Do not use this desktop workflow as the model for new agent-first MT request sch
 
 ### Agent-first file localization
 
-CLI script -> `@cat/localization` command API -> `LocalizationEngine` / `LocalizationInspector` -> file/job adapters -> TM/TB/MT modules -> `@cat/db` + `@cat/core`
+`momocat` (`apps/cli`) -> `@cat/localization` command API -> `LocalizationEngine` / `LocalizationInspector` -> file/job adapters -> TM/TB/MT modules -> `@cat/db` + `@cat/core`
 
 Agent-first file translation keeps external spreadsheets out of project `files` and `segments`, writes per-unit checkpoints, and treats prompt artifacts as inspect-only or explicit diagnostic output.
 
@@ -162,8 +169,12 @@ renderer components/hooks
   -> adapters/repos
   -> @cat/db + SQLite
 
+apps/cli -> @cat/localization -> @cat/db -> @cat/core
+apps/desktop -> @cat/localization
+
 @cat/core is consumed by renderer/main/db for shared domain types and algorithms.
-@cat/localization is consumed by CLI scripts and may be consumed by desktop host code, but it must not depend on desktop code.
+`apps/desktop` is a peer consumer of `@cat/localization`, not a dependency of CLI.
+`apps/cli` must own only the `momocat` app surface and must keep domain and persistence work behind `@cat/localization`.
 ```
 
 ## Do / Don't Boundary Rules
