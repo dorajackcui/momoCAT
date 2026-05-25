@@ -20,8 +20,8 @@ incidents. This file is not active policy.
   the active outer numbered docs.
 - Earlier TM/TB recall and concordance notes were consolidated into
   `60_TM_TB_REFERENCE.md`.
-- Earlier implementation specs and plans under `DOCS/superpowers` were retired
-  as active policy.
+- Earlier implementation specs and plans in the retired specs/plans directory
+  were retired as active policy.
 
 ## Retired Superpowers Specs And Plans
 
