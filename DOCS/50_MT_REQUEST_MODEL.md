@@ -29,7 +29,9 @@ normal per-unit checkpoint, event, snapshot, and final output surfaces.
 
 Partial Window Mode keeps the physical scan stable while making provider
 request ids dynamic. Existing target text inside the window can be prompt
-context without becoming requested output.
+context without becoming requested output. If a physical scan window has zero
+request rows, it is skip-only and must not send a provider request or require
+provider config.
 
 ## Window Partial Prompt Order
 
@@ -95,7 +97,9 @@ events as resume truth.
 
 Prompt artifacts may include provider identity, project prompt metadata, source
 payloads, TM/TB/concordance prompt blocks, rendered prompts, batch metadata, and
-character counts. They must not include API keys or other secrets.
+character counts. They must not include API keys or other secrets. Rendered
+prompts and source payloads may contain private text and must stay out of
+tracked docs and source.
 
 CLI command usage and smoke procedures belong in `DOCS/40_CLI_OPERATION.md`.
 
