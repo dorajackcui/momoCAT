@@ -27,6 +27,9 @@ export interface JobUnit {
 export interface TranslationTask {
   taskId: string;
   units: JobUnit[];
+  requestMode?: 'window' | 'window-partial';
+  scanWindowUnits?: JobUnit[];
+  requestUnitKeys?: string[];
 }
 
 export interface JobOptions {

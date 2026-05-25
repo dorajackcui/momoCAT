@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SnapshotThrottle } from './SnapshotThrottle';
-import { OneUnitTaskPlanner, WindowModeTaskPlanner } from './TaskPlanner';
-import type { JobUnit } from './types';
+import { OneUnitTaskPlanner, WindowModeTaskPlanner, WindowPartialTaskPlanner } from './TaskPlanner';
+import type { JobUnit, TranslationJob, UnitResult } from './types';
 
 describe('OneUnitTaskPlanner', () => {
   it('creates one deterministic task per unit in input order', () => {
@@ -64,6 +64,155 @@ describe('WindowModeTaskPlanner', () => {
     'rejects invalid batch size %s',
     (batchSize) => {
       expect(() => new WindowModeTaskPlanner({ batchSize })).toThrow(
+        'Window Mode batchSize must be an integer from 1 to 5.',
+      );
+    },
+  );
+});
+
+describe('WindowPartialTaskPlanner', () => {
+  it('keeps the physical scan window while requesting only blank targets', () => {
+    const units = Array.from({ length: 5 }, (_, index) =>
+      makeUnit({
+        unitId: `unit-${index + 1}`,
+        target: index === 1 || index === 3 ? `target ${index + 1}` : '',
+      }),
+    );
+    const planner = new WindowPartialTaskPlanner();
+
+    const tasks = planner.planJob({
+      job: makeJob(units),
+      completedResults: new Map(),
+      targetScope: 'blank-only',
+    });
+
+    expect(tasks).toEqual([
+      {
+        taskId: 'window-partial-task-1',
+        requestMode: 'window-partial',
+        scanWindowUnits: units,
+        units,
+        requestUnitKeys: ['doc-1\u0000unit-1', 'doc-1\u0000unit-3', 'doc-1\u0000unit-5'],
+      },
+    ]);
+  });
+
+  it('does not collapse physical windows around completed rows', () => {
+    const units = Array.from({ length: 6 }, (_, index) =>
+      makeUnit({ unitId: `unit-${index + 1}`, sourceHash: `hash-${index + 1}` }),
+    );
+    const completedResults = new Map<string, UnitResult>([
+      ['doc-1\u0000unit-1', makeResult(units[0])],
+      ['doc-1\u0000unit-2', makeResult(units[1])],
+    ]);
+    const planner = new WindowPartialTaskPlanner();
+
+    const tasks = planner.planJob({
+      job: makeJob(units),
+      completedResults,
+      targetScope: 'blank-only',
+    });
+
+    expect(tasks).toEqual([
+      expect.objectContaining({
+        taskId: 'window-partial-task-1',
+        scanWindowUnits: units.slice(0, 5),
+        units: units.slice(2, 5),
+        requestUnitKeys: ['doc-1\u0000unit-3', 'doc-1\u0000unit-4', 'doc-1\u0000unit-5'],
+      }),
+      expect.objectContaining({
+        taskId: 'window-partial-task-2',
+        scanWindowUnits: units.slice(5, 6),
+        units: units.slice(5, 6),
+        requestUnitKeys: ['doc-1\u0000unit-6'],
+      }),
+    ]);
+  });
+
+  it('keeps task ids tied to physical windows when earlier windows are fully completed', () => {
+    const units = Array.from({ length: 6 }, (_, index) =>
+      makeUnit({ unitId: `unit-${index + 1}`, sourceHash: `hash-${index + 1}` }),
+    );
+    const completedResults = new Map<string, UnitResult>(
+      units.slice(0, 5).map((unit) => [`doc-1\u0000${unit.unitId}`, makeResult(unit)]),
+    );
+    const planner = new WindowPartialTaskPlanner();
+
+    const tasks = planner.planJob({
+      job: makeJob(units),
+      completedResults,
+      targetScope: 'blank-only',
+    });
+
+    expect(tasks).toEqual([
+      expect.objectContaining({
+        taskId: 'window-partial-task-2',
+        scanWindowUnits: units.slice(5, 6),
+        units: units.slice(5, 6),
+      }),
+    ]);
+  });
+
+  it('creates a skip-only task when all fresh rows already have targets', () => {
+    const units = [
+      makeUnit({ unitId: 'unit-1', target: 'existing 1' }),
+      makeUnit({ unitId: 'unit-2', target: 'existing 2' }),
+    ];
+    const planner = new WindowPartialTaskPlanner();
+
+    const tasks = planner.planJob({
+      job: makeJob(units),
+      completedResults: new Map(),
+      targetScope: 'blank-only',
+    });
+
+    expect(tasks).toEqual([
+      expect.objectContaining({
+        requestMode: 'window-partial',
+        scanWindowUnits: units,
+        units,
+        requestUnitKeys: [],
+      }),
+    ]);
+  });
+
+  it('creates no task when all rows are already completed', () => {
+    const units = [makeUnit({ unitId: 'unit-1' }), makeUnit({ unitId: 'unit-2' })];
+    const completedResults = new Map<string, UnitResult>([
+      ['doc-1\u0000unit-1', makeResult(units[0])],
+      ['doc-1\u0000unit-2', makeResult(units[1])],
+    ]);
+    const planner = new WindowPartialTaskPlanner();
+
+    const tasks = planner.planJob({
+      job: makeJob(units),
+      completedResults,
+      targetScope: 'blank-only',
+    });
+
+    expect(tasks).toEqual([]);
+  });
+
+  it('requests existing-target rows when overwriting non-confirmed targets', () => {
+    const units = [
+      makeUnit({ unitId: 'unit-1', target: 'existing 1' }),
+      makeUnit({ unitId: 'unit-2', target: 'existing 2' }),
+    ];
+    const planner = new WindowPartialTaskPlanner();
+
+    const tasks = planner.planJob({
+      job: makeJob(units),
+      completedResults: new Map(),
+      targetScope: 'overwrite-non-confirmed',
+    });
+
+    expect(tasks[0]?.requestUnitKeys).toEqual(['doc-1\u0000unit-1', 'doc-1\u0000unit-2']);
+  });
+
+  it.each([0, -1, 1.5, Number.NaN, 6])(
+    'rejects invalid batch size %s',
+    (batchSize) => {
+      expect(() => new WindowPartialTaskPlanner({ batchSize })).toThrow(
         'Window Mode batchSize must be an integer from 1 to 5.',
       );
     },
@@ -156,5 +305,25 @@ function makeUnit(overrides: Partial<JobUnit> = {}): JobUnit {
     source: 'source',
     sourceHash: 'hash-1',
     ...overrides,
+  };
+}
+
+function makeJob(units: JobUnit[]): TranslationJob {
+  return {
+    id: 'job-1',
+    projectId: 1,
+    units,
+  };
+}
+
+function makeResult(unit: JobUnit): UnitResult {
+  return {
+    jobId: 'job-1',
+    documentId: unit.documentId,
+    unitId: unit.unitId,
+    sourceHash: unit.sourceHash,
+    status: 'translated',
+    source: unit.source,
+    target: `target ${unit.unitId}`,
   };
 }

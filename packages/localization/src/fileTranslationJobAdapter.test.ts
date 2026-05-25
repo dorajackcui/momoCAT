@@ -619,6 +619,130 @@ describe('fileTranslationJobAdapter', () => {
     }
   });
 
+  it('selects the partial planner only for window-partial jobs and propagates batch size', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
+    try {
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      writeWorkbook(inputPath, [
+        ['source', 'target'],
+        ['One', ''],
+        ['Two', 'Deux'],
+        ['Three', ''],
+      ]);
+      const plannedTasks: TranslationTask[] = [];
+
+      await translateSpreadsheetFileJob(
+        {
+          projectId: 7,
+          inputPath,
+          outputPath,
+          options: { requestMode: 'window-partial', targetScope: 'blank-only', batchSize: 2 },
+        },
+        {
+          taskExecutor: async () => ({ results: [] }),
+          runnerFactory: (dependencies) => ({
+            run: async (job) => {
+              const planner = dependencies.taskPlanner as unknown as {
+                planJob(input: {
+                  job: TranslationJob;
+                  completedResults: ReadonlyMap<string, UnitResult>;
+                  targetScope: 'blank-only';
+                }): TranslationTask[];
+              };
+              plannedTasks.push(
+                ...planner.planJob({ job, completedResults: new Map(), targetScope: 'blank-only' }),
+              );
+
+              return {
+                jobId: job.id,
+                summary: { total: 3, translated: 0, skipped: 0, reused: 0, failed: 0 },
+                results: [],
+              };
+            },
+          }),
+        },
+      );
+
+      expect(plannedTasks).toEqual([
+        expect.objectContaining({
+          requestMode: 'window-partial',
+          scanWindowUnits: [
+            expect.objectContaining({ unitId: 'row-2' }),
+            expect.objectContaining({ unitId: 'row-3' }),
+          ],
+          units: [
+            expect.objectContaining({ unitId: 'row-2' }),
+            expect.objectContaining({ unitId: 'row-3' }),
+          ],
+          requestUnitKeys: ['mt.xlsx\u0000row-2'],
+        }),
+        expect.objectContaining({
+          requestMode: 'window-partial',
+          scanWindowUnits: [expect.objectContaining({ unitId: 'row-4' })],
+          requestUnitKeys: ['mt.xlsx\u0000row-4'],
+        }),
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps default jobs on the dense window planner and changes fingerprints by requestMode', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
+    try {
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      writeWorkbook(inputPath, [
+        ['source', 'target'],
+        ['Hello', ''],
+      ]);
+
+      const dense = await prepareFileTranslationJob({ projectId: 7, inputPath, outputPath });
+      const explicitWindow = await prepareFileTranslationJob({
+        projectId: 7,
+        inputPath,
+        outputPath,
+        options: { requestMode: 'window' },
+      });
+      const partial = await prepareFileTranslationJob({
+        projectId: 7,
+        inputPath,
+        outputPath,
+        options: { requestMode: 'window-partial' },
+      });
+      let defaultPlannerCanPlanDense = false;
+
+      await translateSpreadsheetFileJob(
+        {
+          projectId: 7,
+          inputPath,
+          outputPath,
+        },
+        {
+          taskExecutor: async () => ({ results: [] }),
+          runnerFactory: (dependencies) => ({
+            run: async (job) => {
+              defaultPlannerCanPlanDense = 'plan' in dependencies.taskPlanner;
+              expect(dependencies.taskPlanner.plan(job.units).map((task) => task.units.length)).toEqual([1]);
+              return {
+                jobId: job.id,
+                summary: { total: 1, translated: 0, skipped: 0, reused: 0, failed: 0 },
+                results: [],
+              };
+            },
+          }),
+        },
+      );
+
+      expect(defaultPlannerCanPlanDense).toBe(true);
+      expect(dense.job.units[0]?.sourceHash).toBe(explicitWindow.job.units[0]?.sourceHash);
+      expect(dense.job.units[0]?.sourceHash).not.toBe(partial.job.units[0]?.sourceHash);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('forces ordered Window Mode job concurrency regardless of legacy concurrency options', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
     try {

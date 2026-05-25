@@ -16,6 +16,9 @@ if (options.help) {
 }
 
 const smoke = loadSmokeConfig(options.configPath ?? defaultConfigPath);
+if (options.requestMode) {
+  smoke.requestMode = options.requestMode;
+}
 const stem = options.prefix ?? `momocat-standard-smoke-${timestampForFile(new Date())}`;
 const artifacts = {
   inspectXlsx: path.join(smoke.outputDir, `${stem}-inspect.xlsx`),
@@ -86,6 +89,7 @@ if (!options.inspectOnly) {
     String(smoke.maxAttempts),
     "--batch-size",
     String(smoke.batchSize),
+    ...requestModeArgs(smoke.requestMode),
     "--progress-stdout",
   ]);
 }
@@ -101,6 +105,7 @@ function parseArgs(argv) {
     help: false,
     inspectOnly: false,
     prefix: undefined,
+    requestMode: undefined,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -133,6 +138,15 @@ function parseArgs(argv) {
     }
     if (arg.startsWith("--prefix=")) {
       parsed.prefix = readEqualsValue(arg, "--prefix");
+      continue;
+    }
+    if (arg === "--request-mode") {
+      parsed.requestMode = requestMode(readRequiredValue(argv, index, arg));
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--request-mode=")) {
+      parsed.requestMode = requestMode(readEqualsValue(arg, "--request-mode"));
       continue;
     }
     throw new Error(`Unknown argument: ${arg}`);
@@ -173,7 +187,12 @@ function loadSmokeConfig(configPath) {
     inspectUnitLimit: raw.inspectUnitLimit === undefined ? 10 : positiveInteger(raw.inspectUnitLimit, "inspectUnitLimit"),
     maxAttempts: raw.maxAttempts === undefined ? 1 : positiveInteger(raw.maxAttempts, "maxAttempts"),
     batchSize: raw.batchSize === undefined ? 5 : batchSize(raw.batchSize),
+    requestMode: raw.requestMode === undefined ? undefined : requestMode(raw.requestMode),
   };
+}
+
+function requestModeArgs(value) {
+  return value ? ["--request-mode", value] : [];
 }
 
 function runCli(label, args) {
@@ -276,6 +295,13 @@ function batchSize(value) {
   return parsed;
 }
 
+function requestMode(value) {
+  if (value !== "window" && value !== "window-partial") {
+    throw new Error('Smoke config field "requestMode" must be "window" or "window-partial".');
+  }
+  return value;
+}
+
 function resolvePath(value) {
   return path.isAbsolute(value) ? value : path.join(repoRoot, value);
 }
@@ -312,10 +338,11 @@ The default config path is .momocat-smoke.local.json. This file is gitignored.
 Create it from .momocat-smoke.example.json and keep local paths/provider metadata there.
 
 Options:
-  --config <path>  Use a different local smoke config file.
-  --dry-run        Print the commands without running them.
-  --inspect-only   Run project readiness and no-request inspect only.
-  --prefix <name>  Override the output artifact filename prefix.
-  -h, --help       Show this help.
+  --config <path>         Use a different local smoke config file.
+  --dry-run               Print the commands without running them.
+  --inspect-only          Run project readiness and no-request inspect only.
+  --prefix <name>         Override the output artifact filename prefix.
+  --request-mode <mode>   Override translate request mode: window or window-partial.
+  -h, --help              Show this help.
 `);
 }

@@ -293,6 +293,66 @@ describe('LocalizationInspector.inspectFile', () => {
     }
   });
 
+  it('inspects Window Partial Mode with request-only rows and current-existing read-only context', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Window Partial Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
+      mountReferenceData(db, projectId);
+      const inputPath = writeInputWorkbook(root, [
+        ['source', 'target'],
+        ['Open', 'Ouvrir'],
+        ['Hello world', ''],
+        ['Existing middle', 'Existant milieu'],
+        ['Preferences', ''],
+        ['Close', 'Fermer'],
+      ]);
+      const transport = createTransport();
+      const inspector = new LocalizationInspector(db, {
+        aiTransport: transport,
+        aiRuntimeConfigProvider: runtimeConfigProvider(),
+      });
+
+      const result = await inspector.inspectFile({
+        projectId,
+        inputPath,
+        outputPath: join(root, 'inspect.xlsx'),
+        options: { requestMode: 'window-partial' },
+      });
+      const json = JSON.parse(await readFile(result.jsonOutputPath, 'utf8'));
+
+      expect(json.units.map((unit: { unit: { unitId: string } }) => unit.unit.unitId)).toEqual([
+        'row-3',
+        'row-5',
+      ]);
+      expect(json.units[0].mt.batch).toMatchObject({
+        mode: 'window-partial',
+        currentIds: ['row-3', 'row-5'],
+        scanWindowCount: 5,
+        requestCount: 2,
+        readOnlyContextCount: 3,
+      });
+      expect(json.units[0].mt.batch.currentIds).not.toContain('row-2');
+      expect(json.units[0].mt.batch.currentIds).not.toContain('row-4');
+      expect(json.units[0].mt.batch.currentIds).not.toContain(`${basename(inputPath)}#row-3`);
+      expect(json.units[0].mt.userPrompt).toContain('Read-only context rows');
+      expect(json.units[0].mt.userPrompt).toContain('current-existing row 2');
+      expect(json.units[0].mt.userPrompt).toContain('current-existing row 4');
+      expect(json.units[0].mt.userPrompt).toContain('current-existing row 6');
+      expect(json.units[0].tm.rawMatches).toHaveLength(1);
+      expect(json.units[1].tm.rawMatches).toHaveLength(0);
+      expect(json.units[0].tb.rawMatches.length).toBeGreaterThan(0);
+      expect(json.units[1].tb.rawMatches).toHaveLength(0);
+      expect(JSON.stringify(json)).not.toContain('test-api-key-1234');
+      expect(JSON.stringify(json)).not.toMatch(/api[_-]?key/i);
+      expect(transport.createResponse).not.toHaveBeenCalled();
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('uses the shared Window Mode context rules for previous translated rows', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
     const db = new CATDatabase(':memory:');

@@ -184,6 +184,136 @@ describe("Window Mode prompt builder", () => {
     expect(bundle.userPrompt).toContain("Current segments to translate");
   });
 
+  it("keeps existing Window Mode prompt sections unchanged when requestMode is omitted", () => {
+    const bundle = buildAIWindowModePromptBundle({
+      srcLang: "en",
+      tgtLang: "fr",
+      currentSegments: [{ id: "row-2", sourcePayload: "Save" }],
+      previousContext: [{ source: "Open", target: "Ouvrir" }],
+      nextContext: [{ source: "Close" }],
+    });
+
+    expect(bundle.sections.batchBlock).toBe(
+      "Batch: translate 1 current segment(s) from en to fr.\nCurrent ids: row-2",
+    );
+    expect(bundle.sections.currentSegmentsBlock).toBe(
+      "Current segments to translate\n\nSegment 1\nid: row-2\nSource:\nSave",
+    );
+    expect(bundle.sections.previousContextBlock).toBe(
+      "Previous 5 translated rows\n1. Open -> Ouvrir",
+    );
+    expect(bundle.sections.nextContextBlock).toBe(
+      "Next 5 source rows\n1. Close",
+    );
+    expect(bundle.sections.jsonFormatBlock).toBe(
+      [
+        "Strict JSON format",
+        'Return exactly: {"translations":[{"id":"<id>","text":"<translation>"}]}',
+        "The top-level object must contain only the translations field.",
+        "The translations array must include exactly one object for each current id.",
+      ].join("\n"),
+    );
+  });
+
+  it("renders partial Window Mode with read-only context and request-only ids", () => {
+    const bundle = buildAIWindowModePromptBundle({
+      requestMode: "window-partial",
+      srcLang: "en",
+      tgtLang: "fr",
+      currentSegments: [{ id: "row-2", sourcePayload: "Save" }],
+      readOnlyContextRows: [
+        {
+          role: "previous",
+          source: "Open",
+          target: "Ouvrir",
+          rowNumber: 1,
+        },
+        {
+          role: "current-existing",
+          source: "Cancel",
+          target: "Annuler",
+          rowNumber: 3,
+        },
+        {
+          role: "next",
+          source: "Close",
+          rowNumber: 4,
+        },
+      ],
+    });
+
+    expect(bundle.sections.batchBlock).toContain(
+      "Return target text for ids: row-2",
+    );
+    expect(bundle.userPrompt).toContain(
+      "Read-only context rows. Do not produce output or return ids for these rows.",
+    );
+    expect(bundle.userPrompt).toContain("1. previous row 1");
+    expect(bundle.userPrompt).toContain("Source:\nOpen");
+    expect(bundle.userPrompt).toContain("Target:\nOuvrir");
+    expect(bundle.userPrompt).toContain("2. current-existing row 3");
+    expect(bundle.userPrompt).toContain("3. next row 4");
+    expect(bundle.userPrompt).toContain(
+      "Rows requiring target text. Return exactly these ids.",
+    );
+    expect(bundle.userPrompt).toContain("id: row-2");
+    expect(bundle.sections.jsonFormatBlock).toContain("<target text>");
+    expect(bundle.sections.jsonFormatBlock).not.toContain("<translation>");
+    expect(bundle.userPrompt).not.toContain("Previous 5 translated rows");
+    expect(bundle.userPrompt).not.toContain("Next 5 source rows");
+  });
+
+  it("uses existing current segment rendering for partial Window Mode request rows", () => {
+    const bundle = buildAIWindowModePromptBundle({
+      requestMode: "window-partial",
+      srcLang: "en",
+      tgtLang: "fr",
+      currentSegments: [
+        {
+          id: "row-2",
+          sourcePayload: "{1>}Save file<2}",
+          context: "Toolbar label",
+          tmReferences: [
+            {
+              similarity: 100,
+              tmName: "Main TM",
+              sourceText: "Save file",
+              targetText: "Enregistrer le fichier",
+            },
+          ],
+          concordanceReferences: [
+            {
+              tmName: "Main TM",
+              matchedSourceText: "file",
+              sourceText: "Open file",
+              targetText: "Ouvrir le fichier",
+            },
+          ],
+          tbReferences: [
+            {
+              srcTerm: "Save",
+              tgtTerm: "Enregistrer",
+              note: "Use the UI verb.",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(bundle.sections.currentSegmentsBlock).toContain("Source:");
+    expect(bundle.sections.currentSegmentsBlock).toContain("{1>}Save file<2}");
+    expect(bundle.sections.currentSegmentsBlock).toContain("Context:");
+    expect(bundle.sections.currentSegmentsBlock).toContain("Toolbar label");
+    expect(bundle.sections.currentSegmentsBlock).toContain("TM References");
+    expect(bundle.sections.currentSegmentsBlock).toContain("Main TM");
+    expect(bundle.sections.currentSegmentsBlock).toContain(
+      "Concordance Suggestions",
+    );
+    expect(bundle.sections.currentSegmentsBlock).toContain(
+      "Terminology References",
+    );
+  });
+
   it("exposes aggregate reference-only sections separately from current source text", () => {
     const bundle = buildAIWindowModePromptBundle({
       srcLang: "en",
@@ -264,6 +394,15 @@ describe("Window Mode strict JSON parser", () => {
     [
       JSON.stringify({ translations: [{ id: "row-9", text: "A" }] }),
       /unknown translation id/i,
+    ],
+    [
+      JSON.stringify({
+        translations: [
+          { id: "row-2", text: "A" },
+          { id: "row-read-only", text: "B" },
+        ],
+      }),
+      /unknown translation id "row-read-only"/i,
     ],
     [
       JSON.stringify({

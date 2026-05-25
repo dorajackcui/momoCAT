@@ -30,6 +30,7 @@ import {
 } from './requestModes/shared/results';
 import type { PreparedTranslatableJobUnit } from './requestModes/types';
 import { WindowModeSequentialBatchStrategy } from './requestModes/windowSequentialBatch/WindowModeSequentialBatchStrategy';
+import { WindowPartialSequentialBatchStrategy } from './requestModes/windowPartialSequentialBatch/WindowPartialSequentialBatchStrategy';
 import { LegacySingleUnitConcurrentStrategy } from './requestModes/legacySingleUnitConcurrent/LegacySingleUnitConcurrentStrategy';
 import type {
   ArtifactRecord,
@@ -84,6 +85,7 @@ export class LocalizationEngine {
   private readonly tbModule: TBModule;
   private readonly mtModule: MTModule;
   private readonly windowModeStrategy: WindowModeSequentialBatchStrategy;
+  private readonly windowPartialStrategy: WindowPartialSequentialBatchStrategy;
   private readonly legacyStrategy: LegacySingleUnitConcurrentStrategy;
   private readonly options: LocalizationEngineConstructorOptions;
 
@@ -115,6 +117,11 @@ export class LocalizationEngine {
       tagValidator: new TagValidator(),
     });
     this.windowModeStrategy = new WindowModeSequentialBatchStrategy({
+      tmModule: this.tmModule,
+      tbModule: this.tbModule,
+      mtModule: this.mtModule,
+    });
+    this.windowPartialStrategy = new WindowPartialSequentialBatchStrategy({
       tmModule: this.tmModule,
       tbModule: this.tbModule,
       mtModule: this.mtModule,
@@ -307,7 +314,10 @@ export class LocalizationEngine {
       mtOptions,
       translationOptions?.providerOverride,
     );
-    const translated = await this.windowModeStrategy.translate({
+    const requestMode = task.requestMode ?? translationOptions?.requestMode ?? 'window';
+    const strategy =
+      requestMode === 'window-partial' ? this.windowPartialStrategy : this.windowModeStrategy;
+    const translated = await strategy.translate({
       task,
       context,
       project,
@@ -431,6 +441,7 @@ export class LocalizationEngine {
       ['project.type', project.projectType ?? 'translation'],
       ['targetScope', targetScope],
       ['mode', mode],
+      ['requestMode', input.options?.requestMode ?? 'window'],
       ['provider.id', mtConfig.provider.id],
       ['provider.kind', mtConfig.provider.kind],
       ['provider.protocol', mtConfig.provider.protocol],

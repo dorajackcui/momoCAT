@@ -103,9 +103,28 @@ Useful options:
 --progress-stdout
 --artifacts <path>
 --batch-size <n>
+--request-mode window
+--request-mode window-partial
 ```
 
-Window Mode is the default request model for `momocat translate file`. Batch size defaults to 5, accepts values from 1 to 5, and controls how many current units are sent in each provider request. Same-file requests remain ordered and sequential even if older concurrency options are present.
+Request modes:
+
+- `window`: default dense Window Mode. Each physical batch requests the rows in target scope.
+- `window-partial`: opt-in physical scan window with dynamic request rows. Existing-target rows in a scan window are read-only context unless `--target-scope overwrite-non-confirmed` makes them request rows.
+
+Batch size defaults to 5, accepts values from 1 to 5, and controls the physical scan window. Same-file requests remain ordered and sequential even if older concurrency options are present.
+
+Prompt contract:
+
+- Rows requiring target text reuse existing Window Mode current segment rendering.
+- Read-only context rows are context only and must not be returned by the provider.
+- Response ids are dynamic and request-only.
+
+Rollback to dense Window Mode:
+
+```bash
+momocat translate file --db <db> --project-id <id> --input <input.xlsx> --output <translated.xlsx> --request-mode window
+```
 
 ## Sidecars
 
@@ -130,6 +149,8 @@ This command reads `.momocat-smoke.local.json`, which is intentionally gitignore
 Create it from `.momocat-smoke.example.json` and keep machine paths, project id,
 provider metadata, and model names in the local file.
 
+Set `"requestMode": "window-partial"` in the local smoke config, or pass `--request-mode window-partial` to the smoke helper, to run the final translate step in partial Window Mode. Set `"requestMode": "window"` or omit it to use dense Window Mode.
+
 Use `npm run smoke:momocat -- --dry-run` to print the exact commands, or `npm run smoke:momocat -- --inspect-only` to skip provider calls.
 
 1. Inspect project config.
@@ -148,6 +169,12 @@ momocat inspect localization --db <db> --project-id <id> --input <input.xlsx> --
 
 ```bash
 momocat translate file --db <db> --project-id <id> --input <input.xlsx> --output <translated.xlsx>
+```
+
+For the partial request mode smoke:
+
+```bash
+momocat translate file --db <db> --project-id <id> --input <input.xlsx> --output <translated.xlsx> --request-mode window-partial
 ```
 
 4. Resume with the same paths if needed.

@@ -1,7 +1,8 @@
 import { runBounded } from '../RequestScheduler';
+import { unitKey as sharedUnitKey } from '../requestModes/shared/unitIdentity';
 import { resolveBatchTargetScope } from '../translationTargetScope';
 import { SnapshotThrottle } from './SnapshotThrottle';
-import type { TaskPlanner } from './TaskPlanner';
+import type { JobAwareTaskPlanner, TaskPlanner } from './TaskPlanner';
 import type {
   ArtifactRecord,
   CheckpointRecord,
@@ -48,7 +49,7 @@ export interface TranslationJobRunnerDependencies {
   artifactStore?: {
     append(record: ArtifactRecord): Promise<void>;
   };
-  taskPlanner: TaskPlanner;
+  taskPlanner: TaskPlanner | JobAwareTaskPlanner;
   taskExecutor: TranslationTaskExecutor;
   clock?: () => Date;
   writeSnapshot?: (
@@ -62,7 +63,7 @@ export class TranslationJobRunner {
   private readonly checkpointStore: TranslationJobRunnerDependencies['checkpointStore'];
   private readonly eventSink: TranslationJobRunnerDependencies['eventSink'];
   private readonly artifactStore?: TranslationJobRunnerDependencies['artifactStore'];
-  private readonly taskPlanner: TaskPlanner;
+  private readonly taskPlanner: TaskPlanner | JobAwareTaskPlanner;
   private readonly taskExecutor: TranslationTaskExecutor;
   private readonly clock: () => Date;
   private readonly writeSnapshot?: TranslationJobRunnerDependencies['writeSnapshot'];
@@ -100,13 +101,19 @@ export class TranslationJobRunner {
           continue;
         }
 
-        resultMap.set(unitKey(unit), reusedResult);
+        resultMap.set(sharedUnitKey(unit), reusedResult);
         await this.emitUnitEvent(job, unit, 'unit_done', reusedResult.status, resultMap.size);
       }
     }
 
-    const pendingUnits = job.units.filter((unit) => !resultMap.has(unitKey(unit)));
-    const tasks = this.taskPlanner.plan(pendingUnits);
+    const pendingUnits = job.units.filter((unit) => !resultMap.has(sharedUnitKey(unit)));
+    const tasks = isJobAwareTaskPlanner(this.taskPlanner)
+      ? this.taskPlanner.planJob({
+          job,
+          completedResults: resultMap,
+          targetScope: resolveBatchTargetScope(job.translationOptions?.targetScope),
+        })
+      : this.taskPlanner.plan(pendingUnits);
     const throttle = new SnapshotThrottle({
       snapshotEveryUnits: job.options?.snapshotEveryUnits,
       snapshotEverySeconds: job.options?.snapshotEverySeconds,
@@ -300,7 +307,7 @@ function normalizeTaskResults(
   );
 
   return task.units.map((unit) => {
-    const result = resultsByUnit.get(unitKey(unit));
+    const result = resultsByUnit.get(sharedUnitKey(unit));
 
     if (!result) {
       return makeFailedResult(job, unit, 'Task executor did not return a result for this unit', attempt);
@@ -444,7 +451,7 @@ function isCheckpointStatus(status: UnitResultStatus): status is CheckpointStatu
 
 function orderedResultsFor(units: JobUnit[], resultMap: ReadonlyMap<string, UnitResult>): UnitResult[] {
   return units.flatMap((unit) => {
-    const result = resultMap.get(unitKey(unit));
+    const result = resultMap.get(sharedUnitKey(unit));
     return result ? [result] : [];
   });
 }
@@ -473,6 +480,17 @@ function normalizeMaxAttempts(value: number | undefined): number {
   return value;
 }
 
+function isJobAwareTaskPlanner(
+  planner: TaskPlanner | JobAwareTaskPlanner,
+): planner is JobAwareTaskPlanner {
+  return (
+    'supportsJobAwarePlanning' in planner &&
+    planner.supportsJobAwarePlanning === true &&
+    'planJob' in planner &&
+    typeof planner.planJob === 'function'
+  );
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -488,10 +506,6 @@ function groupArtifactsByUnit(artifacts: ArtifactRecord[] | undefined): Map<stri
   }
 
   return artifactsByUnit;
-}
-
-function unitKey(unit: Pick<JobUnit, 'documentId' | 'unitId'>): string {
-  return unitKeyFromParts(unit.documentId, unit.unitId);
 }
 
 function unitKeyFromParts(documentId: string, unitId: string): string {

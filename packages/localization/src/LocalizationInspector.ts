@@ -23,6 +23,7 @@ import type { MTBatchCurrentUnitInput } from './modules/MTModule';
 import type { AIRuntimeConfigProvider, AITransport } from './ports';
 import { buildWindowModeContext } from './requestModes/shared/contextWindowBuilder';
 import { unitKey } from './requestModes/shared/unitIdentity';
+import { buildWindowPartialReadOnlyContextRows } from './requestModes/shared/windowPartialContextBuilder';
 import type {
   FileParseRowArtifact,
   InspectArtifact,
@@ -48,6 +49,7 @@ import { createTransientSegment } from './transientSegment';
 import type {
   LocalizationEngineOptions,
   LocalizationMode,
+  LocalizationRequestMode,
   LocalizationTargetScope,
   TranslateFileInput,
 } from './types';
@@ -176,14 +178,25 @@ export class LocalizationInspector {
       return { row, segment, sourceIndex: index };
     });
 
-    const units = await this.inspectRowsWindowMode(
-      project,
-      rowsWithSegments,
-      sourceRows,
-      parsed.inputPath,
-      maxCellChars,
-      targetScope,
-    );
+    const requestMode = this.resolveRequestMode(input.options?.requestMode);
+    const units =
+      requestMode === 'window-partial'
+        ? await this.inspectRowsWindowPartialMode(
+            project,
+            rowsWithSegments,
+            sourceRows,
+            parsed.inputPath,
+            maxCellChars,
+            targetScope,
+          )
+        : await this.inspectRowsWindowMode(
+            project,
+            rowsWithSegments,
+            sourceRows,
+            parsed.inputPath,
+            maxCellChars,
+            targetScope,
+          );
 
     const firstReadyPrompt =
       units.find((unit) => unit.status === 'ready')?.mt.systemPrompt ?? '';
@@ -235,6 +248,10 @@ export class LocalizationInspector {
 
   private resolveMode(mode?: LocalizationMode): LocalizationMode {
     return mode ?? this.options.defaultMode ?? 'standard';
+  }
+
+  private resolveRequestMode(mode?: LocalizationRequestMode): LocalizationRequestMode {
+    return mode ?? 'window';
   }
 
   private async inspectRowsWindowMode(
@@ -301,6 +318,116 @@ export class LocalizationInspector {
           project,
           current,
           ...buildInspectWindowContext(contextRows, readyRows, inputDocumentId),
+          mtOptions: this.options.mt,
+          providerOverride: this.options.mt?.providerId,
+        });
+
+        for (const { unitIndex } of readyRows) {
+          units[unitIndex] = {
+            ...units[unitIndex],
+            mt,
+            xlsx: buildXlsxFields(mt, unitIndex, maxCellChars),
+          };
+        }
+      } catch (error) {
+        for (const { row, segment, unitIndex } of readyRows) {
+          units[unitIndex] = buildErrorUnit({
+            row,
+            segment,
+            project,
+            tm: units[unitIndex].tm,
+            tb: units[unitIndex].tb,
+            error: `mt: ${errorMessage(error)}`,
+          });
+        }
+      }
+    }
+
+    return units;
+  }
+
+  private async inspectRowsWindowPartialMode(
+    project: ProjectRecord,
+    rows: InspectRowWithSegment[],
+    contextRows: FileParseRowArtifact[],
+    inputPath: string,
+    maxCellChars: number,
+    targetScope: LocalizationTargetScope,
+  ): Promise<InspectUnitArtifact[]> {
+    const requestRows = rows.filter(({ row }) =>
+      isTranslatableUnderTargetScope(row, targetScope),
+    );
+    const units = await Promise.all(
+      requestRows.map(({ row, segment }) =>
+        this.inspectRowReferences(project, row, segment),
+      ),
+    );
+    const readyRowByUnitId = new Map(
+      requestRows.map((rowWithSegment, unitIndex) => [
+        rowWithSegment.row.unitId,
+        {
+          ...rowWithSegment,
+          unit: units[unitIndex],
+          unitIndex,
+        },
+      ]),
+    );
+    const inputDocumentId = basename(inputPath);
+    const jobUnits = inspectRowsToJobUnits(contextRows, inputDocumentId);
+    const jobUnitsByUnitId = new Map(jobUnits.map((unit) => [unit.unitId, unit]));
+
+    for (
+      let batchStart = 0;
+      batchStart < rows.length;
+      batchStart += INSPECT_BATCH_SIZE
+    ) {
+      const batchRows = rows.slice(batchStart, batchStart + INSPECT_BATCH_SIZE);
+      const readyRows = batchRows
+        .map((rowWithSegment) =>
+          readyRowByUnitId.get(rowWithSegment.row.unitId),
+        )
+        .filter(
+          (item): item is InspectReadyRow =>
+            item !== undefined && item.unit.status === 'ready',
+        );
+
+      if (readyRows.length === 0) {
+        continue;
+      }
+
+      try {
+        const current: MTBatchCurrentUnitInput[] = readyRows.map(
+          ({ row, segment, unit }) => ({
+            responseId: row.unitId,
+            documentId: inputDocumentId,
+            unitId: row.unitId,
+            segment,
+            tm: unit.tm,
+            tb: unit.tb,
+            context: row.context,
+          }),
+        );
+        const scanWindowUnits = batchRows.flatMap(({ row }) => {
+          const unit = jobUnitsByUnitId.get(row.unitId);
+          return unit ? [unit] : [];
+        });
+        const requestUnitKeys = readyRows.flatMap(({ row }) => {
+          const unit = jobUnitsByUnitId.get(row.unitId);
+          return unit ? [unitKey(unit)] : [];
+        });
+        const mt = await this.mtModule.composeBatchPrompt({
+          taskId: `inspect-window-partial-${Math.floor(batchStart / INSPECT_BATCH_SIZE) + 1}`,
+          project,
+          requestMode: 'window-partial',
+          current,
+          previousContext: [],
+          nextContext: [],
+          readOnlyContextRows: buildWindowPartialReadOnlyContextRows({
+            jobUnits,
+            scanWindowUnits,
+            requestUnitKeys,
+          }),
+          scanWindowCount: scanWindowUnits.length,
           mtOptions: this.options.mt,
           providerOverride: this.options.mt?.providerId,
         });

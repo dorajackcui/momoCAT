@@ -6,6 +6,8 @@ import type {
 
 export type WindowModeProjectType = "translation" | "review" | "custom";
 
+export type WindowModeRequestMode = "window" | "window-partial";
+
 export interface WindowModeCurrentSegment {
   id: string;
   sourcePayload: string;
@@ -24,14 +26,23 @@ export interface WindowModeNextContextRow {
   source: string;
 }
 
+export interface WindowModeReadOnlyContextRow {
+  role: "previous" | "current-existing" | "next";
+  source: string;
+  target?: string;
+  rowNumber?: number;
+}
+
 export interface WindowModePromptBundleBuildParams {
   projectType?: WindowModeProjectType;
   srcLang: string;
   tgtLang: string;
   projectPrompt?: string;
+  requestMode?: WindowModeRequestMode;
   currentSegments: WindowModeCurrentSegment[];
   previousContext?: WindowModePreviousContextRow[];
   nextContext?: WindowModeNextContextRow[];
+  readOnlyContextRows?: WindowModeReadOnlyContextRow[];
   validationFeedback?: string;
 }
 

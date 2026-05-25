@@ -113,7 +113,12 @@ The prompt artifact must not include API keys.
 
 ## Current Request Model
 
-`momocat translate file` job mode now uses Window Mode by default. It plans an ordered file into batches of 1 to 5 current units, sends one provider request at a time for that file, parses a strict JSON response, and writes per-unit results through the existing job surfaces.
+`momocat translate file` job mode uses dense Window Mode by default. It plans an ordered file into batches of 1 to 5 current units, sends one provider request at a time for that file, parses a strict JSON response, and writes per-unit results through the existing job surfaces.
+
+Request modes:
+
+- `window`: default dense Window Mode. Each physical batch requests every row that is in target scope.
+- `window-partial`: opt-in partial Window Mode. The scanner still advances through physical windows, but the request rows are dynamic and include only rows that need target text under the active target scope.
 
 Current flow:
 
@@ -159,6 +164,20 @@ Requirements for grouped requests:
 - Persist prompt artifacts only when artifact capture is enabled.
 - Include batch metadata in artifacts only when useful for diagnostics.
 - Keep same-file provider requests ordered and sequential. Reintroduce bounded request concurrency only after a later explicit design.
+
+Partial Window Mode keeps the same response contract for requested rows, but read-only context rows are context only:
+
+- Current request rows reuse existing Window Mode current segment rendering, including per-request TM/TB references.
+- Read-only rows may include previous translated rows, existing-target rows inside the current physical window, and following source rows.
+- Read-only rows must not require provider output and must not appear in the JSON response.
+- Response ids are dynamic and request-only. Translation runtime ids are document-qualified; inspector prompt artifacts may use local row ids for readability.
+- TM/TB prompt counts and artifacts are built only for requested rows, not read-only context rows.
+
+Rollback to dense mode by passing the explicit default:
+
+```bash
+momocat translate file --db <path> --project-id <id> --input <input.xlsx> --output <translated.xlsx> --request-mode window
+```
 
 ## Inspect Contract
 

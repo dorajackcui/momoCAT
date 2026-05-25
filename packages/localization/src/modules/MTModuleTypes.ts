@@ -44,9 +44,17 @@ export interface MTBatchCurrentUnitInput {
 export interface ComposeBatchPromptInput {
   taskId: string;
   project: Project;
+  requestMode?: 'window' | 'window-partial';
   current: MTBatchCurrentUnitInput[];
   previousContext: WindowModePreviousContextRow[];
   nextContext: WindowModeNextContextRow[];
+  readOnlyContextRows?: Array<{
+    role: 'previous' | 'current-existing' | 'next';
+    source: string;
+    target?: string;
+    rowNumber?: number;
+  }>;
+  scanWindowCount?: number;
   mtOptions?: LocalizationMTOptions;
   providerOverride?: string;
   projectPromptOverride?: string;

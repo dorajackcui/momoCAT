@@ -193,9 +193,11 @@ export class MTModule {
       srcLang: input.srcLang,
       tgtLang: input.tgtLang,
       projectPrompt: promptParams.projectPrompt,
+      requestMode: input.requestMode,
       currentSegments: promptParams.currentSegments,
       previousContext: input.previousContext,
       nextContext: input.nextContext,
+      readOnlyContextRows: input.readOnlyContextRows,
       validationFeedback: promptParams.validationFeedback,
     });
     const sourcePayload = promptParams.currentSegments
@@ -226,11 +228,20 @@ export class MTModule {
         total: promptBundle.systemPrompt.length + promptBundle.userPrompt.length,
       },
       batch: {
-        mode: 'window',
+        mode: input.requestMode === 'window-partial' ? 'window-partial' : 'window',
         taskId: input.taskId,
         currentIds: promptParams.currentSegments.map((segment) => segment.id),
         previousContextCount: input.previousContext.length,
         nextContextCount: input.nextContext.length,
+        ...(typeof input.scanWindowCount === 'number'
+          ? { scanWindowCount: input.scanWindowCount }
+          : {}),
+        ...(input.requestMode === 'window-partial'
+          ? {
+              requestCount: promptParams.currentSegments.length,
+              readOnlyContextCount: input.readOnlyContextRows?.length ?? 0,
+            }
+          : {}),
       },
     };
   }

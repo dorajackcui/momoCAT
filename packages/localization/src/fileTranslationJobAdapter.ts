@@ -5,7 +5,7 @@ import { CheckpointStore } from './job/CheckpointStore';
 import { EventSink } from './job/EventSink';
 import { ArtifactStore } from './job/ArtifactStore';
 import { computeSourceHash } from './job/sourceHash';
-import { WindowModeTaskPlanner } from './job/TaskPlanner';
+import { WindowModeTaskPlanner, WindowPartialTaskPlanner } from './job/TaskPlanner';
 import {
   TranslationJobRunner,
   type TranslationJobRunResult,
@@ -103,7 +103,10 @@ export async function translateSpreadsheetFileJob(
     eventSink: new EventSink(prepared.sidecarPaths.eventsPath, {
       stdout: input.job?.progressStdout,
     }),
-    taskPlanner: new WindowModeTaskPlanner({ batchSize: input.options?.batchSize }),
+    taskPlanner:
+      input.options?.requestMode === 'window-partial'
+        ? new WindowPartialTaskPlanner({ batchSize: input.options?.batchSize })
+        : new WindowModeTaskPlanner({ batchSize: input.options?.batchSize }),
     taskExecutor: options.taskExecutor,
     writeSnapshot: async (results) => {
       await writeTranslatedSpreadsheet(
@@ -183,6 +186,7 @@ function computeFileTranslationResumeFingerprint(input: TranslateFileInput): str
     ['projectId', String(input.projectId)],
     ['targetScope', resolveBatchTargetScope(input.options?.targetScope)],
     ['mode', input.options?.mode ?? 'standard'],
+    ['requestMode', input.options?.requestMode ?? 'window'],
     ['providerOverride', input.options?.providerOverride],
     ['mt.providerId', input.options?.mt?.providerId],
     ['mt.model', input.options?.mt?.model],

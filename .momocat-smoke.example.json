@@ -5,5 +5,6 @@
   "outputDir": "testoutput",
   "inspectUnitLimit": 10,
   "maxAttempts": 1,
-  "batchSize": 5
+  "batchSize": 5,
+  "requestMode": "window-partial"
 }

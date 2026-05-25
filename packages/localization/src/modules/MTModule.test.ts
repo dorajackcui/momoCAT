@@ -292,6 +292,66 @@ describe('MTModule', () => {
     }
   });
 
+  it('composes partial Window Mode metadata with request ids and optional counts', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Partial Batch Prompt', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const row2 = createTransientSegment(
+        { id: 'row-2', source: 'Save file', fileName: 'doc.xlsx' },
+        1,
+      );
+      const transport = createTransport();
+      const module = createModule(db, transport);
+
+      const artifact = await module.composeBatchPrompt({
+        taskId: 'window-task-1',
+        project,
+        requestMode: 'window-partial',
+        current: [
+          {
+            responseId: 'row-2',
+            documentId: 'doc.xlsx',
+            unitId: 'unit-2',
+            segment: row2,
+            tm: createTMArtifact(row2),
+            tb: createTBArtifact(row2),
+          },
+        ],
+        previousContext: [],
+        nextContext: [],
+        readOnlyContextRows: [
+          { role: 'previous', source: 'Open', target: 'Ouvrir', rowNumber: 1 },
+          { role: 'next', source: 'Close', rowNumber: 3 },
+        ],
+        scanWindowCount: 3,
+      });
+
+      expect(artifact.batch).toEqual({
+        mode: 'window-partial',
+        taskId: 'window-task-1',
+        currentIds: ['row-2'],
+        previousContextCount: 0,
+        nextContextCount: 0,
+        scanWindowCount: 3,
+        requestCount: 1,
+        readOnlyContextCount: 2,
+      });
+      expect(artifact.userPrompt).toContain('Return target text for ids: row-2');
+      expect(artifact.userPrompt).toContain(
+        'Read-only context rows. Do not produce output or return ids for these rows.',
+      );
+      expect(artifact.userPrompt).toContain('Rows requiring target text. Return exactly these ids.');
+      expect(artifact.userPrompt).toContain('<target text>');
+      expect(artifact.userPrompt).not.toContain('id: Open');
+      expect(transport.createResponse).not.toHaveBeenCalled();
+    } finally {
+      db.close();
+    }
+  });
+
   it('translates Window Mode strict JSON responses into per-unit tokens', async () => {
     const db = new CATDatabase(':memory:');
     try {

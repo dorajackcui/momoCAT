@@ -109,11 +109,14 @@ export interface PromptProviderArtifact {
 }
 
 export interface PromptBatchArtifact {
-  mode: 'window';
+  mode: 'window' | 'window-partial';
   taskId: string;
   currentIds: string[];
   previousContextCount: number;
   nextContextCount: number;
+  scanWindowCount?: number;
+  requestCount?: number;
+  readOnlyContextCount?: number;
 }
 
 export interface PromptArtifact {

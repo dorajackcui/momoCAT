@@ -108,6 +108,13 @@ function assignOption(
     config.targetScope = optionValue;
     return;
   }
+  if (name === 'request-mode') {
+    if (optionValue !== 'window' && optionValue !== 'window-partial') {
+      throw new Error('--request-mode must be window or window-partial.');
+    }
+    config.requestMode = optionValue;
+    return;
+  }
   if (name === 'checkpoint') {
     config.checkpointPath = io.resolvePath(optionValue);
     return;
@@ -173,6 +180,7 @@ function isKnownOption(name: string): boolean {
     name === 'input' ||
     name === 'output' ||
     name === 'target-scope' ||
+    name === 'request-mode' ||
     name === 'checkpoint' ||
     name === 'events' ||
     name === 'artifacts' ||
@@ -199,6 +207,7 @@ Options:
   --input <path>                   Spreadsheet path to translate.
   --output <path>                  Translated spreadsheet output path.
   --target-scope <scope>           blank-only or overwrite-non-confirmed.
+  --request-mode <mode>            window or window-partial.
   --checkpoint <path>              Optional checkpoint sidecar path.
   --events <path>                  Optional events sidecar path.
   --artifacts <path>               Optional diagnostic artifact JSONL path.

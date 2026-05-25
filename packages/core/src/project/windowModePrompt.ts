@@ -6,6 +6,8 @@ import type {
   WindowModePromptBundleBuildParams,
   WindowModePromptSections,
   WindowModeProjectType,
+  WindowModeReadOnlyContextRow,
+  WindowModeRequestMode,
 } from "./windowModePromptTypes";
 
 function joinBlocks(parts: string[]): string {
@@ -29,6 +31,12 @@ function isTranslationProject(
   params: Pick<WindowModePromptBundleBuildParams, "projectType">,
 ): boolean {
   return getWindowModeProjectType(params.projectType) === "translation";
+}
+
+function getRequestMode(
+  requestMode: WindowModePromptBundleBuildParams["requestMode"],
+): WindowModeRequestMode {
+  return requestMode === "window-partial" ? "window-partial" : "window";
 }
 
 function buildTranslationWindowModeSystemPrompt(
@@ -71,6 +79,13 @@ function buildSystemPrompt(params: WindowModePromptBundleBuildParams): string {
 }
 
 function buildBatchBlock(params: WindowModePromptBundleBuildParams): string {
+  if (getRequestMode(params.requestMode) === "window-partial") {
+    return [
+      `Batch: partial window request from ${params.srcLang} to ${params.tgtLang}.`,
+      `Return target text for ids: ${params.currentSegments.map((segment) => segment.id).join(", ")}`,
+    ].join("\n");
+  }
+
   const action = isTranslationProject(params) ? "translate" : "process";
   return [
     `Batch: ${action} ${params.currentSegments.length} current segment(s) from ${params.srcLang} to ${params.tgtLang}.`,
@@ -128,7 +143,17 @@ function buildCurrentSegmentBlock(segment: WindowModeCurrentSegment): string {
 function buildCurrentSegmentsBlock(
   segments: WindowModeCurrentSegment[],
   projectType: WindowModePromptBundleBuildParams["projectType"],
+  requestMode: WindowModePromptBundleBuildParams["requestMode"],
 ): string {
+  if (getRequestMode(requestMode) === "window-partial") {
+    return [
+      "Rows requiring target text. Return exactly these ids.",
+      ...segments.map((segment, index) =>
+        [`Segment ${index + 1}`, buildCurrentSegmentBlock(segment)].join("\n"),
+      ),
+    ].join("\n\n");
+  }
+
   const action = isTranslationProject({ projectType }) ? "translate" : "process";
   return [
     `Current segments to ${action}`,
@@ -226,6 +251,29 @@ function buildNextContextBlock(
   ].join("\n");
 }
 
+function buildReadOnlyContextRow(row: WindowModeReadOnlyContextRow, index: number): string {
+  const rowNumber = typeof row.rowNumber === "number" ? ` row ${row.rowNumber}` : "";
+  const parts = [`${index + 1}. ${row.role}${rowNumber}`, "Source:", row.source];
+  const target = trimOptional(row.target);
+  if (target) {
+    parts.push("Target:", target);
+  }
+  return parts.join("\n");
+}
+
+function buildReadOnlyContextBlock(
+  rows: WindowModePromptBundleBuildParams["readOnlyContextRows"],
+): string {
+  if (!rows || rows.length === 0) {
+    return "";
+  }
+
+  return [
+    "Read-only context rows. Do not produce output or return ids for these rows.",
+    ...rows.map((row, index) => buildReadOnlyContextRow(row, index)),
+  ].join("\n\n");
+}
+
 function buildValidationFeedbackBlock(validationFeedback?: string): string {
   const feedback = trimOptional(validationFeedback);
   return feedback ? `Validation feedback\n${feedback}` : "";
@@ -233,10 +281,14 @@ function buildValidationFeedbackBlock(validationFeedback?: string): string {
 
 function buildJsonFormatBlock(
   projectType: WindowModePromptBundleBuildParams["projectType"],
+  requestMode: WindowModePromptBundleBuildParams["requestMode"],
 ): string {
-  const textPlaceholder = isTranslationProject({ projectType })
-    ? "<translation>"
-    : "<result>";
+  const textPlaceholder =
+    getRequestMode(requestMode) === "window-partial"
+      ? "<target text>"
+      : isTranslationProject({ projectType })
+        ? "<translation>"
+        : "<result>";
   return [
     "Strict JSON format",
     `Return exactly: {"translations":[{"id":"<id>","text":"${textPlaceholder}"}]}`,
@@ -270,24 +322,36 @@ export function buildAIWindowModePromptBundle(
   params: WindowModePromptBundleBuildParams,
 ): WindowModePromptBundle {
   const currentSegments = normalizeCurrentSegments(params.currentSegments);
-  const normalizedParams = { ...params, currentSegments };
+  const requestMode = getRequestMode(params.requestMode);
+  const normalizedParams = { ...params, requestMode, currentSegments };
+  const readOnlyContextBlock = buildReadOnlyContextBlock(
+    normalizedParams.readOnlyContextRows,
+  );
 
   const sections: WindowModePromptSections = {
     batchBlock: buildBatchBlock(normalizedParams),
     currentSegmentsBlock: buildCurrentSegmentsBlock(
       currentSegments,
       normalizedParams.projectType,
+      normalizedParams.requestMode,
     ),
     tmPromptBlock: buildTMReferenceBlock(currentSegments),
     concordancePromptBlock: buildConcordanceReferenceBlock(currentSegments),
     tbPromptBlock: buildTBReferenceBlock(currentSegments),
     referencePromptBlock: "",
-    previousContextBlock: buildPreviousContextBlock(params.previousContext),
-    nextContextBlock: buildNextContextBlock(params.nextContext),
+    previousContextBlock:
+      requestMode === "window"
+        ? buildPreviousContextBlock(params.previousContext)
+        : readOnlyContextBlock,
+    nextContextBlock:
+      requestMode === "window" ? buildNextContextBlock(params.nextContext) : "",
     validationFeedbackBlock: buildValidationFeedbackBlock(
       params.validationFeedback,
     ),
-    jsonFormatBlock: buildJsonFormatBlock(normalizedParams.projectType),
+    jsonFormatBlock: buildJsonFormatBlock(
+      normalizedParams.projectType,
+      normalizedParams.requestMode,
+    ),
   };
   sections.referencePromptBlock = joinBlocks([
     sections.tmPromptBlock,

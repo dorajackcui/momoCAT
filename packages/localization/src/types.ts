@@ -4,6 +4,8 @@ export type LocalizationTargetScope = 'blank-only' | 'overwrite-non-confirmed';
 
 export type LocalizationMode = 'standard' | 'dialogue';
 
+export type LocalizationRequestMode = 'window' | 'window-partial';
+
 export interface ExternalTranslationUnit {
   id: string;
   source: string;
@@ -29,6 +31,7 @@ export interface MTModuleOptions {
 export interface TranslateUnitsOptions {
   targetScope?: LocalizationTargetScope;
   mode?: LocalizationMode;
+  requestMode?: LocalizationRequestMode;
   includeReferences?: boolean;
   maxConcurrency?: number;
   batchSize?: number;

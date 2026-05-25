@@ -8,6 +8,7 @@ export interface TranslateFileCommandConfig {
   inputPath: string;
   outputPath: string;
   targetScope?: 'blank-only' | 'overwrite-non-confirmed';
+  requestMode?: 'window' | 'window-partial';
   checkpointPath?: string;
   eventsPath?: string;
   artifactsPath?: string;
@@ -30,6 +31,7 @@ export async function runTranslateFileCommand(config: TranslateFileCommandConfig
       outputPath: config.outputPath,
       options: {
         targetScope: config.targetScope,
+        requestMode: config.requestMode,
         batchSize: config.batchSize,
       },
       job: {

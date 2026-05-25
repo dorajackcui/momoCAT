@@ -541,6 +541,81 @@ describe('LocalizationEngine.translateFile job mode', () => {
     }
   });
 
+  it('uses partial Window Mode to request only blank rows while preserving existing targets', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('External File Partial Window', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const inputPath = join(root, 'partial.xlsx');
+      const outputPath = join(root, 'partial.translated.xlsx');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target'],
+          ['One', ''],
+          ['Two', 'Deux'],
+          ['Three', ''],
+          ['Four', 'Quatre'],
+          ['Five', ''],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+      const transport = createTransport();
+      transport.createResponse.mockImplementationOnce(async (request: { userPrompt: string }) => {
+        expect(request.userPrompt).toContain(
+          'Return target text for ids: partial.xlsx#row-2, partial.xlsx#row-4, partial.xlsx#row-6',
+        );
+        expect(request.userPrompt).toContain('Read-only context rows');
+        expect(request.userPrompt).toContain('current-existing row 3');
+        expect(request.userPrompt).toContain('Target:\nDeux');
+        expect(request.userPrompt).toContain('current-existing row 5');
+        expect(request.userPrompt).toContain('Target:\nQuatre');
+        expect(request.userPrompt).not.toMatch(/^id: partial\.xlsx#row-3$/m);
+        expect(request.userPrompt).not.toMatch(/^id: partial\.xlsx#row-5$/m);
+
+        return {
+          content: JSON.stringify({
+            translations: [
+              { id: 'partial.xlsx#row-2', text: 'Un' },
+              { id: 'partial.xlsx#row-4', text: 'Trois' },
+              { id: 'partial.xlsx#row-6', text: 'Cinq' },
+            ],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        };
+      });
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+
+      const result = await engine.translateFile({
+        projectId,
+        inputPath,
+        outputPath,
+        options: { requestMode: 'window-partial', targetScope: 'blank-only' },
+        job: { maxAttempts: 1 },
+      });
+
+      expect(result.summary).toEqual({ total: 5, translated: 3, skipped: 2, failed: 0 });
+      expect(result.results.map((unit) => [unit.id, unit.status, unit.target])).toEqual([
+        ['row-2', 'translated', 'Un'],
+        ['row-3', 'skipped', 'Deux'],
+        ['row-4', 'translated', 'Trois'],
+        ['row-5', 'skipped', 'Quatre'],
+        ['row-6', 'translated', 'Cinq'],
+      ]);
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('translates spreadsheet files through job units without importing the file into the DB', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
     const db = new CATDatabase(':memory:');

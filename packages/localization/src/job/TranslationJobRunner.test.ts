@@ -16,6 +16,7 @@ import type {
   TranslationTaskExecutor,
   UnitResult,
 } from './types';
+import type { JobAwareTaskPlanner, TaskPlanner } from './TaskPlanner';
 
 describe('TranslationJobRunner', () => {
   it('writes artifact, checkpoint, and event records for a successful unit', async () => {
@@ -519,6 +520,163 @@ describe('TranslationJobRunner', () => {
 
     expect(seenCompletedUnits).toEqual([[], ['unit-1']]);
   });
+
+  it('passes full job units and completed results to job-aware planners', async () => {
+    const harness = await makeHarness();
+    await harness.checkpointStore.append(
+      makeCheckpoint({
+        unit: 'unit-1',
+        hash: 'hash-1',
+        target: 'reused target',
+      }),
+    );
+    const seenPlanJobArgs: Array<{
+      jobUnitIds: string[];
+      completedUnitIds: string[];
+      targetScope: string;
+    }> = [];
+    const planner: JobAwareTaskPlanner = {
+      supportsJobAwarePlanning: true,
+      planJob: ({ job, completedResults, targetScope }) => {
+        seenPlanJobArgs.push({
+          jobUnitIds: job.units.map((unit) => unit.unitId),
+          completedUnitIds: Array.from(completedResults.values()).map((result) => result.unitId),
+          targetScope,
+        });
+
+        return [
+          {
+            taskId: 'job-aware-task-1',
+            units: [job.units[1]],
+          },
+        ];
+      },
+    };
+    const runner = harness.makeRunner(
+      async (task) => ({
+        results: [
+          makeResult({
+            unitId: task.units[0].unitId,
+            sourceHash: task.units[0].sourceHash,
+            source: task.units[0].source,
+            target: 'new target',
+          }),
+        ],
+      }),
+      { taskPlanner: planner },
+    );
+
+    await runner.run(
+      makeJob({
+        units: [
+          makeUnit({ unitId: 'unit-1', sourceHash: 'hash-1' }),
+          makeUnit({ unitId: 'unit-2', sourceHash: 'hash-2' }),
+        ],
+        options: { resume: true, maxConcurrency: 1 },
+        translationOptions: { targetScope: 'overwrite-non-confirmed' },
+      }),
+    );
+
+    expect(seenPlanJobArgs).toEqual([
+      {
+        jobUnitIds: ['unit-1', 'unit-2'],
+        completedUnitIds: ['unit-1'],
+        targetScope: 'overwrite-non-confirmed',
+      },
+    ]);
+  });
+
+  it('continues passing only pending units to non-job-aware planners', async () => {
+    const harness = await makeHarness();
+    await harness.checkpointStore.append(
+      makeCheckpoint({
+        unit: 'unit-1',
+        hash: 'hash-1',
+        target: 'reused target',
+      }),
+    );
+    const seenPlanUnitIds: string[][] = [];
+    const planner: TaskPlanner = {
+      plan: (units) => {
+        seenPlanUnitIds.push(units.map((unit) => unit.unitId));
+        return units.map((unit) => ({ taskId: `task-${unit.unitId}`, units: [unit] }));
+      },
+    };
+    const runner = harness.makeRunner(
+      async (task) => ({
+        results: [
+          makeResult({
+            unitId: task.units[0].unitId,
+            sourceHash: task.units[0].sourceHash,
+            source: task.units[0].source,
+            target: 'new target',
+          }),
+        ],
+      }),
+      { taskPlanner: planner },
+    );
+
+    await runner.run(
+      makeJob({
+        units: [
+          makeUnit({ unitId: 'unit-1', sourceHash: 'hash-1' }),
+          makeUnit({ unitId: 'unit-2', sourceHash: 'hash-2' }),
+        ],
+        options: { resume: true, maxConcurrency: 1 },
+      }),
+    );
+
+    expect(seenPlanUnitIds).toEqual([['unit-2']]);
+  });
+
+  it('ignores incidental planJob methods without the job-aware capability flag', async () => {
+    const harness = await makeHarness();
+    await harness.checkpointStore.append(
+      makeCheckpoint({
+        unit: 'unit-1',
+        hash: 'hash-1',
+        target: 'reused target',
+      }),
+    );
+    const seenPlanUnitIds: string[][] = [];
+    const incidentalPlanJob = vi.fn(() => {
+      throw new Error('incidental planJob should not be called');
+    });
+    const planner = {
+      plan: (units: TranslationJob['units']) => {
+        seenPlanUnitIds.push(units.map((unit) => unit.unitId));
+        return units.map((unit) => ({ taskId: `task-${unit.unitId}`, units: [unit] }));
+      },
+      planJob: incidentalPlanJob,
+    };
+    const runner = harness.makeRunner(
+      async (task) => ({
+        results: [
+          makeResult({
+            unitId: task.units[0].unitId,
+            sourceHash: task.units[0].sourceHash,
+            source: task.units[0].source,
+            target: 'new target',
+          }),
+        ],
+      }),
+      { taskPlanner: planner },
+    );
+
+    await runner.run(
+      makeJob({
+        units: [
+          makeUnit({ unitId: 'unit-1', sourceHash: 'hash-1' }),
+          makeUnit({ unitId: 'unit-2', sourceHash: 'hash-2' }),
+        ],
+        options: { resume: true, maxConcurrency: 1 },
+      }),
+    );
+
+    expect(incidentalPlanJob).not.toHaveBeenCalled();
+    expect(seenPlanUnitIds).toEqual([['unit-2']]);
+  });
+
 });
 
 async function makeHarness(): Promise<{
