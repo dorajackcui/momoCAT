@@ -23,6 +23,12 @@ incidents. This file is not active policy.
 - Earlier implementation specs and plans under `DOCS/superpowers` were retired
   as active policy.
 
+## Retired Superpowers Specs And Plans
+
+Historical specs and implementation plans were consolidated during the docs
+system cleanup. Active guidance is now in the outer numbered docs. Archived
+records, when retained, are sanitized and non-active.
+
 ## Durable Historical Lessons
 
 - Split large modules behind compatibility facades before deepening internal
