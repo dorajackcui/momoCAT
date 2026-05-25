@@ -18,8 +18,12 @@ Agent-first CLI/headless localization. Shared capability lives behind
 
 ## Latest Focused Verification
 
-Focused docs consolidation verification will be recorded after final validation
-runs in this implementation sequence.
+Verification date: 2026-05-25
+
+- `Get-ChildItem DOCS -File | Sort-Object Name | Select-Object -ExpandProperty Name`
+- `rg -n "DOCS/agent-first|DOCS/superpowers/specs|DOCS/superpowers/plans" <active docs>`
+- `rg -n "https?://|[A-Za-z]:\\\\|api[_ -]?key|baseUrl|provider endpoint|local path|prompt artifact" <active docs>`
+- `git diff --check`
 
 ## Roadmap
 
