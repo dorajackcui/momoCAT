@@ -7,7 +7,7 @@ target rows are already populated.
 
 The existing `window` behavior remains available as the fallback path. The new
 mode is named `window-partial` in this spec. It preserves the physical 5-row
-scan window, but sends only the rows that still need translation to the MT
+scan window, but sends only the rows that still require target text to the MT
 provider.
 
 ## Decision
@@ -32,7 +32,7 @@ request units, skipped results, checkpoints, and artifacts. For the LLM, the
 prompt has only two roles:
 
 1. Read-only context rows.
-2. Rows to translate.
+2. Rows requiring target text.
 
 This keeps the task simple: context is reference material, and only the listed
 request ids need JSON output.
@@ -41,7 +41,7 @@ request ids need JSON output.
 
 1. Preserve the current Window Mode behavior and rollback path.
 2. Keep a physical scan window of up to 5 source-bearing rows.
-3. Dynamically request only rows that need translation under the target-scope
+3. Dynamically request only rows that require target text under the target-scope
    policy.
 4. Include already translated rows inside the current scan window as read-only
    context.
@@ -82,9 +82,9 @@ Batch
 Source language: <srcLang>
 Target language: <tgtLang>
 Request mode: window-partial
-Return translations for ids: <request id list>
+Return target text for ids: <request id list>
 
-Read-only context rows. Do not translate or return these rows.
+Read-only context rows. Do not produce output or return ids for these rows.
 1. [previous] row <display row>
 Source:
 <source>
@@ -103,7 +103,7 @@ Source:
 Target:
 <target if known, otherwise omitted or marked empty>
 
-Rows to translate. Return exactly these ids.
+Rows requiring target text. Return exactly these ids.
 
 Segment 1
 id: <response id>
@@ -123,7 +123,7 @@ Context:
 <this segment's row/file context, if present>
 
 Strict JSON format
-Return exactly: {"translations":[{"id":"<id>","text":"<translation>"}]}
+Return exactly: {"translations":[{"id":"<id>","text":"<target text>"}]}
 The translations array must include exactly one object for each requested id.
 Do not include read-only context rows.
 ```
@@ -131,12 +131,12 @@ Do not include read-only context rows.
 ### Prompt Rules
 
 1. The phrase "current segments" should be avoided for read-only rows. It is
-   reserved for rows to translate in the existing Window Mode prompt and can
+   reserved for rows requiring target text in the existing Window Mode prompt and can
    confuse the response contract.
 2. Read-only context rows should be ordered in file order and labeled by role:
    `previous`, `current-existing`, or `next`.
-3. Only rows to translate should expose response ids.
-4. Rows to translate must reuse the existing Window Mode current segment
+3. Only rows requiring target text should expose response ids.
+4. Rows requiring target text must reuse the existing Window Mode current segment
    rendering logic. The per-request-row source, context, TM, concordance, TB,
    marker-preserved payload, and strict JSON id contract should stay identical
    to `window`.
@@ -225,7 +225,7 @@ For each scan window:
 1. Build `scanWindowUnits` from full job order.
 2. Build `task.units` from scan-window rows that are not already completed or
    reused.
-3. Build `requestUnitKeys` from rows in the scan window that need translation
+3. Build `requestUnitKeys` from rows in the scan window that require target text
    under target scope and are not already completed or reused.
 4. If `task.units` is empty, skip the task.
 5. If `requestUnitKeys` is empty, execute a skip-only task and make no provider
