@@ -1,5 +1,9 @@
 # Window Partial Mode Design
 
+Status: implemented on 2026-05-25. Active operational docs are
+`DOCS/agent-first/CLI.md` and `DOCS/agent-first/MT_MODULE.md`; this file
+records the design intent.
+
 ## Purpose
 
 Define an opt-in derivative of Window Mode for file translation jobs where some

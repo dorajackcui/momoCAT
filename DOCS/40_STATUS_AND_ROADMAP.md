@@ -15,7 +15,7 @@ Read at task start, before planning scope, and before merge.
 
 ## Last Updated
 
-2026-05-22
+2026-05-25
 
 ## Owner
 
@@ -32,25 +32,30 @@ This is the only active documentation page that may contain live gate status and
 
 ## Current Gate Status (Local Verification)
 
-Verification date: 2026-03-25
+Verification date: 2026-05-25
 
-- `npm run gate:check`: passing
-- Included chain: `typecheck`, `gate:arch`, `gate:style`, `gate:file-size`, `lint`, `gate:smoke:large-file`
-- Notes: lint currently has historical warnings; no lint errors in latest verification.
-- `gate:file-size` current warnings: no known `@cat/core` root-barrel hotspot; monitor newly extracted slice files instead.
-- Current task only verified documentation command references with `rg` and whitespace with `git diff --check` on 2026-05-22; no new full gate result is claimed here.
+- Latest full `npm run gate:check` is not re-claimed by this document update.
+- Latest focused verification for the active CLI/window-partial work:
+  - `npx vitest run packages/core/src/project/windowModePrompt.test.ts packages/localization/src/modules/MTModule.test.ts packages/localization/src/requestModes/windowPartialSequentialBatch/WindowPartialSequentialBatchStrategy.test.ts packages/localization/src/LocalizationInspector.test.ts`
+  - `npm run build --workspace=packages/core`
+  - `npm run build --workspace=packages/localization`
+  - `npm run build:cli`
+  - `git diff --check`
+- Standard real-provider smoke is local-configured through `.momocat-smoke.local.json`; do not commit local paths, provider endpoints, model names, or prompt artifacts.
 
 ## Current Top Risks
 
 1. Historical warning backlog still exists in some workspaces.
 2. New `@cat/core` slice boundaries depend on import-discipline and guardrails staying current.
 3. `apps/cli` must remain a thin `momocat` command surface over `@cat/localization`, without direct desktop, DB, or core coupling.
+4. Real smoke artifacts can contain user text, provider metadata, TM/TB names, and prompt payloads; keep them out of tracked docs and source files.
 
-## Latest Completed Milestone (2026-03-25)
+## Latest Completed Milestone (2026-05-25)
 
-1. Split `@cat/core` into `models`, `project`, `tag`, `text`, and `qa` slices while keeping runtime behavior stable.
-2. Shrunk `packages/core/src/index.ts` to a thin compatibility barrel and moved repo callers to slice entrypoints.
-3. Added architecture guard coverage for root-barrel regressions and colocated core slice tests near the extracted modules.
+1. Extracted the agent-first `momocat` CLI app surface under `apps/cli`, with root scripts kept as repo orchestration helpers.
+2. Kept the dependency boundary clear: `apps/cli -> @cat/localization -> @cat/db -> @cat/core`; CLI must not depend on `apps/desktop`.
+3. Added opt-in `window-partial` request mode for headless file translation and inspect.
+4. Standardized local smoke through gitignored `.momocat-smoke.local.json` and `scripts/momocat-standard-smoke.mjs`.
 
 ## Cleanup Rules
 
@@ -72,7 +77,7 @@ Verification date: 2026-03-25
 3. Keep `@cat/core` slice boundaries stable:
    - no new repo imports from root `@cat/core`,
    - no new internal imports from `packages/core/src/index.ts`.
-4. Keep targeted regression coverage current for DB bootstrap, TM query flow, renderer file-progress shape, and core slice exports.
+4. Keep targeted regression coverage current for CLI command grammar, prompt composition, request-mode planning, DB bootstrap, TM query flow, renderer file-progress shape, and core slice exports.
 
 ### Next
 

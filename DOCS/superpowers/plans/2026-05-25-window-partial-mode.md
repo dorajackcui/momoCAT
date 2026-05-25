@@ -5,6 +5,11 @@
 > superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [ ]`) syntax for tracking.
 
+**Implementation status:** Completed on 2026-05-25. This file is an execution
+record, not the active operational runbook. Active command and prompt behavior
+is documented in `DOCS/agent-first/CLI.md` and
+`DOCS/agent-first/MT_MODULE.md`.
+
 **Goal:** Add an opt-in `window-partial` request mode for file translation jobs.
 The existing `window` mode remains unchanged and available as the rollback path.
 `window-partial` preserves physical 1..5 row scan windows, treats already

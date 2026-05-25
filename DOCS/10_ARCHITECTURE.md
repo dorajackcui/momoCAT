@@ -4,7 +4,7 @@
 
 Describe current system boundaries and module responsibilities so implementation changes stay local and predictable.
 
-For the `agent-first-batch-ai-mvp` branch, architecture decisions should optimize for agent-first CLI/headless workflows and shared localization capability. The legacy desktop UI remains supported, but it is not the primary target for new TM/TB/MT capabilities on this branch.
+For the `cat-cli` branch, architecture decisions should optimize for agent-first CLI/headless workflows and shared localization capability. The legacy desktop UI remains supported, but it is not the primary target for new TM/TB/MT capabilities on this branch.
 
 ## When to Read
 
@@ -17,7 +17,7 @@ Read before modifying module boundaries, cross-layer contracts, or multi-subsyst
 
 ## Last Updated
 
-2026-05-22
+2026-05-25
 
 ## Owner
 

@@ -6,13 +6,13 @@
 
 Pure prompt and response capability belongs in `@cat/core`. Window Mode contracts, builders, response parsers, and schema validation live under `@cat/core/project` initially or a future `@cat/core/mt` slice. `@cat/localization` consumes those pure helpers while owning request orchestration and recovery.
 
-Current MT Window Mode design:
+Current MT request-mode design:
 
-- `DOCS/superpowers/specs/2026-05-20-mt-window-mode-design.md`
+- `DOCS/superpowers/specs/2026-05-25-window-partial-mode-design.md`
 
-Earlier next-direction record:
+Current implementation record:
 
-- `DOCS/superpowers/specs/2026-05-20-agent-first-cli-mt-next-direction-design.md`
+- `DOCS/superpowers/plans/2026-05-25-window-partial-mode.md`
 
 Code:
 
@@ -70,6 +70,8 @@ For Window Mode, the MT layer receives a structured batch input instead of sprea
 
 Context units are prompt context only. They must not require provider output.
 
+For Partial Window Mode, the MT layer also receives read-only context rows. These rows are rendered before the request rows in the user prompt and never expose response ids. Only rows requiring target text receive per-request TM/TB prompt blocks and strict JSON response ids.
+
 ## Outputs
 
 Prompt-only inspect:
@@ -124,7 +126,8 @@ Current flow:
 
 ```text
 one ordered file
-  -> WindowModeTaskPlanner batches 1..5 current units
+  -> WindowModeTaskPlanner or WindowPartialTaskPlanner
+  -> physical scan windows of 1..5 rows
   -> one provider request at a time
   -> strict JSON response
   -> per-unit UnitResult/checkpoints/events/snapshots/final output
@@ -167,6 +170,7 @@ Requirements for grouped requests:
 
 Partial Window Mode keeps the same response contract for requested rows, but read-only context rows are context only:
 
+- User prompt order is: batch instruction, read-only context rows, rows requiring target text, validation feedback if present, strict JSON format.
 - Current request rows reuse existing Window Mode current segment rendering, including per-request TM/TB references.
 - Read-only rows may include previous translated rows, existing-target rows inside the current physical window, and following source rows.
 - Read-only rows must not require provider output and must not appear in the JSON response.

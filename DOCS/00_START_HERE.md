@@ -6,7 +6,7 @@ Provide a deterministic onboarding entrypoint for humans and AI agents to start 
 
 ## Branch Design Core
 
-This branch, `agent-first-batch-ai-mvp`, is designed around agents as the primary operators. It is moving the project toward a CLI-first, agent-first batch localization workstation where humans and agents can inspect, run, resume, and automate localization work without depending on the legacy desktop editor.
+This branch, `cat-cli`, is designed around agents as the primary operators. It is moving the project toward a CLI-first, agent-first batch localization workstation where humans and agents can inspect, run, resume, and automate localization work without depending on the legacy desktop editor.
 
 Core direction:
 
@@ -36,13 +36,13 @@ Read first for every new task, new session, or handoff.
 - Agent-first engine: `DOCS/agent-first/ARCHITECTURE.md`
 - Agent-first CLI commands: `DOCS/agent-first/CLI.md`
 - MT prompt and request scheduling: `DOCS/agent-first/MT_MODULE.md`
-- MT Window Mode design: `DOCS/superpowers/specs/2026-05-20-mt-window-mode-design.md`
-- Next MT direction decision: `DOCS/superpowers/specs/2026-05-20-agent-first-cli-mt-next-direction-design.md`
-- Completed localization package migration record: `DOCS/superpowers/specs/2026-05-20-localization-package-boundary-design.md`
+- Current Window Partial Mode design: `DOCS/superpowers/specs/2026-05-25-window-partial-mode-design.md`
+- Current Window Partial Mode implementation record: `DOCS/superpowers/plans/2026-05-25-window-partial-mode.md`
+- Historical context for retired decisions: `DOCS/90_HISTORY_CONSOLIDATED.md`
 
 ## Last Updated
 
-2026-05-22
+2026-05-25
 
 ## Owner
 
@@ -71,10 +71,10 @@ npm run gate:check
 Agent-first CLI:
 
 - Project check: `momocat inspect projects --db <path> --project-id <id>`
-- No-request prompt inspection: `momocat inspect localization --db <path> --project-id <id> --input <path> --output <inspect.xlsx>`
-- Resumable file translation: `momocat translate file --db <path> --project-id <id> --input <path> --output <translated.xlsx>`
+- No-request prompt inspection: `momocat inspect localization --db <path> --project-id <id> --input <path> --output <inspect.xlsx> [--request-mode window-partial]`
+- Resumable file translation: `momocat translate file --db <path> --project-id <id> --input <path> --output <translated.xlsx> [--request-mode window-partial]`
 - From a source checkout before installing or linking the bin: run `npm run build:cli` after source changes, then use `npm --silent run cli -- inspect projects --db <path> --project-id <id>`
-- Standard local smoke: `npm run smoke:momocat` (uses gitignored `.momocat-smoke.local.json`)
+- Standard local smoke: `npm run smoke:momocat` (uses gitignored `.momocat-smoke.local.json`; `requestMode` applies to both inspect and translate)
 - Real translation artifacts are opt-in with `--artifacts <path>`; inspect is the preferred prompt-debug path.
 
 ## If Task Is X, Open Y

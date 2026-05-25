@@ -56,9 +56,11 @@ Useful options:
 --json-output <path>
 --unit-limit <n>
 --max-cell-chars <n>
+--request-mode window
+--request-mode window-partial
 ```
 
-Use this before prompt changes and before real MT smoke. It does not send provider requests.
+Use this before prompt changes and before real MT smoke. It does not send provider requests. Pass the same `--request-mode` planned for translation so inspect prompt artifacts match the real run shape.
 
 Outputs:
 
@@ -116,6 +118,7 @@ Batch size defaults to 5, accepts values from 1 to 5, and controls the physical 
 
 Prompt contract:
 
+- Partial Window Mode user prompts put read-only context rows before the rows requiring target text.
 - Rows requiring target text reuse existing Window Mode current segment rendering.
 - Read-only context rows are context only and must not be returned by the provider.
 - Response ids are dynamic and request-only.
@@ -149,9 +152,9 @@ This command reads `.momocat-smoke.local.json`, which is intentionally gitignore
 Create it from `.momocat-smoke.example.json` and keep machine paths, project id,
 provider metadata, and model names in the local file.
 
-Set `"requestMode": "window-partial"` in the local smoke config, or pass `--request-mode window-partial` to the smoke helper, to run the final translate step in partial Window Mode. Set `"requestMode": "window"` or omit it to use dense Window Mode.
+Set `"requestMode": "window-partial"` in the local smoke config, or pass `--request-mode window-partial` to the smoke helper, to run inspect and translate in partial Window Mode. Set `"requestMode": "window"` or omit it to use dense Window Mode.
 
-Use `npm run smoke:momocat -- --dry-run` to print the exact commands, or `npm run smoke:momocat -- --inspect-only` to skip provider calls.
+Use `npm run smoke:momocat -- --dry-run` to print the exact commands, or `npm run smoke:momocat -- --inspect-only` to skip provider calls. Real translate prompt evidence is written to the configured `<prefix>.artifacts.jsonl` only when the translate step runs.
 
 1. Inspect project config.
 
@@ -162,7 +165,7 @@ momocat inspect projects --db <db> --project-id <id>
 2. Inspect prompt artifacts without sending requests.
 
 ```bash
-momocat inspect localization --db <db> --project-id <id> --input <input.xlsx> --output <inspect.xlsx>
+momocat inspect localization --db <db> --project-id <id> --input <input.xlsx> --output <inspect.xlsx> [--request-mode window-partial]
 ```
 
 3. Run real translation only when provider calls are intended.
@@ -174,6 +177,7 @@ momocat translate file --db <db> --project-id <id> --input <input.xlsx> --output
 For the partial request mode smoke:
 
 ```bash
+momocat inspect localization --db <db> --project-id <id> --input <input.xlsx> --output <inspect.xlsx> --request-mode window-partial
 momocat translate file --db <db> --project-id <id> --input <input.xlsx> --output <translated.xlsx> --request-mode window-partial
 ```
 
