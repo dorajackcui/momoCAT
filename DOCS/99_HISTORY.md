@@ -66,6 +66,13 @@ This document is historical context only. It is not an active development policy
 2. Distributed live-status reporting across multiple docs is retired; one live-status page is now used.
 3. Archive-first operational reading is retired; archive content is consolidated here for lookup only.
 
+## Retired TM/TB Design Records
+
+Earlier TM recall, concordance recall, and matching-flow documents were
+consolidated into `60_TM_TB_REFERENCE.md`. The active reference now records
+current behavior and debugging paths; the long-form design records are no
+longer active policy.
+
 ## Historical Scope Covered
 
 This consolidation replaces prior standalone archive narratives for:
@@ -82,4 +89,3 @@ This consolidation replaces prior standalone archive narratives for:
 1. Validate historical statements against current code before acting.
 2. Prefer active docs for any implementation decision.
 3. Promote only durable lessons into active docs; keep incident detail here.
-
