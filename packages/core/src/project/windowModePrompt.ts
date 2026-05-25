@@ -359,16 +359,27 @@ export function buildAIWindowModePromptBundle(
     sections.tbPromptBlock,
   ]);
 
+  const userPromptBlocks =
+    requestMode === "window-partial"
+      ? [
+          sections.batchBlock,
+          sections.previousContextBlock,
+          sections.currentSegmentsBlock,
+          sections.validationFeedbackBlock,
+          sections.jsonFormatBlock,
+        ]
+      : [
+          sections.batchBlock,
+          sections.currentSegmentsBlock,
+          sections.previousContextBlock,
+          sections.nextContextBlock,
+          sections.validationFeedbackBlock,
+          sections.jsonFormatBlock,
+        ];
+
   return {
     systemPrompt: buildSystemPrompt(normalizedParams),
-    userPrompt: joinBlocks([
-      sections.batchBlock,
-      sections.currentSegmentsBlock,
-      sections.previousContextBlock,
-      sections.nextContextBlock,
-      sections.validationFeedbackBlock,
-      sections.jsonFormatBlock,
-    ]),
+    userPrompt: joinBlocks(userPromptBlocks),
     sections,
   };
 }

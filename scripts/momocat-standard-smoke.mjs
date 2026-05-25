@@ -63,6 +63,7 @@ runCli("inspect localization", [
   artifacts.inspectJson,
   "--unit-limit",
   String(smoke.inspectUnitLimit),
+  ...requestModeArgs(smoke.requestMode),
 ]);
 
 if (!options.inspectOnly) {
@@ -342,7 +343,7 @@ Options:
   --dry-run               Print the commands without running them.
   --inspect-only          Run project readiness and no-request inspect only.
   --prefix <name>         Override the output artifact filename prefix.
-  --request-mode <mode>   Override translate request mode: window or window-partial.
+  --request-mode <mode>   Override inspect/translate request mode: window or window-partial.
   -h, --help              Show this help.
 `);
 }

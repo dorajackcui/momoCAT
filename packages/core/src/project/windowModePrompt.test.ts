@@ -257,6 +257,9 @@ describe("Window Mode prompt builder", () => {
       "Rows requiring target text. Return exactly these ids.",
     );
     expect(bundle.userPrompt).toContain("id: row-2");
+    expect(bundle.userPrompt.indexOf("Read-only context rows")).toBeLessThan(
+      bundle.userPrompt.indexOf("Rows requiring target text"),
+    );
     expect(bundle.sections.jsonFormatBlock).toContain("<target text>");
     expect(bundle.sections.jsonFormatBlock).not.toContain("<translation>");
     expect(bundle.userPrompt).not.toContain("Previous 5 translated rows");
