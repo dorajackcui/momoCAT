@@ -20,10 +20,11 @@ Agent-first CLI/headless localization. Shared capability lives behind
 
 Verification date: 2026-05-25
 
-- `Get-ChildItem DOCS -File | Sort-Object Name | Select-Object -ExpandProperty Name`
-- `rg -n "DOCS/agent-first|DOCS/superpowers/specs|DOCS/superpowers/plans" <active docs>`
-- `rg -n "https?://|[A-Za-z]:\\\\|api[_ -]?key|baseUrl|provider endpoint|local path|prompt artifact" <active docs>`
-- `git diff --check`
+- Top-level active docs listing matched the consolidated numbered docs set.
+- Old active doc path scan across active docs returned no matches.
+- Sensitive/local/private value scan across active docs returned only generic
+  policy references.
+- Markdown whitespace validation completed with no issues.
 
 ## Roadmap
 
