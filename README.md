@@ -6,7 +6,7 @@
 
 - 当前主线：`v0.3` 进行中
 - 当前重点：**正确性收口 + 解耦改造 + 类型契约收紧**
-- 版本与状态：`DOCS/40_STATUS_AND_ROADMAP.md`
+- 版本与状态：`DOCS/90_STATUS_AND_ROADMAP.md`
 
 ## 主要能力
 
@@ -110,8 +110,8 @@ DOCS/            # 项目文档
 - Architecture: `DOCS/10_ARCHITECTURE.md`
 - Engineering runbook: `DOCS/20_ENGINEERING_RUNBOOK.md`
 - Data model: `DOCS/30_DATA_MODEL.md`
-- Status and roadmap: `DOCS/40_STATUS_AND_ROADMAP.md`
-- Historical consolidation: `DOCS/90_HISTORY_CONSOLIDATED.md`
+- Status and roadmap: `DOCS/90_STATUS_AND_ROADMAP.md`
+- Historical consolidation: `DOCS/99_HISTORY.md`
 
 ## 运行数据说明
 
