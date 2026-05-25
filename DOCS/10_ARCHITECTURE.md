@@ -2,206 +2,190 @@
 
 ## Purpose
 
-Describe current system boundaries and module responsibilities so implementation changes stay local and predictable.
+Describe development boundaries, ownership, and dependency direction for shared
+localization capability.
 
-For the `cat-cli` branch, architecture decisions should optimize for agent-first CLI/headless workflows and shared localization capability. The legacy desktop UI remains supported, but it is not the primary target for new TM/TB/MT capabilities on this branch.
+This branch is agent-first and CLI-first. New TM/TB/MT behavior should land in
+shared packages and headless workflows before legacy desktop UI integration.
 
 ## When to Read
 
-Read before modifying module boundaries, cross-layer contracts, or multi-subsystem workflows.
+Read before changing package boundaries, cross-layer contracts, localization
+orchestration, persistence access, or desktop integration points.
 
-## Source of Truth
-
-- Runtime behavior: implementation in `apps` and `packages`
-- Guardrails: `DOCS/architecture/GATE05_GUARDRAILS.json`
-
-## Last Updated
-
-2026-05-25
-
-## Owner
-
-Core maintainers of `simple-cat-tool`
-
-## Layered Boundaries
-
-1. Renderer (`apps/desktop/src/renderer/src`)
-
-- Uses `apiClient` as the only entry to desktop APIs.
-- Owns view orchestration and UI state.
-
-2. Preload (`apps/desktop/src/preload`)
-
-- Exposes typed bridge through `window.api`.
-- Must stay thin; no domain logic.
-
-3. Main (`apps/desktop/src/main`)
-
-- `ProjectService` is the application facade.
-- Domain logic lives in modules/services, not IPC handlers.
-
-4. CLI (`apps/cli`)
-
-- Exposes the `momocat` app.
-- Owns command grammar, argument parsing, help text, stdout/stderr behavior, and exit codes.
-- Calls `@cat/localization` for agent-first workflows.
-- Must not import `apps/desktop`, `@cat/db`, or `@cat/core` directly.
-
-5. Packages
-
-- `@cat/core`: domain models and pure/domain algorithms.
-- `@cat/db`: persistence, current-schema bootstrap/validation, repositories.
-- `@cat/localization`: agent-first/headless localization orchestration, including file adapters, job runner, checkpoint/events/artifacts, LocalizationEngine, LocalizationInspector, and headless TM/TB/MT adapter modules.
-
-The branch focus is shared core capability plus agent-first orchestration:
-
-- Core capability: TM/TB/MT contracts, tag/protected-marker handling, prompt builders, response parsers, validation helpers, and persistence boundaries.
-- Agent-first operation: CLI commands and headless workflows that are inspectable, resumable, and automation-friendly.
-- Desktop interaction: retained as legacy host/UI surface unless a separate desktop migration is explicitly designed.
-
-### `@cat/core` internal slices
-
-- `@cat/core/models`: shared domain types only.
-- `@cat/core/project`: project-level enums, AI model registry, QA defaults, and project/file report types.
-- `@cat/core/tag`: tag parsing, markers, signatures, display helpers, and tag services.
-- `@cat/core/text`: token text serialization, term matching, TM key/hash helpers.
-- `@cat/core/qa`: tag/terminology QA and validation adapters.
-
-Internal dependency direction:
-
-- `models` -> no internal dependencies
-- `project` -> `models`
-- `tag` -> `models`
-- `text` -> `models`
-- `qa` -> `models`, `project`, `tag`, `text`
-
-## Current Module Responsibilities
-
-### Main modules (facades)
-
-- `ProjectFileModule`: project/file import-export orchestration.
-- `AIModule`: AI facade delegating to `services/modules/ai/*`.
-- `TMModule`: TM facade delegating to `services/modules/tm/*`.
-- `TBModule`: TB management and lookup.
-
-### AI internal services
-
-- `AISettingsService`
-- `AITranslationOrchestrator`
-- `fileTranslationWorkflow` (standard file batch translation loop)
-- `dialogueTranslationWorkflow` (dialogue grouping + fallback path)
-- `segmentTranslationWorkflow` (segment translate/refine/test workflows)
-- `translationTargetScope` (blank-only / overwrite-non-confirmed scope rules)
-- `AITextTranslator`
-- `SegmentPagingIterator`
-- dialogue helpers under `services/modules/ai/*`
-
-### TM internal services
-
-- `TMQueryService`
-- `TMImportService`
-- `TMBatchOpsService`
-
-### Core package boundaries
-
-- Use `@cat/core/models` for shared entities and token/segment types.
-- Use `@cat/core/project` for project-facing config/constants and QA settings.
-- Use `@cat/core/tag` for tag parsing, markers, display, and signatures.
-- Use `@cat/core/text` for linguistic text serialization and term matching.
-- Use `@cat/core/qa` for QA evaluation and `TagValidator`.
-- Use `@cat/core/project` as the current home for AI prompt builders and future pure MT prompt/response helpers; desktop main and localization should consume pure helpers rather than keep local prompt template copies.
-- Keep root `@cat/core` as a compatibility barrel only; repo code should import from a slice entrypoint instead.
-
-### Editor domain split (renderer)
-
-- Container: `components/Editor.tsx`
-- UI subcomponents: `components/editor/*`
-- Controller aggregation: `hooks/useEditor.ts`
-- Domain hooks: `hooks/editor/*`
-- Project AI controller facade: `hooks/projectDetail/useProjectAI.ts`
-- Project AI internals: `hooks/projectDetail/ai/*`
-- Editor filters facade: `hooks/useEditorFilters.ts`
-- Editor filter internals:
-  - `hooks/editor/editorFilterStateStorage.ts`
-  - `hooks/editor/editorSearchableSegments.ts`
-  - `hooks/editor/useEditorFilterMenus.ts`
-- Row orchestrator: `components/EditorRow.tsx`
-- Row internals: `components/editor-row/*`
-- Row hooks:
-  - `useEditorRowDraftController.ts` (draft sync, focus/blur flush, textarea resize)
-  - `useEditorRowCommandHandlers.ts` (shortcut resolution, tag insertion, AI refine input flow)
-  - `useEditorRowDisplayModel.ts` (status/highlight/non-printing/action-visibility derivation)
-
-## Key Call Chains
-
-### Segment edit and confirm
-
-`EditorRow` -> `useEditor` -> `apiClient` -> IPC handler -> `ProjectService` -> `SegmentService` -> repo/db
-
-### Legacy desktop file-level AI translation
-
-Renderer action -> `apiClient.aiTranslateFile` -> `ProjectService` -> `AIModule` -> AI orchestration -> segment updates -> job progress events
-
-This is the existing CAT editor workflow. Standard file processing uses bounded concurrent segment requests for translation default, review, and custom projects. Translation dialogue mode remains serial because each dialogue unit may depend on the previous translated group for consistency context.
-
-Do not use this desktop workflow as the model for new agent-first MT request scheduling.
-
-### Agent-first file localization
-
-`momocat` (`apps/cli`) -> `@cat/localization` command API -> `LocalizationEngine` / `LocalizationInspector` -> file/job adapters -> TM/TB/MT modules -> `@cat/db` + `@cat/core`
-
-Agent-first file translation keeps external spreadsheets out of project `files` and `segments`, writes per-unit checkpoints, and treats prompt artifacts as inspect-only or explicit diagnostic output.
-
-### TM import and batch match
-
-Renderer import flow -> IPC -> `ProjectService` -> `TMModule` -> TM import/query/batch services -> repos/db
-
-## Dependency Map
+## Dependency Direction
 
 ```text
-renderer components/hooks
-  -> renderer/services/apiClient
-  -> preload typed bridge
-  -> shared ipc channels + types
-  -> main ipc handlers
-  -> ProjectService
-  -> services/modules + domain services
-  -> adapters/repos
-  -> @cat/db + SQLite
-
 apps/cli -> @cat/localization -> @cat/db -> @cat/core
 apps/desktop -> @cat/localization
-
-@cat/core is consumed by renderer/main/db for shared domain types and algorithms.
-`apps/desktop` is a peer consumer of `@cat/localization`, not a dependency of CLI.
-`apps/cli` must own only the `momocat` app surface and must keep domain and persistence work behind `@cat/localization`.
 ```
 
-## Do / Don't Boundary Rules
+`apps/cli` owns the `momocat` app surface only. It may parse arguments, print
+help, control stdout/stderr, and call `@cat/localization` command APIs. It must
+not import `apps/desktop`, `@cat/db`, or `@cat/core` directly.
+
+`@cat/localization` owns headless localization orchestration: file adapters,
+inspect, job planning, checkpoints, events, artifacts, `LocalizationEngine`,
+and TM/TB/MT modules.
+
+`@cat/core` owns pure contracts and algorithms. MT prompt builders, strict JSON
+response parsers, tag/protected-marker helpers, and shared domain types belong
+there when they are pure.
+
+## Desktop Boundary
+
+The desktop app is a peer consumer of shared localization capability, not the
+owner of headless localization behavior.
+
+- Renderer code owns view orchestration and UI state.
+- Preload code exposes the typed bridge and stays thin.
+- Main process services own desktop application orchestration.
+- IPC handlers delegate to services and modules instead of holding domain logic.
+- Desktop file-level translation remains legacy workflow surface area unless a
+  separate migration explicitly moves it onto shared localization APIs.
+
+## CLI Boundary
+
+The CLI package is an app shell around `@cat/localization` command APIs.
+
+- Owns argument parsing, help text, terminal output, and exit behavior.
+- Does not own file parsing, job planning, TM/TB/MT behavior, persistence, or
+  prompt/response contracts.
+- Does not import desktop internals or lower-level shared packages directly.
+
+CLI command syntax and operating procedures belong in `40_CLI_OPERATION.md`.
+
+## Package Boundary
+
+- `@cat/localization`: headless localization orchestration and command-facing
+  APIs.
+- `@cat/db`: schema bootstrap, validation, repositories, and persistence
+  contracts.
+- `@cat/core`: pure domain contracts, types, prompt builders, response parsers,
+  tag/protected-marker helpers, text helpers, and QA algorithms.
+
+Repo code should import `@cat/core` through focused slice entrypoints where
+available. The root package entrypoint is a compatibility surface, not the
+preferred internal dependency.
+
+## File Layer
+
+The file layer adapts external inputs and outputs for headless localization.
+
+Responsibilities:
+
+- Read external spreadsheets or other supported file formats.
+- Detect source, target, and optional context fields.
+- Convert rows into typed localization or job units.
+- Preserve source file shape where possible.
+- Write final translated files and throttled snapshots.
+
+Non-responsibilities:
+
+- TM matching.
+- TB matching.
+- MT prompt construction.
+- Provider request scheduling.
+- Resume decisions.
+
+## Job Layer
+
+The job layer owns resumable execution.
+
+Responsibilities:
+
+- Plan work into translation tasks.
+- Run tasks with bounded concurrency.
+- Retry failed tasks according to configured attempts.
+- Append checkpoints as resume truth.
+- Append progress events for observability.
+- Trigger snapshot and final-output callbacks.
+- Capture diagnostic artifacts only when configured.
+
+Non-responsibilities:
+
+- File format parsing.
+- TM/TB business rules.
+- Prompt composition.
+- Provider-specific request body decisions.
+
+## LocalizationEngine Layer
+
+`LocalizationEngine` coordinates headless localization for external units.
+
+Responsibilities:
+
+- Resolve project configuration through shared package APIs.
+- Build transient segments from external units.
+- Apply target-scope policy such as blank-only behavior.
+- Coordinate TM, TB, and MT resource modules.
+- Expose file and unit translation APIs for headless callers.
+
+Non-responsibilities:
+
+- Owning external file format details.
+- Owning checkpoint storage format.
+- Owning progress event persistence.
+- Owning CLI command grammar.
+
+## Resource Modules
+
+TM, TB, and MT modules stay independently replaceable behind structured
+contracts.
+
+- `TMModule`: inspect mounted TM resources, raw matches, selected references,
+  and TM diagnostics.
+- `TBModule`: inspect mounted TB resources, raw matches, selected terms, and TB
+  diagnostics.
+- `MTModule`: compose prompts, resolve request settings, send MT requests,
+  validate responses, and return translated tokens.
+
+The MT module consumes structured TM/TB artifacts. TM and TB modules do not know
+how prompts are written.
+
+## Runtime Artifacts
+
+| Artifact | Default | Purpose |
+| --- | --- | --- |
+| Final output file | Yes | User-facing translated file. |
+| Checkpoint JSONL | Yes | Resume truth for completed output units. |
+| Event JSONL | Yes | Lightweight progress stream for humans, agents, and future services. |
+| Snapshot output | Yes, throttled | Partial translated output during long runs. |
+| Diagnostic artifacts | No | Opt-in records for inspectability and debugging. |
+| Inspect outputs | Inspect only | No-request outputs for module and prompt-contract review. |
+
+Normal runs should stay lightweight. Detailed diagnostics are opt-in.
+
+## Stable Contracts
+
+- File adapters call `LocalizationEngine` or the job layer through typed inputs,
+  not through DB side effects.
+- Job results are matched by `documentId` and `unitId`, not by array order.
+- Checkpoints do not depend on diagnostic artifact files.
+- Resume identity includes project and resolved translation policy
+  fingerprints.
+- Secrets must never be written into checkpoints, events, artifacts, snapshots,
+  or inspect outputs.
+- New prompt builders, strict JSON parsers, tag/protected-marker helpers, and
+  shared domain types move to `@cat/core` when they are pure.
+
+## Boundary Rules
 
 ### Do
 
-1. Keep `ProjectService` orchestration-only.
-2. Add business behavior in modules/services, not in IPC registration code.
-3. Keep IPC types centralized in `apps/desktop/src/shared/ipc.ts`.
-4. Use repository/service abstractions from ports instead of coupling UI to persistence details.
-5. Import `@cat/core` through slice entrypoints in repo code; avoid the root barrel except for explicit compatibility tests.
-6. `@cat/localization` may depend on `@cat/core` and `@cat/db`, but must not import `apps/desktop/src/main/*`. Desktop and CLI code call localization APIs instead of owning headless engine code.
-7. Put pure MT prompt contracts, builders, parsers, and schema validation in `@cat/core`; keep request orchestration in `@cat/localization`.
-8. Design new localization capability for shared packages and agent-first CLI/headless use before considering desktop UI integration.
+1. Put reusable localization capability in shared packages.
+2. Keep CLI and desktop app surfaces thin.
+3. Keep IPC and app-service orchestration separate from domain logic.
+4. Keep file, job, engine, and resource modules separately understandable.
+5. Add focused validation at the boundary being changed.
 
 ### Don't
 
-1. Don't put domain logic in preload.
-2. Don't bypass `apiClient` in renderer.
-3. Don't add cross-repo orchestration into `CATDatabase`.
-4. Don't introduce new large monolithic files when a focused internal service is appropriate.
-5. Don't import `packages/core/src/index.ts` from inside `packages/core`; import the needed slice or sibling module directly.
-6. Don't add new agent-first MT batching behavior to the legacy desktop GUI workflow.
-7. Don't make desktop UI state the source of truth for TM/TB/MT behavior needed by agents or CLI workflows.
-
-## Architecture Evolution Guidance
-
-1. Prefer vertical extraction with compatibility facades.
-2. Preserve IPC/public signatures unless an explicit migration is planned.
-3. Add tests on touched boundary seams (module API, IPC contract, migration behavior).
+1. Don't make desktop UI state the source of truth for shared localization
+   behavior.
+2. Don't add agent-first MT batching behavior to legacy desktop workflows.
+3. Don't bypass `@cat/localization` from the CLI to reach persistence or core
+   helpers.
+4. Don't couple file adapters to DB writes for external files.
+5. Don't add large monolithic services when a typed module boundary can carry
+   the behavior.
