@@ -43,11 +43,22 @@ context rows in Partial Window Mode do not get per-row TM/TB prompt blocks.
 
 ## Key Code Entry Points
 
-- `packages/localization/src/modules/TMModule.ts`
-- `packages/localization/src/modules/TBModule.ts`
-- `packages/localization/src/modules/MTModule.ts`
-- `packages/core/src/text`
-- `packages/core/src/tag`
+- `packages/localization/src/modules/TMModule.ts` selects TM and concordance
+  prompt references from service matches.
+- `packages/localization/src/modules/TBModule.ts` selects TB prompt references
+  from service matches.
+- `packages/localization/src/modules/MTModule.ts` composes structured TM,
+  concordance, and TB references into MT prompts.
+- `packages/localization/src/services/TMService.ts` implements TM exact,
+  fuzzy, concordance scoring, classification, and diversity behavior.
+- `packages/localization/src/services/TBService.ts` implements TB term matching
+  behavior for localization.
+- `packages/db/src/repos/TMRepo.ts` implements TM recall queries and repository
+  diversity gates.
+- `packages/db/src/repos/TBRepo.ts` implements TB lookup queries.
+- `packages/core/src/text` contains text normalization and token text helpers.
+- `packages/core/src/tag` contains protected marker and tag helpers.
+- `package.json` script `test:tm-flow` runs the focused active TM flow checks.
 
 ## Debugging Path
 
