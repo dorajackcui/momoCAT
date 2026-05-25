@@ -105,6 +105,11 @@ CI in plain language:
 2. If you touch `CATDatabase` schema/bootstrap behavior, run current-schema tests and document the startup/data impact.
 3. If you touch AI/TM/editor boundaries, run targeted test suites before merge.
 
+## CLI/Headless Operations
+
+For CLI/headless inspect, smoke, translate, resume, and artifact interpretation,
+use `DOCS/40_CLI_OPERATION.md`.
+
 ## Test Organization Convention
 
 1. Keep unit, behavior, and integration tests colocated with the implementation they cover.
