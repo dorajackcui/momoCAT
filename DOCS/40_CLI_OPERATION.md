@@ -12,7 +12,8 @@ localization flows.
 - From source checkout, use `npm --silent run cli -- <momocat arguments>`.
 - Use placeholders in docs and examples. Keep real local values in ignored
   local config files.
-- See `DOCS/50_MT_REQUEST_MODEL.md` for request-mode semantics.
+- For request-mode semantics, use the request model reference in
+  `DOCS/50_MT_REQUEST_MODEL.md`.
 
 ## Inspect Projects
 
@@ -66,12 +67,23 @@ provider calls are not intended.
 
 ## Sidecars and Outputs
 
+For direct `translate file` runs, default sidecars use the output base name.
+For example, `<translated.xlsx>` produces `<translated>.checkpoint.jsonl`,
+`<translated>.events.jsonl`, and `<translated>.snapshot.xlsx`.
+
+Standard smoke uses `<prefix>-translated.xlsx` for translated output and writes
+its sidecars with the run prefix.
+
 | Output | Purpose |
 | --- | --- |
-| `<output>.checkpoint.jsonl` | Resume truth per unit. |
-| `<output>.events.jsonl` | Lightweight progress stream. |
-| `<output>.snapshot.xlsx` | Throttled partial output. |
-| `<output>.artifacts.jsonl` | Opt-in prompt/TM/TB diagnostics for real translate runs. |
+| `<translated>.checkpoint.jsonl` | Direct translate resume truth per unit. |
+| `<translated>.events.jsonl` | Direct translate lightweight progress stream. |
+| `<translated>.snapshot.xlsx` | Direct translate throttled partial output. |
+| `<prefix>-translated.xlsx` | Standard smoke translated workbook. |
+| `<prefix>.checkpoint.jsonl` | Standard smoke resume truth per unit. |
+| `<prefix>.events.jsonl` | Standard smoke lightweight progress stream. |
+| `<prefix>.snapshot.xlsx` | Standard smoke throttled partial output. |
+| `<prefix>.artifacts.jsonl` | Standard smoke opt-in prompt/TM/TB diagnostics for real translate runs. |
 | `<prefix>-inspect.json` | No-request inspect artifacts. |
 | `<prefix>-inspect.xlsx` | No-request inspect workbook. |
 

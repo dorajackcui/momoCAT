@@ -12,7 +12,7 @@ Read before coding, before opening PRs, and whenever gate/test failures occur.
 
 - Package scripts: `package.json`
 - Architecture guard config: `DOCS/architecture/GATE05_GUARDRAILS.json`
-- Current project status and priorities: `DOCS/40_STATUS_AND_ROADMAP.md`
+- Current project status and priorities: `DOCS/90_STATUS_AND_ROADMAP.md`
 
 ## Last Updated
 
@@ -139,8 +139,8 @@ use `DOCS/40_CLI_OPERATION.md`.
 
 1. Keep architecture facts only in `DOCS/10_ARCHITECTURE.md`.
 2. Keep data model facts only in `DOCS/30_DATA_MODEL.md`.
-3. Keep live status only in `DOCS/40_STATUS_AND_ROADMAP.md`.
-4. Keep historical retrospective content only in `DOCS/90_HISTORY_CONSOLIDATED.md`.
+3. Keep live status only in `DOCS/90_STATUS_AND_ROADMAP.md`.
+4. Keep historical retrospective content only in `DOCS/99_HISTORY.md`.
 
 ## Failure Playbooks
 
