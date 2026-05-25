@@ -136,10 +136,14 @@ Do not include read-only context rows.
 2. Read-only context rows should be ordered in file order and labeled by role:
    `previous`, `current-existing`, or `next`.
 3. Only rows to translate should expose response ids.
-4. TM, concordance, and TB references remain per request row only.
-5. Current-window existing rows should not receive TM, concordance, or TB
+4. Rows to translate must reuse the existing Window Mode current segment
+   rendering logic. The per-request-row source, context, TM, concordance, TB,
+   marker-preserved payload, and strict JSON id contract should stay identical
+   to `window`.
+5. TM, concordance, and TB references remain per request row only.
+6. Current-window existing rows should not receive TM, concordance, or TB
    blocks.
-6. Next context may include target text when the source file or completed
+7. Next context may include target text when the source file or completed
    results already provide one. Otherwise it remains source-only.
 
 ## Response Contract
@@ -291,6 +295,10 @@ The existing `previousContext` and `nextContext` fields can either be kept for
 `window` and adapted into `readOnlyContextRows`, or gradually migrated behind a
 small compatibility mapper. The public prompt contract should stay role-based
 for `window-partial`.
+
+The `currentSegments` rendering path should be shared with `window`. The new
+mode changes which rows enter `currentSegments`; it does not change how a
+current segment's source, TM, concordance, TB, or row context is stitched.
 
 `PromptArtifact.batch` should record enough diagnostic shape without leaking
 sensitive data:
