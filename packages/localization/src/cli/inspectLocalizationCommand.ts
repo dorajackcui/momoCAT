@@ -9,6 +9,7 @@ export interface InspectLocalizationCommandConfig {
   jsonOutputPath?: string;
   unitLimit?: number;
   maxCellChars?: number;
+  requestMode?: 'window' | 'window-partial';
 }
 
 export async function runInspectLocalizationCommand(config: InspectLocalizationCommandConfig) {
@@ -22,6 +23,9 @@ export async function runInspectLocalizationCommand(config: InspectLocalizationC
       jsonOutputPath: config.jsonOutputPath,
       unitLimit: config.unitLimit,
       maxCellChars: config.maxCellChars,
+      options: {
+        requestMode: config.requestMode,
+      },
     };
 
     return await inspector.inspectFile(input);

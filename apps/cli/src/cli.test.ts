@@ -171,6 +171,7 @@ describe('momocat CLI dispatch', () => {
     expect(harness.stdout.join('')).toContain('--json-output <path>');
     expect(harness.stdout.join('')).toContain('--unit-limit <n>');
     expect(harness.stdout.join('')).toContain('--max-cell-chars <n>');
+    expect(harness.stdout.join('')).toContain('--request-mode <mode>');
   });
 
   it('maps inspect localization options to the localization command API', async () => {
@@ -188,6 +189,8 @@ describe('momocat CLI dispatch', () => {
         '12',
         '--max-cell-chars',
         '5000',
+        '--request-mode',
+        'window-partial',
       ],
       harness.deps,
       harness.io,
@@ -206,9 +209,37 @@ describe('momocat CLI dispatch', () => {
           jsonOutputPath: 'inspect.json',
           unitLimit: 12,
           maxCellChars: 5000,
+          requestMode: 'window-partial',
         },
       },
     ]);
+  });
+
+  it('reports inspect localization invalid request mode before calling localization', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      [
+        'inspect',
+        'localization',
+        '--db',
+        'cat.db',
+        '--project-id',
+        '7',
+        '--input',
+        'input.xlsx',
+        '--output',
+        'inspect.xlsx',
+        '--request-mode',
+        'legacy',
+      ],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toContain('--request-mode must be window or window-partial.');
+    expect(harness.stderr.join('')).toContain('Run: momocat inspect localization --help');
   });
 
   it('reports inspect localization invalid project id before calling localization', async () => {

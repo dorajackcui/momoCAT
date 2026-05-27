@@ -109,6 +109,13 @@ function assignOption(
     config.maxCellChars = parsePositiveInteger(optionValue, '--max-cell-chars');
     return;
   }
+  if (name === 'request-mode') {
+    if (optionValue !== 'window' && optionValue !== 'window-partial') {
+      throw new Error('--request-mode must be window or window-partial.');
+    }
+    config.requestMode = optionValue;
+    return;
+  }
 
   throw new Error(`Unknown argument: --${name}`);
 }
@@ -122,7 +129,8 @@ function isKnownOption(name: string): boolean {
     name === 'output' ||
     name === 'json-output' ||
     name === 'unit-limit' ||
-    name === 'max-cell-chars'
+    name === 'max-cell-chars' ||
+    name === 'request-mode'
   );
 }
 
@@ -137,6 +145,7 @@ Options:
   --json-output <path>             Optional JSON artifact output path.
   --unit-limit <n>                 Optional maximum number of source units to inspect.
   --max-cell-chars <n>             Optional max characters per generated spreadsheet cell.
+  --request-mode <mode>            window or window-partial.
   -h, --help                       Show this help.
 
 Examples:
