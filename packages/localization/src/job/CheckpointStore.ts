@@ -69,6 +69,39 @@ export class CheckpointIndex {
       metadata: unit.metadata,
     };
   }
+
+  toRuntimeSeedResults(units: JobUnit[]): UnitResult[] {
+    return units.flatMap((unit) => {
+      const record = this.getRecord(unit);
+
+      if (!record || record.hash !== unit.sourceHash) {
+        return [];
+      }
+
+      if (record.status !== 'translated' && record.status !== 'skipped') {
+        return [];
+      }
+
+      if (!unit.source.trim() || !record.target?.trim()) {
+        return [];
+      }
+
+      return [
+        {
+          jobId: record.job,
+          documentId: record.doc,
+          unitId: record.unit,
+          sourceHash: record.hash,
+          status: record.status,
+          source: unit.source,
+          target: record.target,
+          error: record.error,
+          attempts: record.attempts,
+          metadata: unit.metadata,
+        },
+      ];
+    });
+  }
 }
 
 export class CheckpointStore {

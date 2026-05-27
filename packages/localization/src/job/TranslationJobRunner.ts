@@ -36,10 +36,16 @@ export interface TranslationJobRunResult {
   results: UnitResult[];
 }
 
+export interface TranslationJobRuntimeTMHooks {
+  seed(results: UnitResult[]): Promise<void> | void;
+  commit(results: UnitResult[], task: TranslationTask, job: TranslationJob): Promise<void> | void;
+}
+
 export interface TranslationJobRunnerDependencies {
   checkpointStore: {
     load(jobId: string): Promise<{
       toReusedResult(unit: JobUnit): UnitResult | undefined;
+      toRuntimeSeedResults(units: JobUnit[]): UnitResult[];
     }>;
     append(record: CheckpointRecord): Promise<void>;
   };
@@ -57,6 +63,7 @@ export interface TranslationJobRunnerDependencies {
     context: TranslationJobRunnerCallbackContext,
   ) => Promise<void>;
   writeFinal?: (results: UnitResult[], context: TranslationJobRunnerCallbackContext) => Promise<void>;
+  runtimeTm?: TranslationJobRuntimeTMHooks;
 }
 
 export class TranslationJobRunner {
@@ -68,6 +75,7 @@ export class TranslationJobRunner {
   private readonly clock: () => Date;
   private readonly writeSnapshot?: TranslationJobRunnerDependencies['writeSnapshot'];
   private readonly writeFinal?: TranslationJobRunnerDependencies['writeFinal'];
+  private readonly runtimeTm?: TranslationJobRunnerDependencies['runtimeTm'];
 
   constructor(dependencies: TranslationJobRunnerDependencies) {
     this.checkpointStore = dependencies.checkpointStore;
@@ -78,6 +86,7 @@ export class TranslationJobRunner {
     this.clock = dependencies.clock ?? (() => new Date());
     this.writeSnapshot = dependencies.writeSnapshot;
     this.writeFinal = dependencies.writeFinal;
+    this.runtimeTm = dependencies.runtimeTm;
   }
 
   async run(job: TranslationJob): Promise<TranslationJobRunResult> {
@@ -104,6 +113,8 @@ export class TranslationJobRunner {
         resultMap.set(sharedUnitKey(unit), reusedResult);
         await this.emitUnitEvent(job, unit, 'unit_done', reusedResult.status, resultMap.size);
       }
+
+      await this.runtimeTm?.seed(checkpointIndex.toRuntimeSeedResults(job.units));
     }
 
     const pendingUnits = job.units.filter((unit) => !resultMap.has(sharedUnitKey(unit)));
@@ -134,9 +145,10 @@ export class TranslationJobRunner {
       tasks,
       async (task) => {
         const taskResult = await this.executeTaskWithAttempts(job, task, maxAttempts, resultMap);
-        await enqueuePersistence(() =>
-          this.persistTaskResult(job, task, taskResult, resultMap, throttle),
-        );
+        await enqueuePersistence(async () => {
+          await this.persistTaskResult(job, task, taskResult, resultMap, throttle);
+          await this.runtimeTm?.commit(taskResult.results, task, job);
+        });
       },
       { maxConcurrency: job.options?.maxConcurrency },
     );

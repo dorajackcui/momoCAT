@@ -677,6 +677,160 @@ describe('TranslationJobRunner', () => {
     expect(seenPlanUnitIds).toEqual([['unit-2']]);
   });
 
+  it('runtime TM seeds translated and skipped checkpoint results on resume', async () => {
+    const harness = await makeHarness();
+    await harness.checkpointStore.append(
+      makeCheckpoint({
+        unit: 'unit-1',
+        hash: 'hash-1',
+        status: 'translated',
+        target: 'translated checkpoint',
+      }),
+    );
+    await harness.checkpointStore.append(
+      makeCheckpoint({
+        unit: 'unit-2',
+        hash: 'hash-2',
+        status: 'skipped',
+        target: 'existing target',
+      }),
+    );
+    await harness.checkpointStore.append(
+      makeCheckpoint({
+        unit: 'unit-3',
+        hash: 'old-hash',
+        status: 'translated',
+        target: 'stale checkpoint',
+      }),
+    );
+    await harness.checkpointStore.append(
+      makeCheckpoint({
+        unit: 'unit-4',
+        hash: 'hash-4',
+        status: 'translated',
+        target: '',
+      }),
+    );
+    const seed = vi.fn();
+    const executor = vi.fn<TranslationTaskExecutor>(async (task) => ({
+        results: [
+          makeResult({
+            unitId: task.units[0].unitId,
+            sourceHash: task.units[0].sourceHash,
+            source: task.units[0].source,
+            target: `fresh ${task.units[0].unitId}`,
+          }),
+        ],
+      }));
+    const runner = harness.makeRunner(
+      executor,
+      {
+        runtimeTm: { seed, commit: vi.fn() },
+      },
+    );
+
+    await runner.run(
+      makeJob({
+        units: [
+          makeUnit({ unitId: 'unit-1', sourceHash: 'hash-1', source: 'Hello 1' }),
+          makeUnit({ unitId: 'unit-2', sourceHash: 'hash-2', source: 'Hello 2' }),
+          makeUnit({ unitId: 'unit-3', sourceHash: 'hash-3', source: 'Hello 3' }),
+          makeUnit({ unitId: 'unit-4', sourceHash: 'hash-4', source: 'Hello 4' }),
+        ],
+        options: { resume: true, maxConcurrency: 1 },
+      }),
+    );
+
+    expect(seed).toHaveBeenCalledTimes(1);
+    expect(seed).toHaveBeenCalledWith([
+      expect.objectContaining({
+        unitId: 'unit-1',
+        status: 'translated',
+        source: 'Hello 1',
+        target: 'translated checkpoint',
+      }),
+      expect.objectContaining({
+        unitId: 'unit-2',
+        status: 'skipped',
+        source: 'Hello 2',
+        target: 'existing target',
+      }),
+    ]);
+    expect(executor.mock.calls.map(([task]) => task.units[0].unitId)).toEqual([
+      'unit-2',
+      'unit-3',
+    ]);
+  });
+
+  it('runtime TM commits normalized task results after checkpoint persistence', async () => {
+    const harness = await makeHarness();
+    const calls: string[] = [];
+    const checkpointStore = {
+      load: harness.checkpointStore.load.bind(harness.checkpointStore),
+      append: async (record: CheckpointRecord) => {
+        calls.push(`checkpoint:${record.unit}:${record.target}`);
+        await harness.checkpointStore.append(record);
+      },
+    };
+    const commit = vi.fn((results: UnitResult[]) => {
+      calls.push(`commit:${results[0].unitId}:${results[0].target}`);
+    });
+    const runner = harness.makeRunner(
+      async () => ({
+        results: [
+          makeResult({
+            jobId: 'wrong-job',
+            unitId: 'unit-1',
+            sourceHash: 'wrong-hash',
+            source: 'wrong source',
+            target: 'normalized target',
+            attempts: 99,
+          }),
+        ],
+      }),
+      {
+        checkpointStore,
+        runtimeTm: {
+          seed: vi.fn(),
+          commit,
+        },
+      },
+    );
+
+    await runner.run(makeJob());
+
+    expect(calls).toEqual([
+      'checkpoint:unit-1:normalized target',
+      'commit:unit-1:normalized target',
+    ]);
+    expect(commit).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          jobId: 'job-1',
+          documentId: 'doc-1',
+          unitId: 'unit-1',
+          sourceHash: 'hash-1',
+          source: 'Hello',
+          target: 'normalized target',
+          attempts: 99,
+        }),
+      ],
+      expect.objectContaining({ taskId: 'task-1' }),
+      expect.objectContaining({ id: 'job-1' }),
+    );
+    expect(await readJsonlRecords<CheckpointRecord>(harness.checkpointPath)).toMatchObject({
+      records: [
+        expect.objectContaining({
+          job: 'job-1',
+          unit: 'unit-1',
+          hash: 'hash-1',
+          target: 'normalized target',
+          attempts: 99,
+        }),
+      ],
+    });
+  });
+
 });
 
 async function makeHarness(): Promise<{
@@ -688,7 +842,7 @@ async function makeHarness(): Promise<{
     executor: TranslationTaskExecutor,
     options?: Pick<
       ConstructorParameters<typeof TranslationJobRunner>[0],
-      'writeSnapshot' | 'writeFinal' | 'taskPlanner'
+      'writeSnapshot' | 'writeFinal' | 'taskPlanner' | 'runtimeTm' | 'checkpointStore'
     > & { persistArtifacts?: boolean },
   ) => TranslationJobRunner;
   events: () => Promise<ProgressEventRecord[]>;
@@ -706,13 +860,14 @@ async function makeHarness(): Promise<{
     checkpointStore,
     makeRunner: (taskExecutor, options = {}) => {
       const dependencies: ConstructorParameters<typeof TranslationJobRunner>[0] = {
-        checkpointStore,
+        checkpointStore: options.checkpointStore ?? checkpointStore,
         eventSink: new EventSink(eventsPath),
         taskPlanner: options.taskPlanner ?? new OneUnitTaskPlanner(),
         taskExecutor,
         clock: () => new Date('2026-05-19T00:00:00.000Z'),
         writeSnapshot: options.writeSnapshot,
         writeFinal: options.writeFinal,
+        runtimeTm: options.runtimeTm,
       };
 
       if (options.persistArtifacts !== false) {
