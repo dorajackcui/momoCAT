@@ -11,7 +11,21 @@ database.
 
 ## Status
 
-Design approved. Implementation pending.
+Implemented for headless file translation in `@cat/localization`.
+
+Runtime TM currently runs only for `translateFile()` jobs using
+`requestMode=window` or `requestMode=window-partial`. Each file translation job
+owns one job-local in-memory TM lifecycle: seed from reusable checkpoint results
+on resume, commit eligible translated and skipped task results during the job,
+then dispose when the job ends.
+
+Runtime TM keeps independent selection caps of 3 TM matches and 3 concordance
+matches alongside the existing persistent caps. Runtime entries do not write to
+Working TM, Main TM, or the persistent project database.
+
+Verification uses mocked/local tests only. Do not add real provider config,
+base URLs, API keys, local paths, or private prompt/artifact data to docs or
+source.
 
 ## Scope
 

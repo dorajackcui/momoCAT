@@ -18,13 +18,16 @@ Agent-first CLI/headless localization. Shared capability lives behind
 
 ## Latest Focused Verification
 
-Verification date: 2026-05-25
+Verification date: 2026-05-27
 
-- Top-level active docs listing matched the consolidated numbered docs set.
-- Old active doc path scan across active docs returned no matches.
-- Sensitive/local/private value scan across active docs returned only generic
-  policy references.
-- Markdown whitespace validation completed with no issues.
+- Runtime TM focused tests passed for runtime TM modules, job hooks, and
+  headless file translation coverage using mocked/local transports.
+- Window and Window Partial request-mode strategy tests passed.
+- `@cat/localization` typecheck and build passed, and the CLI build passed.
+- Sensitive/path scan across docs plus Runtime TM source and tests returned
+  only generic docs/test fixture references. No real provider config, base
+  URLs, API keys, local paths, or private prompt/artifact data were added.
+- No real provider smoke tests were run.
 
 ## Roadmap
 
@@ -33,12 +36,15 @@ Verification date: 2026-05-25
 - Keep active docs consolidated in outer numbered files.
 - Keep CLI/headless behavior documented for work agents.
 - Keep architecture and request contracts documented for coding agents.
-- Prepare Runtime TM implementation from `70_RUNTIME_TM_SPEC.md`.
+- Runtime TM is implemented for headless file translate jobs using
+  `requestMode=window` and `requestMode=window-partial`. It is job-local,
+  keeps independent caps of 3 TM and 3 concordance references, and does not
+  pollute persistent TM data.
 
 ### Next
 
 - Continue hardening CLI command grammar and inspect artifacts.
-- Continue strengthening `@cat/localization` Runtime TM, request-mode, and pure
+- Continue strengthening `@cat/localization` request-mode behavior and pure
   `@cat/core` MT helpers.
 
 ### Later
