@@ -743,6 +743,37 @@ describe('fileTranslationJobAdapter', () => {
     }
   });
 
+  it('separates none tag policy from default source hashes without changing explicit default', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
+    try {
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      writeWorkbook(inputPath, [
+        ['source', 'target'],
+        ['Save {1} {1>name<2} <b>x</b> %s', ''],
+      ]);
+
+      const omitted = await prepareFileTranslationJob({ projectId: 7, inputPath, outputPath });
+      const explicitDefault = await prepareFileTranslationJob({
+        projectId: 7,
+        inputPath,
+        outputPath,
+        options: { tagPolicy: 'default' },
+      });
+      const none = await prepareFileTranslationJob({
+        projectId: 7,
+        inputPath,
+        outputPath,
+        options: { tagPolicy: 'none' },
+      });
+
+      expect(omitted.job.units[0]?.sourceHash).toBe(explicitDefault.job.units[0]?.sourceHash);
+      expect(omitted.job.units[0]?.sourceHash).not.toBe(none.job.units[0]?.sourceHash);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('forces ordered Window Mode job concurrency regardless of legacy concurrency options', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
     try {

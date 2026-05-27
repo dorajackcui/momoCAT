@@ -1,4 +1,5 @@
 import { CATDatabase } from '@cat/db';
+import type { TagPolicy } from '@cat/core/tag';
 import { LocalizationEngine } from '../LocalizationEngine';
 import type { TranslateFileInput } from '../types';
 
@@ -9,6 +10,7 @@ export interface TranslateFileCommandConfig {
   outputPath: string;
   targetScope?: 'blank-only' | 'overwrite-non-confirmed';
   requestMode?: 'window' | 'window-partial';
+  tagPolicy?: TagPolicy;
   checkpointPath?: string;
   eventsPath?: string;
   artifactsPath?: string;
@@ -32,6 +34,7 @@ export async function runTranslateFileCommand(config: TranslateFileCommandConfig
       options: {
         targetScope: config.targetScope,
         requestMode: config.requestMode,
+        tagPolicy: config.tagPolicy,
         batchSize: config.batchSize,
       },
       job: {

@@ -1,4 +1,5 @@
 import { CATDatabase } from '@cat/db';
+import type { TagPolicy } from '@cat/core/tag';
 import { LocalizationInspector, type InspectFileInput } from '../LocalizationInspector';
 
 export interface InspectLocalizationCommandConfig {
@@ -10,6 +11,7 @@ export interface InspectLocalizationCommandConfig {
   unitLimit?: number;
   maxCellChars?: number;
   requestMode?: 'window' | 'window-partial';
+  tagPolicy?: TagPolicy;
 }
 
 export async function runInspectLocalizationCommand(config: InspectLocalizationCommandConfig) {
@@ -25,6 +27,7 @@ export async function runInspectLocalizationCommand(config: InspectLocalizationC
       maxCellChars: config.maxCellChars,
       options: {
         requestMode: config.requestMode,
+        tagPolicy: config.tagPolicy,
       },
     };
 

@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { basename, extname, join, parse as parsePath, win32 } from 'path';
+import { tagPolicyFingerprintValue } from './tagPolicy';
 import { resolveBatchTargetScope } from './translationTargetScope';
 import { CheckpointStore } from './job/CheckpointStore';
 import { EventSink } from './job/EventSink';
@@ -189,6 +190,7 @@ function computeFileTranslationResumeFingerprint(input: TranslateFileInput): str
     ['targetScope', resolveBatchTargetScope(input.options?.targetScope)],
     ['mode', input.options?.mode ?? 'standard'],
     ['requestMode', input.options?.requestMode ?? 'window'],
+    ['tagPolicy', tagPolicyFingerprintValue(input.options?.tagPolicy)],
     ['providerOverride', input.options?.providerOverride],
     ['mt.providerId', input.options?.mt?.providerId],
     ['mt.model', input.options?.mt?.model],
