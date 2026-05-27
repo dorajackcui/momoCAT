@@ -1,5 +1,6 @@
 import type { Segment } from '@cat/core/models';
 import type { Project } from '@cat/core/project';
+import type { TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import { runBounded } from '../../RequestScheduler';
 import type { MTModule, ResolvedMTConfig } from '../../modules/MTModule';
@@ -30,6 +31,7 @@ export interface LegacySingleUnitConcurrentStrategyInput {
   project: Project;
   mtConfig: ResolvedMTConfig;
   mtOptions: NonNullable<LocalizationEngineOptions['mt']>;
+  tagPolicy: TagPolicy;
   includeReferences: boolean;
   maxConcurrency?: number;
   units: PreparedLegacyUnit[];
@@ -96,6 +98,7 @@ export class LegacySingleUnitConcurrentStrategy {
       model: input.mtConfig.model,
       reasoningEffort: input.mtConfig.reasoningEffort,
       provider: input.mtConfig.provider,
+      tagPolicy: input.tagPolicy,
       srcLang: prepared.unit.sourceLanguage ?? input.project.srcLang,
       tgtLang: prepared.unit.targetLanguage ?? input.project.tgtLang,
     });

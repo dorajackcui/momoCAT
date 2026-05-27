@@ -155,6 +155,42 @@ describe('LocalizationInspector.inspectFile', () => {
     }
   });
 
+  it('inspects marker-like text as plain source payload when tag policy is none', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-inspect-policy-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Inspect Plain Markers', 'en', 'fr');
+      configureAIProvider(db, projectId);
+      const inputPath = writeInputWorkbook(root, [
+        ['source', 'target'],
+        ['Hello {1>name<2} <b>x</b> %s', ''],
+      ]);
+      const outputPath = join(root, 'inspect.out.xlsx');
+      const jsonOutputPath = join(root, 'inspect.json');
+      const inspector = new LocalizationInspector(db, {
+        aiTransport: createTransport(),
+        aiRuntimeConfigProvider: runtimeConfigProvider(),
+      });
+
+      const result = await inspector.inspectFile({
+        projectId,
+        inputPath,
+        outputPath,
+        jsonOutputPath,
+        options: { tagPolicy: 'none' },
+      });
+
+      const unit = result.artifact.units[0];
+      expect(unit.transientSegment.tagsSignature).toBe('');
+      expect(unit.mt.sourcePayload).toBe('row-2: Hello {1>name<2} <b>x</b> %s');
+      expect(unit.mt.userPrompt).toContain('Hello {1>name<2} <b>x</b> %s');
+      expect(unit.mt.userPrompt).not.toContain('{1>x<2}');
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('preserves full prompt, TM, and TB artifacts in the JSON sidecar', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
     const db = new CATDatabase(':memory:');

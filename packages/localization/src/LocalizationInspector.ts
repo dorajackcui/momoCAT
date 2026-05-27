@@ -3,6 +3,7 @@ import { basename, extname, join, parse } from 'path';
 import type { Segment } from '@cat/core/models';
 import type { Project } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
+import type { TagPolicy } from '@cat/core/tag';
 import type { CATDatabase } from '@cat/db';
 import { MTModule } from './modules/MTModule';
 import { TBModule } from './modules/TBModule';
@@ -46,6 +47,7 @@ import {
   writeInspectSpreadsheet,
 } from './modules/FileModule';
 import { createTransientSegment } from './transientSegment';
+import { resolveTagPolicy } from './tagPolicy';
 import type {
   LocalizationEngineOptions,
   LocalizationMode,
@@ -160,6 +162,7 @@ export class LocalizationInspector {
     const targetScope = resolveBatchTargetScope(
       input.options?.targetScope ?? this.options.defaultTargetScope,
     );
+    const tagPolicy = resolveTagPolicy(input.options?.tagPolicy);
     const sourceRows = parsed.artifact.rows.filter((row) => row.source.trim());
     const limitedRows =
       unitLimit === undefined ? sourceRows : sourceRows.slice(0, unitLimit);
@@ -174,6 +177,7 @@ export class LocalizationInspector {
           targetLanguage: project.tgtLang,
           fileName: basename(parsed.inputPath),
         },
+        { tagPolicy },
       );
       return { row, segment, sourceIndex: index };
     });
@@ -188,6 +192,7 @@ export class LocalizationInspector {
             parsed.inputPath,
             maxCellChars,
             targetScope,
+            tagPolicy,
           )
         : await this.inspectRowsWindowMode(
             project,
@@ -196,6 +201,7 @@ export class LocalizationInspector {
             parsed.inputPath,
             maxCellChars,
             targetScope,
+            tagPolicy,
           );
 
     const firstReadyPrompt =
@@ -261,6 +267,7 @@ export class LocalizationInspector {
     inputPath: string,
     maxCellChars: number,
     targetScope: LocalizationTargetScope,
+    tagPolicy: TagPolicy,
   ): Promise<InspectUnitArtifact[]> {
     const translatableRows = rows.filter(({ row }) =>
       isTranslatableUnderTargetScope(row, targetScope),
@@ -320,6 +327,7 @@ export class LocalizationInspector {
           ...buildInspectWindowContext(contextRows, readyRows, inputDocumentId),
           mtOptions: this.options.mt,
           providerOverride: this.options.mt?.providerId,
+          tagPolicy,
         });
 
         for (const { unitIndex } of readyRows) {
@@ -353,6 +361,7 @@ export class LocalizationInspector {
     inputPath: string,
     maxCellChars: number,
     targetScope: LocalizationTargetScope,
+    tagPolicy: TagPolicy,
   ): Promise<InspectUnitArtifact[]> {
     const requestRows = rows.filter(({ row }) =>
       isTranslatableUnderTargetScope(row, targetScope),
@@ -430,6 +439,7 @@ export class LocalizationInspector {
           scanWindowCount: scanWindowUnits.length,
           mtOptions: this.options.mt,
           providerOverride: this.options.mt?.providerId,
+          tagPolicy,
         });
 
         for (const { unitIndex } of readyRows) {

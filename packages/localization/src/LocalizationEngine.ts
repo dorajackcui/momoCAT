@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 import type { Segment } from '@cat/core/models';
 import { normalizeProjectAIModel } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
+import type { TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { CATDatabase } from '@cat/db';
 import { MTModule } from './modules/MTModule';
@@ -21,6 +22,7 @@ import type { AIRuntimeConfigProvider, AITransport } from './ports';
 import { translateSpreadsheetFileJob } from './fileTranslationJobAdapter';
 import { translateSpreadsheetFile } from './spreadsheetFileAdapter';
 import { RuntimeTMContext, RuntimeTMReferenceResolver } from './runtimeTm';
+import { resolveTagPolicy, tagPolicyFingerprintValue } from './tagPolicy';
 import { createTransientSegment } from './transientSegment';
 import { unitKey } from './requestModes/shared/unitIdentity';
 import type { RequestModeReferenceResolver } from './requestModes/shared/references';
@@ -205,9 +207,10 @@ export class LocalizationEngine {
     const targetScope = resolveBatchTargetScope(
       input.options?.targetScope ?? this.options.defaultTargetScope,
     ) as LocalizationTargetScope;
+    const tagPolicy = resolveTagPolicy(input.options?.tagPolicy);
     const maxConcurrency = input.options?.maxConcurrency ?? this.options.maxConcurrency;
     const preparedUnits = input.units.map((unit, index) =>
-      this.prepareUnit(unit, index, project, targetScope),
+      this.prepareUnit(unit, index, project, targetScope, tagPolicy),
     );
     const hasTranslatableUnits = preparedUnits.some((prepared) => prepared.kind === 'translatable');
 
@@ -238,6 +241,7 @@ export class LocalizationEngine {
       project,
       mtConfig,
       mtOptions,
+      tagPolicy,
       includeReferences: Boolean(input.options?.includeReferences),
       maxConcurrency,
       units: translatableUnits,
@@ -282,8 +286,9 @@ export class LocalizationEngine {
     const targetScope = resolveBatchTargetScope(
       translationOptions?.targetScope ?? this.options.defaultTargetScope,
     ) as LocalizationTargetScope;
+    const tagPolicy = resolveTagPolicy(translationOptions?.tagPolicy);
     const preparedUnits = task.units.map((unit, index) =>
-      this.prepareUnit(jobUnitToExternalUnit(unit), index, project, targetScope),
+      this.prepareUnit(jobUnitToExternalUnit(unit), index, project, targetScope, tagPolicy),
     );
     const hasTranslatableUnits = preparedUnits.some((prepared) => prepared.kind === 'translatable');
     const captureArtifacts = context.captureArtifacts !== false;
@@ -330,6 +335,7 @@ export class LocalizationEngine {
       project,
       mtConfig,
       mtOptions,
+      tagPolicy,
       includeReferences: Boolean(translationOptions?.includeReferences),
       captureArtifacts,
       translatableUnits,
@@ -358,6 +364,7 @@ export class LocalizationEngine {
       if (mode === 'dialogue') {
         throw new Error('Dialogue mode is not supported for external translation units.');
       }
+      resolveTagPolicy(input.options?.tagPolicy);
 
       const project = this.projectRepo.getProject(input.projectId);
       if (!project) {
@@ -471,6 +478,7 @@ export class LocalizationEngine {
       ['targetScope', targetScope],
       ['mode', mode],
       ['requestMode', input.options?.requestMode ?? 'window'],
+      ['tagPolicy', tagPolicyFingerprintValue(input.options?.tagPolicy)],
       ['provider.id', mtConfig.provider.id],
       ['provider.kind', mtConfig.provider.kind],
       ['provider.protocol', mtConfig.provider.protocol],
@@ -489,6 +497,7 @@ export class LocalizationEngine {
     index: number,
     project: ProjectRecord,
     targetScope: LocalizationTargetScope,
+    tagPolicy: TagPolicy,
   ): PreparedUnit {
     const source = unit.source;
     if (!source.trim()) {
@@ -504,12 +513,17 @@ export class LocalizationEngine {
       };
     }
 
-    const segment = createTransientSegment(unit, index, {
-      projectId: project.id,
-      sourceLanguage: project.srcLang,
-      targetLanguage: project.tgtLang,
-      fileName: unit.fileName,
-    });
+    const segment = createTransientSegment(
+      unit,
+      index,
+      {
+        projectId: project.id,
+        sourceLanguage: project.srcLang,
+        targetLanguage: project.tgtLang,
+        fileName: unit.fileName,
+      },
+      { tagPolicy },
+    );
     const existingTarget = serializeTokensToDisplayText(segment.targetTokens);
     if (targetScope === 'blank-only' && existingTarget.trim()) {
       return {

@@ -1,4 +1,5 @@
 import type { Project } from '@cat/core/project';
+import type { TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { LocalizationEngineOptions } from '../../types';
 import type {
@@ -33,6 +34,7 @@ export interface WindowPartialSequentialBatchStrategyInput {
   project: Project;
   mtConfig: ResolvedMTConfig;
   mtOptions: NonNullable<LocalizationEngineOptions['mt']>;
+  tagPolicy: TagPolicy;
   includeReferences: boolean;
   captureArtifacts: boolean;
   translatableUnits: PreparedTranslatableJobUnit[];
@@ -107,6 +109,7 @@ export class WindowPartialSequentialBatchStrategy {
       model: input.mtConfig.model,
       reasoningEffort: input.mtConfig.reasoningEffort,
       provider: input.mtConfig.provider,
+      tagPolicy: input.tagPolicy,
       srcLang: meta?.sourceLanguage ? String(meta.sourceLanguage) : input.project.srcLang,
       tgtLang: meta?.targetLanguage ? String(meta.targetLanguage) : input.project.tgtLang,
     });

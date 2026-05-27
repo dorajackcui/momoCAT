@@ -194,6 +194,38 @@ describe('LocalizationEngine.translateUnits', () => {
     }
   });
 
+  it('translates marker-like external units as plain text when tag policy is none', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('External Plain Markers', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const transport = createTransport('Bonjour {1>nom<2}');
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+
+      const result = await engine.translateUnits({
+        projectId,
+        units: [{ id: 'unit-1', source: 'Hello {1>name<2} <b>x</b>' }],
+        options: { tagPolicy: 'none' },
+      });
+
+      expect(result.results[0]).toMatchObject({
+        id: 'unit-1',
+        source: 'Hello {1>name<2} <b>x</b>',
+        target: 'Bonjour {1>nom<2}',
+        status: 'translated',
+      });
+      const request = transport.createResponse.mock.calls[0]?.[0];
+      expect(request.userPrompt).toContain('Hello {1>name<2} <b>x</b>');
+      expect(request.userPrompt).not.toContain('{1>x<2}');
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
+    } finally {
+      db.close();
+    }
+  });
+
   it('resolves TM and TB references for transient units without persisting file records', async () => {
     const db = new CATDatabase(':memory:');
     try {
@@ -1241,6 +1273,30 @@ describe('LocalizationEngine.translateFile job mode', () => {
 });
 
 describe('LocalizationEngine task executor', () => {
+  it('rejects invalid runtime tag policy values before provider requests', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Invalid Tag Policy', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const transport = createTransport('Bonjour');
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+
+      await expect(
+        engine.translateUnits({
+          projectId,
+          units: [{ id: 'unit-1', source: 'Hello' }],
+          options: { tagPolicy: 'html-only' as never },
+        }),
+      ).rejects.toThrow('tagPolicy must be default or none.');
+      expect(transport.createResponse).not.toHaveBeenCalled();
+    } finally {
+      db.close();
+    }
+  });
+
   it('translates a task unit without creating files or segment rows and returns artifacts', async () => {
     const db = new CATDatabase(':memory:');
     try {
