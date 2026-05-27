@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SqliteSettingsRepository } from '../adapters/sqlite/SqliteSettingsRepository';
 import { AIProviderCatalogService } from '../providers/AIProviderCatalogService';
 import type { AIRuntimeConfigProvider, AITransport } from '../ports';
+import type { TagValidator } from '@cat/core/qa';
 import type { TMMatch } from '../internalServices';
 import type { TBArtifact, TMArtifact } from '../artifacts';
 import { createTransientSegment } from '../transientSegment';
@@ -272,7 +273,8 @@ describe('MTModule', () => {
         { tagPolicy: 'none' },
       );
       const transport = createTransport('<b>Enregistrer</b> {1>nom<2}');
-      const module = createModule(db, transport);
+      const tagValidator = createFailingTagValidator();
+      const module = createModule(db, transport, 'medium', tagValidator as never);
       const config = await module.resolveConfig(project);
 
       const result = await module.translate({
@@ -296,6 +298,7 @@ describe('MTModule', () => {
       ]);
       expect(serializeTokensToDisplayText(result.targetTokens)).toBe('<b>Enregistrer</b> {1>nom<2}');
       expect(transport.createResponse).toHaveBeenCalledTimes(1);
+      expect(tagValidator.validate).not.toHaveBeenCalled();
     } finally {
       db.close();
     }
@@ -603,7 +606,8 @@ describe('MTModule', () => {
           translations: [{ id: 'row-2', text: 'Enregistrer sans marqueur' }],
         }),
       );
-      const module = createModule(db, transport);
+      const tagValidator = createFailingTagValidator();
+      const module = createModule(db, transport, 'medium', tagValidator as never);
       const config = await module.resolveConfig(project);
 
       const result = await module.translateBatch({
@@ -635,6 +639,7 @@ describe('MTModule', () => {
         'Enregistrer sans marqueur',
       );
       expect(transport.createResponse).toHaveBeenCalledTimes(1);
+      expect(tagValidator.validate).not.toHaveBeenCalled();
     } finally {
       db.close();
     }
@@ -814,6 +819,7 @@ function createModule(
   db: CATDatabase,
   transport: AITransport,
   reasoningEffort: 'low' | 'medium' | 'high' = 'medium',
+  tagValidator?: TagValidator,
 ): MTModule {
   const runtimeConfigProvider: AIRuntimeConfigProvider = {
     getModelConfig: vi.fn().mockResolvedValue({ reasoningEffort }),
@@ -826,7 +832,17 @@ function createModule(
     ),
     aiRuntimeConfigProvider: runtimeConfigProvider,
     aiTransport: transport,
+    tagValidator,
   });
+}
+
+function createFailingTagValidator(): Pick<TagValidator, 'validate'> {
+  return {
+    validate: vi.fn(() => ({
+      issues: [{ ruleId: 'tag-missing', severity: 'error', message: 'Should not run' }],
+      suggestions: [],
+    })),
+  };
 }
 
 function seedConfiguredAIProvider(db: CATDatabase, projectId: number): void {
