@@ -33,11 +33,13 @@ Verification date: 2026-05-25
 - Keep active docs consolidated in outer numbered files.
 - Keep CLI/headless behavior documented for work agents.
 - Keep architecture and request contracts documented for coding agents.
+- Prepare Runtime TM implementation from `70_RUNTIME_TM_SPEC.md`.
 
 ### Next
 
 - Continue hardening CLI command grammar and inspect artifacts.
-- Continue strengthening `@cat/localization` and pure `@cat/core` MT helpers.
+- Continue strengthening `@cat/localization` Runtime TM, request-mode, and pure
+  `@cat/core` MT helpers.
 
 ### Later
 

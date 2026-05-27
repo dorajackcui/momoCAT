@@ -10,6 +10,8 @@ prompt composition.
 Read this when changing TM recall, concordance behavior, TB matching, or how
 references are selected for MT prompts.
 
+Read `70_RUNTIME_TM_SPEC.md` before changing job-local Runtime TM behavior.
+
 ## Current TM Flow
 
 - Mounted TM resources are resolved from the project before recall.
@@ -40,6 +42,10 @@ structured prompt references attached to request rows.
 
 TM, concordance, and TB references are attached to request rows. Read-only
 context rows in Partial Window Mode do not get per-row TM/TB prompt blocks.
+
+Runtime TM design is owned by `70_RUNTIME_TM_SPEC.md`. Runtime references must
+reuse the persistent TM recall path where possible and merge into the existing
+TM and concordance prompt blocks.
 
 ## Key Code Entry Points
 
