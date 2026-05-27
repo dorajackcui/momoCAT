@@ -106,6 +106,52 @@ function createTMEntry(params: {
   };
 }
 
+function mountEmptyMainTM(db: CATDatabase, projectId: number): string {
+  const tmId = db.createTM('Empty Main TM', 'en', 'fr', 'main');
+  db.mountTMToProject(projectId, tmId, 10, 'readwrite');
+  return tmId;
+}
+
+function expectPersistentTMsEmpty(db: CATDatabase): void {
+  const stats = db.listTMs().map((tm) => ({
+    name: tm.name,
+    type: tm.type,
+    entryCount: db.getTMStats(tm.id).entryCount,
+  }));
+
+  expect(stats).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ type: 'working', entryCount: 0 }),
+      expect.objectContaining({ type: 'main', entryCount: 0 }),
+    ]),
+  );
+  expect(stats.every((stat) => stat.entryCount === 0)).toBe(true);
+  expect(stats.map((stat) => stat.name)).not.toContain('Runtime TM');
+}
+
+function expectRuntimeTMPromptReference(
+  prompt: string,
+  responseId: string,
+  sourceText: string,
+  targetText: string,
+): void {
+  expect(prompt).toContain('TM References');
+  expect(prompt).toMatch(
+    new RegExp(
+      [
+        `id: ${escapeRegExp(responseId)}`,
+        'Runtime TM',
+        escapeRegExp(sourceText),
+        escapeRegExp(targetText),
+      ].join('[\\s\\S]*'),
+    ),
+  );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 describe('LocalizationEngine.translateUnits', () => {
   it('translates external units through project MT without creating files or segments', async () => {
     const db = new CATDatabase(':memory:');
@@ -541,6 +587,81 @@ describe('LocalizationEngine.translateFile job mode', () => {
     }
   });
 
+  it('uses Runtime TM in later Window Mode file batches without polluting persistent TM', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('External File Runtime TM Window', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      mountEmptyMainTM(db, projectId);
+      const inputPath = join(root, 'runtime-window.xlsx');
+      const outputPath = join(root, 'runtime-window.translated.xlsx');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target'],
+          ['Install package', ''],
+          ['Open settings', ''],
+          ['Choose folder', ''],
+          ['Start download', ''],
+          ['Finish setup', ''],
+          ['Install package', ''],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+      const transport = createTransport();
+      transport.createResponse
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            translations: [
+              { id: 'runtime-window.xlsx#row-2', text: 'Installer le paquet' },
+              { id: 'runtime-window.xlsx#row-3', text: 'Ouvrir les parametres' },
+              { id: 'runtime-window.xlsx#row-4', text: 'Choisir le dossier' },
+              { id: 'runtime-window.xlsx#row-5', text: 'Demarrer le telechargement' },
+              { id: 'runtime-window.xlsx#row-6', text: 'Terminer la configuration' },
+            ],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            translations: [{ id: 'runtime-window.xlsx#row-7', text: 'Installer le paquet' }],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        });
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+
+      const result = await engine.translateFile({
+        projectId,
+        inputPath,
+        outputPath,
+        job: { maxAttempts: 1 },
+      });
+
+      expect(result.summary).toEqual({ total: 6, translated: 6, skipped: 0, failed: 0 });
+      expect(transport.createResponse).toHaveBeenCalledTimes(2);
+      const secondPrompt = transport.createResponse.mock.calls[1]?.[0].userPrompt;
+      expect(secondPrompt).toEqual(expect.any(String));
+      expectRuntimeTMPromptReference(
+        secondPrompt as string,
+        'runtime-window.xlsx#row-7',
+        'Install package',
+        'Installer le paquet',
+      );
+      expectPersistentTMsEmpty(db);
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('uses partial Window Mode to request only blank rows while preserving existing targets', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
     const db = new CATDatabase(':memory:');
@@ -610,6 +731,103 @@ describe('LocalizationEngine.translateFile job mode', () => {
         ['row-6', 'translated', 'Cinq'],
       ]);
       expect(transport.createResponse).toHaveBeenCalledTimes(1);
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('uses Runtime TM from skipped rows in later Window Partial Mode file batches', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('External File Runtime TM Partial Window', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      mountEmptyMainTM(db, projectId);
+      const inputPath = join(root, 'runtime-partial.xlsx');
+      const outputPath = join(root, 'runtime-partial.translated.xlsx');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target'],
+          ['Start game', ''],
+          ['Launch game', 'Lancer le jeu'],
+          ['Open options', ''],
+          ['Quit game', 'Quitter le jeu'],
+          ['Save progress', ''],
+          ['Launch game', ''],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+      const transport = createTransport();
+      transport.createResponse
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            translations: [
+              { id: 'runtime-partial.xlsx#row-2', text: 'Demarrer le jeu' },
+              { id: 'runtime-partial.xlsx#row-4', text: 'Ouvrir les options' },
+              { id: 'runtime-partial.xlsx#row-6', text: 'Sauvegarder la progression' },
+            ],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            translations: [{ id: 'runtime-partial.xlsx#row-7', text: 'Lancer le jeu' }],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        });
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+
+      const result = await engine.translateFile({
+        projectId,
+        inputPath,
+        outputPath,
+        options: { requestMode: 'window-partial', targetScope: 'blank-only' },
+        job: { maxAttempts: 1 },
+      });
+
+      expect(result.summary).toEqual({ total: 6, translated: 4, skipped: 2, failed: 0 });
+      expect(result.results.map((unit) => [unit.id, unit.status, unit.target])).toEqual([
+        ['row-2', 'translated', 'Demarrer le jeu'],
+        ['row-3', 'skipped', 'Lancer le jeu'],
+        ['row-4', 'translated', 'Ouvrir les options'],
+        ['row-5', 'skipped', 'Quitter le jeu'],
+        ['row-6', 'translated', 'Sauvegarder la progression'],
+        ['row-7', 'translated', 'Lancer le jeu'],
+      ]);
+      expect(transport.createResponse).toHaveBeenCalledTimes(2);
+      const firstPrompt = transport.createResponse.mock.calls[0]?.[0].userPrompt;
+      const secondPrompt = transport.createResponse.mock.calls[1]?.[0].userPrompt;
+      expect(firstPrompt).toEqual(expect.any(String));
+      expect(secondPrompt).toEqual(expect.any(String));
+      expect(firstPrompt as string).toContain(
+        'Return target text for ids: runtime-partial.xlsx#row-2, runtime-partial.xlsx#row-4, runtime-partial.xlsx#row-6',
+      );
+      expect(firstPrompt as string).toContain('Read-only context rows');
+      expect(firstPrompt as string).toContain('current-existing row 3');
+      expect(firstPrompt as string).toContain('Target:\nLancer le jeu');
+      expect(firstPrompt as string).toContain('current-existing row 5');
+      expect(firstPrompt as string).toContain('Target:\nQuitter le jeu');
+      expect(firstPrompt as string).not.toMatch(/^id: runtime-partial\.xlsx#row-3$/m);
+      expect(firstPrompt as string).not.toMatch(/^id: runtime-partial\.xlsx#row-5$/m);
+      expect(secondPrompt as string).toContain(
+        'Return target text for ids: runtime-partial.xlsx#row-7',
+      );
+      expectRuntimeTMPromptReference(
+        secondPrompt as string,
+        'runtime-partial.xlsx#row-7',
+        'Launch game',
+        'Lancer le jeu',
+      );
+      expectPersistentTMsEmpty(db);
     } finally {
       db.close();
       await rm(root, { recursive: true, force: true });
