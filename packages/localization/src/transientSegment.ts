@@ -1,7 +1,8 @@
 import type { Segment } from '@cat/core/models';
-import { computeTagsSignature, parseDisplayTextToTokens } from '@cat/core/tag';
+import { computeTagsSignature, parseDisplayTextToTokens, type TagPolicy } from '@cat/core/tag';
 import { computeMatchKey, computeSrcHash } from '@cat/core/text';
 import type { ExternalTranslationUnit } from './types';
+import { resolveTagPolicy } from './tagPolicy';
 
 export interface TransientSegmentContext {
   projectId?: number;
@@ -22,6 +23,10 @@ export type TransientSegment = Omit<Segment, 'meta'> & {
   };
 };
 
+export interface TransientSegmentOptions {
+  tagPolicy?: TagPolicy;
+}
+
 const TRANSIENT_SEGMENT_ID_PREFIX = 'transient:';
 const TRANSIENT_FILE_ID = 0;
 
@@ -29,9 +34,11 @@ export function createTransientSegment(
   unit: ExternalTranslationUnit,
   orderIndex: number,
   context: TransientSegmentContext = {},
+  options: TransientSegmentOptions = {},
 ): TransientSegment {
-  const sourceTokens = parseDisplayTextToTokens(unit.source);
-  const targetTokens = unit.target ? parseDisplayTextToTokens(unit.target) : [];
+  const tagPolicy = resolveTagPolicy(options.tagPolicy);
+  const sourceTokens = parseDisplayTextToTokens(unit.source, { tagPolicy });
+  const targetTokens = unit.target ? parseDisplayTextToTokens(unit.target, { tagPolicy }) : [];
   const tagsSignature = computeTagsSignature(sourceTokens);
   const matchKey = computeMatchKey(sourceTokens);
   const now = new Date().toISOString();

@@ -1,5 +1,6 @@
 import { readFile } from 'fs/promises';
 import { describe, expect, it } from 'vitest';
+import { parseDisplayTextToTokens } from '@cat/core/tag';
 import { computeSrcHash, serializeTokensToDisplayText } from '@cat/core/text';
 import { createTransientSegment, toTransientSegmentId } from './transientSegment';
 
@@ -82,5 +83,36 @@ describe('createTransientSegment', () => {
     const segment = createTransientSegment({ id: 'row-4', source: 'No writes' }, 0);
     expect(segment.fileId).toBe(0);
     expect(segment.segmentId.startsWith('transient:')).toBe(true);
+  });
+
+  it('keeps marker-like source and target text plain when tag policy is none', () => {
+    const segment = createTransientSegment(
+      {
+        id: 'row-5',
+        source: 'Save {1} {1>name<2} <b>x</b> %s',
+        target: '<ok> {3}',
+      },
+      0,
+      {},
+      { tagPolicy: 'none' },
+    );
+
+    expect(segment.sourceTokens).toEqual([
+      { type: 'text', content: 'Save {1} {1>name<2} <b>x</b> %s' },
+    ]);
+    expect(segment.targetTokens).toEqual([{ type: 'text', content: '<ok> {3}' }]);
+    expect(segment.tagsSignature).toBe('');
+    expect(segment.matchKey).toBe('save {1} {1>name<2} <b>x</b> %s');
+    expect(segment.srcHash).toBe(computeSrcHash(segment.matchKey, ''));
+  });
+
+  it('keeps default transient tag recognition when policy is omitted', () => {
+    const segment = createTransientSegment(
+      { id: 'row-6', source: 'Save {1} <b>x</b> %s' },
+      0,
+    );
+
+    expect(segment.sourceTokens).toEqual(parseDisplayTextToTokens('Save {1} <b>x</b> %s'));
+    expect(segment.tagsSignature).toBe('{1}|<b>|</b>|%s');
   });
 });

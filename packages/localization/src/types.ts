@@ -1,3 +1,4 @@
+import type { TagPolicy } from '@cat/core/tag';
 import type { ReasoningEffort } from './ports';
 
 export type LocalizationTargetScope = 'blank-only' | 'overwrite-non-confirmed';
@@ -32,6 +33,7 @@ export interface TranslateUnitsOptions {
   targetScope?: LocalizationTargetScope;
   mode?: LocalizationMode;
   requestMode?: LocalizationRequestMode;
+  tagPolicy?: TagPolicy;
   includeReferences?: boolean;
   maxConcurrency?: number;
   batchSize?: number;

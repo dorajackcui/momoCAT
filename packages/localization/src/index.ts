@@ -33,7 +33,11 @@ export {
 } from './job/TaskPlanner';
 export type { TaskPlanner, WindowModeTaskPlannerOptions } from './job/TaskPlanner';
 export { createTransientSegment, toTransientSegmentId } from './transientSegment';
-export type { TransientSegment, TransientSegmentContext } from './transientSegment';
+export type {
+  TransientSegment,
+  TransientSegmentContext,
+  TransientSegmentOptions,
+} from './transientSegment';
 export {
   fileRowsToLocalizationUnits,
   parseExternalSpreadsheet,
