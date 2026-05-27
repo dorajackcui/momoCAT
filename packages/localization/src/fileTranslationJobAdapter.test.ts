@@ -806,6 +806,49 @@ describe('fileTranslationJobAdapter', () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it('passes runtime TM hooks into TranslationJobRunner dependencies', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
+    try {
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      writeWorkbook(inputPath, [
+        ['source', 'target'],
+        ['Hello', ''],
+      ]);
+      const runtimeTm = {
+        seed: vi.fn(),
+        commit: vi.fn(),
+      };
+      let seenRuntimeTm: unknown;
+
+      await translateSpreadsheetFileJob(
+        {
+          projectId: 7,
+          inputPath,
+          outputPath,
+        },
+        {
+          taskExecutor: async () => ({ results: [] }),
+          runtimeTm,
+          runnerFactory: (dependencies) => {
+            seenRuntimeTm = dependencies.runtimeTm;
+            return {
+              run: async (job) => ({
+                jobId: job.id,
+                summary: { total: 1, translated: 0, skipped: 0, reused: 0, failed: 0 },
+                results: [],
+              }),
+            };
+          },
+        },
+      );
+
+      expect(seenRuntimeTm).toBe(runtimeTm);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 function writeWorkbook(path: string, rows: unknown[][]): void {

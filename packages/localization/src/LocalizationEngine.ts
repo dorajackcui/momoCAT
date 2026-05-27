@@ -20,8 +20,10 @@ import { AIProviderTransport } from './providers/AIProviderTransport';
 import type { AIRuntimeConfigProvider, AITransport } from './ports';
 import { translateSpreadsheetFileJob } from './fileTranslationJobAdapter';
 import { translateSpreadsheetFile } from './spreadsheetFileAdapter';
+import { RuntimeTMContext, RuntimeTMReferenceResolver } from './runtimeTm';
 import { createTransientSegment } from './transientSegment';
 import { unitKey } from './requestModes/shared/unitIdentity';
+import type { RequestModeReferenceResolver } from './requestModes/shared/references';
 import {
   buildTranslateUnitsResult,
   jobUnitToExternalUnit,
@@ -60,6 +62,10 @@ export interface LocalizationEngineConstructorOptions extends LocalizationEngine
 }
 
 type ProjectRecord = NonNullable<ReturnType<SqliteProjectRepository['getProject']>>;
+
+export interface LocalizationTaskExecutorOptions {
+  referenceResolver?: RequestModeReferenceResolver;
+}
 
 type PreparedUnit =
   | {
@@ -253,13 +259,14 @@ export class LocalizationEngine {
     return buildTranslateUnitsResult(results);
   }
 
-  public createTaskExecutor(): TranslationTaskExecutor {
-    return (task, context) => this.executeTranslationTask(task, context);
+  public createTaskExecutor(options: LocalizationTaskExecutorOptions = {}): TranslationTaskExecutor {
+    return (task, context) => this.executeTranslationTask(task, context, options);
   }
 
   public async executeTranslationTask(
     task: TranslationTask,
     context: TaskExecutionContext,
+    options: LocalizationTaskExecutorOptions = {},
   ): Promise<TaskExecutionResult> {
     const project = this.projectRepo.getProject(context.job.projectId);
     if (!project) {
@@ -327,6 +334,7 @@ export class LocalizationEngine {
       captureArtifacts,
       translatableUnits,
       skippedResults,
+      referenceResolver: options.referenceResolver,
     });
     const translatedByKey = new Map(translated.results.map((result) => [unitKey(result), result]));
 
@@ -356,20 +364,41 @@ export class LocalizationEngine {
         throw new Error(`Project not found: ${input.projectId}`);
       }
       const resumeFingerprint = await this.buildFileTranslationResumeFingerprint(input, project);
+      const runtimeTm =
+        (project.projectType ?? 'translation') === 'translation'
+          ? RuntimeTMContext.create({ srcLang: project.srcLang, tgtLang: project.tgtLang })
+          : undefined;
+      const referenceResolver = runtimeTm
+        ? new RuntimeTMReferenceResolver(runtimeTm).resolve
+        : undefined;
 
-      return translateSpreadsheetFileJob(
-        {
-          ...input,
-          job: {
-            ...input.job,
-            resumeFingerprint,
+      try {
+        return await translateSpreadsheetFileJob(
+          {
+            ...input,
+            job: {
+              ...input.job,
+              resumeFingerprint,
+            },
           },
-        },
-        {
-          taskExecutor: this.createTaskExecutor(),
-          defaultMaxConcurrency: this.options.maxConcurrency,
-        },
-      );
+          {
+            taskExecutor: this.createTaskExecutor({ referenceResolver }),
+            defaultMaxConcurrency: this.options.maxConcurrency,
+            runtimeTm: runtimeTm
+              ? {
+                  seed: (results) => {
+                    runtimeTm.seedResults(results);
+                  },
+                  commit: (results) => {
+                    runtimeTm.commitResults(results);
+                  },
+                }
+              : undefined,
+          },
+        );
+      } finally {
+        runtimeTm?.dispose();
+      }
     }
 
     return translateSpreadsheetFile(input, (units) =>
