@@ -5,6 +5,7 @@ import type {
   WindowModePreviousContextRow,
 } from '@cat/core/project';
 import type { TagValidator } from '@cat/core/qa';
+import type { TagPolicy } from '@cat/core/tag';
 import type {
   AIProviderCatalogService,
   ResolvedAIProviderConfig,
@@ -26,6 +27,7 @@ export interface ComposePromptInput {
   segment: Segment;
   tm: TMArtifact;
   tb: TBArtifact;
+  tagPolicy?: TagPolicy;
   mtOptions?: LocalizationMTOptions;
   providerOverride?: string;
   projectPromptOverride?: string;
@@ -55,6 +57,7 @@ export interface ComposeBatchPromptInput {
     rowNumber?: number;
   }>;
   scanWindowCount?: number;
+  tagPolicy?: TagPolicy;
   mtOptions?: LocalizationMTOptions;
   providerOverride?: string;
   projectPromptOverride?: string;

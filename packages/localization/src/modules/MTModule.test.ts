@@ -106,6 +106,40 @@ describe('MTModule', () => {
     }
   });
 
+  it('passes marker-like source text as ordinary payload when tag policy is none', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Plain Marker Payload', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const segment = createTransientSegment(
+        { id: 'unit-1', source: 'Save {1} {1>name<2} <b>x</b> %s' },
+        0,
+        { projectId, sourceLanguage: 'en', targetLanguage: 'fr' },
+        { tagPolicy: 'none' },
+      );
+      const transport = createTransport();
+      const module = createModule(db, transport);
+
+      const artifact = await module.composePrompt({
+        unitId: 'unit-1',
+        project,
+        segment,
+        tm: createTMArtifact(segment),
+        tb: createTBArtifact(segment),
+        tagPolicy: 'none',
+      });
+
+      expect(artifact.sourcePayload).toBe('Save {1} {1>name<2} <b>x</b> %s');
+      expect(artifact.userPrompt).toContain('Save {1} {1>name<2} <b>x</b> %s');
+      expect(artifact.userPrompt).not.toContain('{1>x<2}');
+      expect(transport.createResponse).not.toHaveBeenCalled();
+    } finally {
+      db.close();
+    }
+  });
+
   it('falls old built-in provider ids back to the first configured provider at runtime', async () => {
     const db = new CATDatabase(':memory:');
     try {
@@ -224,6 +258,49 @@ describe('MTModule', () => {
     }
   });
 
+  it('parses marker-like provider text as plain text and skips tag retry when tag policy is none', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Plain Marker Response', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const segment = createTransientSegment(
+        { id: 'unit-1', source: 'Save {1} <b>x</b>' },
+        0,
+        {},
+        { tagPolicy: 'none' },
+      );
+      const transport = createTransport('<b>Enregistrer</b> {1>nom<2}');
+      const module = createModule(db, transport);
+      const config = await module.resolveConfig(project);
+
+      const result = await module.translate({
+        unitId: 'unit-1',
+        project,
+        segment,
+        tm: createTMArtifact(segment),
+        tb: createTBArtifact(segment),
+        tagPolicy: 'none',
+        apiKey: config.apiKey,
+        baseUrl: config.provider.baseUrl,
+        model: config.model,
+        reasoningEffort: config.reasoningEffort,
+        provider: config.provider,
+        srcLang: 'en',
+        tgtLang: 'fr',
+      });
+
+      expect(result.targetTokens).toEqual([
+        { type: 'text', content: '<b>Enregistrer</b> {1>nom<2}' },
+      ]);
+      expect(serializeTokensToDisplayText(result.targetTokens)).toBe('<b>Enregistrer</b> {1>nom<2}');
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
+    } finally {
+      db.close();
+    }
+  });
+
   it('composes a Window Mode batch prompt without calling provider transport', async () => {
     const db = new CATDatabase(':memory:');
     try {
@@ -286,6 +363,49 @@ describe('MTModule', () => {
       expect(artifact.tmPromptBlock).not.toContain('Source:');
       expect(artifact.tbPromptBlock).toContain('world -> monde');
       expect(artifact.tbPromptBlock).not.toContain('Source:');
+      expect(transport.createResponse).not.toHaveBeenCalled();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('passes marker-like Window Mode source payload as ordinary text when tag policy is none', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Batch Plain Marker Payload', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const row2 = createTransientSegment(
+        { id: 'row-2', source: 'Save {1} {1>name<2} <b>x</b> %s' },
+        0,
+        {},
+        { tagPolicy: 'none' },
+      );
+      const transport = createTransport();
+      const module = createModule(db, transport);
+
+      const artifact = await module.composeBatchPrompt({
+        taskId: 'window-task-plain-markers',
+        project,
+        current: [
+          {
+            responseId: 'row-2',
+            documentId: 'doc.xlsx',
+            unitId: 'row-2',
+            segment: row2,
+            tm: createTMArtifact(row2),
+            tb: createTBArtifact(row2),
+          },
+        ],
+        previousContext: [],
+        nextContext: [],
+        tagPolicy: 'none',
+      });
+
+      expect(artifact.sourcePayload).toBe('row-2: Save {1} {1>name<2} <b>x</b> %s');
+      expect(artifact.userPrompt).toContain('Save {1} {1>name<2} <b>x</b> %s');
+      expect(artifact.userPrompt).not.toContain('{1>x<2}');
       expect(transport.createResponse).not.toHaveBeenCalled();
     } finally {
       db.close();
@@ -459,6 +579,61 @@ describe('MTModule', () => {
       });
 
       expect(serializeTokensToDisplayText(result.results[0].targetTokens)).toBe('Save file');
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('does not retry Window Mode tag validation when tag policy is none', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Batch No Tag Retry', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const row2 = createTransientSegment(
+        { id: 'row-2', source: 'Save {1} <b>x</b>' },
+        1,
+        {},
+        { tagPolicy: 'none' },
+      );
+      const transport = createTransport(
+        JSON.stringify({
+          translations: [{ id: 'row-2', text: 'Enregistrer sans marqueur' }],
+        }),
+      );
+      const module = createModule(db, transport);
+      const config = await module.resolveConfig(project);
+
+      const result = await module.translateBatch({
+        taskId: 'window-task-1',
+        project,
+        current: [
+          {
+            responseId: 'row-2',
+            documentId: 'doc.xlsx',
+            unitId: 'unit-2',
+            segment: row2,
+            tm: createTMArtifact(row2),
+            tb: createTBArtifact(row2),
+          },
+        ],
+        previousContext: [],
+        nextContext: [],
+        tagPolicy: 'none',
+        apiKey: config.apiKey,
+        baseUrl: config.provider.baseUrl,
+        model: config.model,
+        reasoningEffort: config.reasoningEffort,
+        provider: config.provider,
+        srcLang: 'en',
+        tgtLang: 'fr',
+      });
+
+      expect(serializeTokensToDisplayText(result.results[0].targetTokens)).toBe(
+        'Enregistrer sans marqueur',
+      );
       expect(transport.createResponse).toHaveBeenCalledTimes(1);
     } finally {
       db.close();

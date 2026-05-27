@@ -16,6 +16,7 @@ import type { AIProviderCatalogService } from '../providers/AIProviderCatalogSer
 import type { AIRuntimeConfigProvider, AITransport, ReasoningEffort } from '../ports';
 import type { PromptArtifact, TBArtifact, TMArtifact } from '../artifacts';
 import type { MTModuleOptions as LocalizationMTOptions } from '../types';
+import { resolveTagPolicy } from '../tagPolicy';
 import type {
   ComposeBatchPromptInput,
   ComposePromptInput,
@@ -249,6 +250,7 @@ export class MTModule {
   async translate(input: TranslatePreparedPromptInput): Promise<MTTranslateResult> {
     const prompt = this.composePreparedPrompt(input);
     const promptParams = this.buildPromptParams(input);
+    const tagPolicy = resolveTagPolicy(input.tagPolicy);
     const maxAttempts = 3;
     let validationFeedback: string | undefined;
 
@@ -273,8 +275,10 @@ export class MTModule {
         throw new Error('AI provider response was empty');
       }
 
-      const targetTokens = parseEditorTextToTokens(trimmed, input.segment.sourceTokens);
-      if (promptParams.projectType === 'custom') {
+      const targetTokens = parseEditorTextToTokens(trimmed, input.segment.sourceTokens, {
+        tagPolicy,
+      });
+      if (promptParams.projectType === 'custom' || tagPolicy === 'none') {
         return { targetTokens, prompt };
       }
 
@@ -305,6 +309,7 @@ export class MTModule {
     const prompt = this.composePreparedBatchPrompt(input);
     const promptParams = this.buildBatchPromptParams(input);
     const currentByResponseId = new Map(input.current.map((unit) => [unit.responseId, unit]));
+    const tagPolicy = resolveTagPolicy(input.tagPolicy);
     const maxAttempts = 3;
     let validationFeedback: string | undefined;
 
@@ -338,11 +343,13 @@ export class MTModule {
           documentId: unit.documentId,
           unitId: unit.unitId,
           responseId: translation.id,
-          targetTokens: parseEditorTextToTokens(translation.text, unit.segment.sourceTokens),
+          targetTokens: parseEditorTextToTokens(translation.text, unit.segment.sourceTokens, {
+            tagPolicy,
+          }),
         };
       });
 
-      if (promptParams.projectType === 'custom') {
+      if (promptParams.projectType === 'custom' || tagPolicy === 'none') {
         return { results, prompt: attemptPrompt };
       }
 
@@ -392,9 +399,9 @@ export class MTModule {
     };
   } {
     const sourceText = serializeTokensToDisplayText(input.segment.sourceTokens);
-    const sourceTagPreservedText = serializeTokensToEditorText(
+    const sourceTagPreservedText = this.serializeSourcePayload(
       input.segment.sourceTokens,
-      input.segment.sourceTokens,
+      input.tagPolicy,
     );
     const context = input.segment.meta?.context ? String(input.segment.meta.context).trim() : '';
     const tmReferences = input.tm.selectedReferences.tmReferences;
@@ -435,9 +442,9 @@ export class MTModule {
     }>;
   } {
     const currentSegments = input.current.map((unit) => {
-      const sourcePayload = serializeTokensToEditorText(
+      const sourcePayload = this.serializeSourcePayload(
         unit.segment.sourceTokens,
-        unit.segment.sourceTokens,
+        input.tagPolicy,
       );
 
       const context =
@@ -468,6 +475,12 @@ export class MTModule {
       validationFeedback: input.validationFeedback,
       currentSegments,
     };
+  }
+
+  private serializeSourcePayload(tokens: Segment['sourceTokens'], rawPolicy: unknown): string {
+    const sourceText = serializeTokensToDisplayText(tokens);
+    const tagPolicy = resolveTagPolicy(rawPolicy);
+    return tagPolicy === 'none' ? sourceText : serializeTokensToEditorText(tokens, tokens);
   }
 
   private parseBatchResponse(content: string, expectedIds: string[]) {
