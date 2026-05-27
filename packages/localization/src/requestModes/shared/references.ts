@@ -4,12 +4,18 @@ import { mapTBEngineReferences } from '../../modules/TBModule';
 import { mapTMEngineReferences } from '../../modules/TMModule';
 import type { RequestModeReferenceModules, ResolvedReferences } from '../types';
 
-export async function resolveRequestModeReferences(params: {
+export interface ResolveRequestModeReferencesInput {
   projectId: number;
   segment: Segment;
   tmModule: RequestModeReferenceModules['tmModule'];
   tbModule: RequestModeReferenceModules['tbModule'];
-}): Promise<ResolvedReferences> {
+}
+
+export type RequestModeReferenceResolver = (
+  params: ResolveRequestModeReferencesInput,
+) => Promise<ResolvedReferences>;
+
+export const resolveRequestModeReferences: RequestModeReferenceResolver = async (params) => {
   const [tmMatches, tbMatches] = await Promise.all([
     params.tmModule.inspect(params.projectId, params.segment),
     params.tbModule.inspect(params.projectId, params.segment),
@@ -23,7 +29,7 @@ export async function resolveRequestModeReferences(params: {
     tm: tmMatches,
     tb: tbMatches,
   };
-}
+};
 
 export function emptyReferencesForUnit(
   unit: Pick<JobUnit, 'unitId'>,
