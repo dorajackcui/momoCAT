@@ -274,7 +274,7 @@ describe('MTModule', () => {
       );
       const transport = createTransport('<b>Enregistrer</b> {1>nom<2}');
       const tagValidator = createFailingTagValidator();
-      const module = createModule(db, transport, 'medium', tagValidator as never);
+      const module = createModule(db, transport, 'medium', tagValidator);
       const config = await module.resolveConfig(project);
 
       const result = await module.translate({
@@ -607,7 +607,7 @@ describe('MTModule', () => {
         }),
       );
       const tagValidator = createFailingTagValidator();
-      const module = createModule(db, transport, 'medium', tagValidator as never);
+      const module = createModule(db, transport, 'medium', tagValidator);
       const config = await module.resolveConfig(project);
 
       const result = await module.translateBatch({
@@ -836,12 +836,13 @@ function createModule(
   });
 }
 
-function createFailingTagValidator(): Pick<TagValidator, 'validate'> {
+function createFailingTagValidator(): TagValidator {
   return {
     validate: vi.fn(() => ({
-      issues: [{ ruleId: 'tag-missing', severity: 'error', message: 'Should not run' }],
+      issues: [{ ruleId: 'tag-missing', severity: 'error' as const, message: 'Should not run' }],
       suggestions: [],
     })),
+    generateAutoFix: vi.fn(() => null),
   };
 }
 
