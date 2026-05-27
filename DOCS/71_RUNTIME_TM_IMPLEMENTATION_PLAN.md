@@ -23,12 +23,18 @@ Read first:
 
 Runtime TM is enabled only for `LocalizationEngine.translateFile()` jobs that use the headless file job path with `requestMode=window` or `requestMode=window-partial`. It is not enabled for inspect, legacy concurrent `translateUnits()`, or desktop legacy flows.
 
+Status note: Runtime TM reference selection caps are implemented as 3 runtime
+TM plus 3 runtime concordance references, independent of persistent reference
+caps. Append/global entry caps remain optional `RuntimeTMContext` behavior for
+tests or future callers; `LocalizationEngine.translateFile()` does not pass
+`maxEntries`, so file jobs currently use the context default of no append cap.
+
 ## File Structure
 
 Create:
 
 - `packages/localization/src/runtimeTm/RuntimeTMDatabase.ts`: create an isolated in-memory CAT database, runtime project, and runtime TM.
-- `packages/localization/src/runtimeTm/RuntimeTMContext.ts`: own job-scoped runtime lifecycle, seed, commit, inspect, entry cap, and dispose.
+- `packages/localization/src/runtimeTm/RuntimeTMContext.ts`: own job-scoped runtime lifecycle, seed, commit, inspect, optional append cap, and dispose.
 - `packages/localization/src/runtimeTm/RuntimeTMSelection.ts`: select independent runtime/persistent TM and concordance slots, merge by rank, and build merged TM artifacts.
 - `packages/localization/src/runtimeTm/RuntimeTMReferenceResolver.ts`: combine persistent reference resolution with runtime TM references.
 - `packages/localization/src/runtimeTm/index.ts`: internal runtime TM exports.
@@ -596,8 +602,6 @@ import { createTransientSegment } from '../transientSegment';
 import { createRuntimeTMDatabase } from './RuntimeTMDatabase';
 import type { RuntimeTMDatabase } from './RuntimeTMDatabase';
 
-const DEFAULT_MAX_RUNTIME_TM_ENTRIES = 10_000;
-
 export interface RuntimeTMCommitSummary {
   appended: number;
   skipped: number;
@@ -626,7 +630,7 @@ export class RuntimeTMContext {
     this.tmRepo = new SqliteTMRepository(runtime.db);
     this.tmService = new TMService(projectRepo, this.tmRepo);
     this.tmModule = new TMModule({ tmRepo: this.tmRepo, tmService: this.tmService });
-    this.maxEntries = options.maxEntries ?? DEFAULT_MAX_RUNTIME_TM_ENTRIES;
+    this.maxEntries = options.maxEntries ?? Number.POSITIVE_INFINITY;
   }
 
   static create(options: RuntimeTMContextOptions): RuntimeTMContext {
