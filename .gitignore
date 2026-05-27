@@ -56,3 +56,6 @@ Thumbs.db
 testoutput/
 test-data/
 testExcel/
+
+DOCS/assets/
+DOCS/*.html
