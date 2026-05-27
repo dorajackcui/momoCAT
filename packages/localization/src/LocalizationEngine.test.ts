@@ -10,6 +10,7 @@ import type { AITransport } from './ports';
 import { LocalizationEngine } from './LocalizationEngine';
 import { createLocalizationTaskExecutor } from './job/LocalizationTaskExecutor';
 import { createTransientSegment } from './transientSegment';
+import type { TranslateUnitsOptions } from './types';
 
 type MockTransport = AITransport & {
   testConnection: ReturnType<typeof vi.fn>;
@@ -1283,12 +1284,14 @@ describe('LocalizationEngine task executor', () => {
         dbPath: ':memory:',
         aiTransport: transport,
       });
+      const options: TranslateUnitsOptions = {};
+      Reflect.set(options, 'tagPolicy', 'html-only');
 
       await expect(
         engine.translateUnits({
           projectId,
           units: [{ id: 'unit-1', source: 'Hello' }],
-          options: { tagPolicy: 'html-only' as never },
+          options,
         }),
       ).rejects.toThrow('tagPolicy must be default or none.');
       expect(transport.createResponse).not.toHaveBeenCalled();
