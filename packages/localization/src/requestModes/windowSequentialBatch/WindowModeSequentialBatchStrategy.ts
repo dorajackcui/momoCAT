@@ -16,6 +16,7 @@ import type {
 import { buildWindowModeContext, mergeCompletedResults } from '../shared/contextWindowBuilder';
 import {
   emptyReferencesForUnit,
+  type RequestModeReferenceResolver,
   resolveRequestModeReferences,
 } from '../shared/references';
 import { toArtifactRecord } from '../shared/results';
@@ -36,6 +37,7 @@ export interface WindowModeSequentialBatchStrategyInput {
   captureArtifacts: boolean;
   translatableUnits: PreparedTranslatableJobUnit[];
   skippedResults: UnitResult[];
+  referenceResolver?: RequestModeReferenceResolver;
 }
 
 export class WindowModeSequentialBatchStrategy {
@@ -47,11 +49,12 @@ export class WindowModeSequentialBatchStrategy {
 
   async translate(input: WindowModeSequentialBatchStrategyInput): Promise<PreparedWindowBatchResult> {
     const projectType = input.project.projectType ?? 'translation';
+    const resolveReferences = input.referenceResolver ?? resolveRequestModeReferences;
     const resolvedUnits = await Promise.all(
       input.translatableUnits.map(async ({ jobUnit, segment }) => {
         const references =
           projectType === 'translation'
-            ? await resolveRequestModeReferences({
+            ? await resolveReferences({
                 projectId: input.project.id,
                 segment,
                 tmModule: this.dependencies.tmModule,

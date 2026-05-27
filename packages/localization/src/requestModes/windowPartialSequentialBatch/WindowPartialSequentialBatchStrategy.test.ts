@@ -6,6 +6,7 @@ import type { PromptArtifact } from '../../artifacts';
 import type { JobUnit, TaskExecutionContext, TranslationTask, UnitResult } from '../../job/types';
 import type { ResolvedMTConfig } from '../../modules/MTModule';
 import type { LocalizationEngineOptions } from '../../types';
+import type { RequestModeReferenceResolver } from '../shared/references';
 import { WindowPartialSequentialBatchStrategy } from './WindowPartialSequentialBatchStrategy';
 
 describe('WindowPartialSequentialBatchStrategy', () => {
@@ -109,6 +110,94 @@ describe('WindowPartialSequentialBatchStrategy', () => {
         skippedResults: [],
       }),
     ).rejects.toThrow('Window Partial task is missing requestUnitKeys');
+  });
+
+  it('uses an injected reference resolver only for requested rows', async () => {
+    const units = [
+      jobUnit('row-1', 'One', 'hash-1'),
+      jobUnit('row-2', 'Two', 'hash-2'),
+      jobUnit('row-3', 'Three', 'hash-3'),
+    ];
+    const segments = new Map(
+      [units[0], units[2]].map((unit, index) => [
+        unit.unitId,
+        createTransientSegment({ id: unit.unitId, source: unit.source }, index),
+      ]),
+    );
+    const firstReferences = references('row-1', segments.get('row-1')!.segmentId);
+    const secondReferences = references('row-3', segments.get('row-3')!.segmentId);
+    const referenceResolver: RequestModeReferenceResolver = vi
+      .fn()
+      .mockResolvedValueOnce(firstReferences)
+      .mockResolvedValueOnce(secondReferences);
+    const translateBatch = vi.fn().mockResolvedValue({
+      results: [units[0], units[2]].map((unit) => ({
+        documentId: unit.documentId,
+        unitId: unit.unitId,
+        responseId: `sheet.xlsx#${unit.unitId}`,
+        targetTokens: parseEditorTextToTokens(
+          `translated ${unit.source}`,
+          segments.get(unit.unitId)?.sourceTokens ?? [],
+        ),
+      })),
+      prompt: promptArtifact(['sheet.xlsx#row-1', 'sheet.xlsx#row-3']),
+    });
+    const tmInspect = vi.fn();
+    const tbInspect = vi.fn();
+    const strategy = new WindowPartialSequentialBatchStrategy({
+      tmModule: { inspect: tmInspect },
+      tbModule: { inspect: tbInspect },
+      mtModule: { translateBatch },
+    });
+
+    await strategy.translate({
+      task: {
+        taskId: 'partial-task-injected-resolver',
+        requestMode: 'window-partial',
+        units,
+        scanWindowUnits: units,
+        requestUnitKeys: [units[0], units[2]].map(key),
+      },
+      context: executionContext({ job: { units } }),
+      project: project(),
+      mtConfig: resolvedMTConfig(),
+      mtOptions: mtOptions(),
+      includeReferences: false,
+      captureArtifacts: false,
+      translatableUnits: [units[0], units[2]].map((jobUnit) => ({
+        jobUnit,
+        segment: segments.get(jobUnit.unitId)!,
+      })),
+      skippedResults: [unitResult(units[1], 'Deux', 'skipped')],
+      referenceResolver,
+    });
+
+    expect(referenceResolver).toHaveBeenCalledTimes(2);
+    expect(referenceResolver).toHaveBeenNthCalledWith(1, {
+      projectId: 1,
+      segment: segments.get('row-1'),
+      tmModule: { inspect: tmInspect },
+      tbModule: { inspect: tbInspect },
+    });
+    expect(referenceResolver).toHaveBeenNthCalledWith(2, {
+      projectId: 1,
+      segment: segments.get('row-3'),
+      tmModule: { inspect: tmInspect },
+      tbModule: { inspect: tbInspect },
+    });
+    expect(tmInspect).not.toHaveBeenCalled();
+    expect(tbInspect).not.toHaveBeenCalled();
+    expect(translateBatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        current: [
+          expect.objectContaining({ unitId: 'row-1', tm: firstReferences.tm, tb: firstReferences.tb }),
+          expect.objectContaining({ unitId: 'row-3', tm: secondReferences.tm, tb: secondReferences.tb }),
+        ],
+        readOnlyContextRows: [
+          { role: 'current-existing', source: 'Two', target: 'Deux' },
+        ],
+      }),
+    );
   });
 
   it('uses empty references for custom projects', async () => {
@@ -271,5 +360,32 @@ function emptyTb(segmentId: string, unitId: string) {
     selectedReferences: [],
     selectionPolicy: { maxTbReferences: 0 },
     diagnostics: [],
+  };
+}
+
+function references(unitId: string, segmentId: string) {
+  return {
+    engineReferences: {
+      tm: [
+        {
+          kind: 'tm' as const,
+          rank: 1,
+          tmName: 'Injected TM',
+          sourceText: unitId,
+          targetText: `${unitId} target`,
+          similarity: 100,
+        },
+      ],
+      tb: [
+        {
+          tbName: 'Injected TB',
+          srcTerm: unitId,
+          tgtTerm: `${unitId} term`,
+          note: null,
+        },
+      ],
+    },
+    tm: emptyTm(segmentId, unitId),
+    tb: emptyTb(segmentId, unitId),
   };
 }

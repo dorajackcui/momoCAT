@@ -15,6 +15,7 @@ import type {
 } from '../types';
 import {
   emptyReferencesForUnit,
+  type RequestModeReferenceResolver,
   resolveRequestModeReferences,
 } from '../shared/references';
 import { toArtifactRecord } from '../shared/results';
@@ -36,6 +37,7 @@ export interface WindowPartialSequentialBatchStrategyInput {
   captureArtifacts: boolean;
   translatableUnits: PreparedTranslatableJobUnit[];
   skippedResults: UnitResult[];
+  referenceResolver?: RequestModeReferenceResolver;
 }
 
 export class WindowPartialSequentialBatchStrategy {
@@ -55,11 +57,12 @@ export class WindowPartialSequentialBatchStrategy {
       requestKeys.has(unitKey(jobUnit)),
     );
     const projectType = input.project.projectType ?? 'translation';
+    const resolveReferences = input.referenceResolver ?? resolveRequestModeReferences;
     const resolvedUnits = await Promise.all(
       requestUnits.map(async ({ jobUnit, segment }) => {
         const references =
           projectType === 'translation'
-            ? await resolveRequestModeReferences({
+            ? await resolveReferences({
                 projectId: input.project.id,
                 segment,
                 tmModule: this.dependencies.tmModule,

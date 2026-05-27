@@ -6,6 +6,7 @@ import type { PromptArtifact } from '../../artifacts';
 import type { JobUnit, TaskExecutionContext, TranslationTask, UnitResult } from '../../job/types';
 import type { ResolvedMTConfig } from '../../modules/MTModule';
 import type { LocalizationEngineOptions } from '../../types';
+import type { RequestModeReferenceResolver } from '../shared/references';
 import { WindowModeSequentialBatchStrategy } from './WindowModeSequentialBatchStrategy';
 
 describe('WindowModeSequentialBatchStrategy', () => {
@@ -200,6 +201,64 @@ describe('WindowModeSequentialBatchStrategy', () => {
         nextContext: [],
       }),
     );
+  });
+
+  it('uses an injected reference resolver for requested units', async () => {
+    const unit = jobUnit('window.xlsx', 'row-2', 'Save file', 'hash-2');
+    const segment = createTransientSegment({ id: 'row-2', source: 'Save file' }, 0);
+    const injectedReferences = references('row-2', segment.segmentId, 'Save file', 'Sauvegarder');
+    const referenceResolver: RequestModeReferenceResolver = vi.fn().mockResolvedValue(injectedReferences);
+    const translateBatch = vi.fn().mockResolvedValue({
+      results: [
+        {
+          documentId: 'window.xlsx',
+          unitId: 'row-2',
+          responseId: 'window.xlsx#row-2',
+          targetTokens: parseEditorTextToTokens('Sauvegarder', segment.sourceTokens),
+        },
+      ],
+      prompt: promptArtifact(['window.xlsx#row-2']),
+    });
+    const tmInspect = vi.fn();
+    const tbInspect = vi.fn();
+    const strategy = new WindowModeSequentialBatchStrategy({
+      tmModule: { inspect: tmInspect },
+      tbModule: { inspect: tbInspect },
+      mtModule: { translateBatch },
+    });
+
+    const result = await strategy.translate({
+      task: translationTask([unit]),
+      context: executionContext({ job: { units: [unit] } }),
+      project: project(),
+      mtConfig: resolvedMTConfig(),
+      mtOptions: mtOptions(),
+      includeReferences: true,
+      captureArtifacts: false,
+      translatableUnits: [{ jobUnit: unit, segment }],
+      skippedResults: [],
+      referenceResolver,
+    });
+
+    expect(referenceResolver).toHaveBeenCalledWith({
+      projectId: 1,
+      segment,
+      tmModule: { inspect: tmInspect },
+      tbModule: { inspect: tbInspect },
+    });
+    expect(tmInspect).not.toHaveBeenCalled();
+    expect(tbInspect).not.toHaveBeenCalled();
+    expect(translateBatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        current: [
+          expect.objectContaining({
+            tm: injectedReferences.tm,
+            tb: injectedReferences.tb,
+          }),
+        ],
+      }),
+    );
+    expect(result.results[0]?.references).toBe(injectedReferences.engineReferences);
   });
 
   it('does not include the API key in results or artifacts JSON', async () => {
