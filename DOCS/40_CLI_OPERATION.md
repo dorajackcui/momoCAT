@@ -29,7 +29,7 @@ may report whether required secrets exist, but it must not print secret values.
 ## Inspect Localization
 
 ```bash
-momocat inspect localization --db <local-db> --project-id <project-id> --input <input.xlsx> --output <inspect.xlsx>
+momocat inspect localization --db <local-db> --project-id <project-id> --input <input.xlsx> --output <inspect.xlsx> --tag-policy none
 momocat inspect localization --db <local-db> --project-id <project-id> --input <input.xlsx> --output <inspect.xlsx> --json-output <inspect.json> --request-mode window-partial
 ```
 
@@ -39,7 +39,7 @@ for real translation.
 ## Translate File
 
 ```bash
-momocat translate file --db <local-db> --project-id <project-id> --input <input.xlsx> --output <translated.xlsx>
+momocat translate file --db <local-db> --project-id <project-id> --input <input.xlsx> --output <translated.xlsx> --tag-policy none
 momocat translate file --db <local-db> --project-id <project-id> --input <input.xlsx> --output <translated.xlsx> --request-mode window-partial
 ```
 
@@ -49,6 +49,10 @@ import the input file into project storage.
 
 Blank target cells are translated by default. Use `--target-scope` only when a
 run intentionally needs different target handling.
+
+Tag policy defaults to current CAT marker detection. Use `--tag-policy none`
+when input text has already been filtered upstream, or when marker-like content
+such as `{1}`, `{1>`, `<2}`, `{3}`, `<xxx>`, or `%s` must remain ordinary text.
 
 ## Standard Smoke
 

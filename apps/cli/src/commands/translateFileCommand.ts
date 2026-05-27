@@ -115,6 +115,13 @@ function assignOption(
     config.requestMode = optionValue;
     return;
   }
+  if (name === 'tag-policy') {
+    if (optionValue !== 'default' && optionValue !== 'none') {
+      throw new Error('--tag-policy must be default or none.');
+    }
+    config.tagPolicy = optionValue;
+    return;
+  }
   if (name === 'checkpoint') {
     config.checkpointPath = io.resolvePath(optionValue);
     return;
@@ -181,6 +188,7 @@ function isKnownOption(name: string): boolean {
     name === 'output' ||
     name === 'target-scope' ||
     name === 'request-mode' ||
+    name === 'tag-policy' ||
     name === 'checkpoint' ||
     name === 'events' ||
     name === 'artifacts' ||
@@ -208,6 +216,7 @@ Options:
   --output <path>                  Translated spreadsheet output path.
   --target-scope <scope>           blank-only or overwrite-non-confirmed.
   --request-mode <mode>            window or window-partial.
+  --tag-policy <policy>            default or none.
   --checkpoint <path>              Optional checkpoint sidecar path.
   --events <path>                  Optional events sidecar path.
   --artifacts <path>               Optional diagnostic artifact JSONL path.

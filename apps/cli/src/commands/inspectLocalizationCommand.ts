@@ -116,6 +116,13 @@ function assignOption(
     config.requestMode = optionValue;
     return;
   }
+  if (name === 'tag-policy') {
+    if (optionValue !== 'default' && optionValue !== 'none') {
+      throw new Error('--tag-policy must be default or none.');
+    }
+    config.tagPolicy = optionValue;
+    return;
+  }
 
   throw new Error(`Unknown argument: --${name}`);
 }
@@ -130,7 +137,8 @@ function isKnownOption(name: string): boolean {
     name === 'json-output' ||
     name === 'unit-limit' ||
     name === 'max-cell-chars' ||
-    name === 'request-mode'
+    name === 'request-mode' ||
+    name === 'tag-policy'
   );
 }
 
@@ -146,6 +154,7 @@ Options:
   --unit-limit <n>                 Optional maximum number of source units to inspect.
   --max-cell-chars <n>             Optional max characters per generated spreadsheet cell.
   --request-mode <mode>            window or window-partial.
+  --tag-policy <policy>            default or none.
   -h, --help                       Show this help.
 
 Examples:

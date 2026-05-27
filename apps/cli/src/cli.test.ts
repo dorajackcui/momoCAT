@@ -172,6 +172,7 @@ describe('momocat CLI dispatch', () => {
     expect(harness.stdout.join('')).toContain('--unit-limit <n>');
     expect(harness.stdout.join('')).toContain('--max-cell-chars <n>');
     expect(harness.stdout.join('')).toContain('--request-mode <mode>');
+    expect(harness.stdout.join('')).toContain('--tag-policy <policy>');
   });
 
   it('maps inspect localization options to the localization command API', async () => {
@@ -191,6 +192,8 @@ describe('momocat CLI dispatch', () => {
         '5000',
         '--request-mode',
         'window-partial',
+        '--tag-policy',
+        'none',
       ],
       harness.deps,
       harness.io,
@@ -210,9 +213,37 @@ describe('momocat CLI dispatch', () => {
           unitLimit: 12,
           maxCellChars: 5000,
           requestMode: 'window-partial',
+          tagPolicy: 'none',
         },
       },
     ]);
+  });
+
+  it('reports inspect localization invalid tag policy before calling localization', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      [
+        'inspect',
+        'localization',
+        '--db',
+        'cat.db',
+        '--project-id',
+        '7',
+        '--input',
+        'input.xlsx',
+        '--output',
+        'inspect.xlsx',
+        '--tag-policy',
+        'html-only',
+      ],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toContain('--tag-policy must be default or none.');
+    expect(harness.stderr.join('')).toContain('Run: momocat inspect localization --help');
   });
 
   it('reports inspect localization invalid request mode before calling localization', async () => {
@@ -399,6 +430,7 @@ describe('momocat CLI dispatch', () => {
     expect(harness.stdout.join('')).toContain(
       '--request-mode <mode>            window or window-partial.',
     );
+    expect(harness.stdout.join('')).toContain('--tag-policy <policy>');
     expect(harness.stdout.join('')).toContain('--progress-stdout');
   });
 
@@ -417,6 +449,7 @@ describe('momocat CLI dispatch', () => {
         '--target-scope=overwrite-non-confirmed',
         '--request-mode',
         'window-partial',
+        '--tag-policy=none',
         '--checkpoint',
         'checkpoint.json',
         '--events=events.ndjson',
@@ -448,6 +481,7 @@ describe('momocat CLI dispatch', () => {
           outputPath: 'translated.xlsx',
           targetScope: 'overwrite-non-confirmed',
           requestMode: 'window-partial',
+          tagPolicy: 'none',
           checkpointPath: 'checkpoint.json',
           eventsPath: 'events.ndjson',
           artifactsPath: 'artifacts',
@@ -556,6 +590,33 @@ describe('momocat CLI dispatch', () => {
     expect(harness.stderr.join('')).toContain(
       '--request-mode must be window or window-partial.',
     );
+    expect(harness.stderr.join('')).toContain('Run: momocat translate file --help');
+  });
+
+  it('reports translate file invalid tag policy before calling localization', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      [
+        'translate',
+        'file',
+        '--db',
+        'cat.db',
+        '--project-id',
+        '7',
+        '--input',
+        'input.xlsx',
+        '--output',
+        'translated.xlsx',
+        '--tag-policy',
+        'html-only',
+      ],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toContain('--tag-policy must be default or none.');
     expect(harness.stderr.join('')).toContain('Run: momocat translate file --help');
   });
 
