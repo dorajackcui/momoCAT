@@ -12,6 +12,7 @@ import {
   MAX_ENGINE_TM_REFERENCES,
   MAX_TM_PROMPT_REFERENCES,
   TMModule,
+  buildTMPromptReferences,
   mapTMEngineReferences,
 } from './TMModule';
 
@@ -173,6 +174,47 @@ describe('TMModule', () => {
         (reference) => reference.matchedSourceText,
       ),
     ).toEqual(['matched 0', 'matched 1', 'matched 2']);
+  });
+
+  it('builds TM prompt references with caller-provided caps', () => {
+    const matches: TMMatch[] = [
+      ...Array.from({ length: 4 }, (_, index) =>
+        createTMMatch({
+          kind: 'tm',
+          id: `tm-${index}`,
+          sourceText: `source ${index}`,
+          targetText: `target ${index}`,
+          similarity: 100 - index,
+        }),
+      ),
+      ...Array.from({ length: 4 }, (_, index) =>
+        createTMMatch({
+          kind: 'concordance',
+          id: `concordance-${index}`,
+          matchedSourceText: `matched ${index}`,
+          sourceText: `concordance source ${index}`,
+          targetText: `concordance target ${index}`,
+        }),
+      ),
+    ];
+
+    const refs = buildTMPromptReferences(matches, {
+      maxTmReferences: 4,
+      maxConcordanceReferences: 4,
+    });
+
+    expect(refs.tmReferences.map((reference) => reference.sourceText)).toEqual([
+      'source 0',
+      'source 1',
+      'source 2',
+      'source 3',
+    ]);
+    expect(refs.concordanceReferences.map((reference) => reference.sourceText)).toEqual([
+      'concordance source 0',
+      'concordance source 1',
+      'concordance source 2',
+      'concordance source 3',
+    ]);
   });
 
   it('maps TM and concordance matches to capped engine references', () => {

@@ -10,6 +10,16 @@ export const MAX_TM_PROMPT_REFERENCES = 3;
 export const MAX_CONCORDANCE_PROMPT_REFERENCES = 3;
 export const MAX_ENGINE_TM_REFERENCES = 10;
 
+export interface TMPromptReferenceLimits {
+  maxTmReferences: number;
+  maxConcordanceReferences: number;
+}
+
+export const DEFAULT_TM_PROMPT_REFERENCE_LIMITS: TMPromptReferenceLimits = {
+  maxTmReferences: MAX_TM_PROMPT_REFERENCES,
+  maxConcordanceReferences: MAX_CONCORDANCE_PROMPT_REFERENCES,
+};
+
 export interface TMModuleOptions {
   tmRepo: Pick<TMRepository, 'getProjectMountedTMs'>;
   tmService: Pick<TMService, 'findMatches'>;
@@ -89,17 +99,20 @@ export function mapTMEngineReferences(matches: TMMatch[]): EngineTMReference[] {
   });
 }
 
-export function buildTMPromptReferences(matches: TMMatch[]): TMArtifact['selectedReferences'] {
+export function buildTMPromptReferences(
+  matches: TMMatch[],
+  limits: TMPromptReferenceLimits = DEFAULT_TM_PROMPT_REFERENCE_LIMITS,
+): TMArtifact['selectedReferences'] {
   return {
     tmReferences: matches
       .filter((match): match is Extract<TMMatch, { kind: 'tm' }> => match.kind === 'tm')
-      .slice(0, MAX_TM_PROMPT_REFERENCES)
+      .slice(0, limits.maxTmReferences)
       .map(mapTMPromptReference),
     concordanceReferences: matches
       .filter(
         (match): match is Extract<TMMatch, { kind: 'concordance' }> => match.kind === 'concordance',
       )
-      .slice(0, MAX_CONCORDANCE_PROMPT_REFERENCES)
+      .slice(0, limits.maxConcordanceReferences)
       .map(mapConcordancePromptReference),
   };
 }
