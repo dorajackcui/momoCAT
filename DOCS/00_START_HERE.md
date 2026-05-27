@@ -20,6 +20,7 @@ capability.
 | MT/request-model work | `50_MT_REQUEST_MODEL.md` | Understand Window Mode and Partial Window Mode contracts. |
 | TM/TB behavior work | `60_TM_TB_REFERENCE.md` | Understand current reference matching and prompt inputs. |
 | Runtime TM work | `70_RUNTIME_TM_SPEC.md` | Understand job-local Runtime TM design. |
+| Runtime TM implementation | `71_RUNTIME_TM_IMPLEMENTATION_PLAN.md` | Execute the Runtime TM plan task-by-task. |
 | DB/schema work | `30_DATA_MODEL.md` | Understand persistence contracts. |
 | Planning or risk review | `90_STATUS_AND_ROADMAP.md` | Understand current phase and active risks. |
 
@@ -32,6 +33,7 @@ capability.
 - `50_MT_REQUEST_MODEL.md`: MT request and prompt contracts.
 - `60_TM_TB_REFERENCE.md`: TM/TB reference behavior.
 - `70_RUNTIME_TM_SPEC.md`: job-local Runtime TM design.
+- `71_RUNTIME_TM_IMPLEMENTATION_PLAN.md`: Runtime TM implementation plan.
 - `90_STATUS_AND_ROADMAP.md`: live status and roadmap.
 - `99_HISTORY.md`: sanitized historical index.
 
