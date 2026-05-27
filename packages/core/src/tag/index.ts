@@ -5,7 +5,9 @@ export {
   parseDisplayTextToTokens,
   parseEditorTextToTokens,
   serializeTokensToEditorText,
+  type ParseDisplayTextOptions,
   type ParseEditorTextOptions,
+  type TagPolicy,
 } from './TagCodec';
 export {
   TAG_PATTERN_REGISTRY,

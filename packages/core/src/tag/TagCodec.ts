@@ -6,9 +6,29 @@ import {
 } from './TagPatternRegistry';
 import { createTagNumberMap, getTagContentByMarkerIndex, getUniqueTagContents } from './TagMapper';
 
-export interface ParseEditorTextOptions {
+export type TagPolicy = 'default' | 'none';
+
+export interface ParseDisplayTextOptions {
   displayTagPatterns?: RegExp[];
+  tagPolicy?: TagPolicy;
+}
+
+export interface ParseEditorTextOptions extends ParseDisplayTextOptions {
   editorMarkerPatterns?: EditorMarkerPattern[];
+}
+
+type ParseDisplayTextArgument = RegExp[] | ParseDisplayTextOptions;
+
+function resolveTagPolicy(policy?: TagPolicy): TagPolicy {
+  return policy ?? 'default';
+}
+
+function normalizeDisplayOptions(options?: ParseDisplayTextArgument): ParseDisplayTextOptions {
+  if (Array.isArray(options)) {
+    return { displayTagPatterns: options };
+  }
+
+  return options ?? {};
 }
 
 const pushTextToken = (tokens: Token[], value: string): void => {
@@ -106,12 +126,22 @@ export function serializeTokensToEditorText(tokens: Token[], sourceTokens: Token
     .join('');
 }
 
-export function parseDisplayTextToTokens(text: string, customPatterns?: RegExp[]): Token[] {
+export function parseDisplayTextToTokens(
+  text: string,
+  options?: ParseDisplayTextArgument
+): Token[] {
+  const normalizedOptions = normalizeDisplayOptions(options);
+
+  if (resolveTagPolicy(normalizedOptions.tagPolicy) === 'none') {
+    return [{ type: 'text', content: text }];
+  }
+
   if (!text) {
     return [{ type: 'text', content: text }];
   }
 
   // Fast path for common plain-text rows.
+  const customPatterns = normalizedOptions.displayTagPatterns;
   const hasCustomPatterns = Array.isArray(customPatterns) && customPatterns.length > 0;
   if (!hasCustomPatterns && !/[<{%]/.test(text)) {
     return [{ type: 'text', content: text }];
@@ -159,6 +189,10 @@ export function parseEditorTextToTokens(
   sourceTokens: Token[],
   options?: ParseEditorTextOptions
 ): Token[] {
+  if (resolveTagPolicy(options?.tagPolicy) === 'none') {
+    return [{ type: 'text', content: text }];
+  }
+
   const markerPatterns = getEditorMarkerPatterns(options?.editorMarkerPatterns);
   const displayPatterns = getDisplayTagPatterns(options?.displayTagPatterns);
   const tokens: Token[] = [];

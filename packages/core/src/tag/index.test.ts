@@ -52,6 +52,29 @@ describe("CAT Core Tokenizer", () => {
     ]);
   });
 
+  it("treats marker-like display text as plain text when tag policy is none", () => {
+    const tokens = parseDisplayTextToTokens("Save {1} {1>name<2} <b>x</b> %s", {
+      tagPolicy: "none",
+    });
+
+    expect(tokens).toEqual([
+      { type: "text", content: "Save {1} {1>name<2} <b>x</b> %s" },
+    ]);
+    expect(computeTagsSignature(tokens)).toBe("");
+  });
+
+  it("keeps the legacy custom pattern argument working", () => {
+    const tokens = parseDisplayTextToTokens("prefix @@NAME@@ suffix", [
+      /@@[A-Z_]+@@/g,
+    ]);
+
+    expect(tokens).toEqual([
+      { type: "text", content: "prefix " },
+      { type: "tag", content: "@@NAME@@", meta: { id: "@@NAME@@" } },
+      { type: "text", content: " suffix" },
+    ]);
+  });
+
   it("computes consistent tags signature", () => {
     const signature = computeTagsSignature([
       { type: "text", content: "Hello " },
@@ -175,6 +198,18 @@ describe("Editor Tag Marker Conversion", () => {
       { type: "text", content: "X " },
       { type: "tag", content: "<b>", meta: { id: "<b>" } },
       { type: "text", content: " Y" },
+    ]);
+  });
+
+  it("treats editor markers and raw display tags as plain text when tag policy is none", () => {
+    const tokens = parseEditorTextToTokens(
+      "X {1>Y<2} <b> {3} %s",
+      [...sourceTokens],
+      { tagPolicy: "none" },
+    );
+
+    expect(tokens).toEqual([
+      { type: "text", content: "X {1>Y<2} <b> {3} %s" },
     ]);
   });
 });
