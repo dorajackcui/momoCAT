@@ -46,6 +46,8 @@ Verification date: 2026-05-27
 - Continue hardening CLI command grammar and inspect artifacts.
 - Continue strengthening `@cat/localization` request-mode behavior and pure
   `@cat/core` MT helpers.
+- Decide whether Runtime TM file jobs need an append cap and diagnostic warning
+  after real workload evidence.
 
 ### Later
 

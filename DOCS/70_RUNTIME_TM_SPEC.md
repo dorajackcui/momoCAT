@@ -175,20 +175,25 @@ TM artifacts.
 
 ## Performance Guardrails
 
-Version 1 should use an in-memory SQLite runtime database.
+Version 1 uses an in-memory SQLite runtime database.
 
 Expected file-level usage, including files with around one thousand eligible
 rows, should stay small compared with provider request time and normal Node
-runtime memory. To avoid unbounded growth, Runtime TM should enforce a clear
-entry cap.
+runtime memory.
 
-Recommended v1 behavior:
+Current v1 behavior:
 
 - Default to in-memory SQLite.
+- File translation jobs do not wire an append or entry cap yet.
+- `RuntimeTMContext` supports an optional cap for tests and future callers, but
+  defaults to no cap when `maxEntries` is not provided.
+- Do not add temp-file SQLite fallback in v1 unless real workloads require it.
+
+Follow-up behavior, if real workloads need it:
+
 - Stop appending new runtime entries after a conservative cap.
 - Continue translating normally when the cap is reached.
 - Emit a diagnostic warning when runtime append is disabled by the cap.
-- Do not add temp-file SQLite fallback in v1 unless real workloads require it.
 
 ## Artifacts And Diagnostics
 
@@ -201,7 +206,7 @@ Useful artifact signals:
 - Runtime TM selected references.
 - Runtime concordance selected references.
 - Runtime append count for each completed task.
-- Runtime append disabled warning if the cap is reached.
+- Runtime append disabled warning if a future append cap is wired and reached.
 
 Prompt artifacts may contain private source text, target text, and reference
 content. They must stay out of tracked docs and source files.
