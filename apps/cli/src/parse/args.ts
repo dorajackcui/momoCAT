@@ -1,5 +1,8 @@
 export interface CommandIO {
   cwd: string;
+  env: Record<string, string | undefined>;
+  platform: NodeJS.Platform;
+  homeDir: string;
   stdout: (text: string) => void;
   stderr: (text: string) => void;
   exists: (filePath: string) => boolean;
