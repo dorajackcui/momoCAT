@@ -6,10 +6,11 @@
     "momocat": "./dist/index.mjs"
   },
   "main": "./dist/index.mjs",
-  "types": "./dist/src/index.d.ts",
+  "engines": {
+    "node": ">=20 <21 || >=22"
+  },
   "files": [
     "dist/index.mjs",
-    "dist/src/**/*.d.ts",
     "README.md"
   ],
   "scripts": {

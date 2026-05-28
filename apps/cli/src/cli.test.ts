@@ -58,19 +58,21 @@ describe('momocat CLI dispatch', () => {
     ) as {
       private?: boolean;
       dependencies?: Record<string, string>;
+      engines?: Record<string, string>;
       files?: string[];
+      types?: string;
     };
 
     expect(packageJson.private).toBeUndefined();
+    expect(packageJson.types).toBeUndefined();
+    expect(packageJson.engines).toEqual({
+      node: '>=20 <21 || >=22',
+    });
     expect(packageJson.dependencies).toEqual({
       'better-sqlite3': '^12.6.2',
       xlsx: '^0.18.5',
     });
-    expect(packageJson.files).toEqual([
-      'dist/index.mjs',
-      'dist/src/**/*.d.ts',
-      'README.md',
-    ]);
+    expect(packageJson.files).toEqual(['dist/index.mjs', 'README.md']);
   });
 
   it('keeps the root cli helper separate from build output', () => {

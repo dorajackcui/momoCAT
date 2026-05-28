@@ -81,8 +81,12 @@ Override mechanisms:
 ```bash
 momocat inspect projects --db <local-db>
 momocat inspect projects --db-path <local-db>
-set MOMOCAT_DB=<local-db>
-set MOMOCAT_USER_DATA_DIR=<user-data-dir>
+MOMOCAT_DB=/path/to/cat_v1.db momocat inspect projects
+```
+
+```powershell
+$env:MOMOCAT_DB = 'C:\path\to\cat_v1.db'
+momocat inspect projects
 ```
 
 Installed runtime sidecars live next to the resolved database:

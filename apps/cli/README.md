@@ -57,8 +57,12 @@ Use overrides when the desktop database lives somewhere else:
 
 ```bash
 momocat inspect projects --db <local-db>
-set MOMOCAT_DB=<local-db>
-set MOMOCAT_USER_DATA_DIR=<user-data-dir>
+MOMOCAT_DB=/path/to/cat_v1.db momocat inspect projects
+```
+
+```powershell
+$env:MOMOCAT_DB = 'C:\path\to\cat_v1.db'
+momocat inspect projects
 ```
 
 ## Commands
