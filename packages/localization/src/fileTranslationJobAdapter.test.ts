@@ -72,6 +72,36 @@ describe('fileTranslationJobAdapter', () => {
     }
   });
 
+  it('clears external file targets when target baseline ignores current targets', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
+    try {
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      writeWorkbook(inputPath, [
+        ['source', 'target', 'context'],
+        ['Hello', 'old target', 'Greeting'],
+        ['World', '', 'Noun'],
+      ]);
+
+      const prepared = await prepareFileTranslationJob({
+        projectId: 7,
+        inputPath,
+        outputPath,
+        columns: { contextHeader: 'context' },
+        options: { targetBaseline: 'ignore-current-targets' },
+      });
+
+      expect(prepared.job.translationOptions?.targetBaseline).toBe('ignore-current-targets');
+      expect(prepared.job.translationOptions?.targetScope).toBeUndefined();
+      expect(prepared.job.units.map((unit) => [unit.unitId, unit.target])).toEqual([
+        ['row-2', ''],
+        ['row-3', ''],
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('keeps default checkpoint identity separate across project ids', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
     try {
@@ -124,7 +154,7 @@ describe('fileTranslationJobAdapter', () => {
     }
   });
 
-  it('changes unit source hashes across targetScope policies for explicit job ids', async () => {
+  it('changes unit source hashes across target baseline policies for explicit job ids', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
     try {
       const inputPath = join(root, 'mt.xlsx');
@@ -165,14 +195,14 @@ describe('fileTranslationJobAdapter', () => {
         projectId: 7,
         inputPath,
         outputPath,
-        options: { targetScope: 'blank-only' },
+        options: { targetBaseline: 'use-current-targets' },
         job: { jobId: 'same-job', checkpointPath },
       });
       const secondPrepared = await prepareFileTranslationJob({
         projectId: 7,
         inputPath,
         outputPath,
-        options: { targetScope: 'overwrite-non-confirmed' },
+        options: { targetBaseline: 'ignore-current-targets' },
         job: { jobId: 'same-job', checkpointPath },
       });
 
@@ -181,7 +211,7 @@ describe('fileTranslationJobAdapter', () => {
           projectId: 7,
           inputPath,
           outputPath,
-          options: { targetScope: 'blank-only' },
+          options: { targetBaseline: 'use-current-targets' },
           job: { jobId: 'same-job', checkpointPath, maxAttempts: 1 },
         },
         { taskExecutor: executor },
@@ -191,7 +221,7 @@ describe('fileTranslationJobAdapter', () => {
           projectId: 7,
           inputPath,
           outputPath,
-          options: { targetScope: 'overwrite-non-confirmed' },
+          options: { targetBaseline: 'ignore-current-targets' },
           job: { jobId: 'same-job', checkpointPath, resume: true, maxAttempts: 1 },
         },
         { taskExecutor: executor },
@@ -588,7 +618,7 @@ describe('fileTranslationJobAdapter', () => {
           projectId: 7,
           inputPath,
           outputPath,
-          options: { batchSize: 2, maxConcurrency: 8 },
+          options: { requestMode: 'window', batchSize: 2, maxConcurrency: 8 },
         },
         {
           taskExecutor: async () => ({ results: [] }),
@@ -634,7 +664,11 @@ describe('fileTranslationJobAdapter', () => {
           projectId: 7,
           inputPath,
           outputPath,
-          options: { requestMode: 'window-partial', targetScope: 'blank-only', batchSize: 2 },
+          options: {
+            requestMode: 'window-partial',
+            targetBaseline: 'use-current-targets',
+            batchSize: 2,
+          },
         },
         {
           taskExecutor: async () => ({ results: [] }),
@@ -644,11 +678,10 @@ describe('fileTranslationJobAdapter', () => {
                 planJob(input: {
                   job: TranslationJob;
                   completedResults: ReadonlyMap<string, UnitResult>;
-                  targetScope: 'blank-only';
                 }): TranslationTask[];
               };
               plannedTasks.push(
-                ...planner.planJob({ job, completedResults: new Map(), targetScope: 'blank-only' }),
+                ...planner.planJob({ job, completedResults: new Map() }),
               );
 
               return {
@@ -685,7 +718,7 @@ describe('fileTranslationJobAdapter', () => {
     }
   });
 
-  it('keeps default jobs on the dense window planner and changes fingerprints by requestMode', async () => {
+  it('defaults jobs to the partial window planner and changes fingerprints by requestMode', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
     try {
       const inputPath = join(root, 'mt.xlsx');
@@ -708,7 +741,8 @@ describe('fileTranslationJobAdapter', () => {
         outputPath,
         options: { requestMode: 'window-partial' },
       });
-      let defaultPlannerCanPlanDense = false;
+      let defaultPlannerSupportsPartial = false;
+      const plannedTasks: TranslationTask[] = [];
 
       await translateSpreadsheetFileJob(
         {
@@ -720,8 +754,17 @@ describe('fileTranslationJobAdapter', () => {
           taskExecutor: async () => ({ results: [] }),
           runnerFactory: (dependencies) => ({
             run: async (job) => {
-              defaultPlannerCanPlanDense = 'plan' in dependencies.taskPlanner;
-              expect(dependencies.taskPlanner.plan(job.units).map((task) => task.units.length)).toEqual([1]);
+              const planner = dependencies.taskPlanner as unknown as {
+                supportsJobAwarePlanning?: boolean;
+                planJob(input: {
+                  job: TranslationJob;
+                  completedResults: ReadonlyMap<string, UnitResult>;
+                }): TranslationTask[];
+              };
+              defaultPlannerSupportsPartial = planner.supportsJobAwarePlanning === true;
+              plannedTasks.push(
+                ...planner.planJob({ job, completedResults: new Map() }),
+              );
               return {
                 jobId: job.id,
                 summary: { total: 1, translated: 0, skipped: 0, reused: 0, failed: 0 },
@@ -732,9 +775,17 @@ describe('fileTranslationJobAdapter', () => {
         },
       );
 
-      expect(defaultPlannerCanPlanDense).toBe(true);
-      expect(dense.job.units[0]?.sourceHash).toBe(explicitWindow.job.units[0]?.sourceHash);
-      expect(dense.job.units[0]?.sourceHash).not.toBe(partial.job.units[0]?.sourceHash);
+      expect(defaultPlannerSupportsPartial).toBe(true);
+      expect(dense.job.translationOptions?.requestMode).toBe('window-partial');
+      expect(plannedTasks).toEqual([
+        expect.objectContaining({
+          requestMode: 'window-partial',
+          scanWindowUnits: [expect.objectContaining({ unitId: 'row-2' })],
+          requestUnitKeys: ['mt.xlsx\u0000row-2'],
+        }),
+      ]);
+      expect(dense.job.units[0]?.sourceHash).toBe(partial.job.units[0]?.sourceHash);
+      expect(dense.job.units[0]?.sourceHash).not.toBe(explicitWindow.job.units[0]?.sourceHash);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

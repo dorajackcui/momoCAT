@@ -19,7 +19,6 @@ import { AIProviderCatalogService } from './providers/AIProviderCatalogService';
 import { AIProviderTransport } from './providers/AIProviderTransport';
 import { computeSourceHash } from './job/sourceHash';
 import type { JobUnit, TranslationTask } from './job/types';
-import { resolveBatchTargetScope } from './translationTargetScope';
 import type { MTBatchCurrentUnitInput } from './modules/MTModule';
 import type { AIRuntimeConfigProvider, AITransport } from './ports';
 import { buildWindowModeContext } from './requestModes/shared/contextWindowBuilder';
@@ -48,11 +47,11 @@ import {
 } from './modules/FileModule';
 import { createTransientSegment } from './transientSegment';
 import { resolveTagPolicy } from './tagPolicy';
+import { normalizeTargetForBaseline, resolveTargetBaseline } from './targetBaseline';
 import type {
   LocalizationEngineOptions,
   LocalizationMode,
   LocalizationRequestMode,
-  LocalizationTargetScope,
   TranslateFileInput,
 } from './types';
 
@@ -159,13 +158,21 @@ export class LocalizationInspector {
     const parsed = await parseExternalSpreadsheet(input);
     const jsonOutputPath =
       input.jsonOutputPath ?? inferJsonOutputPath(input.outputPath);
-    const targetScope = resolveBatchTargetScope(
-      input.options?.targetScope ?? this.options.defaultTargetScope,
-    );
+    const targetBaseline = resolveTargetBaseline({
+      targetBaseline: input.options?.targetBaseline,
+      targetScope: input.options?.targetScope ?? this.options.defaultTargetScope,
+    });
     const tagPolicy = resolveTagPolicy(input.options?.tagPolicy);
     const sourceRows = parsed.artifact.rows.filter((row) => row.source.trim());
+    const baselineRows = sourceRows.map((row) => ({
+      ...row,
+      target: normalizeTargetForBaseline({
+        target: row.target,
+        targetBaseline,
+      }),
+    }));
     const limitedRows =
-      unitLimit === undefined ? sourceRows : sourceRows.slice(0, unitLimit);
+      unitLimit === undefined ? baselineRows : baselineRows.slice(0, unitLimit);
 
     const rowsWithSegments = limitedRows.map((row, index) => {
       const segment = createTransientSegment(
@@ -188,19 +195,17 @@ export class LocalizationInspector {
         ? await this.inspectRowsWindowPartialMode(
             project,
             rowsWithSegments,
-            sourceRows,
+            baselineRows,
             parsed.inputPath,
             maxCellChars,
-            targetScope,
             tagPolicy,
           )
         : await this.inspectRowsWindowMode(
             project,
             rowsWithSegments,
-            sourceRows,
+            baselineRows,
             parsed.inputPath,
             maxCellChars,
-            targetScope,
             tagPolicy,
           );
 
@@ -266,12 +271,9 @@ export class LocalizationInspector {
     contextRows: FileParseRowArtifact[],
     inputPath: string,
     maxCellChars: number,
-    targetScope: LocalizationTargetScope,
     tagPolicy: TagPolicy,
   ): Promise<InspectUnitArtifact[]> {
-    const translatableRows = rows.filter(({ row }) =>
-      isTranslatableUnderTargetScope(row, targetScope),
-    );
+    const translatableRows = rows.filter(({ row }) => isRequestRow(row));
     const units = await Promise.all(
       translatableRows.map(({ row, segment }) =>
         this.inspectRowReferences(project, row, segment),
@@ -360,12 +362,9 @@ export class LocalizationInspector {
     contextRows: FileParseRowArtifact[],
     inputPath: string,
     maxCellChars: number,
-    targetScope: LocalizationTargetScope,
     tagPolicy: TagPolicy,
   ): Promise<InspectUnitArtifact[]> {
-    const requestRows = rows.filter(({ row }) =>
-      isTranslatableUnderTargetScope(row, targetScope),
-    );
+    const requestRows = rows.filter(({ row }) => isRequestRow(row));
     const units = await Promise.all(
       requestRows.map(({ row, segment }) =>
         this.inspectRowReferences(project, row, segment),
@@ -598,11 +597,8 @@ function buildInspectWindowContext(
   });
 }
 
-function isTranslatableUnderTargetScope(
-  row: FileParseRowArtifact,
-  targetScope: LocalizationTargetScope,
-): boolean {
-  return targetScope === 'overwrite-non-confirmed' || !row.target.trim();
+function isRequestRow(row: FileParseRowArtifact): boolean {
+  return !row.target.trim();
 }
 
 function validatePositiveInteger(

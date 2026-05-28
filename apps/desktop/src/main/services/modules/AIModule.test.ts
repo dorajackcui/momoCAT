@@ -295,7 +295,7 @@ describe('AIModule.aiTranslateFile', () => {
     expect(input.options).toEqual({
       mode: 'standard',
       requestMode: 'window-partial',
-      targetScope: 'blank-only',
+      targetBaseline: 'use-current-targets',
       mt: { providerId: ALT_PROVIDER_ID },
     });
     expect(input.units).toEqual([
@@ -328,7 +328,7 @@ describe('AIModule.aiTranslateFile', () => {
     expect(transport.createResponse).not.toHaveBeenCalled();
   });
 
-  it('clears non-confirmed targets before localization when target baseline ignores current targets', async () => {
+  it('passes target baseline to localization so the engine can ignore current targets', async () => {
     const segments: Segment[] = [
       createSegment({
         segmentId: 'baseline-prefilled',
@@ -391,11 +391,12 @@ describe('AIModule.aiTranslateFile', () => {
     });
 
     const input = localizationEngine.translateProjectSegments.mock.calls[0][0];
-    expect(input.options?.targetScope).toBe('blank-only');
+    expect(input.options?.targetBaseline).toBe('ignore-current-targets');
+    expect(input.options?.targetScope).toBeUndefined();
     expect(input.units).toEqual([
       expect.objectContaining({
         id: 'baseline-prefilled',
-        target: '',
+        target: 'old target',
       }),
       expect.objectContaining({
         id: 'baseline-confirmed',

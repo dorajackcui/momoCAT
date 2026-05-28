@@ -30,9 +30,7 @@ export async function runLocalizationFileTranslation(
 ): Promise<{ translated: number; skipped: number; failed: number; total: number }> {
   const segments = Array.from(params.segmentPagingIterator.iterateFileSegments(params.fileId));
   const segmentsById = new Map(segments.map((segment) => [segment.segmentId, segment]));
-  const units = segments.map((segment) =>
-    mapSegmentToLocalizationUnit(segment, params.targetBaseline),
-  );
+  const units = segments.map(mapSegmentToLocalizationUnit);
   const providerId = params.providerId?.trim();
 
   logAIBatchDebug({
@@ -54,7 +52,7 @@ export async function runLocalizationFileTranslation(
     options: {
       mode: 'standard',
       requestMode: 'window-partial',
-      targetScope: 'blank-only',
+      targetBaseline: params.targetBaseline,
       ...(providerId ? { mt: { providerId } } : {}),
     },
     onResult: async (unitResult) => {
@@ -94,13 +92,9 @@ export async function runLocalizationFileTranslation(
 
 function mapSegmentToLocalizationUnit(
   segment: Segment,
-  targetBaseline: AIBatchTargetBaseline,
 ): TranslateProjectSegmentsInput['units'][number] {
   const context = segment.meta?.context ? String(segment.meta.context).trim() : '';
-  const target =
-    segment.status === 'confirmed' || targetBaseline === 'use-current-targets'
-      ? serializeTokensToDisplayText(segment.targetTokens)
-      : '';
+  const target = serializeTokensToDisplayText(segment.targetTokens);
 
   return {
     id: segment.segmentId,

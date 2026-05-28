@@ -71,6 +71,8 @@ export type {
   TranslateProjectSegmentsJobOptions,
 } from './projectSegmentJobAdapter';
 export { resolveBatchTargetScope } from './translationTargetScope';
+export { normalizeTargetForBaseline, resolveTargetBaseline } from './targetBaseline';
+export type { TargetBaselineOptions } from './targetBaseline';
 export type * from './ports';
 export { SqliteProjectRepository } from './adapters/sqlite/SqliteProjectRepository';
 export { SqliteSettingsRepository } from './adapters/sqlite/SqliteSettingsRepository';

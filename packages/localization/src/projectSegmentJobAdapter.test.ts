@@ -15,19 +15,42 @@ describe('projectSegmentJobAdapter', () => {
         { id: 's2', source: 'Two', target: 'Deux', metadata: { orderIndex: 1 } },
         { id: 's3', source: 'Three', target: 'Trois', locked: true, metadata: { orderIndex: 2 } },
       ],
-      options: { targetScope: 'overwrite-non-confirmed', batchSize: 3 },
+      options: { targetBaseline: 'ignore-current-targets', batchSize: 3 },
     });
 
     expect(prepared.job.translationOptions?.requestMode).toBe('window-partial');
+    expect(prepared.job.translationOptions?.targetBaseline).toBe('ignore-current-targets');
+    expect(prepared.job.translationOptions?.targetScope).toBeUndefined();
     expect(prepared.job.options?.maxConcurrency).toBe(1);
     expect(prepared.job.units).toEqual([
       expect.objectContaining({ unitId: 's1', target: '', locked: undefined }),
-      expect.objectContaining({ unitId: 's2', target: 'Deux', locked: undefined }),
+      expect.objectContaining({ unitId: 's2', target: '', locked: undefined }),
       expect.objectContaining({ unitId: 's3', target: 'Trois', locked: true }),
     ]);
   });
 
-  it('uses the window-partial planner and keeps locked rows out of requestUnitKeys under overwrite scope', async () => {
+  it('maps legacy overwrite target scope to ignore-current-targets before planning', () => {
+    const prepared = prepareProjectSegmentTranslationJob({
+      projectId: 7,
+      documentId: 'file-1:demo.xlsx',
+      units: [
+        { id: 's1', source: 'One', target: '' },
+        { id: 's2', source: 'Two', target: 'Deux' },
+        { id: 's3', source: 'Three', target: 'Trois', locked: true },
+      ],
+      options: { targetScope: 'overwrite-non-confirmed', batchSize: 3 },
+    });
+
+    expect(prepared.job.translationOptions?.targetBaseline).toBe('ignore-current-targets');
+    expect(prepared.job.translationOptions?.targetScope).toBeUndefined();
+    expect(prepared.job.units).toEqual([
+      expect.objectContaining({ unitId: 's1', target: '' }),
+      expect.objectContaining({ unitId: 's2', target: '' }),
+      expect.objectContaining({ unitId: 's3', target: 'Trois', locked: true }),
+    ]);
+  });
+
+  it('uses the window-partial planner and keeps locked rows out of requestUnitKeys by baseline-normalized targets', async () => {
     const plannedTasks: TranslationTask[] = [];
 
     await translateProjectSegmentsJob(
@@ -39,7 +62,7 @@ describe('projectSegmentJobAdapter', () => {
           { id: 's2', source: 'Two', target: 'Deux' },
           { id: 's3', source: 'Three', target: 'Trois', locked: true },
         ],
-        options: { targetScope: 'overwrite-non-confirmed', batchSize: 3 },
+        options: { targetBaseline: 'ignore-current-targets', batchSize: 3 },
       },
       {
         taskExecutor: async () => ({ results: [] }),
@@ -49,7 +72,6 @@ describe('projectSegmentJobAdapter', () => {
               planJob(input: {
                 job: TranslationJob;
                 completedResults: ReadonlyMap<string, UnitResult>;
-                targetScope: 'overwrite-non-confirmed';
               }): TranslationTask[];
             };
 
@@ -57,7 +79,6 @@ describe('projectSegmentJobAdapter', () => {
               ...planner.planJob({
                 job,
                 completedResults: new Map(),
-                targetScope: 'overwrite-non-confirmed',
               }),
             );
 

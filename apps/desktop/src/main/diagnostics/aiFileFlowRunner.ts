@@ -1,7 +1,9 @@
 import path from 'path';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { Segment, TBMatch } from '@cat/core/models';
+import type { ProjectType } from '@cat/core/project';
 import { CATDatabase } from '../../../../../packages/db/src';
+import { findHeaderColumn, resolveDefaultContextColumn } from '../../shared/importColumnDefaults';
 import type { AIBatchMode, AIBatchTargetScope, ImportOptions } from '../../shared/ipc';
 import { ProjectService } from '../services/ProjectService';
 import type { AIRuntimeConfigProvider, AITransport, SpreadsheetGateway } from '../services/ports';
@@ -142,7 +144,12 @@ export async function runAIFileFlowTrace(
     );
 
     const project = resolveProject(projectService, options);
-    const file = await resolveFile(projectService, project.id, options);
+    const file = await resolveFile(
+      projectService,
+      project.id,
+      project.projectType ?? 'translation',
+      options,
+    );
 
     emit(options, {
       event: 'ai_file_flow_start',
@@ -232,6 +239,7 @@ function resolveProject(projectService: ProjectService, options: RunAIFileFlowTr
 async function resolveFile(
   projectService: ProjectService,
   projectId: number,
+  projectType: ProjectType,
   options: RunAIFileFlowTraceOptions,
 ) {
   if (options.fileId !== undefined) {
@@ -252,7 +260,12 @@ async function resolveFile(
     throw new Error('Missing file id or file path.');
   }
 
-  const importOptions = await resolveImportOptions(projectService, filePath, options.importOptions);
+  const importOptions = await resolveImportOptions(
+    projectService,
+    filePath,
+    projectType,
+    options.importOptions,
+  );
   const file = await projectService.addFileToProject(projectId, filePath, importOptions);
   emit(options, {
     event: 'ai_file_flow_imported_file',
@@ -268,6 +281,7 @@ async function resolveFile(
 async function resolveImportOptions(
   projectService: ProjectService,
   filePath: string,
+  projectType: ProjectType,
   importOptions: ImportOptions | undefined,
 ): Promise<ImportOptions> {
   if (importOptions) {
@@ -288,26 +302,24 @@ async function resolveImportOptions(
     throw new Error('Auto-detected source and target columns are the same column.');
   }
 
-  return {
+  const contextCol = resolveDefaultContextColumn({
+    hasHeader: true,
+    previewData: preview,
+    projectType,
+    sourceCol,
+  });
+  const resolvedOptions: ImportOptions = {
     ...DEFAULT_IMPORT_OPTIONS,
     hasHeader: true,
     sourceCol,
     targetCol,
   };
-}
 
-function findHeaderColumn(
-  headerRow: Array<string | number | boolean | null | undefined>,
-  headerName: string,
-): number | undefined {
-  const normalizedHeaderName = headerName.trim().toLowerCase();
-  const index = headerRow.findIndex(
-    (cell) =>
-      String(cell ?? '')
-        .trim()
-        .toLowerCase() === normalizedHeaderName,
-  );
-  return index >= 0 ? index : undefined;
+  if (contextCol !== undefined) {
+    resolvedOptions.contextCol = contextCol;
+  }
+
+  return resolvedOptions;
 }
 
 async function emitReferencePreview(

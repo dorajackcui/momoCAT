@@ -473,7 +473,7 @@ describe('LocalizationInspector.inspectFile', () => {
     }
   });
 
-  it('includes existing-target rows as current with overwrite-non-confirmed target scope', async () => {
+  it('includes existing-target rows as current when target baseline ignores current targets', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
     const db = new CATDatabase(':memory:');
     try {
@@ -493,7 +493,7 @@ describe('LocalizationInspector.inspectFile', () => {
         projectId,
         inputPath,
         outputPath: join(root, 'inspect.xlsx'),
-        options: { targetScope: 'overwrite-non-confirmed' },
+        options: { targetBaseline: 'ignore-current-targets' },
       });
       const json = JSON.parse(await readFile(result.jsonOutputPath, 'utf8'));
       const openUnit = json.units.find(

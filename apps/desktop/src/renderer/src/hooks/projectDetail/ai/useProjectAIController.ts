@@ -3,7 +3,6 @@ import type { Project, ProjectAIModel, ProjectType } from '@cat/core/project';
 import type {
   AIBatchMode,
   AIBatchTargetBaseline,
-  AIBatchTargetScope,
   AIProviderSummary,
   JobProgressEvent,
 } from '../../../../../shared/ipc';
@@ -31,7 +30,6 @@ import type {
 
 export interface ResolvedAITranslateStartConfig {
   effectiveMode: AIBatchMode;
-  effectiveTargetScope: AIBatchTargetScope;
   effectiveTargetBaseline: AIBatchTargetBaseline;
   actionLabel: string;
   targetLabel: string;
@@ -44,8 +42,6 @@ export function resolveAITranslateStartConfig(params: {
   const projectType = params.projectType || 'translation';
   const effectiveMode: AIBatchMode =
     projectType === 'translation' ? params.options.mode || 'default' : 'default';
-  const effectiveTargetScope: AIBatchTargetScope =
-    projectType === 'translation' ? params.options.targetScope || 'blank-only' : 'blank-only';
   const effectiveTargetBaseline: AIBatchTargetBaseline =
     projectType === 'translation'
       ? resolveTargetBaseline(params.options)
@@ -61,7 +57,6 @@ export function resolveAITranslateStartConfig(params: {
 
   return {
     effectiveMode,
-    effectiveTargetScope,
     effectiveTargetBaseline,
     actionLabel,
     targetLabel: projectType === 'custom' ? 'output' : 'target',

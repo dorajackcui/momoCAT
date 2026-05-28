@@ -101,6 +101,37 @@ describe('FileModule', () => {
     }
   });
 
+  it('defaults optional context column to the context header', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-module-'));
+    try {
+      const inputPath = join(root, 'default-context.xlsx');
+      const outputPath = join(root, 'unused.xlsx');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target', 'context'],
+          ['Hello', '', 'menu label'],
+          ['Bye', '', 'toolbar action'],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+
+      const parsed = await parseExternalSpreadsheet({ projectId: 1, inputPath, outputPath });
+
+      expect(parsed.artifact.rows.map((row) => row.context)).toEqual([
+        'menu label',
+        'toolbar action',
+      ]);
+      expect(fileRowsToLocalizationUnits(parsed.artifact.rows).map((unit) => unit.context)).toEqual(
+        ['menu label', 'toolbar action'],
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('stops parsing at the last non-empty source cell even when worksheet range is bloated', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-file-module-'));
     try {

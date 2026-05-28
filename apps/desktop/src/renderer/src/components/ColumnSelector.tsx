@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { ProjectType } from '@cat/core/project';
 import type { ImportOptions, SpreadsheetPreviewData } from '../../../shared/ipc';
+import { resolveDefaultContextColumn } from '../../../shared/importColumnDefaults';
 import { Button, Card, IconButton, Select } from './ui';
 
 interface ColumnSelectorProps {
@@ -48,13 +49,20 @@ export function ColumnSelector({
   const colIndexes = Array.from({ length: maxCols }, (_, i) => i);
 
   useEffect(() => {
-    if (!isOpen || !isReviewProject) return;
-    if (contextCol === undefined && colIndexes.length > 0) {
-      // Keep review mode defaults aligned with opened preview columns.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setContextCol(0);
-    }
-  }, [colIndexes.length, contextCol, isOpen, isReviewProject]);
+    if (!isOpen || contextCol !== undefined || colIndexes.length === 0) return;
+
+    const defaultContextCol = resolveDefaultContextColumn({
+      hasHeader,
+      previewData,
+      projectType,
+      sourceCol,
+    });
+    if (defaultContextCol === undefined) return;
+
+    // Keep default column selection aligned with opened preview columns.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setContextCol(defaultContextCol);
+  }, [colIndexes.length, contextCol, hasHeader, isOpen, previewData, projectType, sourceCol]);
 
   if (!isOpen) return null;
 

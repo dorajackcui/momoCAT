@@ -1,6 +1,5 @@
 import { runBounded } from '../RequestScheduler';
 import { unitKey as sharedUnitKey } from '../requestModes/shared/unitIdentity';
-import { resolveBatchTargetScope } from '../translationTargetScope';
 import type { RuntimeTMSummary } from '../types';
 import { SnapshotThrottle } from './SnapshotThrottle';
 import type { JobAwareTaskPlanner, TaskPlanner } from './TaskPlanner';
@@ -131,7 +130,6 @@ export class TranslationJobRunner {
       ? this.taskPlanner.planJob({
           job,
           completedResults: resultMap,
-          targetScope: resolveBatchTargetScope(job.translationOptions?.targetScope),
         })
       : this.taskPlanner.plan(pendingUnits);
     const throttle = new SnapshotThrottle({
@@ -413,8 +411,7 @@ function isIntrinsicallySkippedUnit(job: TranslationJob, unit: JobUnit): boolean
     return true;
   }
 
-  const targetScope = resolveBatchTargetScope(job.translationOptions?.targetScope);
-  return targetScope === 'blank-only' && Boolean(unit.target?.trim());
+  return Boolean(unit.target?.trim());
 }
 
 function canonicalizeArtifact(

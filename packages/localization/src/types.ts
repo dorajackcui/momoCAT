@@ -3,6 +3,8 @@ import type { ReasoningEffort } from './ports';
 
 export type LocalizationTargetScope = 'blank-only' | 'overwrite-non-confirmed';
 
+export type LocalizationTargetBaseline = 'use-current-targets' | 'ignore-current-targets';
+
 export type LocalizationMode = 'standard' | 'dialogue';
 
 export type LocalizationRequestMode = 'window' | 'window-partial';
@@ -32,6 +34,7 @@ export interface MTModuleOptions {
 
 export interface TranslateUnitsOptions {
   targetScope?: LocalizationTargetScope;
+  targetBaseline?: LocalizationTargetBaseline;
   mode?: LocalizationMode;
   requestMode?: LocalizationRequestMode;
   tagPolicy?: TagPolicy;

@@ -30,25 +30,41 @@ may report whether required secrets exist, but it must not print secret values.
 
 ```bash
 momocat inspect localization --db <local-db> --project-id <project-id> --input <input.xlsx> --output <inspect.xlsx> --tag-policy none
-momocat inspect localization --db <local-db> --project-id <project-id> --input <input.xlsx> --output <inspect.xlsx> --json-output <inspect.json> --request-mode window-partial
+momocat inspect localization --db <local-db> --project-id <project-id> --input <input.xlsx> --output <inspect.xlsx> --json-output <inspect.json> --request-mode window-partial --target-baseline use-current-targets
 ```
 
 Inspect does not send provider requests. Use the same `--request-mode` planned
-for real translation.
+for real translation. Use the same `--target-baseline` as the intended
+translation run when comparing prompt shape.
 
 ## Translate File
 
 ```bash
 momocat translate file --db <local-db> --project-id <project-id> --input <input.xlsx> --output <translated.xlsx> --tag-policy none
-momocat translate file --db <local-db> --project-id <project-id> --input <input.xlsx> --output <translated.xlsx> --request-mode window-partial
+momocat translate file --db <local-db> --project-id <project-id> --input <input.xlsx> --output <translated.xlsx> --request-mode window-partial --target-baseline ignore-current-targets --context-header context
 ```
 
 Translate reads project settings, mounted TM/TB resources, and provider config
 from the DB. It writes `--output`, leaves the input unchanged, and does not
 import the input file into project storage.
 
-Blank target cells are translated by default. Use `--target-scope` only when a
-run intentionally needs different target handling.
+Context columns are optional. Use `--context-header <header>` to read a named
+context column, or `--context-col <index>` to read a zero-based context column.
+When context is present, Window Mode prompts include it with the corresponding
+source unit.
+
+Target baseline controls how existing target text is interpreted before Window
+Mode planning:
+
+| Option | Meaning |
+| --- | --- |
+| `--target-baseline use-current-targets` | Default. Keep current target cells as baseline. `window-partial` requests only eligible blank target cells and may use existing targets as read-only context. |
+| `--target-baseline ignore-current-targets` | Treat current non-confirmed target text as absent before planning so eligible rows are regenerated. |
+
+`--target-scope` is not a `translate file` option. It belongs to legacy
+single-unit concurrent translation APIs, where it selects which units enter the
+concurrent work queue. Window and Window Partial CLI runs use
+`--target-baseline` instead.
 
 Tag policy defaults to current CAT marker detection. Use `--tag-policy none`
 when input text has already been filtered upstream, or when marker-like content
@@ -64,7 +80,7 @@ npm run smoke:momocat -- --request-mode window-partial --prefix <run-prefix>
 ```
 
 The smoke helper reads `.momocat-smoke.local.json`, which is gitignored.
-`requestMode` applies to both inspect and translate.
+`requestMode` and target baseline apply to both inspect and translate.
 
 Use `--dry-run` to print commands before execution. Use `--inspect-only` when
 provider calls are not intended.

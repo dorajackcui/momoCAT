@@ -20,7 +20,7 @@ query TM or TB directly, and it should not depend on spreadsheet row shape.
 
 | Mode | Meaning |
 | --- | --- |
-| `window` | Dense Window Mode. Physical batches request rows in target scope. |
+| `window` | Dense Window Mode. Physical batches request rows that require target text. |
 | `window-partial` | Partial Window Mode. Physical scan windows remain stable, but only rows requiring target text become request rows. |
 
 Dense Window Mode groups one to five current units in one provider request,
@@ -32,6 +32,12 @@ request ids dynamic. Existing target text inside the window can be prompt
 context without becoming requested output. If a physical scan window has zero
 request rows, it is skip-only and must not send a provider request or require
 provider config.
+
+Target baseline is resolved before request-mode planning. `use-current-targets`
+keeps existing targets as the baseline; `ignore-current-targets` normalizes
+eligible current targets away before planning. Window planners do not interpret
+legacy `targetScope` values such as `blank-only`; those belong to legacy
+single-unit concurrent translation APIs.
 
 ## Window Partial Prompt Order
 

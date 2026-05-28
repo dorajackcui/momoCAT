@@ -531,7 +531,7 @@ describe('LocalizationEngine.translateUnits', () => {
 });
 
 describe('LocalizationEngine.translateFile job mode', () => {
-  it('uses Window Mode batches by default and sends later batches only after earlier targets exist', async () => {
+  it('uses explicit Window Mode batches and sends later batches only after earlier targets exist', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
     const db = new CATDatabase(':memory:');
     try {
@@ -590,6 +590,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
         projectId,
         inputPath,
         outputPath,
+        options: { requestMode: 'window' },
         job: { maxAttempts: 1 },
       });
 
@@ -675,6 +676,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
         projectId,
         inputPath,
         outputPath,
+        options: { requestMode: 'window' },
         job: { maxAttempts: 1 },
       });
 
@@ -704,6 +706,65 @@ describe('LocalizationEngine.translateFile job mode', () => {
       expect(result.runtimeTm?.hitUnits).toBeGreaterThan(0);
       expect(result.runtimeTm?.tmHits).toBeGreaterThan(0);
       expectPersistentTMsEmpty(db);
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('treats omitted file request mode as explicit Window Partial Mode for resume identity', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('External File Default Partial Resume', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const inputPath = join(root, 'default-partial.xlsx');
+      const outputPath = join(root, 'default-partial.translated.xlsx');
+      const checkpointPath = join(root, 'default-partial.checkpoint.jsonl');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target'],
+          ['Hello', ''],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+      const transport = createTransport(
+        JSON.stringify({
+          translations: [{ id: 'default-partial.xlsx#row-2', text: 'Bonjour' }],
+        }),
+      );
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+
+      await engine.translateFile({
+        projectId,
+        inputPath,
+        outputPath,
+        options: { requestMode: 'window-partial' },
+        job: { checkpointPath, maxAttempts: 1 },
+      });
+      const resumed = await engine.translateFile({
+        projectId,
+        inputPath,
+        outputPath,
+        job: { checkpointPath, resume: true, maxAttempts: 1 },
+      });
+
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
+      expect(resumed.summary).toEqual({
+        total: 1,
+        translated: 0,
+        skipped: 0,
+        failed: 0,
+        reused: 1,
+      });
+      expect(resumed.results[0]?.status).toBe('reused');
+      expect(resumed.results[0]?.target).toBe('Bonjour');
     } finally {
       db.close();
       await rm(root, { recursive: true, force: true });

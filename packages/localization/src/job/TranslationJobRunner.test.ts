@@ -533,21 +533,21 @@ describe('TranslationJobRunner', () => {
     const seenPlanJobArgs: Array<{
       jobUnitIds: string[];
       completedUnitIds: string[];
-      targetScope: string;
+      hasTargetScope: boolean;
     }> = [];
     const planner: JobAwareTaskPlanner = {
       supportsJobAwarePlanning: true,
-      planJob: ({ job, completedResults, targetScope }) => {
+      planJob: (input) => {
         seenPlanJobArgs.push({
-          jobUnitIds: job.units.map((unit) => unit.unitId),
-          completedUnitIds: Array.from(completedResults.values()).map((result) => result.unitId),
-          targetScope,
+          jobUnitIds: input.job.units.map((unit) => unit.unitId),
+          completedUnitIds: Array.from(input.completedResults.values()).map((result) => result.unitId),
+          hasTargetScope: 'targetScope' in input,
         });
 
         return [
           {
             taskId: 'job-aware-task-1',
-            units: [job.units[1]],
+            units: [input.job.units[1]],
           },
         ];
       },
@@ -573,7 +573,7 @@ describe('TranslationJobRunner', () => {
           makeUnit({ unitId: 'unit-2', sourceHash: 'hash-2' }),
         ],
         options: { resume: true, maxConcurrency: 1 },
-        translationOptions: { targetScope: 'overwrite-non-confirmed' },
+        translationOptions: { targetBaseline: 'ignore-current-targets' },
       }),
     );
 
@@ -581,7 +581,7 @@ describe('TranslationJobRunner', () => {
       {
         jobUnitIds: ['unit-1', 'unit-2'],
         completedUnitIds: ['unit-1'],
-        targetScope: 'overwrite-non-confirmed',
+        hasTargetScope: false,
       },
     ]);
   });

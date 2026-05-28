@@ -171,8 +171,48 @@ describe('momocat CLI dispatch', () => {
     expect(harness.stdout.join('')).toContain('--json-output <path>');
     expect(harness.stdout.join('')).toContain('--unit-limit <n>');
     expect(harness.stdout.join('')).toContain('--max-cell-chars <n>');
-    expect(harness.stdout.join('')).toContain('--request-mode <mode>');
+    expect(harness.stdout.join('')).toContain(
+      '--request-mode <mode>            window or window-partial. Default: window-partial.',
+    );
+    expect(harness.stdout.join('')).toContain(
+      '--target-baseline <baseline>     use-current-targets or ignore-current-targets. Default: use-current-targets.',
+    );
     expect(harness.stdout.join('')).toContain('--tag-policy <policy>');
+  });
+
+  it('defaults inspect localization to window-partial request mode', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      [
+        'inspect',
+        'localization',
+        '--db',
+        'cat.db',
+        '--project-id',
+        '7',
+        '--input',
+        'input.xlsx',
+        '--output',
+        'inspect.xlsx',
+      ],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(harness.calls).toEqual([
+      {
+        name: 'inspectLocalization',
+        config: {
+          dbPath: 'cat.db',
+          projectId: 7,
+          inputPath: 'input.xlsx',
+          outputPath: 'inspect.xlsx',
+          requestMode: 'window-partial',
+          targetBaseline: 'use-current-targets',
+        },
+      },
+    ]);
   });
 
   it('maps inspect localization options to the localization command API', async () => {
@@ -192,6 +232,8 @@ describe('momocat CLI dispatch', () => {
         '5000',
         '--request-mode',
         'window-partial',
+        '--target-baseline',
+        'ignore-current-targets',
         '--tag-policy',
         'none',
       ],
@@ -213,6 +255,7 @@ describe('momocat CLI dispatch', () => {
           unitLimit: 12,
           maxCellChars: 5000,
           requestMode: 'window-partial',
+          targetBaseline: 'ignore-current-targets',
           tagPolicy: 'none',
         },
       },
@@ -426,12 +469,52 @@ describe('momocat CLI dispatch', () => {
     expect(exitCode).toBe(0);
     expect(harness.stdout.join('')).toContain('Usage: momocat translate file');
     expect(harness.stdout.join('')).toContain('--db <path>, --db-path <path>');
-    expect(harness.stdout.join('')).toContain('--target-scope <scope>');
+    expect(harness.stdout.join('')).not.toContain('--target-scope');
+    expect(harness.stdout.join('')).toContain('--context-header <header>');
+    expect(harness.stdout.join('')).toContain('--context-col <index>');
     expect(harness.stdout.join('')).toContain(
-      '--request-mode <mode>            window or window-partial.',
+      '--request-mode <mode>            window or window-partial. Default: window-partial.',
+    );
+    expect(harness.stdout.join('')).toContain(
+      '--target-baseline <baseline>     use-current-targets or ignore-current-targets. Default: use-current-targets.',
     );
     expect(harness.stdout.join('')).toContain('--tag-policy <policy>');
     expect(harness.stdout.join('')).toContain('--progress-stdout');
+  });
+
+  it('defaults translate file to window-partial request mode', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      [
+        'translate',
+        'file',
+        '--db',
+        'cat.db',
+        '--project-id',
+        '7',
+        '--input',
+        'input.xlsx',
+        '--output',
+        'translated.xlsx',
+      ],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(harness.calls).toEqual([
+      {
+        name: 'translateFile',
+        config: {
+          dbPath: 'cat.db',
+          projectId: 7,
+          inputPath: 'input.xlsx',
+          outputPath: 'translated.xlsx',
+          requestMode: 'window-partial',
+          targetBaseline: 'use-current-targets',
+        },
+      },
+    ]);
   });
 
   it('maps translate file options to the localization command API', async () => {
@@ -446,7 +529,9 @@ describe('momocat CLI dispatch', () => {
         '--input=input.xlsx',
         '--output',
         'translated.xlsx',
-        '--target-scope=overwrite-non-confirmed',
+        '--context-header',
+        'context',
+        '--target-baseline=ignore-current-targets',
         '--request-mode',
         'window-partial',
         '--tag-policy=none',
@@ -479,7 +564,8 @@ describe('momocat CLI dispatch', () => {
           projectId: 7,
           inputPath: 'input.xlsx',
           outputPath: 'translated.xlsx',
-          targetScope: 'overwrite-non-confirmed',
+          contextHeader: 'context',
+          targetBaseline: 'ignore-current-targets',
           requestMode: 'window-partial',
           tagPolicy: 'none',
           checkpointPath: 'checkpoint.json',
@@ -528,9 +614,37 @@ describe('momocat CLI dispatch', () => {
           inputPath: 'input.xlsx',
           outputPath: 'translated.xlsx',
           requestMode: 'window',
+          targetBaseline: 'use-current-targets',
         },
       },
     ]);
+  });
+
+  it('rejects translate file --target-scope because target scope belongs to legacy concurrent APIs', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      [
+        'translate',
+        'file',
+        '--db',
+        'cat.db',
+        '--project-id',
+        '7',
+        '--input',
+        'input.xlsx',
+        '--output',
+        'translated.xlsx',
+        '--target-scope',
+        'overwrite-non-confirmed',
+      ],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toContain('Unknown argument: --target-scope');
+    expect(harness.stderr.join('')).toContain('Run: momocat translate file --help');
   });
 
   it('maps translate file --request-mode equals syntax to the localization command API', async () => {
@@ -559,6 +673,7 @@ describe('momocat CLI dispatch', () => {
           inputPath: 'input.xlsx',
           outputPath: 'translated.xlsx',
           requestMode: 'window-partial',
+          targetBaseline: 'use-current-targets',
         },
       },
     ]);
@@ -593,6 +708,34 @@ describe('momocat CLI dispatch', () => {
     expect(harness.stderr.join('')).toContain('Run: momocat translate file --help');
   });
 
+  it('reports invalid target baseline before calling localization', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(
+      [
+        'translate',
+        'file',
+        '--db',
+        'cat.db',
+        '--project-id',
+        '7',
+        '--input',
+        'input.xlsx',
+        '--output',
+        'translated.xlsx',
+        '--target-baseline',
+        'reuse-old',
+      ],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toContain(
+      '--target-baseline must be use-current-targets or ignore-current-targets.',
+    );
+  });
+
   it('reports translate file invalid tag policy before calling localization', async () => {
     const harness = createHarness();
     const exitCode = await runCli(
@@ -620,7 +763,7 @@ describe('momocat CLI dispatch', () => {
     expect(harness.stderr.join('')).toContain('Run: momocat translate file --help');
   });
 
-  it('reports translate file invalid target scope before calling localization', async () => {
+  it('reports translate file target scope equals syntax as unsupported', async () => {
     const harness = createHarness();
     const exitCode = await runCli(
       [
@@ -634,8 +777,7 @@ describe('momocat CLI dispatch', () => {
         'input.xlsx',
         '--output',
         'translated.xlsx',
-        '--target-scope',
-        'all',
+        '--target-scope=blank-only',
       ],
       harness.deps,
       harness.io,
@@ -643,15 +785,15 @@ describe('momocat CLI dispatch', () => {
 
     expect(exitCode).toBe(1);
     expect(harness.calls).toEqual([]);
-    expect(harness.stderr.join('')).toContain(
-      '--target-scope must be blank-only or overwrite-non-confirmed.',
-    );
+    expect(harness.stderr.join('')).toContain('Unknown argument: --target-scope');
     expect(harness.stderr.join('')).toContain('Run: momocat translate file --help');
   });
 
   it('reports translate file invalid project id and numeric options before calling localization', async () => {
     for (const [flag, value, expected] of [
       ['--project-id', '0', '--project-id must be a positive integer.'],
+      ['--context-col', '-1', '--context-col must be a zero-based column index.'],
+      ['--context-col', '1.5', '--context-col must be a zero-based column index.'],
       ['--max-attempts', '0', '--max-attempts must be a positive integer.'],
       ['--batch-size', '0', '--batch-size must be an integer from 1 to 5.'],
       ['--batch-size', '6', '--batch-size must be an integer from 1 to 5.'],

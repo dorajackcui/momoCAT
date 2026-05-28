@@ -1,5 +1,4 @@
 import { unitKey } from '../requestModes/shared/unitIdentity';
-import type { LocalizationTargetScope } from '../types';
 import type { JobUnit, TranslationJob, TranslationTask, UnitResult } from './types';
 
 export interface TaskPlanner {
@@ -11,7 +10,6 @@ export interface JobAwareTaskPlanner {
   planJob(input: {
     job: TranslationJob;
     completedResults: ReadonlyMap<string, UnitResult>;
-    targetScope: LocalizationTargetScope;
   }): TranslationTask[];
 }
 
@@ -61,7 +59,6 @@ export class WindowPartialTaskPlanner implements JobAwareTaskPlanner {
   planJob(input: {
     job: TranslationJob;
     completedResults: ReadonlyMap<string, UnitResult>;
-    targetScope: LocalizationTargetScope;
   }): TranslationTask[] {
     const tasks: TranslationTask[] = [];
 
@@ -78,7 +75,7 @@ export class WindowPartialTaskPlanner implements JobAwareTaskPlanner {
         requestMode: 'window-partial',
         scanWindowUnits,
         units,
-        requestUnitKeys: units.filter((unit) => shouldRequestUnit(unit, input.targetScope)).map(unitKey),
+        requestUnitKeys: units.filter(shouldRequestUnit).map(unitKey),
       });
     }
 
@@ -98,7 +95,7 @@ export function normalizeWindowModeBatchSize(value: number | undefined): number 
   return value;
 }
 
-function shouldRequestUnit(unit: JobUnit, targetScope: LocalizationTargetScope): boolean {
+function shouldRequestUnit(unit: JobUnit): boolean {
   if (unit.locked) {
     return false;
   }
@@ -107,5 +104,5 @@ function shouldRequestUnit(unit: JobUnit, targetScope: LocalizationTargetScope):
     return false;
   }
 
-  return targetScope === 'overwrite-non-confirmed' || !unit.target?.trim();
+  return !unit.target?.trim();
 }

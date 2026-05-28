@@ -69,6 +69,9 @@ function parseInspectLocalizationArgs(
   assertExistingPath(io, config.dbPath, 'Database');
   assertExistingPath(io, config.inputPath, 'Input file');
 
+  config.requestMode ??= 'window-partial';
+  config.targetBaseline ??= 'use-current-targets';
+
   return config as InspectLocalizationCommandConfig;
 }
 
@@ -116,6 +119,13 @@ function assignOption(
     config.requestMode = optionValue;
     return;
   }
+  if (name === 'target-baseline') {
+    if (optionValue !== 'use-current-targets' && optionValue !== 'ignore-current-targets') {
+      throw new Error('--target-baseline must be use-current-targets or ignore-current-targets.');
+    }
+    config.targetBaseline = optionValue;
+    return;
+  }
   if (name === 'tag-policy') {
     if (optionValue !== 'default' && optionValue !== 'none') {
       throw new Error('--tag-policy must be default or none.');
@@ -138,6 +148,7 @@ function isKnownOption(name: string): boolean {
     name === 'unit-limit' ||
     name === 'max-cell-chars' ||
     name === 'request-mode' ||
+    name === 'target-baseline' ||
     name === 'tag-policy'
   );
 }
@@ -153,7 +164,8 @@ Options:
   --json-output <path>             Optional JSON artifact output path.
   --unit-limit <n>                 Optional maximum number of source units to inspect.
   --max-cell-chars <n>             Optional max characters per generated spreadsheet cell.
-  --request-mode <mode>            window or window-partial.
+  --request-mode <mode>            window or window-partial. Default: window-partial.
+  --target-baseline <baseline>     use-current-targets or ignore-current-targets. Default: use-current-targets.
   --tag-policy <policy>            default or none.
   -h, --help                       Show this help.
 

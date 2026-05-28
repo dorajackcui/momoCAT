@@ -31,7 +31,7 @@ Options:
 
 Examples:
   npm run trace:ai-file -- --project-id 1 --file-id 23
-  npm run trace:ai-file -- --project-name "Nikki(zh-fr)" --file "C:\\path\\mt.xlsx"
+  npm run trace:ai-file -- --project-name "Sample(zh-fr)" --file "C:\\path\\mt.xlsx"
   npm run trace:ai-file -- --project-id 1 --file-id 23 --target-scope overwrite-non-confirmed
   npm run trace:ai-file -- --db .cat_data/cat_v1.db --project-id 1 --file-id 23 --preview-limit 5`);
 }

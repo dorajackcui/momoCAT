@@ -73,6 +73,9 @@ function parseTranslateFileArgs(argv: string[], io: CommandIO): TranslateFileCom
   assertExistingPath(io, config.dbPath, 'Database');
   assertExistingPath(io, config.inputPath, 'Input file');
 
+  config.requestMode ??= 'window-partial';
+  config.targetBaseline ??= 'use-current-targets';
+
   return config as TranslateFileCommandConfig;
 }
 
@@ -101,11 +104,19 @@ function assignOption(
     config.outputPath = io.resolvePath(optionValue);
     return;
   }
-  if (name === 'target-scope') {
-    if (optionValue !== 'blank-only' && optionValue !== 'overwrite-non-confirmed') {
-      throw new Error('--target-scope must be blank-only or overwrite-non-confirmed.');
+  if (name === 'context-header') {
+    config.contextHeader = optionValue;
+    return;
+  }
+  if (name === 'context-col') {
+    config.contextCol = parseZeroBasedColumnIndex(optionValue);
+    return;
+  }
+  if (name === 'target-baseline') {
+    if (optionValue !== 'use-current-targets' && optionValue !== 'ignore-current-targets') {
+      throw new Error('--target-baseline must be use-current-targets or ignore-current-targets.');
     }
-    config.targetScope = optionValue;
+    config.targetBaseline = optionValue;
     return;
   }
   if (name === 'request-mode') {
@@ -179,6 +190,14 @@ function parseBatchSize(value: string): number {
   return parsed;
 }
 
+function parseZeroBasedColumnIndex(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error('--context-col must be a zero-based column index.');
+  }
+  return parsed;
+}
+
 function isKnownOption(name: string): boolean {
   return (
     name === 'db' ||
@@ -186,7 +205,9 @@ function isKnownOption(name: string): boolean {
     name === 'project-id' ||
     name === 'input' ||
     name === 'output' ||
-    name === 'target-scope' ||
+    name === 'context-header' ||
+    name === 'context-col' ||
+    name === 'target-baseline' ||
     name === 'request-mode' ||
     name === 'tag-policy' ||
     name === 'checkpoint' ||
@@ -214,8 +235,10 @@ Options:
   --project-id <id>                Project id that owns mounted TM/TB resources.
   --input <path>                   Spreadsheet path to translate.
   --output <path>                  Translated spreadsheet output path.
-  --target-scope <scope>           blank-only or overwrite-non-confirmed.
-  --request-mode <mode>            window or window-partial.
+  --context-header <header>        Optional context column header.
+  --context-col <index>            Optional zero-based context column index.
+  --target-baseline <baseline>     use-current-targets or ignore-current-targets. Default: use-current-targets.
+  --request-mode <mode>            window or window-partial. Default: window-partial.
   --tag-policy <policy>            default or none.
   --checkpoint <path>              Optional checkpoint sidecar path.
   --events <path>                  Optional events sidecar path.

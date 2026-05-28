@@ -83,7 +83,6 @@ describe('WindowPartialTaskPlanner', () => {
     const tasks = planner.planJob({
       job: makeJob(units),
       completedResults: new Map(),
-      targetScope: 'blank-only',
     });
 
     expect(tasks).toEqual([
@@ -110,7 +109,6 @@ describe('WindowPartialTaskPlanner', () => {
     const tasks = planner.planJob({
       job: makeJob(units),
       completedResults,
-      targetScope: 'blank-only',
     });
 
     expect(tasks).toEqual([
@@ -141,7 +139,6 @@ describe('WindowPartialTaskPlanner', () => {
     const tasks = planner.planJob({
       job: makeJob(units),
       completedResults,
-      targetScope: 'blank-only',
     });
 
     expect(tasks).toEqual([
@@ -163,7 +160,6 @@ describe('WindowPartialTaskPlanner', () => {
     const tasks = planner.planJob({
       job: makeJob(units),
       completedResults: new Map(),
-      targetScope: 'blank-only',
     });
 
     expect(tasks).toEqual([
@@ -187,40 +183,37 @@ describe('WindowPartialTaskPlanner', () => {
     const tasks = planner.planJob({
       job: makeJob(units),
       completedResults,
-      targetScope: 'blank-only',
     });
 
     expect(tasks).toEqual([]);
   });
 
-  it('requests existing-target rows when overwriting non-confirmed targets', () => {
+  it('requests existing-target rows only after baseline preprocessing clears their targets', () => {
     const units = [
-      makeUnit({ unitId: 'unit-1', target: 'existing 1' }),
-      makeUnit({ unitId: 'unit-2', target: 'existing 2' }),
+      makeUnit({ unitId: 'unit-1', target: '' }),
+      makeUnit({ unitId: 'unit-2', target: '' }),
     ];
     const planner = new WindowPartialTaskPlanner();
 
     const tasks = planner.planJob({
       job: makeJob(units),
       completedResults: new Map(),
-      targetScope: 'overwrite-non-confirmed',
     });
 
     expect(tasks[0]?.requestUnitKeys).toEqual(['doc-1\u0000unit-1', 'doc-1\u0000unit-2']);
   });
 
-  it('keeps locked rows as scan-window context without requesting them in overwrite scope', () => {
+  it('keeps locked rows as scan-window context without requesting them after baseline preprocessing', () => {
     const units = [
       makeUnit({ unitId: 'unit-1', target: '', locked: false }),
       makeUnit({ unitId: 'unit-2', target: 'confirmed target', locked: true }),
-      makeUnit({ unitId: 'unit-3', target: 'draft target', locked: false }),
+      makeUnit({ unitId: 'unit-3', target: '', locked: false }),
     ];
     const planner = new WindowPartialTaskPlanner();
 
     const tasks = planner.planJob({
       job: makeJob(units),
       completedResults: new Map(),
-      targetScope: 'overwrite-non-confirmed',
     });
 
     expect(tasks).toEqual([

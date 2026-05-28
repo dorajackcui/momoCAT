@@ -1,6 +1,7 @@
 import { CATDatabase } from '@cat/db';
 import type { TagPolicy } from '@cat/core/tag';
 import { LocalizationInspector, type InspectFileInput } from '../LocalizationInspector';
+import type { LocalizationTargetBaseline } from '../types';
 
 export interface InspectLocalizationCommandConfig {
   dbPath: string;
@@ -11,6 +12,7 @@ export interface InspectLocalizationCommandConfig {
   unitLimit?: number;
   maxCellChars?: number;
   requestMode?: 'window' | 'window-partial';
+  targetBaseline?: LocalizationTargetBaseline;
   tagPolicy?: TagPolicy;
 }
 
@@ -26,7 +28,8 @@ export async function runInspectLocalizationCommand(config: InspectLocalizationC
       unitLimit: config.unitLimit,
       maxCellChars: config.maxCellChars,
       options: {
-        requestMode: config.requestMode,
+        requestMode: config.requestMode ?? 'window-partial',
+        targetBaseline: config.targetBaseline ?? 'use-current-targets',
         tagPolicy: config.tagPolicy,
       },
     };

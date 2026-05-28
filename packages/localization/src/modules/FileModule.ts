@@ -37,6 +37,7 @@ const INSPECT_COLUMNS = [
   '_inspect_status',
   '_inspect_json_ref',
 ] as const;
+const DEFAULT_CONTEXT_HEADER = 'context';
 
 export async function parseExternalSpreadsheet(
   input: TranslateFileInput,
@@ -156,8 +157,8 @@ function resolveColumns(
     (hasHeader ? findHeaderColumn(headerRow, options.targetHeader ?? 'target') : undefined);
   const contextCol =
     options.contextCol ??
-    (hasHeader && options.contextHeader
-      ? findHeaderColumn(headerRow, options.contextHeader)
+    (hasHeader
+      ? findHeaderColumn(headerRow, options.contextHeader ?? DEFAULT_CONTEXT_HEADER)
       : undefined);
 
   if (sourceCol === undefined || targetCol === undefined) {

@@ -1,14 +1,16 @@
 import { CATDatabase } from '@cat/db';
 import type { TagPolicy } from '@cat/core/tag';
 import { LocalizationEngine } from '../LocalizationEngine';
-import type { TranslateFileInput } from '../types';
+import type { LocalizationTargetBaseline, TranslateFileInput } from '../types';
 
 export interface TranslateFileCommandConfig {
   dbPath: string;
   projectId: number;
   inputPath: string;
   outputPath: string;
-  targetScope?: 'blank-only' | 'overwrite-non-confirmed';
+  contextHeader?: string;
+  contextCol?: number;
+  targetBaseline?: LocalizationTargetBaseline;
   requestMode?: 'window' | 'window-partial';
   tagPolicy?: TagPolicy;
   checkpointPath?: string;
@@ -31,9 +33,16 @@ export async function runTranslateFileCommand(config: TranslateFileCommandConfig
       projectId: config.projectId,
       inputPath: config.inputPath,
       outputPath: config.outputPath,
+      columns:
+        config.contextHeader !== undefined || config.contextCol !== undefined
+          ? {
+              contextHeader: config.contextHeader,
+              contextCol: config.contextCol,
+            }
+          : undefined,
       options: {
-        targetScope: config.targetScope,
-        requestMode: config.requestMode,
+        targetBaseline: config.targetBaseline ?? 'use-current-targets',
+        requestMode: config.requestMode ?? 'window-partial',
         tagPolicy: config.tagPolicy,
         batchSize: config.batchSize,
       },

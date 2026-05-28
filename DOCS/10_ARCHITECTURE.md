@@ -117,7 +117,7 @@ Responsibilities:
 
 - Resolve project configuration through shared package APIs.
 - Build transient segments from external units.
-- Apply target-scope policy such as blank-only behavior.
+- Normalize target baseline before job/request planning.
 - Coordinate TM, TB, and MT resource modules.
 - Expose file and unit translation APIs for headless callers.
 

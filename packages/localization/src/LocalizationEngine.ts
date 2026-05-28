@@ -24,6 +24,7 @@ import { translateProjectSegmentsJob } from './projectSegmentJobAdapter';
 import { translateSpreadsheetFile } from './spreadsheetFileAdapter';
 import { RuntimeTMContext, RuntimeTMReferenceResolver } from './runtimeTm';
 import { resolveTagPolicy, tagPolicyFingerprintValue } from './tagPolicy';
+import { resolveTargetBaseline } from './targetBaseline';
 import { createTransientSegment } from './transientSegment';
 import { unitKey } from './requestModes/shared/unitIdentity';
 import type { RequestModeReferenceResolver } from './requestModes/shared/references';
@@ -56,6 +57,7 @@ import type {
   TranslateProjectSegmentsInput,
   TranslateUnitResult,
   TranslateUnitsInput,
+  TranslateUnitsOptions,
   TranslateUnitsResult,
 } from './types';
 
@@ -285,12 +287,9 @@ export class LocalizationEngine {
       throw new Error('Dialogue mode is not supported for external translation units.');
     }
 
-    const targetScope = resolveBatchTargetScope(
-      translationOptions?.targetScope ?? this.options.defaultTargetScope,
-    ) as LocalizationTargetScope;
     const tagPolicy = resolveTagPolicy(translationOptions?.tagPolicy);
     const preparedUnits = task.units.map((unit, index) =>
-      this.prepareUnit(jobUnitToExternalUnit(unit), index, project, targetScope, tagPolicy),
+      this.prepareJobUnit(jobUnitToExternalUnit(unit), index, project, tagPolicy),
     );
     const hasTranslatableUnits = preparedUnits.some((prepared) => prepared.kind === 'translatable');
     const captureArtifacts = context.captureArtifacts !== false;
@@ -372,7 +371,12 @@ export class LocalizationEngine {
       if (!project) {
         throw new Error(`Project not found: ${input.projectId}`);
       }
-      const resumeFingerprint = await this.buildFileTranslationResumeFingerprint(input, project);
+      const normalizedOptions = this.normalizeWindowJobOptions(input.options);
+      const normalizedInput = { ...input, options: normalizedOptions };
+      const resumeFingerprint = await this.buildFileTranslationResumeFingerprint(
+        normalizedInput,
+        project,
+      );
       const runtimeTm =
         (project.projectType ?? 'translation') === 'translation'
           ? RuntimeTMContext.create({
@@ -388,7 +392,7 @@ export class LocalizationEngine {
       try {
         return await translateSpreadsheetFileJob(
           {
-            ...input,
+            ...normalizedInput,
             job: {
               ...input.job,
               resumeFingerprint,
@@ -449,7 +453,7 @@ export class LocalizationEngine {
     const referenceResolver = runtimeTm
       ? new RuntimeTMReferenceResolver(runtimeTm).resolve
       : undefined;
-    const targetScope = input.options?.targetScope ?? this.options.defaultTargetScope;
+    const normalizedOptions = this.normalizeWindowJobOptions(input.options);
 
     try {
       return await translateProjectSegmentsJob(
@@ -458,9 +462,8 @@ export class LocalizationEngine {
           documentId: input.documentId,
           units: input.units,
           options: {
-            ...input.options,
-            ...(targetScope ? { targetScope } : {}),
-            requestMode: input.options?.requestMode ?? 'window-partial',
+            ...normalizedOptions,
+            requestMode: normalizedOptions.requestMode ?? 'window-partial',
           },
           job: input.job,
         },
@@ -496,9 +499,7 @@ export class LocalizationEngine {
     input: TranslateFileInput,
     project: ProjectRecord,
   ): Promise<string> {
-    const targetScope = resolveBatchTargetScope(
-      input.options?.targetScope ?? this.options.defaultTargetScope,
-    );
+    const targetBaseline = this.resolveWindowTargetBaseline(input.options);
     const mode = this.resolveMode(input.options?.mode);
     const mtOptions = mergeMTOptions(this.options.mt, input.options?.mt);
     const mtConfig = await this.mtModule.resolvePromptConfig(
@@ -546,9 +547,9 @@ export class LocalizationEngine {
       ['project.srcLang', project.srcLang],
       ['project.tgtLang', project.tgtLang],
       ['project.type', project.projectType ?? 'translation'],
-      ['targetScope', targetScope],
+      ['targetBaseline', targetBaseline],
       ['mode', mode],
-      ['requestMode', input.options?.requestMode ?? 'window'],
+      ['requestMode', input.options?.requestMode ?? 'window-partial'],
       ['tagPolicy', tagPolicyFingerprintValue(input.options?.tagPolicy)],
       ['provider.id', mtConfig.provider.id],
       ['provider.kind', mtConfig.provider.kind],
@@ -610,6 +611,91 @@ export class LocalizationEngine {
     );
     const existingTarget = serializeTokensToDisplayText(segment.targetTokens);
     if (targetScope === 'blank-only' && existingTarget.trim()) {
+      return {
+        kind: 'skipped',
+        result: {
+          id: unit.id,
+          source,
+          target: existingTarget,
+          status: 'skipped',
+          metadata: unit.metadata,
+        },
+      };
+    }
+
+    return {
+      kind: 'translatable',
+      unit,
+      segment,
+    };
+  }
+
+  private normalizeWindowJobOptions(
+    options: TranslateUnitsOptions | undefined,
+  ): TranslateUnitsOptions {
+    const { targetScope: _legacyTargetScope, ...restOptions } = options ?? {};
+
+    return {
+      ...restOptions,
+      targetBaseline: this.resolveWindowTargetBaseline(options),
+    };
+  }
+
+  private resolveWindowTargetBaseline(
+    options: TranslateUnitsOptions | undefined,
+  ) {
+    return resolveTargetBaseline({
+      targetBaseline: options?.targetBaseline,
+      targetScope: options?.targetScope ?? this.options.defaultTargetScope,
+    });
+  }
+
+  private prepareJobUnit(
+    unit: ExternalTranslationUnit,
+    index: number,
+    project: ProjectRecord,
+    tagPolicy: TagPolicy,
+  ): PreparedUnit {
+    const source = unit.source;
+    if (!source.trim()) {
+      return {
+        kind: 'skipped',
+        result: {
+          id: unit.id,
+          source,
+          target: unit.target ?? '',
+          status: 'skipped',
+          metadata: unit.metadata,
+        },
+      };
+    }
+
+    if (unit.locked) {
+      return {
+        kind: 'skipped',
+        result: {
+          id: unit.id,
+          source,
+          target: unit.target ?? '',
+          status: 'skipped',
+          metadata: unit.metadata,
+        },
+      };
+    }
+
+    const segment = createTransientSegment(
+      unit,
+      index,
+      {
+        projectId: project.id,
+        sourceLanguage: project.srcLang,
+        targetLanguage: project.tgtLang,
+        fileName: unit.fileName,
+      },
+      { tagPolicy },
+    );
+    const existingTarget = serializeTokensToDisplayText(segment.targetTokens);
+    if (existingTarget.trim()) {
       return {
         kind: 'skipped',
         result: {

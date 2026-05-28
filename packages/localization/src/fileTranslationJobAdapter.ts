@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import { basename, extname, join, parse as parsePath, win32 } from 'path';
 import { tagPolicyFingerprintValue } from './tagPolicy';
-import { resolveBatchTargetScope } from './translationTargetScope';
+import { normalizeTargetForBaseline, resolveTargetBaseline } from './targetBaseline';
 import { CheckpointStore } from './job/CheckpointStore';
 import { EventSink } from './job/EventSink';
 import { ArtifactStore } from './job/ArtifactStore';
@@ -15,9 +15,11 @@ import {
 import type { JobUnit, TranslationJob, TranslationTaskExecutor, UnitResult } from './job/types';
 import { parseExternalSpreadsheet, writeTranslatedSpreadsheet } from './modules/FileModule';
 import type {
+  LocalizationRequestMode,
   TranslateFileInput,
   TranslateFileResult,
   TranslateUnitResult,
+  TranslateUnitsOptions,
   TranslateUnitsResult,
 } from './types';
 
@@ -51,13 +53,17 @@ export async function prepareFileTranslationJob(
   const parsed = await parseExternalSpreadsheet(input);
   const documentId = basename(input.inputPath);
   const resumeFingerprint = computeFileTranslationResumeFingerprint(input);
+  const translationOptions = buildFileTranslationOptions(input.options);
   const units: JobUnit[] = parsed.artifact.rows
     .filter((row) => row.source.trim())
     .map((row) => ({
       documentId,
       unitId: row.unitId,
       source: row.source,
-      target: row.target,
+      target: normalizeTargetForBaseline({
+        target: row.target,
+        targetBaseline: translationOptions.targetBaseline ?? 'use-current-targets',
+      }),
       context: row.context,
       rowNumber: row.rowNumber,
       sourceHash: computeSourceHash({
@@ -79,7 +85,7 @@ export async function prepareFileTranslationJob(
       id: input.job?.jobId ?? defaultFileTranslationJobId(input),
       projectId: input.projectId,
       units,
-      translationOptions: input.options,
+      translationOptions,
       options: {
         resume: input.job?.resume,
         maxAttempts: input.job?.maxAttempts,
@@ -106,9 +112,9 @@ export async function translateSpreadsheetFileJob(
       stdout: input.job?.progressStdout,
     }),
     taskPlanner:
-      input.options?.requestMode === 'window-partial'
-        ? new WindowPartialTaskPlanner({ batchSize: input.options?.batchSize })
-        : new WindowModeTaskPlanner({ batchSize: input.options?.batchSize }),
+      prepared.job.translationOptions?.requestMode === 'window-partial'
+        ? new WindowPartialTaskPlanner({ batchSize: prepared.job.translationOptions.batchSize })
+        : new WindowModeTaskPlanner({ batchSize: prepared.job.translationOptions?.batchSize }),
     taskExecutor: options.taskExecutor,
     writeSnapshot: async (results) => {
       await writeTranslatedSpreadsheet(
@@ -185,11 +191,13 @@ function defaultFileTranslationJobId(input: TranslateFileInput): string {
 }
 
 function computeFileTranslationResumeFingerprint(input: TranslateFileInput): string {
+  const targetBaseline = resolveTargetBaseline(input.options);
+
   return hashCanonicalPayload([
     ['projectId', String(input.projectId)],
-    ['targetScope', resolveBatchTargetScope(input.options?.targetScope)],
+    ['targetBaseline', targetBaseline],
     ['mode', input.options?.mode ?? 'standard'],
-    ['requestMode', input.options?.requestMode ?? 'window'],
+    ['requestMode', resolveFileTranslationRequestMode(input.options?.requestMode)],
     ['tagPolicy', tagPolicyFingerprintValue(input.options?.tagPolicy)],
     ['providerOverride', input.options?.providerOverride],
     ['mt.providerId', input.options?.mt?.providerId],
@@ -211,6 +219,24 @@ function hashCanonicalPayload(entries: Array<[string, string | undefined]>): str
 
 function normalizeNumberOption(value: number | undefined): string | undefined {
   return value === undefined ? undefined : String(value);
+}
+
+function resolveFileTranslationRequestMode(
+  requestMode: LocalizationRequestMode | undefined,
+): LocalizationRequestMode {
+  return requestMode ?? 'window-partial';
+}
+
+function buildFileTranslationOptions(
+  options: TranslateUnitsOptions | undefined,
+): TranslateUnitsOptions {
+  const { targetScope: _legacyTargetScope, ...restOptions } = options ?? {};
+
+  return {
+    ...restOptions,
+    targetBaseline: resolveTargetBaseline(options),
+    requestMode: resolveFileTranslationRequestMode(options?.requestMode),
+  };
 }
 
 function jobRunResultToTranslateUnitsResult(

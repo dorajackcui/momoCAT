@@ -206,7 +206,7 @@ describe('runAIFileFlowTrace', () => {
       ]);
       const filter = {
         getPreview: vi.fn().mockResolvedValue([
-          ['note', 'target', 'source'],
+          ['context', 'target', 'source'],
           ['context', '', '测试文本'],
         ]),
         import: importSpy,
@@ -271,6 +271,7 @@ describe('runAIFileFlowTrace', () => {
           hasHeader: true,
           sourceCol: 2,
           targetCol: 1,
+          contextCol: 0,
         }),
       );
       expect(events.map((event) => (event as { event: string }).event)).toContain(

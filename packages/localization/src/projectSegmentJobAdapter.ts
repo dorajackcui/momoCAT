@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import { tagPolicyFingerprintValue } from './tagPolicy';
-import { resolveBatchTargetScope } from './translationTargetScope';
+import { normalizeTargetForBaseline, resolveTargetBaseline } from './targetBaseline';
 import { computeSourceHash } from './job/sourceHash';
 import { WindowModeTaskPlanner, WindowPartialTaskPlanner } from './job/TaskPlanner';
 import {
@@ -64,8 +64,11 @@ export function prepareProjectSegmentTranslationJob(
   input: TranslateProjectSegmentsJobInput,
 ): PreparedProjectSegmentTranslationJob {
   const requestMode: LocalizationRequestMode = input.options?.requestMode ?? 'window-partial';
+  const targetBaseline = resolveTargetBaseline(input.options);
+  const { targetScope: _legacyTargetScope, ...restOptions } = input.options ?? {};
   const translationOptions: TranslateUnitsOptions = {
-    ...input.options,
+    ...restOptions,
+    targetBaseline,
     requestMode,
   };
   const resumeFingerprint = computeProjectSegmentResumeFingerprint(input, requestMode);
@@ -73,7 +76,11 @@ export function prepareProjectSegmentTranslationJob(
     documentId: input.documentId,
     unitId: unit.id,
     source: unit.source,
-    target: unit.target,
+    target: normalizeTargetForBaseline({
+      target: unit.target,
+      locked: unit.locked,
+      targetBaseline,
+    }),
     context: unit.context,
     rowNumber: unit.rowNumber,
     locked: unit.locked,
@@ -172,7 +179,7 @@ function computeProjectSegmentResumeFingerprint(
   return hashCanonicalPayload([
     ['projectId', String(input.projectId)],
     ['documentId', input.documentId],
-    ['targetScope', resolveBatchTargetScope(input.options?.targetScope)],
+    ['targetBaseline', resolveTargetBaseline(input.options)],
     ['mode', input.options?.mode ?? 'standard'],
     ['requestMode', requestMode],
     ['tagPolicy', tagPolicyFingerprintValue(input.options?.tagPolicy)],
