@@ -212,6 +212,45 @@ describe('momocat CLI dispatch', () => {
     ]);
   });
 
+  it('resolves inspect projects database from MOMOCAT_USER_DATA_DIR when --db is omitted', async () => {
+    const harness = createHarness({
+      env: { MOMOCAT_USER_DATA_DIR: 'D:/userData' },
+      existing: ['D:/userData/cat_v1.db'],
+    });
+
+    const exitCode = await runCli(['inspect', 'projects'], harness.deps, harness.io);
+
+    expect(exitCode).toBe(0);
+    expect(harness.calls).toEqual([
+      {
+        name: 'inspectProjects',
+        config: {
+          dbPath: 'D:/userData/cat_v1.db',
+          projectId: undefined,
+        },
+      },
+    ]);
+  });
+
+  it('keeps explicit --db ahead of installed defaults for inspect projects', async () => {
+    const harness = createHarness({
+      env: { MOMOCAT_USER_DATA_DIR: 'D:/userData' },
+      existing: ['D:/custom/cat.db', 'D:/userData/cat_v1.db'],
+    });
+
+    const exitCode = await runCli(
+      ['inspect', 'projects', '--db', 'D:/custom/cat.db'],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(harness.calls[0]?.config).toEqual({
+      dbPath: 'D:/custom/cat.db',
+      projectId: undefined,
+    });
+  });
+
   it('prints inspect projects JSON without extra text', async () => {
     const harness = createHarness();
     const exitCode = await runCli(
@@ -241,6 +280,17 @@ describe('momocat CLI dispatch', () => {
     expect(exitCode).toBe(1);
     expect(harness.calls).toEqual([]);
     expect(harness.stderr.join('')).toContain('Database does not exist: missing.db');
+    expect(harness.stderr.join('')).toContain('Run: momocat inspect projects --help');
+  });
+
+  it('prints installed database guidance when command defaults cannot find a DB', async () => {
+    const harness = createHarness({ existing: ['input.xlsx'] });
+
+    const exitCode = await runCli(['inspect', 'projects'], harness.deps, harness.io);
+
+    expect(exitCode).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toContain('Could not find Momocat database.');
     expect(harness.stderr.join('')).toContain('Run: momocat inspect projects --help');
   });
 
@@ -294,9 +344,45 @@ describe('momocat CLI dispatch', () => {
           outputPath: 'inspect.xlsx',
           requestMode: 'window-partial',
           targetBaseline: 'use-current-targets',
+          aiRuntimeConfigPath: 'ai-runtime.json',
+          proxyEnvPath: 'proxy.env',
         },
       },
     ]);
+  });
+
+  it('resolves inspect localization database and runtime sidecars when --db is omitted', async () => {
+    const harness = createHarness({
+      env: { MOMOCAT_USER_DATA_DIR: 'D:/userData' },
+      existing: ['D:/userData/cat_v1.db', 'input.xlsx'],
+    });
+
+    const exitCode = await runCli(
+      [
+        'inspect',
+        'localization',
+        '--project-id',
+        '7',
+        '--input',
+        'input.xlsx',
+        '--output',
+        'inspect.xlsx',
+      ],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(harness.calls[0]?.config).toEqual({
+      dbPath: 'D:/userData/cat_v1.db',
+      projectId: 7,
+      inputPath: 'input.xlsx',
+      outputPath: 'inspect.xlsx',
+      requestMode: 'window-partial',
+      targetBaseline: 'use-current-targets',
+      aiRuntimeConfigPath: 'D:/userData/ai-runtime.json',
+      proxyEnvPath: 'D:/userData/proxy.env',
+    });
   });
 
   it('maps inspect localization options to the localization command API', async () => {
@@ -341,6 +427,8 @@ describe('momocat CLI dispatch', () => {
           requestMode: 'window-partial',
           targetBaseline: 'ignore-current-targets',
           tagPolicy: 'none',
+          aiRuntimeConfigPath: 'ai-runtime.json',
+          proxyEnvPath: 'proxy.env',
         },
       },
     ]);
@@ -596,9 +684,45 @@ describe('momocat CLI dispatch', () => {
           outputPath: 'translated.xlsx',
           requestMode: 'window-partial',
           targetBaseline: 'use-current-targets',
+          aiRuntimeConfigPath: 'ai-runtime.json',
+          proxyEnvPath: 'proxy.env',
         },
       },
     ]);
+  });
+
+  it('resolves translate file database and runtime sidecars when --db is omitted', async () => {
+    const harness = createHarness({
+      env: { MOMOCAT_USER_DATA_DIR: 'D:/userData' },
+      existing: ['D:/userData/cat_v1.db', 'input.xlsx'],
+    });
+
+    const exitCode = await runCli(
+      [
+        'translate',
+        'file',
+        '--project-id',
+        '7',
+        '--input',
+        'input.xlsx',
+        '--output',
+        'translated.xlsx',
+      ],
+      harness.deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(harness.calls[0]?.config).toEqual({
+      dbPath: 'D:/userData/cat_v1.db',
+      projectId: 7,
+      inputPath: 'input.xlsx',
+      outputPath: 'translated.xlsx',
+      requestMode: 'window-partial',
+      targetBaseline: 'use-current-targets',
+      aiRuntimeConfigPath: 'D:/userData/ai-runtime.json',
+      proxyEnvPath: 'D:/userData/proxy.env',
+    });
   });
 
   it('maps translate file options to the localization command API', async () => {
@@ -662,6 +786,8 @@ describe('momocat CLI dispatch', () => {
           snapshotEveryUnits: 20,
           snapshotEverySeconds: 60,
           progressStdout: true,
+          aiRuntimeConfigPath: 'ai-runtime.json',
+          proxyEnvPath: 'proxy.env',
         },
       },
     ]);
@@ -699,6 +825,8 @@ describe('momocat CLI dispatch', () => {
           outputPath: 'translated.xlsx',
           requestMode: 'window',
           targetBaseline: 'use-current-targets',
+          aiRuntimeConfigPath: 'ai-runtime.json',
+          proxyEnvPath: 'proxy.env',
         },
       },
     ]);
@@ -758,6 +886,8 @@ describe('momocat CLI dispatch', () => {
           outputPath: 'translated.xlsx',
           requestMode: 'window-partial',
           targetBaseline: 'use-current-targets',
+          aiRuntimeConfigPath: 'ai-runtime.json',
+          proxyEnvPath: 'proxy.env',
         },
       },
     ]);
@@ -913,7 +1043,6 @@ describe('momocat CLI dispatch', () => {
 
   it('reports translate file missing required paths before calling localization', async () => {
     for (const [args, expected] of [
-      [['--project-id', '7', '--input', 'input.xlsx', '--output', 'translated.xlsx'], 'Missing --db.'],
       [['--db', 'cat.db', '--input', 'input.xlsx', '--output', 'translated.xlsx'], 'Missing --project-id.'],
       [['--db', 'cat.db', '--project-id', '7', '--output', 'translated.xlsx'], 'Missing --input.'],
       [['--db', 'cat.db', '--project-id', '7', '--input', 'input.xlsx'], 'Missing --output.'],

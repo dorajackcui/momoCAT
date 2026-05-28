@@ -1,5 +1,6 @@
 import type { InspectLocalizationCommandConfig } from '@cat/localization';
 import type { CliDependencies } from '../cli';
+import { formatMissingDatabaseMessage, resolveDataEnvironment } from '../env/dataEnvironment';
 import {
   assertExistingPath,
   parsePositiveInteger,
@@ -7,6 +8,11 @@ import {
   requireOptionValue,
 } from '../parse/args';
 import type { CommandIO } from '../parse/args';
+
+type InspectLocalizationCliConfig = InspectLocalizationCommandConfig & {
+  aiRuntimeConfigPath?: string;
+  proxyEnvPath?: string;
+};
 
 export function runInspectLocalizationCliCommand(
   argv: string[],
@@ -25,8 +31,9 @@ export function runInspectLocalizationCliCommand(
 function parseInspectLocalizationArgs(
   argv: string[],
   io: CommandIO,
-): InspectLocalizationCommandConfig {
-  const config: Partial<InspectLocalizationCommandConfig> = {};
+): InspectLocalizationCliConfig {
+  const config: Partial<InspectLocalizationCliConfig> = {};
+  let explicitDbPath: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -40,6 +47,11 @@ function parseInspectLocalizationArgs(
       const name = arg.slice(2, equalsIndex);
       if (!isKnownOption(name)) {
         throw new Error(`Unknown argument: ${arg.slice(0, equalsIndex)}`);
+      }
+
+      if (name === 'db' || name === 'db-path') {
+        explicitDbPath = requireOptionValue(arg.slice(0, equalsIndex), arg.slice(equalsIndex + 1));
+        continue;
       }
 
       assignOption(
@@ -57,11 +69,28 @@ function parseInspectLocalizationArgs(
       throw new Error(`Unknown argument: ${arg}`);
     }
 
+    if (name === 'db' || name === 'db-path') {
+      explicitDbPath = readValue(argv, index, arg);
+      index += 1;
+      continue;
+    }
+
     assignOption(config, name, readValue(argv, index, arg), io, arg);
     index += 1;
   }
 
-  if (!config.dbPath) throw new Error('Missing --db.');
+  const dataEnvironment = resolveDataEnvironment(io, { explicitDbPath });
+  if (explicitDbPath && dataEnvironment.source !== 'explicit') {
+    config.dbPath = io.resolvePath(explicitDbPath);
+    assertExistingPath(io, config.dbPath, 'Database');
+  } else if (!dataEnvironment.dbPath) {
+    throw new Error(formatMissingDatabaseMessage(dataEnvironment));
+  } else {
+    config.dbPath = dataEnvironment.dbPath;
+    config.aiRuntimeConfigPath = dataEnvironment.aiRuntimeConfigPath;
+    config.proxyEnvPath = dataEnvironment.proxyEnvPath;
+  }
+
   if (config.projectId === undefined) throw new Error('Missing --project-id.');
   if (!config.inputPath) throw new Error('Missing --input.');
   if (!config.outputPath) throw new Error('Missing --output.');
@@ -72,11 +101,11 @@ function parseInspectLocalizationArgs(
   config.requestMode ??= 'window-partial';
   config.targetBaseline ??= 'use-current-targets';
 
-  return config as InspectLocalizationCommandConfig;
+  return config as InspectLocalizationCliConfig;
 }
 
 function assignOption(
-  config: Partial<InspectLocalizationCommandConfig>,
+  config: Partial<InspectLocalizationCliConfig>,
   name: string,
   value: string | undefined,
   io: CommandIO,
@@ -84,10 +113,6 @@ function assignOption(
 ): void {
   const optionValue = requireOptionValue(flag, value);
 
-  if (name === 'db' || name === 'db-path') {
-    config.dbPath = io.resolvePath(optionValue);
-    return;
-  }
   if (name === 'project-id') {
     config.projectId = parsePositiveInteger(optionValue, '--project-id');
     return;
@@ -154,10 +179,10 @@ function isKnownOption(name: string): boolean {
 }
 
 function help(): string {
-  return `Usage: momocat inspect localization --db <path> --project-id <id> --input <path> --output <path> [options]
+  return `Usage: momocat inspect localization [--db <path>] --project-id <id> --input <path> --output <path> [options]
 
 Options:
-  --db <path>, --db-path <path>    SQLite DB path.
+  --db <path>, --db-path <path>    SQLite DB path. Default: installed desktop data, then .cat_data/cat_v1.db.
   --project-id <id>                Project id that owns mounted TM/TB resources.
   --input <path>                   Spreadsheet path to inspect.
   --output <path>                  Output inspection spreadsheet path.

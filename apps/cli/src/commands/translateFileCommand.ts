@@ -1,5 +1,6 @@
 import type { TranslateFileCommandConfig } from '@cat/localization';
 import type { CliDependencies } from '../cli';
+import { formatMissingDatabaseMessage, resolveDataEnvironment } from '../env/dataEnvironment';
 import {
   assertExistingPath,
   parsePositiveInteger,
@@ -7,6 +8,11 @@ import {
   requireOptionValue,
 } from '../parse/args';
 import type { CommandIO } from '../parse/args';
+
+type TranslateFileCliConfig = TranslateFileCommandConfig & {
+  aiRuntimeConfigPath?: string;
+  proxyEnvPath?: string;
+};
 
 export function runTranslateFileCliCommand(
   argv: string[],
@@ -22,8 +28,9 @@ export function runTranslateFileCliCommand(
   return deps.runTranslateFileCommand(config).then(() => 0);
 }
 
-function parseTranslateFileArgs(argv: string[], io: CommandIO): TranslateFileCommandConfig {
-  const config: Partial<TranslateFileCommandConfig> = {};
+function parseTranslateFileArgs(argv: string[], io: CommandIO): TranslateFileCliConfig {
+  const config: Partial<TranslateFileCliConfig> = {};
+  let explicitDbPath: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -41,6 +48,11 @@ function parseTranslateFileArgs(argv: string[], io: CommandIO): TranslateFileCom
 
       if (isBooleanOption(name)) {
         throw new Error(`${arg.slice(0, equalsIndex)} does not accept a value.`);
+      }
+
+      if (name === 'db' || name === 'db-path') {
+        explicitDbPath = requireOptionValue(arg.slice(0, equalsIndex), arg.slice(equalsIndex + 1));
+        continue;
       }
 
       assignOption(config, name, arg.slice(equalsIndex + 1), io, arg.slice(0, equalsIndex));
@@ -61,11 +73,28 @@ function parseTranslateFileArgs(argv: string[], io: CommandIO): TranslateFileCom
       continue;
     }
 
+    if (name === 'db' || name === 'db-path') {
+      explicitDbPath = readValue(argv, index, arg);
+      index += 1;
+      continue;
+    }
+
     assignOption(config, name, readValue(argv, index, arg), io, arg);
     index += 1;
   }
 
-  if (!config.dbPath) throw new Error('Missing --db.');
+  const dataEnvironment = resolveDataEnvironment(io, { explicitDbPath });
+  if (explicitDbPath && dataEnvironment.source !== 'explicit') {
+    config.dbPath = io.resolvePath(explicitDbPath);
+    assertExistingPath(io, config.dbPath, 'Database');
+  } else if (!dataEnvironment.dbPath) {
+    throw new Error(formatMissingDatabaseMessage(dataEnvironment));
+  } else {
+    config.dbPath = dataEnvironment.dbPath;
+    config.aiRuntimeConfigPath = dataEnvironment.aiRuntimeConfigPath;
+    config.proxyEnvPath = dataEnvironment.proxyEnvPath;
+  }
+
   if (config.projectId === undefined) throw new Error('Missing --project-id.');
   if (!config.inputPath) throw new Error('Missing --input.');
   if (!config.outputPath) throw new Error('Missing --output.');
@@ -76,11 +105,11 @@ function parseTranslateFileArgs(argv: string[], io: CommandIO): TranslateFileCom
   config.requestMode ??= 'window-partial';
   config.targetBaseline ??= 'use-current-targets';
 
-  return config as TranslateFileCommandConfig;
+  return config as TranslateFileCliConfig;
 }
 
 function assignOption(
-  config: Partial<TranslateFileCommandConfig>,
+  config: Partial<TranslateFileCliConfig>,
   name: string,
   value: string | undefined,
   io: CommandIO,
@@ -88,10 +117,6 @@ function assignOption(
 ): void {
   const optionValue = requireOptionValue(flag, value);
 
-  if (name === 'db' || name === 'db-path') {
-    config.dbPath = io.resolvePath(optionValue);
-    return;
-  }
   if (name === 'project-id') {
     config.projectId = parsePositiveInteger(optionValue, '--project-id');
     return;
@@ -169,7 +194,7 @@ function assignOption(
   throw new Error(`Unknown argument: --${name}`);
 }
 
-function assignBooleanOption(config: Partial<TranslateFileCommandConfig>, name: string): void {
+function assignBooleanOption(config: Partial<TranslateFileCliConfig>, name: string): void {
   if (name === 'resume') {
     config.resume = true;
     return;
@@ -228,10 +253,10 @@ function isBooleanOption(name: string): boolean {
 }
 
 function help(): string {
-  return `Usage: momocat translate file --db <path> --project-id <id> --input <path> --output <path> [options]
+  return `Usage: momocat translate file [--db <path>] --project-id <id> --input <path> --output <path> [options]
 
 Options:
-  --db <path>, --db-path <path>    SQLite DB path.
+  --db <path>, --db-path <path>    SQLite DB path. Default: installed desktop data, then .cat_data/cat_v1.db.
   --project-id <id>                Project id that owns mounted TM/TB resources.
   --input <path>                   Spreadsheet path to translate.
   --output <path>                  Translated spreadsheet output path.

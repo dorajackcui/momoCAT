@@ -1,5 +1,6 @@
 import type { InspectProjectsResult } from '@cat/localization';
 import type { CliDependencies } from '../cli';
+import { formatMissingDatabaseMessage, resolveDataEnvironment } from '../env/dataEnvironment';
 import {
   assertExistingPath,
   parsePositiveInteger,
@@ -42,27 +43,26 @@ export function runInspectProjectsCliCommand(
 
 function parseInspectProjectsArgs(argv: string[], io: CommandIO): InspectProjectsCliConfig {
   const config: InspectProjectsCliConfig = {
-    dbPath: io.resolvePath('.cat_data/cat_v1.db'),
+    dbPath: '',
     json: false,
   };
+  let explicitDbPath: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     const equalsIndex = arg.indexOf('=');
 
     if (arg === '--db' || arg === '--db-path') {
-      config.dbPath = io.resolvePath(readValue(argv, index, arg));
+      explicitDbPath = readValue(argv, index, arg);
       index += 1;
       continue;
     }
     if (arg.startsWith('--db=')) {
-      config.dbPath = io.resolvePath(requireOptionValue('--db', arg.slice('--db='.length)));
+      explicitDbPath = requireOptionValue('--db', arg.slice('--db='.length));
       continue;
     }
     if (arg.startsWith('--db-path=')) {
-      config.dbPath = io.resolvePath(
-        requireOptionValue('--db-path', arg.slice('--db-path='.length)),
-      );
+      explicitDbPath = requireOptionValue('--db-path', arg.slice('--db-path='.length));
       continue;
     }
     if (arg === '--project-id') {
@@ -87,20 +87,31 @@ function parseInspectProjectsArgs(argv: string[], io: CommandIO): InspectProject
     throw new Error(`Unknown argument: ${arg}`);
   }
 
+  const dataEnvironment = resolveDataEnvironment(io, { explicitDbPath });
+  if (explicitDbPath && dataEnvironment.source !== 'explicit') {
+    config.dbPath = io.resolvePath(explicitDbPath);
+    assertExistingPath(io, config.dbPath, 'Database');
+    return config;
+  }
+  if (!dataEnvironment.dbPath) {
+    throw new Error(formatMissingDatabaseMessage(dataEnvironment));
+  }
+  config.dbPath = dataEnvironment.dbPath;
   assertExistingPath(io, config.dbPath, 'Database');
   return config;
 }
 
 function help(): string {
-  return `Usage: momocat inspect projects --db <path> [options]
+  return `Usage: momocat inspect projects [--db <path>] [options]
 
 Options:
-  --db <path>, --db-path <path>    SQLite DB path. Default: .cat_data/cat_v1.db
+  --db <path>, --db-path <path>    SQLite DB path. Default: installed desktop data, then .cat_data/cat_v1.db.
   --project-id <id>                Optional project id filter.
   --json                           Print machine-readable JSON.
   -h, --help                       Show this help.
 
 Examples:
+  momocat inspect projects
   momocat inspect projects --db .cat_data/cat_v1.db
   momocat inspect projects --db .cat_data/cat_v1.db --project-id 3
   momocat inspect projects --db .cat_data/cat_v1.db --json
