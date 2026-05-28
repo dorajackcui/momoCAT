@@ -1,16 +1,19 @@
 import type { Segment } from '@cat/core/models';
+import type { TagPolicy } from '@cat/core/tag';
 import { SqliteProjectRepository } from '../adapters/sqlite/SqliteProjectRepository';
 import { SqliteTMRepository } from '../adapters/sqlite/SqliteTMRepository';
 import type { TMArtifact } from '../artifacts';
 import type { UnitResult } from '../job/types';
 import { TMModule } from '../modules/TMModule';
 import { TMService } from '../services/TMService';
+import { resolveTagPolicy } from '../tagPolicy';
 import { createTransientSegment } from '../transientSegment';
 import { createRuntimeTMDatabase, type RuntimeTMDatabase } from './RuntimeTMDatabase';
 
 export interface RuntimeTMContextOptions {
   srcLang: string;
   tgtLang: string;
+  tagPolicy?: TagPolicy;
   maxEntries?: number;
 }
 
@@ -26,6 +29,7 @@ export class RuntimeTMContext {
   private readonly tmService: TMService;
   private readonly srcLang: string;
   private readonly tgtLang: string;
+  private readonly tagPolicy: TagPolicy;
   private readonly maxEntries: number;
   private entryCount = 0;
   private disposed = false;
@@ -33,6 +37,7 @@ export class RuntimeTMContext {
   private constructor(options: RuntimeTMContextOptions) {
     this.srcLang = options.srcLang;
     this.tgtLang = options.tgtLang;
+    this.tagPolicy = resolveTagPolicy(options.tagPolicy);
     this.maxEntries = options.maxEntries ?? Number.POSITIVE_INFINITY;
     this.runtimeDb = createRuntimeTMDatabase({
       srcLang: options.srcLang,
@@ -89,6 +94,7 @@ export class RuntimeTMContext {
             sourceLanguage: this.srcLang,
             targetLanguage: this.tgtLang,
           },
+          { tagPolicy: this.tagPolicy },
         ),
       );
       this.entryCount += 1;

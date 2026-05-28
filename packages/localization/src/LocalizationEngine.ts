@@ -364,7 +364,7 @@ export class LocalizationEngine {
       if (mode === 'dialogue') {
         throw new Error('Dialogue mode is not supported for external translation units.');
       }
-      resolveTagPolicy(input.options?.tagPolicy);
+      const tagPolicy = resolveTagPolicy(input.options?.tagPolicy);
 
       const project = this.projectRepo.getProject(input.projectId);
       if (!project) {
@@ -373,7 +373,11 @@ export class LocalizationEngine {
       const resumeFingerprint = await this.buildFileTranslationResumeFingerprint(input, project);
       const runtimeTm =
         (project.projectType ?? 'translation') === 'translation'
-          ? RuntimeTMContext.create({ srcLang: project.srcLang, tgtLang: project.tgtLang })
+          ? RuntimeTMContext.create({
+              srcLang: project.srcLang,
+              tgtLang: project.tgtLang,
+              tagPolicy,
+            })
           : undefined;
       const referenceResolver = runtimeTm
         ? new RuntimeTMReferenceResolver(runtimeTm).resolve

@@ -695,6 +695,80 @@ describe('LocalizationEngine.translateFile job mode', () => {
     }
   });
 
+  it('uses tag policy none when seeding Runtime TM for later Window Mode file batches', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('External File Runtime TM Tag Policy', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      mountEmptyMainTM(db, projectId);
+      const inputPath = join(root, 'runtime-policy.xlsx');
+      const outputPath = join(root, 'runtime-policy.translated.xlsx');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        workbook,
+        XLSX.utils.aoa_to_sheet([
+          ['source', 'target'],
+          ['Install {1}', ''],
+          ['Open settings', ''],
+          ['Choose folder', ''],
+          ['Start download', ''],
+          ['Finish setup', ''],
+          ['Install {1}', ''],
+        ]),
+        'Sheet1',
+      );
+      XLSX.writeFile(workbook, inputPath);
+      const transport = createTransport();
+      transport.createResponse
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            translations: [
+              { id: 'runtime-policy.xlsx#row-2', text: 'Installer {1}' },
+              { id: 'runtime-policy.xlsx#row-3', text: 'Ouvrir les parametres' },
+              { id: 'runtime-policy.xlsx#row-4', text: 'Choisir le dossier' },
+              { id: 'runtime-policy.xlsx#row-5', text: 'Demarrer le telechargement' },
+              { id: 'runtime-policy.xlsx#row-6', text: 'Terminer la configuration' },
+            ],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            translations: [{ id: 'runtime-policy.xlsx#row-7', text: 'Installer {1}' }],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        });
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+
+      await engine.translateFile({
+        projectId,
+        inputPath,
+        outputPath,
+        options: { tagPolicy: 'none' },
+        job: { maxAttempts: 1 },
+      });
+
+      const secondPrompt = transport.createResponse.mock.calls[1]?.[0].userPrompt;
+      expect(secondPrompt).toEqual(expect.any(String));
+      expectRuntimeTMPromptReference(
+        secondPrompt as string,
+        'runtime-policy.xlsx#row-7',
+        'Install {1}',
+        'Installer {1}',
+      );
+      expectPersistentTMsEmpty(db);
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('uses partial Window Mode to request only blank rows while preserving existing targets', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
     const db = new CATDatabase(':memory:');

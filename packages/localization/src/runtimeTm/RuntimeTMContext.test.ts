@@ -51,6 +51,29 @@ describe('RuntimeTMContext', () => {
       runtime.dispose();
     }
   });
+
+  it('commits runtime entries with the configured tag policy', async () => {
+    const runtime = RuntimeTMContext.create({ srcLang: 'en', tgtLang: 'fr', tagPolicy: 'none' });
+    try {
+      runtime.commitResults([
+        result({ unitId: 'u1', source: 'Save {1}', target: 'Enregistrer {1}' }),
+      ]);
+
+      const artifact = await runtime.inspect(
+        createTransientSegment({ id: 'query', source: 'Save {1}' }, 0, {}, { tagPolicy: 'none' }),
+      );
+
+      expect(artifact.rawMatches[0]).toMatchObject({
+        kind: 'tm',
+        tmName: 'Runtime TM',
+        similarity: 100,
+        sourceTokens: [{ type: 'text', content: 'Save {1}' }],
+        targetTokens: [{ type: 'text', content: 'Enregistrer {1}' }],
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
 });
 
 function result(overrides: Partial<UnitResult>): UnitResult {
