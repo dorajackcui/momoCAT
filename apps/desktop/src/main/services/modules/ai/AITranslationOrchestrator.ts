@@ -1,5 +1,10 @@
 import type { Segment } from '@cat/core/models';
-import type { AIBatchMode, AIBatchTargetScope } from '../../../../shared/ipc';
+import type { LocalizationEngine } from '@cat/localization';
+import type {
+  AIBatchMode,
+  AIBatchTargetBaseline,
+  AIBatchTargetScope,
+} from '../../../../shared/ipc';
 import type {
   AIRuntimeConfigProvider,
   AITransport,
@@ -15,6 +20,7 @@ import { SegmentPagingIterator } from './SegmentPagingIterator';
 import { resolveBatchTargetScope } from './translationTargetScope';
 import { runDialogueFileTranslation } from './dialogueTranslationWorkflow';
 import { runStandardFileTranslation } from './fileTranslationWorkflow';
+import { runLocalizationFileTranslation } from './localizationFileTranslationWorkflow';
 import {
   buildSegmentWorkflowDeps,
   createSegmentOperationLock,
@@ -28,6 +34,7 @@ export interface AITranslateFileOptions {
   model?: string;
   mode?: AIBatchMode;
   targetScope?: AIBatchTargetScope;
+  targetBaseline?: AIBatchTargetBaseline;
   onProgress?: (data: { current: number; total: number; message?: string }) => void;
 }
 
@@ -48,6 +55,7 @@ export class AITranslationOrchestrator {
     private readonly textTranslator: AITextTranslator,
     private readonly segmentPagingIterator: SegmentPagingIterator,
     private readonly promptReferenceResolvers: PromptReferenceResolvers = {},
+    private readonly localizationEngine?: Pick<LocalizationEngine, 'translateProjectSegments'>,
   ) {}
 
   public async aiTranslateFile(
@@ -84,6 +92,20 @@ export class AITranslationOrchestrator {
           this.resolveTranslationPromptReferences(projectId, segment),
         onProgress: options?.onProgress,
         intervalMs: AITranslationOrchestrator.TRANSLATION_INTERVAL_MS,
+      });
+    }
+
+    if ((project.projectType || 'translation') === 'translation' && this.localizationEngine) {
+      return runLocalizationFileTranslation({
+        fileId,
+        fileName: file.name,
+        project,
+        targetBaseline: resolveTargetBaseline(options),
+        providerId: options?.model ?? project.aiModel,
+        localizationEngine: this.localizationEngine,
+        segmentPagingIterator: this.segmentPagingIterator,
+        segmentService: this.segmentService,
+        onProgress: options?.onProgress,
       });
     }
 
@@ -169,4 +191,16 @@ export class AITranslationOrchestrator {
       resolvers: this.promptReferenceResolvers,
     });
   }
+}
+
+function resolveTargetBaseline(
+  options: AITranslateFileOptions | undefined,
+): AIBatchTargetBaseline {
+  if (options?.targetBaseline) {
+    return options.targetBaseline;
+  }
+
+  return options?.targetScope === 'overwrite-non-confirmed'
+    ? 'ignore-current-targets'
+    : 'use-current-targets';
 }

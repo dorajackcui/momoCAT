@@ -831,6 +831,125 @@ describe('TranslationJobRunner', () => {
     });
   });
 
+  it('applies host results before committing them to runtime TM', async () => {
+    const harness = await makeHarness();
+    const order: string[] = [];
+    const unit = makeUnit({ unitId: 'unit-1', source: 'Hello' });
+    const runner = harness.makeRunner(
+      async (task, context) => ({
+        results: task.units.map((taskUnit) => ({
+          jobId: context.job.id,
+          documentId: taskUnit.documentId,
+          unitId: taskUnit.unitId,
+          sourceHash: taskUnit.sourceHash,
+          status: 'translated',
+          source: taskUnit.source,
+          target: 'Bonjour',
+        })),
+      }),
+      {
+        applyResult: async (result) => {
+          order.push(`apply:${result.unitId}`);
+        },
+        runtimeTm: {
+          seed: vi.fn(),
+          commit: vi.fn(async (results) => {
+            order.push(`runtime:${results[0]?.unitId}`);
+          }),
+        },
+      },
+    );
+
+    await runner.run(makeJob({ units: [unit] }));
+
+    expect(order).toEqual(['apply:unit-1', 'runtime:unit-1']);
+  });
+
+  it('does not checkpoint or commit to runtime TM when host result apply fails', async () => {
+    const harness = await makeHarness();
+    const append = vi.fn(async (_record: CheckpointRecord) => undefined);
+    const commit = vi.fn();
+    const checkpointStore = {
+      load: harness.checkpointStore.load.bind(harness.checkpointStore),
+      append,
+    };
+    const runner = harness.makeRunner(
+      async (task, context) => ({
+        results: task.units.map((taskUnit) => ({
+          jobId: context.job.id,
+          documentId: taskUnit.documentId,
+          unitId: taskUnit.unitId,
+          sourceHash: taskUnit.sourceHash,
+          status: 'translated',
+          source: taskUnit.source,
+          target: 'Bonjour',
+        })),
+      }),
+      {
+        checkpointStore,
+        persistArtifacts: false,
+        applyResult: async () => {
+          throw new Error('host apply failed');
+        },
+        runtimeTm: {
+          seed: vi.fn(),
+          commit,
+        },
+      },
+    );
+
+    await expect(runner.run(makeJob())).rejects.toThrow('host apply failed');
+
+    expect(append).not.toHaveBeenCalled();
+    expect(commit).not.toHaveBeenCalled();
+  });
+
+  it('includes Runtime TM summary in run result and job_done event without artifacts', async () => {
+    const harness = await makeHarness();
+    const summary = {
+      enabled: true,
+      tagPolicy: 'none' as const,
+      seeded: 2,
+      appended: 3,
+      skipped: 1,
+      entryCount: 4,
+      inspectCalls: 5,
+      hitUnits: 6,
+      tmHits: 7,
+      concordanceHits: 8,
+      capped: false,
+    };
+    const runner = harness.makeRunner(
+      async (task) => ({
+        results: [
+          makeResult({
+            unitId: task.units[0].unitId,
+            sourceHash: task.units[0].sourceHash,
+            source: task.units[0].source,
+            target: 'Bonjour',
+          }),
+        ],
+      }),
+      {
+        persistArtifacts: false,
+        runtimeTm: {
+          seed: vi.fn(),
+          commit: vi.fn(),
+          summary: () => summary,
+        },
+      },
+    );
+
+    const result = await runner.run(makeJob());
+
+    expect(result.runtimeTm).toEqual(summary);
+    const events = await harness.events();
+    expect(events.find((event) => event.event === 'job_done')).toEqual(
+      expect.objectContaining({ runtimeTm: summary }),
+    );
+    expect((await readJsonlRecords<ArtifactRecord>(harness.artifactsPath)).records).toEqual([]);
+  });
+
 });
 
 async function makeHarness(): Promise<{
@@ -842,7 +961,12 @@ async function makeHarness(): Promise<{
     executor: TranslationTaskExecutor,
     options?: Pick<
       ConstructorParameters<typeof TranslationJobRunner>[0],
-      'writeSnapshot' | 'writeFinal' | 'taskPlanner' | 'runtimeTm' | 'checkpointStore'
+      | 'writeSnapshot'
+      | 'writeFinal'
+      | 'taskPlanner'
+      | 'runtimeTm'
+      | 'checkpointStore'
+      | 'applyResult'
     > & { persistArtifacts?: boolean },
   ) => TranslationJobRunner;
   events: () => Promise<ProgressEventRecord[]>;
@@ -867,6 +991,7 @@ async function makeHarness(): Promise<{
         clock: () => new Date('2026-05-19T00:00:00.000Z'),
         writeSnapshot: options.writeSnapshot,
         writeFinal: options.writeFinal,
+        applyResult: options.applyResult,
         runtimeTm: options.runtimeTm,
       };
 

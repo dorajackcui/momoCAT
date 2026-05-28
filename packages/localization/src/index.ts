@@ -28,6 +28,7 @@ export type {
 } from './job/TranslationJobRunner';
 export {
   OneUnitTaskPlanner,
+  WindowPartialTaskPlanner,
   WindowModeTaskPlanner,
   normalizeWindowModeBatchSize,
 } from './job/TaskPlanner';
@@ -58,6 +59,17 @@ export type {
   PreparedFileTranslationJob,
   TranslateSpreadsheetFileJobOptions,
 } from './fileTranslationJobAdapter';
+export {
+  prepareProjectSegmentTranslationJob,
+  translateProjectSegmentsJob,
+} from './projectSegmentJobAdapter';
+export type {
+  PreparedProjectSegmentTranslationJob,
+  ProjectSegmentTranslationJobRunnerFactory,
+  ProjectSegmentTranslationUnit,
+  TranslateProjectSegmentsJobInput,
+  TranslateProjectSegmentsJobOptions,
+} from './projectSegmentJobAdapter';
 export { resolveBatchTargetScope } from './translationTargetScope';
 export type * from './ports';
 export { SqliteProjectRepository } from './adapters/sqlite/SqliteProjectRepository';

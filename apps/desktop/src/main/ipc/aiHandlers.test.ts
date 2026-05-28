@@ -14,7 +14,7 @@ function createIpcMainStub() {
 }
 
 describe('ai handlers', () => {
-  it('forwards dialogue mode to project service when translating file', async () => {
+  it('forwards file translate options to project service when translating file', async () => {
     const { handlers, ipcMain } = createIpcMainStub();
     const startJob = vi.fn();
     const updateProgress = vi.fn();
@@ -47,6 +47,7 @@ describe('ai handlers', () => {
     const jobId = handler?.({}, 1, {
       mode: 'dialogue',
       targetScope: 'overwrite-non-confirmed',
+      targetBaseline: 'ignore-current-targets',
     }) as string;
     expect(typeof jobId).toBe('string');
     expect(startJob).toHaveBeenCalledWith(jobId, 'AI translation started');
@@ -55,6 +56,7 @@ describe('ai handlers', () => {
       expect.objectContaining({
         mode: 'dialogue',
         targetScope: 'overwrite-non-confirmed',
+        targetBaseline: 'ignore-current-targets',
         onProgress: expect.any(Function),
       }),
     );

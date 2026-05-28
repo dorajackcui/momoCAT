@@ -316,31 +316,28 @@ describe('fileTranslationJobAdapter', () => {
         ['Keep me', 'Existing target'],
       ]);
       const executor = vi.fn<TranslationTaskExecutor>(async (task, context) => {
-        const unit = task.units[0];
-        const base = {
-          jobId: context.job.id,
-          documentId: unit.documentId,
-          unitId: unit.unitId,
-          sourceHash: unit.sourceHash,
-          source: unit.source,
-          metadata: unit.metadata,
-        };
+        return {
+          results: task.units.map((unit) => {
+            const base = {
+              jobId: context.job.id,
+              documentId: unit.documentId,
+              unitId: unit.unitId,
+              sourceHash: unit.sourceHash,
+              source: unit.source,
+              metadata: unit.metadata,
+            };
 
-        if (unit.unitId === 'row-3') {
-          return {
-            results: [
-              {
+            if (unit.unitId === 'row-3') {
+              return {
                 ...base,
                 status: 'failed',
                 target: 'Should not be written',
                 error: 'provider failed',
-              },
-            ],
-          };
-        }
+              };
+            }
 
-        return {
-          results: [{ ...base, status: 'translated', target: 'Bonjour' }],
+            return { ...base, status: 'translated', target: 'Bonjour' };
+          }),
         };
       });
 
@@ -876,6 +873,58 @@ describe('fileTranslationJobAdapter', () => {
       );
 
       expect(seenRuntimeTm).toBe(runtimeTm);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves runtime TM summary returned by a custom runnerFactory', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-job-'));
+    try {
+      const inputPath = join(root, 'mt.xlsx');
+      const outputPath = join(root, 'mt.translated.xlsx');
+      const inferredArtifactPath = join(root, 'mt.translated.artifacts.jsonl');
+      writeWorkbook(inputPath, [
+        ['source', 'target'],
+        ['Hello', ''],
+      ]);
+      const runtimeTm = {
+        enabled: true,
+        tagPolicy: 'none' as const,
+        seeded: 0,
+        appended: 1,
+        skipped: 0,
+        entryCount: 1,
+        inspectCalls: 0,
+        hitUnits: 0,
+        tmHits: 0,
+        concordanceHits: 0,
+        capped: false,
+      };
+
+      const result = await translateSpreadsheetFileJob(
+        {
+          projectId: 7,
+          inputPath,
+          outputPath,
+        },
+        {
+          taskExecutor: async () => ({ results: [] }),
+          runnerFactory: () => ({
+            run: async (job) => ({
+              jobId: job.id,
+              summary: { total: 1, translated: 1, skipped: 0, reused: 0, failed: 0 },
+              results: [
+                makeResult('row-2', 'Hello', 'Bonjour', { rowIndex: 1, rowNumber: 2 }),
+              ],
+              runtimeTm,
+            }),
+          }),
+        },
+      );
+
+      expect(result.runtimeTm).toEqual(runtimeTm);
+      expect(existsSync(inferredArtifactPath)).toBe(false);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

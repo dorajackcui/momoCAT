@@ -1,6 +1,7 @@
 import { runBounded } from '../RequestScheduler';
 import { unitKey as sharedUnitKey } from '../requestModes/shared/unitIdentity';
 import { resolveBatchTargetScope } from '../translationTargetScope';
+import type { RuntimeTMSummary } from '../types';
 import { SnapshotThrottle } from './SnapshotThrottle';
 import type { JobAwareTaskPlanner, TaskPlanner } from './TaskPlanner';
 import type {
@@ -34,11 +35,13 @@ export interface TranslationJobRunResult {
   jobId: string;
   summary: TranslationJobSummary;
   results: UnitResult[];
+  runtimeTm?: RuntimeTMSummary;
 }
 
 export interface TranslationJobRuntimeTMHooks {
   seed(results: UnitResult[]): Promise<void> | void;
   commit(results: UnitResult[], task: TranslationTask, job: TranslationJob): Promise<void> | void;
+  summary?: () => RuntimeTMSummary;
 }
 
 export interface TranslationJobRunnerDependencies {
@@ -63,6 +66,10 @@ export interface TranslationJobRunnerDependencies {
     context: TranslationJobRunnerCallbackContext,
   ) => Promise<void>;
   writeFinal?: (results: UnitResult[], context: TranslationJobRunnerCallbackContext) => Promise<void>;
+  applyResult?: (
+    result: UnitResult,
+    context: TranslationJobRunnerCallbackContext & { task: TranslationTask },
+  ) => Promise<void> | void;
   runtimeTm?: TranslationJobRuntimeTMHooks;
 }
 
@@ -75,6 +82,7 @@ export class TranslationJobRunner {
   private readonly clock: () => Date;
   private readonly writeSnapshot?: TranslationJobRunnerDependencies['writeSnapshot'];
   private readonly writeFinal?: TranslationJobRunnerDependencies['writeFinal'];
+  private readonly applyResult?: TranslationJobRunnerDependencies['applyResult'];
   private readonly runtimeTm?: TranslationJobRunnerDependencies['runtimeTm'];
 
   constructor(dependencies: TranslationJobRunnerDependencies) {
@@ -86,6 +94,7 @@ export class TranslationJobRunner {
     this.clock = dependencies.clock ?? (() => new Date());
     this.writeSnapshot = dependencies.writeSnapshot;
     this.writeFinal = dependencies.writeFinal;
+    this.applyResult = dependencies.applyResult;
     this.runtimeTm = dependencies.runtimeTm;
   }
 
@@ -167,18 +176,21 @@ export class TranslationJobRunner {
     }
 
     const summary = summarizeResults(total, orderedResults);
+    const runtimeTm = this.runtimeTm?.summary?.();
 
     await this.emit({
       job: job.id,
       event: 'job_done',
       done: orderedResults.length,
       total,
+      ...(runtimeTm ? { runtimeTm } : {}),
     });
 
     return {
       jobId: job.id,
       summary,
       results: orderedResults,
+      ...(runtimeTm ? { runtimeTm } : {}),
     };
   }
 
@@ -241,6 +253,7 @@ export class TranslationJobRunner {
       const checkpoint = resultToCheckpoint(result, this.isoNow());
 
       if (checkpoint) {
+        await this.applyResult?.(result, { job, resultMap, task });
         await this.checkpointStore.append(checkpoint);
       }
       resultMap.set(unitKeyFromParts(result.documentId, result.unitId), result);
@@ -392,6 +405,10 @@ function makeSkippedResult(
 }
 
 function isIntrinsicallySkippedUnit(job: TranslationJob, unit: JobUnit): boolean {
+  if (unit.locked) {
+    return true;
+  }
+
   if (!unit.source.trim()) {
     return true;
   }

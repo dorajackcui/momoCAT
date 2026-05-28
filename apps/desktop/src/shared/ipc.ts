@@ -222,10 +222,12 @@ export interface AISegmentTranslateResult {
 
 export type AIBatchMode = 'default' | 'dialogue';
 export type AIBatchTargetScope = 'blank-only' | 'overwrite-non-confirmed';
+export type AIBatchTargetBaseline = 'use-current-targets' | 'ignore-current-targets';
 
 export interface AITranslateFileOptions {
   mode?: AIBatchMode;
   targetScope?: AIBatchTargetScope;
+  targetBaseline?: AIBatchTargetBaseline;
 }
 
 export interface SegmentsUpdatedEvent {

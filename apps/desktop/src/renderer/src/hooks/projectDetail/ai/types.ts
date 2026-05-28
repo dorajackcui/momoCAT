@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { Project, ProjectAIModel } from '@cat/core/project';
 import type {
   AIBatchMode,
+  AIBatchTargetBaseline,
   AIBatchTargetScope,
   AIProviderSummary,
   JobProgressEvent,
@@ -40,6 +41,7 @@ export interface TrackedAIJob extends JobProgressEvent {
 export interface StartAITranslateFileOptions {
   mode?: AIBatchMode;
   targetScope?: AIBatchTargetScope;
+  targetBaseline?: AIBatchTargetBaseline;
   confirm?: boolean;
 }
 

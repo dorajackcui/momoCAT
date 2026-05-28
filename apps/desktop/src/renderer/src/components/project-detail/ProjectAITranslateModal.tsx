@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import type { AIBatchMode, AIBatchTargetScope } from '../../../../shared/ipc';
+import type { AIBatchTargetBaseline } from '../../../../shared/ipc';
 import { Button, Modal, Select } from '../ui';
 
 export interface ProjectAITranslateSubmit {
-  mode: AIBatchMode;
-  targetScope: AIBatchTargetScope;
+  targetBaseline: AIBatchTargetBaseline;
 }
 
 interface ProjectAITranslateModalProps {
@@ -20,8 +19,8 @@ export function ProjectAITranslateModal({
   onClose,
   onConfirm,
 }: ProjectAITranslateModalProps) {
-  const [mode, setMode] = useState<AIBatchMode>('default');
-  const [targetScope, setTargetScope] = useState<AIBatchTargetScope>('blank-only');
+  const [targetBaseline, setTargetBaseline] =
+    useState<AIBatchTargetBaseline>('use-current-targets');
 
   return (
     <Modal
@@ -37,7 +36,7 @@ export function ProjectAITranslateModal({
           <Button
             variant="soft"
             className="!bg-success-soft !text-success"
-            onClick={() => onConfirm({ mode, targetScope })}
+            onClick={() => onConfirm({ targetBaseline })}
           >
             Start AI Translate
           </Button>
@@ -50,32 +49,22 @@ export function ProjectAITranslateModal({
 
       <div className="space-y-3 mt-4">
         <label className="block space-y-1">
-          <span className="text-xs font-medium text-text-muted">Translation Scope</span>
+          <span className="text-xs font-medium text-text-muted">Target Baseline</span>
           <Select
-            aria-label="Translation Scope"
-            value={targetScope}
-            onChange={(event) => setTargetScope(event.target.value as AIBatchTargetScope)}
+            aria-label="Target Baseline"
+            value={targetBaseline}
+            onChange={(event) =>
+              setTargetBaseline(event.target.value as AIBatchTargetBaseline)
+            }
           >
-            <option value="blank-only">Blank Segments Only</option>
-            <option value="overwrite-non-confirmed">Overwrite Non-Confirmed Segments</option>
-          </Select>
-        </label>
-
-        <label className="block space-y-1">
-          <span className="text-xs font-medium text-text-muted">Dialogue Mode</span>
-          <Select
-            aria-label="Dialogue Mode"
-            value={mode}
-            onChange={(event) => setMode(event.target.value as AIBatchMode)}
-          >
-            <option value="default">No</option>
-            <option value="dialogue">Yes</option>
+            <option value="use-current-targets">Use Current Targets</option>
+            <option value="ignore-current-targets">Ignore Current Targets</option>
           </Select>
         </label>
       </div>
 
       <p className="text-[11px] text-text-faint mt-4">
-        Confirmed segments are always skipped, even in overwrite mode.
+        Confirmed segments stay locked.
       </p>
     </Modal>
   );

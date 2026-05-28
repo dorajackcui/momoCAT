@@ -18,6 +18,13 @@ function createTempDbPath(): string {
   return join(TEMP_ROOT, `${randomUUID()}.db`);
 }
 
+function hasIndex(db: Database.Database, indexName: string): boolean {
+  const row = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
+    .get(indexName);
+  return Boolean(row);
+}
+
 describe('ensureCurrentSchema', () => {
   afterEach(() => {
     if (existsSync(TEMP_ROOT)) {
@@ -52,9 +59,14 @@ describe('ensureCurrentSchema', () => {
     expect(tables.has('project_term_bases')).toBe(true);
     expect(tables.has('tb_entries')).toBe(true);
     expect(tables.has('tb_fts')).toBe(true);
-    expect(tables.has('app_settings')).toBe(true);
+    const hasTmStatsIndex = hasIndex(db, 'idx_tm_entries_tm_updatedAt');
+    const hasTbStatsIndex = hasIndex(db, 'idx_tb_entries_tb_updatedAt');
 
     db.close();
+
+    expect(tables.has('app_settings')).toBe(true);
+    expect(hasTmStatsIndex).toBe(true);
+    expect(hasTbStatsIndex).toBe(true);
   });
 
   it('reopens an already-current database without mutating the schema marker', () => {
@@ -128,5 +140,33 @@ describe('ensureCurrentSchema', () => {
 
     expect(() => ensureCurrentSchema(db)).toThrowError(UnsupportedDatabaseSchemaError);
     db.close();
+  });
+
+  it('restores TM and TB stats performance indexes on current databases', () => {
+    const dbPath = createTempDbPath();
+
+    const first = new CATDatabase(dbPath);
+    first.close();
+
+    const before = new Database(dbPath);
+    before.prepare('DROP INDEX IF EXISTS idx_tm_entries_tm_updatedAt').run();
+    before.prepare('DROP INDEX IF EXISTS idx_tb_entries_tb_updatedAt').run();
+    expect(hasIndex(before, 'idx_tm_entries_tm_updatedAt')).toBe(false);
+    expect(hasIndex(before, 'idx_tb_entries_tb_updatedAt')).toBe(false);
+    before.close();
+
+    const reopened = new CATDatabase(dbPath);
+    reopened.close();
+
+    const after = new Database(dbPath);
+    const markerAfter = after.prepare('SELECT version FROM schema_version').get() as { version: number };
+
+    const hasTmStatsIndex = hasIndex(after, 'idx_tm_entries_tm_updatedAt');
+    const hasTbStatsIndex = hasIndex(after, 'idx_tb_entries_tb_updatedAt');
+    after.close();
+
+    expect(markerAfter.version).toBe(CURRENT_SCHEMA_VERSION);
+    expect(hasTmStatsIndex).toBe(true);
+    expect(hasTbStatsIndex).toBe(true);
   });
 });

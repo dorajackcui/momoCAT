@@ -1,6 +1,7 @@
 ﻿import { describe, expect, it, vi } from 'vitest';
 import type { Segment } from '@cat/core/models';
 import { serializeTokensToDisplayText } from '@cat/core/text';
+import type { TranslateProjectSegmentsInput } from '@cat/localization';
 import { AIModule } from './AIModule';
 import { AITransport, ProjectRepository, SegmentRepository, SettingsRepository } from '../ports';
 import type { ProxySettingsApplier } from '../proxy/ProxySettingsManager';
@@ -14,6 +15,7 @@ function createSegment(params: {
   targetText?: string;
   status?: Segment['status'];
   context?: string;
+  orderIndex?: number;
 }): Segment {
   const sourceTokens = params.sourceText
     ? [{ type: 'text', content: params.sourceText as string }]
@@ -24,7 +26,7 @@ function createSegment(params: {
   return {
     segmentId: params.segmentId,
     fileId: 1,
-    orderIndex: 0,
+    orderIndex: params.orderIndex ?? 0,
     sourceTokens,
     targetTokens,
     status: params.status ?? 'new',
@@ -201,6 +203,208 @@ async function runFileProcessingConcurrencyCase(params: {
 }
 
 describe('AIModule.aiTranslateFile', () => {
+  it('uses localization window-partial workflow for default translation project file translate', async () => {
+    const segments: Segment[] = [
+      createSegment({
+        segmentId: 'loc-empty-1',
+        sourceText: 'Hello <b>world</b>',
+        context: '  Homepage title  ',
+        orderIndex: 4,
+      }),
+      createSegment({
+        segmentId: 'loc-confirmed-1',
+        sourceText: 'Already done',
+        targetText: 'Deja termine',
+        status: 'confirmed',
+        orderIndex: 5,
+      }),
+    ];
+
+    const project = {
+      id: 11,
+      srcLang: 'en',
+      tgtLang: 'fr',
+      projectType: 'translation',
+      aiPrompt: '',
+      aiTemperature: 0.2,
+      aiModel: TEST_PROVIDER_ID,
+    };
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({ id: 1, projectId: 11, name: 'demo.xlsx' }),
+      getProject: vi.fn().mockReturnValue(project),
+    } as unknown as ProjectRepository;
+
+    const segmentRepo = {
+      getSegmentsPage: vi.fn().mockReturnValue(segments),
+    } as unknown as SegmentRepository;
+
+    const settingsRepo = createAISettingsRepository({
+      providers: [
+        { id: TEST_PROVIDER_ID, name: 'Test GPT 5 mini', model: TEST_PROVIDER_MODEL },
+        { id: ALT_PROVIDER_ID, name: 'Test GPT 5.4', model: ALT_PROVIDER_MODEL },
+      ],
+    });
+
+    const segmentService = {
+      updateSegment: vi.fn().mockResolvedValue(undefined),
+    } as unknown as SegmentService;
+
+    const transport = {
+      testConnection: vi.fn().mockResolvedValue({ ok: true }),
+      createResponse: vi.fn(),
+    } as unknown as AITransport;
+
+    const localizationEngine = {
+      translateProjectSegments: vi.fn(async (input: TranslateProjectSegmentsInput) => {
+        await input.onResult?.({
+          id: 'loc-empty-1',
+          source: 'Hello <b>world</b>',
+          target: 'Bonjour <b>monde</b>',
+          status: 'translated',
+          metadata: { segmentId: 'loc-empty-1' },
+        });
+        return {
+          summary: { total: 2, translated: 1, reused: 0, skipped: 1, failed: 0 },
+          results: [],
+        };
+      }),
+    };
+
+    const module = new AIModule(
+      projectRepo,
+      segmentRepo,
+      settingsRepo,
+      segmentService,
+      transport,
+      undefined,
+      undefined,
+      undefined,
+      localizationEngine,
+    );
+
+    const result = await module.aiTranslateFile(1, {
+      model: ALT_PROVIDER_ID,
+      targetScope: 'blank-only',
+    });
+
+    expect(result).toEqual({ translated: 1, skipped: 1, failed: 0, total: 2 });
+    expect(localizationEngine.translateProjectSegments).toHaveBeenCalledTimes(1);
+    const input = localizationEngine.translateProjectSegments.mock.calls[0][0];
+    expect(input.projectId).toBe(11);
+    expect(input.documentId).toBe('file-1:demo.xlsx');
+    expect(input.options).toEqual({
+      mode: 'standard',
+      requestMode: 'window-partial',
+      targetScope: 'blank-only',
+      mt: { providerId: ALT_PROVIDER_ID },
+    });
+    expect(input.units).toEqual([
+      {
+        id: 'loc-empty-1',
+        source: 'Hello <b>world</b>',
+        target: '',
+        context: 'Homepage title',
+        rowNumber: 5,
+        metadata: { segmentId: 'loc-empty-1', orderIndex: 4, status: 'new' },
+      },
+      {
+        id: 'loc-confirmed-1',
+        source: 'Already done',
+        target: 'Deja termine',
+        rowNumber: 6,
+        locked: true,
+        metadata: { segmentId: 'loc-confirmed-1', orderIndex: 5, status: 'confirmed' },
+      },
+    ]);
+    expect(segmentService.updateSegment).toHaveBeenCalledTimes(1);
+    expect(segmentService.updateSegment).toHaveBeenCalledWith(
+      'loc-empty-1',
+      expect.any(Array),
+      'translated',
+    );
+    const translatedTokens = (segmentService.updateSegment as ReturnType<typeof vi.fn>).mock
+      .calls[0][1];
+    expect(serializeTokensToDisplayText(translatedTokens)).toBe('Bonjour <b>monde</b>');
+    expect(transport.createResponse).not.toHaveBeenCalled();
+  });
+
+  it('clears non-confirmed targets before localization when target baseline ignores current targets', async () => {
+    const segments: Segment[] = [
+      createSegment({
+        segmentId: 'baseline-prefilled',
+        sourceText: 'Good morning',
+        targetText: 'old target',
+        orderIndex: 0,
+      }),
+      createSegment({
+        segmentId: 'baseline-confirmed',
+        sourceText: 'Confirmed text',
+        targetText: 'confirmed target',
+        status: 'confirmed',
+        orderIndex: 1,
+      }),
+    ];
+
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({ id: 1, projectId: 11, name: 'demo.xlsx' }),
+      getProject: vi.fn().mockReturnValue({
+        id: 11,
+        srcLang: 'en',
+        tgtLang: 'fr',
+        projectType: 'translation',
+        aiPrompt: '',
+        aiTemperature: 0.2,
+        aiModel: TEST_PROVIDER_ID,
+      }),
+    } as unknown as ProjectRepository;
+    const segmentRepo = {
+      getSegmentsPage: vi.fn().mockReturnValue(segments),
+    } as unknown as SegmentRepository;
+    const segmentService = {
+      updateSegment: vi.fn().mockResolvedValue(undefined),
+    } as unknown as SegmentService;
+    const transport = {
+      testConnection: vi.fn().mockResolvedValue({ ok: true }),
+      createResponse: vi.fn(),
+    } as unknown as AITransport;
+    const localizationEngine = {
+      translateProjectSegments: vi.fn(async () => ({
+        summary: { total: 2, translated: 1, reused: 0, skipped: 1, failed: 0 },
+        results: [],
+      })),
+    };
+
+    const module = new AIModule(
+      projectRepo,
+      segmentRepo,
+      createAISettingsRepository(),
+      segmentService,
+      transport,
+      undefined,
+      undefined,
+      undefined,
+      localizationEngine,
+    );
+
+    await module.aiTranslateFile(1, {
+      targetBaseline: 'ignore-current-targets',
+    });
+
+    const input = localizationEngine.translateProjectSegments.mock.calls[0][0];
+    expect(input.options?.targetScope).toBe('blank-only');
+    expect(input.units).toEqual([
+      expect.objectContaining({
+        id: 'baseline-prefilled',
+        target: '',
+      }),
+      expect.objectContaining({
+        id: 'baseline-confirmed',
+        target: 'confirmed target',
+        locked: true,
+      }),
+    ]);
+  });
+
   it('keeps scanning after consecutive empty source segments', async () => {
     const segments: Segment[] = [
       createSegment({ segmentId: 'empty-1', sourceText: '' }),

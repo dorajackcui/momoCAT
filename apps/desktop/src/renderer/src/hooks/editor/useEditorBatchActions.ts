@@ -108,8 +108,7 @@ export function useEditorBatchActions({
     setIsBatchAIModalOpen(false);
     try {
       const jobId = await apiClient.aiTranslateFile(fileId, {
-        mode: options.mode,
-        targetScope: options.targetScope,
+        targetBaseline: options.targetBaseline,
       });
       setTrackedBatchAIJobId(jobId);
       setIsBatchAITranslating(true);

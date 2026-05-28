@@ -1,5 +1,9 @@
 import type { PromptArtifact, TBArtifact, TMArtifact } from '../artifacts';
-import type { TranslateUnitReferences, TranslateUnitsOptions } from '../types';
+import type {
+  RuntimeTMSummary,
+  TranslateUnitReferences,
+  TranslateUnitsOptions,
+} from '../types';
 
 export type UnitResultStatus = 'translated' | 'skipped' | 'reused' | 'failed';
 
@@ -18,6 +22,7 @@ export interface JobUnit {
   unitId: string;
   source: string;
   target?: string;
+  locked?: boolean;
   context?: string;
   rowNumber?: number;
   sourceHash: string;
@@ -84,6 +89,7 @@ export interface ProgressEventRecord {
   done?: number;
   total?: number;
   error?: string;
+  runtimeTm?: RuntimeTMSummary;
   at: string;
 }
 

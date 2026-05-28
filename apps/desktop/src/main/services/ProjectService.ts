@@ -6,6 +6,7 @@ import type {
   ProjectType,
 } from '@cat/core/project';
 import { CATDatabase } from '@cat/db';
+import { LocalizationEngine } from '@cat/localization';
 import { SpreadsheetFilter } from '../filters/SpreadsheetFilter';
 import { TMService } from './TMService';
 import { SegmentService } from './SegmentService';
@@ -31,6 +32,7 @@ import { SqliteTransactionManager } from './adapters/SqliteTransactionManager';
 import { ProxySettingsManager } from './proxy/ProxySettingsManager';
 import type {
   AIBatchMode,
+  AIBatchTargetBaseline,
   AIBatchTargetScope,
   ImportOptions,
   ProxySettings,
@@ -137,6 +139,11 @@ export class ProjectService {
           tmService,
           tbService,
         },
+        new LocalizationEngine(db, {
+          dbPath,
+          aiTransport,
+          aiRuntimeConfigProvider,
+        }),
       );
 
     try {
@@ -399,6 +406,7 @@ export class ProjectService {
       model?: string;
       mode?: AIBatchMode;
       targetScope?: AIBatchTargetScope;
+      targetBaseline?: AIBatchTargetBaseline;
       onProgress?: (data: { current: number; total: number; message?: string }) => void;
     },
   ) {

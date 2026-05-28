@@ -104,6 +104,7 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
         .aiTranslateFile(fileId, {
           mode: options?.mode,
           targetScope: options?.targetScope,
+          targetBaseline: options?.targetBaseline,
           onProgress: (data) => {
             const progress = data.total === 0 ? 100 : Math.round((data.current / data.total) * 100);
             jobManager.updateProgress(jobId, {

@@ -216,7 +216,10 @@ function normalizeNumberOption(value: number | undefined): string | undefined {
 function jobRunResultToTranslateUnitsResult(
   runResult: TranslationJobRunResult,
 ): TranslateUnitsResult {
-  return unitResultsToTranslateUnitsResult(runResult.results);
+  return {
+    ...unitResultsToTranslateUnitsResult(runResult.results),
+    ...(runResult.runtimeTm ? { runtimeTm: runResult.runtimeTm } : {}),
+  };
 }
 
 function unitResultsToTranslateUnitsResult(results: UnitResult[]): TranslateUnitsResult {

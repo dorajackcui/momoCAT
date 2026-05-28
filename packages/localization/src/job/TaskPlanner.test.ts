@@ -209,6 +209,30 @@ describe('WindowPartialTaskPlanner', () => {
     expect(tasks[0]?.requestUnitKeys).toEqual(['doc-1\u0000unit-1', 'doc-1\u0000unit-2']);
   });
 
+  it('keeps locked rows as scan-window context without requesting them in overwrite scope', () => {
+    const units = [
+      makeUnit({ unitId: 'unit-1', target: '', locked: false }),
+      makeUnit({ unitId: 'unit-2', target: 'confirmed target', locked: true }),
+      makeUnit({ unitId: 'unit-3', target: 'draft target', locked: false }),
+    ];
+    const planner = new WindowPartialTaskPlanner();
+
+    const tasks = planner.planJob({
+      job: makeJob(units),
+      completedResults: new Map(),
+      targetScope: 'overwrite-non-confirmed',
+    });
+
+    expect(tasks).toEqual([
+      expect.objectContaining({
+        requestMode: 'window-partial',
+        scanWindowUnits: units,
+        units,
+        requestUnitKeys: ['doc-1\u0000unit-1', 'doc-1\u0000unit-3'],
+      }),
+    ]);
+  });
+
   it.each([0, -1, 1.5, Number.NaN, 6])(
     'rejects invalid batch size %s',
     (batchSize) => {

@@ -101,7 +101,21 @@ export class UnsupportedDatabaseSchemaError extends Error {
   }
 }
 
-export function ensureCurrentSchema(db: Database.Database): void {
+interface EnsureCurrentSchemaOptions {
+  allowSchemaMaintenance?: boolean;
+}
+
+const TM_STATS_PERFORMANCE_INDEX_SQL = `
+  CREATE INDEX IF NOT EXISTS idx_tm_entries_tm_updatedAt ON tm_entries(tmId, updatedAt);
+`;
+const TB_STATS_PERFORMANCE_INDEX_SQL = `
+  CREATE INDEX IF NOT EXISTS idx_tb_entries_tb_updatedAt ON tb_entries(tbId, updatedAt);
+`;
+
+export function ensureCurrentSchema(
+  db: Database.Database,
+  options: EnsureCurrentSchemaOptions = {},
+): void {
   if (isDatabaseEmpty(db)) {
     createCurrentSchema(db);
     return;
@@ -109,6 +123,10 @@ export function ensureCurrentSchema(db: Database.Database): void {
 
   assertCurrentSchemaMarker(db);
   assertCurrentSchemaShape(db);
+
+  if (options.allowSchemaMaintenance ?? true) {
+    ensureCurrentPerformanceIndexes(db);
+  }
 }
 
 function isDatabaseEmpty(db: Database.Database): boolean {
@@ -274,12 +292,19 @@ function createCurrentSchema(db: Database.Database): void {
       CREATE INDEX idx_tm_entries_tm_srcHash ON tm_entries(tmId, srcHash);
       CREATE INDEX idx_tm_entries_tm_matchKey ON tm_entries(tmId, matchKey);
       CREATE UNIQUE INDEX idx_tm_entries_tm_srcHash_unique ON tm_entries(tmId, srcHash);
+      ${TM_STATS_PERFORMANCE_INDEX_SQL}
       CREATE INDEX idx_project_tbs_project ON project_term_bases(projectId, isEnabled, priority);
       CREATE INDEX idx_tb_entries_tb_src ON tb_entries(tbId, srcNorm);
       CREATE INDEX idx_tb_entries_tb_src_term ON tb_entries(tbId, srcTerm);
       CREATE UNIQUE INDEX idx_tb_entries_tb_src_unique ON tb_entries(tbId, srcNorm);
+      ${TB_STATS_PERFORMANCE_INDEX_SQL}
     `);
   })();
+}
+
+function ensureCurrentPerformanceIndexes(db: Database.Database): void {
+  db.exec(TM_STATS_PERFORMANCE_INDEX_SQL);
+  db.exec(TB_STATS_PERFORMANCE_INDEX_SQL);
 }
 
 function assertCurrentSchemaMarker(db: Database.Database): void {

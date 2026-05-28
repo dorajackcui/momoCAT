@@ -139,7 +139,7 @@ describe('runAIFileFlowTrace', () => {
           endpoint: '/mock',
         }),
         createResponse: vi.fn().mockResolvedValue({
-          content: '你好世界',
+          content: windowPartialResponse('file-1:demo.xlsx', 'seg-1', '你好世界'),
           status: 200,
           endpoint: '/mock',
         }),
@@ -194,7 +194,7 @@ describe('runAIFileFlowTrace', () => {
 
     const db = new CATDatabase(':memory:');
     try {
-      const projectId = db.createProject('Nikki(zh-fr)', 'zh-CN', 'fr-FR');
+      const projectId = db.createProject('Sample(zh-fr)', 'zh-CN', 'fr-FR');
       configureAIProvider(db, projectId);
       const importSpy = vi.fn(async (_filePath: string, _projectId: number, fileId: number) => [
         createSegment({
@@ -213,7 +213,7 @@ describe('runAIFileFlowTrace', () => {
         export: vi.fn(),
       } as unknown as SpreadsheetGateway;
 
-      const tmId = db.createTM('Nikki(zh-fr)TM', 'zh', 'fr', 'main');
+      const tmId = db.createTM('Sample(zh-fr)TM', 'zh', 'fr', 'main');
       db.mountTMToProject(projectId, tmId, 10, 'read');
       db.upsertTMEntry(
         createTMEntry({
@@ -225,7 +225,7 @@ describe('runAIFileFlowTrace', () => {
         }),
       );
 
-      const tbId = db.createTermBase('Nikki_TB(zh-fr)', 'zh-CN', 'fr');
+      const tbId = db.createTermBase('Sample_TB(zh-fr)', 'zh-CN', 'fr');
       db.mountTermBaseToProject(projectId, tbId, 10);
       db.insertTBEntryIfAbsentBySrcTerm({
         id: 'term-imported',
@@ -242,7 +242,7 @@ describe('runAIFileFlowTrace', () => {
           endpoint: '/mock',
         }),
         createResponse: vi.fn().mockResolvedValue({
-          content: 'Texte de test',
+          content: windowPartialResponse('file-1:mt.xlsx', 'seg-imported', 'Texte de test'),
           status: 200,
           endpoint: '/mock',
         }),
@@ -252,7 +252,7 @@ describe('runAIFileFlowTrace', () => {
       const result = await runAIFileFlowTrace({
         dbPath: ':memory:',
         db,
-        projectName: 'Nikki(zh-fr)',
+        projectName: 'Sample(zh-fr)',
         filePath: inputPath,
         projectsDir: join(rootDir, 'projects'),
         previewLimit: 1,
@@ -280,7 +280,7 @@ describe('runAIFileFlowTrace', () => {
         expect.objectContaining({
           event: 'ai_file_flow_start',
           projectId,
-          projectName: 'Nikki(zh-fr)',
+          projectName: 'Sample(zh-fr)',
           fileName: 'mt.xlsx',
         }),
       );
@@ -337,6 +337,17 @@ function configureAIProvider(db: CATDatabase, projectId: number): void {
   );
   db.setSetting(`ai_connection_key::${connectionId}`, 'test-api-key-1234');
   db.updateProjectAISettings(projectId, null, providerId);
+}
+
+function windowPartialResponse(documentId: string, unitId: string, text: string): string {
+  return JSON.stringify({
+    translations: [
+      {
+        id: `${encodeURIComponent(documentId)}#${encodeURIComponent(unitId)}`,
+        text,
+      },
+    ],
+  });
 }
 
 function readEnvTraceConfig(env: NodeJS.ProcessEnv): EnvTraceConfig | null {

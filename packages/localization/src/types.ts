@@ -11,6 +11,7 @@ export interface ExternalTranslationUnit {
   id: string;
   source: string;
   target?: string;
+  locked?: boolean;
   sourceLanguage?: string;
   targetLanguage?: string;
   context?: string;
@@ -108,6 +109,20 @@ export type TranslateUnitResult = TranslateUnitSuccess | TranslateUnitFailure;
 
 export type LocalizationUnitResult = TranslateUnitResult;
 
+export interface RuntimeTMSummary {
+  enabled: boolean;
+  tagPolicy: TagPolicy;
+  seeded: number;
+  appended: number;
+  skipped: number;
+  entryCount: number;
+  inspectCalls: number;
+  hitUnits: number;
+  tmHits: number;
+  concordanceHits: number;
+  capped: boolean;
+}
+
 export interface TranslateUnitsResult {
   summary: {
     total: number;
@@ -117,12 +132,30 @@ export interface TranslateUnitsResult {
     reused?: number;
   };
   results: TranslateUnitResult[];
+  runtimeTm?: RuntimeTMSummary;
 }
 
 export interface TranslateUnitsInput {
   projectId: number;
   units: ExternalTranslationUnit[];
   options?: TranslateUnitsOptions;
+}
+
+export interface TranslateProjectSegmentUnit extends ExternalTranslationUnit {
+  id: string;
+}
+
+export interface TranslateProjectSegmentsInput {
+  projectId: number;
+  documentId: string;
+  units: TranslateProjectSegmentUnit[];
+  options?: TranslateUnitsOptions;
+  job?: {
+    jobId?: string;
+    maxAttempts?: number;
+  };
+  onResult?: (result: TranslateUnitResult) => Promise<void> | void;
+  onProgress?: (data: { current: number; total: number; message?: string }) => void;
 }
 
 export interface FileTranslationColumns {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Project, ProjectAIModel, ProjectType } from '@cat/core/project';
 import type {
   AIBatchMode,
+  AIBatchTargetBaseline,
   AIBatchTargetScope,
   AIProviderSummary,
   JobProgressEvent,
@@ -31,6 +32,7 @@ import type {
 export interface ResolvedAITranslateStartConfig {
   effectiveMode: AIBatchMode;
   effectiveTargetScope: AIBatchTargetScope;
+  effectiveTargetBaseline: AIBatchTargetBaseline;
   actionLabel: string;
   targetLabel: string;
 }
@@ -44,6 +46,10 @@ export function resolveAITranslateStartConfig(params: {
     projectType === 'translation' ? params.options.mode || 'default' : 'default';
   const effectiveTargetScope: AIBatchTargetScope =
     projectType === 'translation' ? params.options.targetScope || 'blank-only' : 'blank-only';
+  const effectiveTargetBaseline: AIBatchTargetBaseline =
+    projectType === 'translation'
+      ? resolveTargetBaseline(params.options)
+      : 'use-current-targets';
   const actionLabel =
     projectType === 'review'
       ? 'review'
@@ -56,6 +62,7 @@ export function resolveAITranslateStartConfig(params: {
   return {
     effectiveMode,
     effectiveTargetScope,
+    effectiveTargetBaseline,
     actionLabel,
     targetLabel: projectType === 'custom' ? 'output' : 'target',
   };
@@ -65,11 +72,21 @@ export function buildAIStartConfirmMessage(
   fileName: string,
   config: ResolvedAITranslateStartConfig,
 ): string {
-  const scopeLabel =
-    config.effectiveTargetScope === 'overwrite-non-confirmed'
-      ? `overwrite existing non-confirmed ${config.targetLabel} segments`
-      : `fill empty ${config.targetLabel} segments only`;
-  return `Run AI ${config.actionLabel} for "${fileName}"? This will ${scopeLabel}.`;
+  const baselineLabel =
+    config.effectiveTargetBaseline === 'ignore-current-targets'
+      ? `ignore existing non-confirmed ${config.targetLabel} segments and regenerate them`
+      : `use current ${config.targetLabel} segments and fill blanks`;
+  return `Run AI ${config.actionLabel} for "${fileName}"? This will ${baselineLabel}.`;
+}
+
+function resolveTargetBaseline(options: StartAITranslateFileOptions): AIBatchTargetBaseline {
+  if (options.targetBaseline) {
+    return options.targetBaseline;
+  }
+
+  return options.targetScope === 'overwrite-non-confirmed'
+    ? 'ignore-current-targets'
+    : 'use-current-targets';
 }
 
 export function useProjectAI({
@@ -301,7 +318,7 @@ export function useProjectAI({
       try {
         const jobId = await apiClient.aiTranslateFile(fileId, {
           mode: config.effectiveMode,
-          targetScope: config.effectiveTargetScope,
+          targetBaseline: config.effectiveTargetBaseline,
         });
         setAiJobs((prev) => {
           const existing = prev[jobId];

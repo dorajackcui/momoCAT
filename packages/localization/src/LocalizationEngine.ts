@@ -20,6 +20,7 @@ import { resolveBatchTargetScope } from './translationTargetScope';
 import { AIProviderTransport } from './providers/AIProviderTransport';
 import type { AIRuntimeConfigProvider, AITransport } from './ports';
 import { translateSpreadsheetFileJob } from './fileTranslationJobAdapter';
+import { translateProjectSegmentsJob } from './projectSegmentJobAdapter';
 import { translateSpreadsheetFile } from './spreadsheetFileAdapter';
 import { RuntimeTMContext, RuntimeTMReferenceResolver } from './runtimeTm';
 import { resolveTagPolicy, tagPolicyFingerprintValue } from './tagPolicy';
@@ -52,6 +53,7 @@ import type {
   LocalizationTargetScope,
   TranslateFileInput,
   TranslateFileResult,
+  TranslateProjectSegmentsInput,
   TranslateUnitResult,
   TranslateUnitsInput,
   TranslateUnitsResult,
@@ -403,6 +405,7 @@ export class LocalizationEngine {
                   commit: (results) => {
                     runtimeTm.commitResults(results);
                   },
+                  summary: () => runtimeTm.summary(),
                 }
               : undefined,
           },
@@ -419,6 +422,70 @@ export class LocalizationEngine {
         options: input.options,
       }),
     );
+  }
+
+  public async translateProjectSegments(
+    input: TranslateProjectSegmentsInput,
+  ): Promise<TranslateUnitsResult> {
+    const project = this.projectRepo.getProject(input.projectId);
+    if (!project) {
+      throw new Error(`Project not found: ${input.projectId}`);
+    }
+
+    const mode = this.resolveMode(input.options?.mode);
+    if (mode === 'dialogue') {
+      throw new Error('Dialogue mode is not supported for project segment jobs.');
+    }
+
+    const tagPolicy = resolveTagPolicy(input.options?.tagPolicy);
+    const runtimeTm =
+      (project.projectType ?? 'translation') === 'translation'
+        ? RuntimeTMContext.create({
+            srcLang: project.srcLang,
+            tgtLang: project.tgtLang,
+            tagPolicy,
+          })
+        : undefined;
+    const referenceResolver = runtimeTm
+      ? new RuntimeTMReferenceResolver(runtimeTm).resolve
+      : undefined;
+    const targetScope = input.options?.targetScope ?? this.options.defaultTargetScope;
+
+    try {
+      return await translateProjectSegmentsJob(
+        {
+          projectId: input.projectId,
+          documentId: input.documentId,
+          units: input.units,
+          options: {
+            ...input.options,
+            ...(targetScope ? { targetScope } : {}),
+            requestMode: input.options?.requestMode ?? 'window-partial',
+          },
+          job: input.job,
+        },
+        {
+          taskExecutor: this.createTaskExecutor({ referenceResolver }),
+          runtimeTm: runtimeTm
+            ? {
+                seed: (results) => {
+                  runtimeTm.seedResults(results);
+                },
+                commit: (results) => {
+                  runtimeTm.commitResults(results);
+                },
+                summary: () => runtimeTm.summary(),
+              }
+            : undefined,
+          applyResult: input.onResult
+            ? (result) => input.onResult?.(unitResultToPublicResult(result))
+            : undefined,
+          onProgress: input.onProgress,
+        },
+      );
+    } finally {
+      runtimeTm?.dispose();
+    }
   }
 
   private resolveMode(mode?: LocalizationMode): LocalizationMode {
@@ -517,6 +584,19 @@ export class LocalizationEngine {
       };
     }
 
+    if (unit.locked) {
+      return {
+        kind: 'skipped',
+        result: {
+          id: unit.id,
+          source,
+          target: unit.target ?? '',
+          status: 'skipped',
+          metadata: unit.metadata,
+        },
+      };
+    }
+
     const segment = createTransientSegment(
       unit,
       index,
@@ -549,6 +629,32 @@ export class LocalizationEngine {
     };
   }
 
+}
+
+function unitResultToPublicResult(result: UnitResult): TranslateUnitResult {
+  if (result.status === 'failed') {
+    return {
+      id: result.unitId,
+      source: result.source,
+      target: result.target,
+      status: 'failed',
+      error: result.error ?? 'Translation failed',
+      references: result.references,
+      metadata: result.metadata,
+    };
+  }
+
+  return {
+    id: result.unitId,
+    source: result.source,
+    target: result.target ?? '',
+    status:
+      result.status === 'translated' || result.status === 'reused'
+        ? result.status
+        : 'skipped',
+    references: result.references,
+    metadata: result.metadata,
+  };
 }
 
 function hashCanonicalPayload(entries: Array<[string, unknown]>): string {

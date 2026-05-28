@@ -15,6 +15,7 @@ export function jobUnitToExternalUnit(unit: {
   unitId: string;
   source: string;
   target?: string;
+  locked?: boolean;
   context?: string;
   rowNumber?: number;
   metadata?: Record<string, unknown>;
@@ -23,6 +24,7 @@ export function jobUnitToExternalUnit(unit: {
     id: unit.unitId,
     source: unit.source,
     target: unit.target,
+    locked: unit.locked,
     context: unit.context,
     rowNumber: unit.rowNumber,
     metadata: unit.metadata,

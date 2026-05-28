@@ -8,6 +8,7 @@ import { TMModule } from '../modules/TMModule';
 import { TMService } from '../services/TMService';
 import { resolveTagPolicy } from '../tagPolicy';
 import { createTransientSegment } from '../transientSegment';
+import type { RuntimeTMSummary } from '../types';
 import { createRuntimeTMDatabase, type RuntimeTMDatabase } from './RuntimeTMDatabase';
 
 export interface RuntimeTMContextOptions {
@@ -23,6 +24,8 @@ export interface RuntimeTMCommitSummary {
   disabled: boolean;
 }
 
+type RuntimeTMAppendCounter = 'appended' | 'seeded';
+
 export class RuntimeTMContext {
   private readonly runtimeDb: RuntimeTMDatabase;
   private readonly tmModule: TMModule;
@@ -32,6 +35,14 @@ export class RuntimeTMContext {
   private readonly tagPolicy: TagPolicy;
   private readonly maxEntries: number;
   private entryCount = 0;
+  private seeded = 0;
+  private appended = 0;
+  private skipped = 0;
+  private inspectCalls = 0;
+  private hitUnits = 0;
+  private tmHits = 0;
+  private concordanceHits = 0;
+  private capped = false;
   private disposed = false;
 
   private constructor(options: RuntimeTMContextOptions) {
@@ -59,6 +70,56 @@ export class RuntimeTMContext {
   }
 
   commitResults(results: readonly UnitResult[]): RuntimeTMCommitSummary {
+    return this.appendResults(results, 'appended');
+  }
+
+  seedResults(results: readonly UnitResult[]): RuntimeTMCommitSummary {
+    return this.appendResults(results, 'seeded');
+  }
+
+  async inspect(segment: Segment): Promise<TMArtifact> {
+    this.assertOpen();
+    const artifact = await this.tmModule.inspect(this.runtimeDb.projectId, segment);
+    this.inspectCalls += 1;
+    if (artifact.rawMatches.length > 0) {
+      this.hitUnits += 1;
+    }
+    for (const match of artifact.rawMatches) {
+      if (match.kind === 'tm') {
+        this.tmHits += 1;
+      } else if (match.kind === 'concordance') {
+        this.concordanceHits += 1;
+      }
+    }
+    return artifact;
+  }
+
+  summary(): RuntimeTMSummary {
+    return {
+      enabled: true,
+      tagPolicy: this.tagPolicy,
+      seeded: this.seeded,
+      appended: this.appended,
+      skipped: this.skipped,
+      entryCount: this.entryCount,
+      inspectCalls: this.inspectCalls,
+      hitUnits: this.hitUnits,
+      tmHits: this.tmHits,
+      concordanceHits: this.concordanceHits,
+      capped: this.capped,
+    };
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.runtimeDb.db.close();
+    this.disposed = true;
+  }
+
+  private appendResults(
+    results: readonly UnitResult[],
+    aggregateAppendCounter: RuntimeTMAppendCounter,
+  ): RuntimeTMCommitSummary {
     this.assertOpen();
 
     let appended = 0;
@@ -68,12 +129,15 @@ export class RuntimeTMContext {
     for (const result of results) {
       if (!isRuntimeTMEligibleResult(result)) {
         skipped += 1;
+        this.skipped += 1;
         continue;
       }
 
       if (this.entryCount >= this.maxEntries) {
         skipped += 1;
         disabled = true;
+        this.skipped += 1;
+        this.capped = true;
         continue;
       }
 
@@ -99,24 +163,10 @@ export class RuntimeTMContext {
       );
       this.entryCount += 1;
       appended += 1;
+      this[aggregateAppendCounter] += 1;
     }
 
     return { appended, skipped, disabled };
-  }
-
-  seedResults(results: readonly UnitResult[]): RuntimeTMCommitSummary {
-    return this.commitResults(results);
-  }
-
-  inspect(segment: Segment): Promise<TMArtifact> {
-    this.assertOpen();
-    return this.tmModule.inspect(this.runtimeDb.projectId, segment);
-  }
-
-  dispose(): void {
-    if (this.disposed) return;
-    this.runtimeDb.db.close();
-    this.disposed = true;
   }
 
   private assertOpen(): void {

@@ -1,9 +1,10 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { ProjectAIController } from '../../hooks/projectDetail/useProjectAI';
 import type { ProjectFileRecord } from '../../../../shared/ipc';
-import { ProjectFilesPane } from './ProjectFilesPane';
+import { ProjectAITranslateModal } from './ProjectAITranslateModal';
+import { buildProjectAITranslateStartOptions, ProjectFilesPane } from './ProjectFilesPane';
 
 vi.mock('./ProjectAIPane', () => ({
   ProjectAIPane: () => React.createElement('div', { 'data-testid': 'project-ai-pane' }),
@@ -84,7 +85,7 @@ function createAIControllerMock(overrides?: Partial<ProjectAIController>): {
 }
 
 function renderPane(ai: ProjectAIController, projectType: 'translation' | 'review' | 'custom') {
-  return render(
+  return renderToStaticMarkup(
     React.createElement(ProjectFilesPane, {
       files: [createFile()],
       onOpenFile: vi.fn(),
@@ -100,59 +101,55 @@ function renderPane(ai: ProjectAIController, projectType: 'translation' | 'revie
 }
 
 describe('ProjectFilesPane', () => {
-  it('shows a single AI Translate button and opens options modal in translation projects', () => {
+  it('shows a single AI Translate button in translation projects', () => {
     const { ai } = createAIControllerMock();
-    renderPane(ai, 'translation');
+    const html = renderPane(ai, 'translation');
 
-    expect(screen.getByText('AI Translate')).toBeInTheDocument();
-    expect(screen.queryByText('AI Dialogue')).toBeNull();
-
-    fireEvent.click(screen.getByText('AI Translate'));
-    expect(screen.getByText('AI Translate Options')).toBeInTheDocument();
-    expect(screen.getByLabelText('Translation Scope')).toBeInTheDocument();
-    expect(screen.getByLabelText('Dialogue Mode')).toBeInTheDocument();
+    expect(html).toContain('AI Translate');
+    expect(html).not.toContain('AI Dialogue');
+    expect(html).not.toContain('AI Translate Options');
   });
 
-  it('submits default modal options as blank-only + default mode without extra confirm', () => {
-    const { ai, startAITranslateFile } = createAIControllerMock();
-    renderPane(ai, 'translation');
+  it('renders target baseline options without legacy translation scope controls', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ProjectAITranslateModal, {
+        open: true,
+        fileName: 'demo.xlsx',
+        onClose: vi.fn(),
+        onConfirm: vi.fn(),
+      }),
+    );
 
-    fireEvent.click(screen.getByText('AI Translate'));
-    fireEvent.click(screen.getByText('Start AI Translate'));
+    expect(html).toContain('AI Translate Options');
+    expect(html).toContain('Target Baseline');
+    expect(html).toContain('Use Current Targets');
+    expect(html).toContain('Ignore Current Targets');
+    expect(html).toContain('Confirmed segments stay locked.');
+    expect(html).not.toContain('Translation Scope');
+    expect(html).not.toContain('Dialogue Mode');
+  });
 
-    expect(startAITranslateFile).toHaveBeenCalledWith(1, 'demo.xlsx', {
-      mode: 'default',
-      targetScope: 'blank-only',
+  it('submits modal options as target baseline without extra confirm', () => {
+    expect(
+      buildProjectAITranslateStartOptions({ targetBaseline: 'use-current-targets' }),
+    ).toEqual({
+      targetBaseline: 'use-current-targets',
       confirm: false,
     });
-  });
 
-  it('submits selected dialogue + overwrite options from modal', () => {
-    const { ai, startAITranslateFile } = createAIControllerMock();
-    renderPane(ai, 'translation');
-
-    fireEvent.click(screen.getByText('AI Translate'));
-    fireEvent.change(screen.getByLabelText('Translation Scope'), {
-      target: { value: 'overwrite-non-confirmed' },
-    });
-    fireEvent.change(screen.getByLabelText('Dialogue Mode'), {
-      target: { value: 'dialogue' },
-    });
-    fireEvent.click(screen.getByText('Start AI Translate'));
-
-    expect(startAITranslateFile).toHaveBeenCalledWith(1, 'demo.xlsx', {
-      mode: 'dialogue',
-      targetScope: 'overwrite-non-confirmed',
+    expect(
+      buildProjectAITranslateStartOptions({ targetBaseline: 'ignore-current-targets' }),
+    ).toEqual({
+      targetBaseline: 'ignore-current-targets',
       confirm: false,
     });
   });
 
   it('keeps one-click AI action for non-translation projects', () => {
-    const { ai, startAITranslateFile } = createAIControllerMock();
-    renderPane(ai, 'review');
+    const { ai } = createAIControllerMock();
+    const html = renderPane(ai, 'review');
 
-    fireEvent.click(screen.getByText('AI Review'));
-    expect(screen.queryByText('AI Translate Options')).toBeNull();
-    expect(startAITranslateFile).toHaveBeenCalledWith(1, 'demo.xlsx');
+    expect(html).toContain('AI Review');
+    expect(html).not.toContain('AI Translate Options');
   });
 });

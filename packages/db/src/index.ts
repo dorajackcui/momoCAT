@@ -62,7 +62,7 @@ export class CATDatabase {
       this.db.pragma("temp_store = MEMORY");
     }
 
-    ensureCurrentSchema(this.db);
+    ensureCurrentSchema(this.db, { allowSchemaMaintenance: !readonly });
 
     this.projectRepo = new ProjectRepo(this.db);
     this.segmentRepo = new SegmentRepo(this.db, (fileId) =>

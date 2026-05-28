@@ -4,7 +4,7 @@ import type { ProjectFileRecord } from '../../../../shared/ipc';
 import { ProjectAIController } from '../../hooks/projectDetail/useProjectAI';
 import { Button, Card, IconButton } from '../ui';
 import { ProjectAIPane } from './ProjectAIPane';
-import { ProjectAITranslateModal } from './ProjectAITranslateModal';
+import { ProjectAITranslateModal, type ProjectAITranslateSubmit } from './ProjectAITranslateModal';
 import { deriveFileProgressBuckets, toPercent } from './fileProgressStats';
 
 interface ProjectFilesPaneProps {
@@ -17,6 +17,13 @@ interface ProjectFilesPaneProps {
   onRunFileQA: (fileId: number, fileName: string) => Promise<void>;
   ai: ProjectAIController;
   projectType?: ProjectType;
+}
+
+export function buildProjectAITranslateStartOptions(options: ProjectAITranslateSubmit) {
+  return {
+    targetBaseline: options.targetBaseline,
+    confirm: false,
+  };
 }
 
 export function ProjectFilesPane({
@@ -43,11 +50,11 @@ export function ProjectFilesPane({
           fileName={aiTranslateFile.name}
           onClose={() => setAiTranslateFile(null)}
           onConfirm={(options) => {
-            void ai.startAITranslateFile(aiTranslateFile.id, aiTranslateFile.name, {
-              mode: options.mode,
-              targetScope: options.targetScope,
-              confirm: false,
-            });
+            void ai.startAITranslateFile(
+              aiTranslateFile.id,
+              aiTranslateFile.name,
+              buildProjectAITranslateStartOptions(options),
+            );
             setAiTranslateFile(null);
           }}
         />

@@ -1,6 +1,8 @@
 import { TagValidator } from '@cat/core/qa';
+import type { LocalizationEngine } from '@cat/localization';
 import type {
   AIBatchMode,
+  AIBatchTargetBaseline,
   AIBatchTargetScope,
   ProxySettings,
   ProxySettingsInput,
@@ -47,6 +49,7 @@ export class AIModule {
     proxySettingsManager: ProxySettingsApplier = new ProxySettingsManager(),
     aiRuntimeConfigProvider: AIRuntimeConfigProvider = new DefaultAIRuntimeConfigProvider(),
     promptReferenceResolvers: PromptReferenceResolvers = {},
+    localizationEngine?: Pick<LocalizationEngine, 'translateProjectSegments'>,
   ) {
     this.projectRepo = projectRepo;
     const tagValidator = new TagValidator();
@@ -68,6 +71,7 @@ export class AIModule {
       textTranslator,
       segmentPagingIterator,
       promptReferenceResolvers,
+      localizationEngine,
     );
   }
 
@@ -123,6 +127,7 @@ export class AIModule {
       model?: string;
       mode?: AIBatchMode;
       targetScope?: AIBatchTargetScope;
+      targetBaseline?: AIBatchTargetBaseline;
       onProgress?: (data: { current: number; total: number; message?: string }) => void;
     },
   ): Promise<{ translated: number; skipped: number; failed: number; total: number }> {

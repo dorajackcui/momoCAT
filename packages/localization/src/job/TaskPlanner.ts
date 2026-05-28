@@ -99,6 +99,10 @@ export function normalizeWindowModeBatchSize(value: number | undefined): number 
 }
 
 function shouldRequestUnit(unit: JobUnit, targetScope: LocalizationTargetScope): boolean {
+  if (unit.locked) {
+    return false;
+  }
+
   if (!unit.source.trim()) {
     return false;
   }

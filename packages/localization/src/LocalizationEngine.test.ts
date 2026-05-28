@@ -688,6 +688,21 @@ describe('LocalizationEngine.translateFile job mode', () => {
         'Install package',
         'Installer le paquet',
       );
+      expect(result.runtimeTm).toMatchObject({
+        enabled: true,
+        tagPolicy: 'default',
+        seeded: 0,
+        appended: 6,
+        skipped: 0,
+        entryCount: 6,
+        inspectCalls: expect.any(Number),
+        hitUnits: expect.any(Number),
+        tmHits: expect.any(Number),
+        capped: false,
+      });
+      expect(result.runtimeTm?.inspectCalls).toBeGreaterThan(0);
+      expect(result.runtimeTm?.hitUnits).toBeGreaterThan(0);
+      expect(result.runtimeTm?.tmHits).toBeGreaterThan(0);
       expectPersistentTMsEmpty(db);
     } finally {
       db.close();
@@ -1343,6 +1358,154 @@ describe('LocalizationEngine.translateFile job mode', () => {
     } finally {
       db.close();
       await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('LocalizationEngine.translateProjectSegments', () => {
+  it('defaults project segment jobs to Window Partial Mode with Runtime TM and publishes translated results', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Project Segment Runtime TM', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      mountEmptyMainTM(db, projectId);
+      const transport = createTransport();
+      transport.createResponse
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            translations: [
+              { id: 'doc-1#seg-1', text: 'Installer le paquet' },
+              { id: 'doc-1#seg-3', text: 'Ouvrir les options' },
+              { id: 'doc-1#seg-5', text: 'Sauvegarder la progression' },
+            ],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        })
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            translations: [{ id: 'doc-1#seg-6', text: 'Installer le paquet' }],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        });
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+      });
+      const onResult = vi.fn();
+
+      const result = await engine.translateProjectSegments({
+        projectId,
+        documentId: 'doc-1',
+        units: [
+          { id: 'seg-1', source: 'Install package' },
+          { id: 'seg-2', source: 'Launch game', target: 'Lancer le jeu' },
+          { id: 'seg-3', source: 'Open options' },
+          { id: 'seg-4', source: 'Quit game', target: 'Quitter le jeu' },
+          { id: 'seg-5', source: 'Save progress' },
+          { id: 'seg-6', source: 'Install package' },
+        ],
+        options: { targetScope: 'blank-only' },
+        job: { maxAttempts: 1 },
+        onResult,
+      });
+
+      expect(result.summary).toEqual({ total: 6, translated: 4, skipped: 2, failed: 0 });
+      expect(result.results.map((unit) => [unit.id, unit.status, unit.target])).toEqual([
+        ['seg-1', 'translated', 'Installer le paquet'],
+        ['seg-2', 'skipped', 'Lancer le jeu'],
+        ['seg-3', 'translated', 'Ouvrir les options'],
+        ['seg-4', 'skipped', 'Quitter le jeu'],
+        ['seg-5', 'translated', 'Sauvegarder la progression'],
+        ['seg-6', 'translated', 'Installer le paquet'],
+      ]);
+      expect(onResult.mock.calls.map((call) => [call[0].id, call[0].status, call[0].target])).toEqual(
+        [
+          ['seg-1', 'translated', 'Installer le paquet'],
+          ['seg-2', 'skipped', 'Lancer le jeu'],
+          ['seg-3', 'translated', 'Ouvrir les options'],
+          ['seg-4', 'skipped', 'Quitter le jeu'],
+          ['seg-5', 'translated', 'Sauvegarder la progression'],
+          ['seg-6', 'translated', 'Installer le paquet'],
+        ],
+      );
+      expect(transport.createResponse).toHaveBeenCalledTimes(2);
+      const firstPrompt = transport.createResponse.mock.calls[0]?.[0].userPrompt;
+      const secondPrompt = transport.createResponse.mock.calls[1]?.[0].userPrompt;
+      expect(firstPrompt).toEqual(expect.any(String));
+      expect(secondPrompt).toEqual(expect.any(String));
+      expect(firstPrompt as string).toContain(
+        'Return target text for ids: doc-1#seg-1, doc-1#seg-3, doc-1#seg-5',
+      );
+      expect(firstPrompt as string).toContain('Read-only context rows');
+      expect(firstPrompt as string).not.toMatch(/^id: doc-1#seg-2$/m);
+      expect(firstPrompt as string).not.toMatch(/^id: doc-1#seg-4$/m);
+      expectRuntimeTMPromptReference(
+        secondPrompt as string,
+        'doc-1#seg-6',
+        'Install package',
+        'Installer le paquet',
+      );
+      expect(result.runtimeTm).toMatchObject({
+        enabled: true,
+        tagPolicy: 'default',
+        seeded: 0,
+        appended: 6,
+        skipped: 0,
+        entryCount: 6,
+        inspectCalls: expect.any(Number),
+        hitUnits: expect.any(Number),
+        tmHits: expect.any(Number),
+        capped: false,
+      });
+      expect(result.runtimeTm?.inspectCalls).toBeGreaterThan(0);
+      expect(result.runtimeTm?.hitUnits).toBeGreaterThan(0);
+      expect(result.runtimeTm?.tmHits).toBeGreaterThan(0);
+      expectPersistentTMsEmpty(db);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('uses defaultTargetScope for project segment jobs with existing non-confirmed targets', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Project Segment Default Target Scope', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const transport = createTransport(
+        JSON.stringify({
+          translations: [{ id: 'doc-1#seg-1', text: 'Nouveau brouillon' }],
+        }),
+      );
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+        defaultTargetScope: 'overwrite-non-confirmed',
+      });
+
+      const result = await engine.translateProjectSegments({
+        projectId,
+        documentId: 'doc-1',
+        units: [{ id: 'seg-1', source: 'Draft copy', target: 'Ancien brouillon' }],
+        job: { maxAttempts: 1 },
+      });
+
+      expect(result.summary).toEqual({ total: 1, translated: 1, skipped: 0, failed: 0 });
+      expect(result.results).toEqual([
+        expect.objectContaining({
+          id: 'seg-1',
+          source: 'Draft copy',
+          target: 'Nouveau brouillon',
+          status: 'translated',
+        }),
+      ]);
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
+      expect(transport.createResponse.mock.calls[0]?.[0].userPrompt).toContain(
+        'Return target text for ids: doc-1#seg-1',
+      );
+    } finally {
+      db.close();
     }
   });
 });

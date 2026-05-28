@@ -14,54 +14,53 @@ vi.mock('../../services/feedbackService', () => ({
 }));
 
 describe('useProjectAI controller behaviors', () => {
-  it('resolves translation mode and scope for translation projects', () => {
+  it('resolves target baseline for translation projects', () => {
     const config = resolveAITranslateStartConfig({
       projectType: 'translation',
-      options: { mode: 'dialogue', targetScope: 'overwrite-non-confirmed' },
+      options: { targetBaseline: 'ignore-current-targets' },
     });
 
-    expect(config).toEqual({
-      effectiveMode: 'dialogue',
-      effectiveTargetScope: 'overwrite-non-confirmed',
-      actionLabel: 'dialogue translation',
+    expect(config).toMatchObject({
+      effectiveTargetBaseline: 'ignore-current-targets',
+      actionLabel: 'translation',
       targetLabel: 'target',
     });
   });
 
-  it('forces default mode and blank-only scope for non-translation projects', () => {
+  it('forces default target baseline for non-translation projects', () => {
     const reviewConfig = resolveAITranslateStartConfig({
       projectType: 'review',
-      options: { mode: 'dialogue', targetScope: 'overwrite-non-confirmed' },
+      options: { targetBaseline: 'ignore-current-targets' },
     });
     const customConfig = resolveAITranslateStartConfig({
       projectType: 'custom',
-      options: { mode: 'default', targetScope: 'blank-only' },
+      options: { targetBaseline: 'use-current-targets' },
     });
 
     expect(reviewConfig).toMatchObject({
       effectiveMode: 'default',
-      effectiveTargetScope: 'blank-only',
+      effectiveTargetBaseline: 'use-current-targets',
       actionLabel: 'review',
       targetLabel: 'target',
     });
     expect(customConfig).toMatchObject({
       effectiveMode: 'default',
-      effectiveTargetScope: 'blank-only',
+      effectiveTargetBaseline: 'use-current-targets',
       actionLabel: 'processing',
       targetLabel: 'output',
     });
   });
 
-  it('builds confirmation message with proper scope wording', () => {
+  it('builds confirmation message with target baseline wording', () => {
     const message = buildAIStartConfirmMessage('demo.xlsx', {
-      effectiveMode: 'dialogue',
-      effectiveTargetScope: 'overwrite-non-confirmed',
-      actionLabel: 'dialogue translation',
+      effectiveMode: 'default',
+      effectiveTargetBaseline: 'ignore-current-targets',
+      actionLabel: 'translation',
       targetLabel: 'target',
     });
 
     expect(message).toBe(
-      'Run AI dialogue translation for "demo.xlsx"? This will overwrite existing non-confirmed target segments.',
+      'Run AI translation for "demo.xlsx"? This will ignore existing non-confirmed target segments and regenerate them.',
     );
   });
 
