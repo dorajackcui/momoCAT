@@ -3,10 +3,19 @@ import { describe, expect, it } from 'vitest';
 import { runCli } from './cli';
 import { isDirectRun } from './index';
 
-function createHarness() {
+function createHarness(
+  overrides: Partial<{
+    cwd: string;
+    env: Record<string, string | undefined>;
+    platform: NodeJS.Platform;
+    homeDir: string;
+    existing: string[];
+  }> = {},
+) {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const calls: Array<{ name: string; config: unknown }> = [];
+  const existing = new Set((overrides.existing ?? []).map((value) => value.replaceAll('\\', '/')));
   const deps = {
     runInspectProjectsCommand: (config: unknown) => {
       calls.push({ name: 'inspectProjects', config });
@@ -25,10 +34,17 @@ function createHarness() {
     },
   };
   const io = {
-    cwd: 'D:/repo',
+    cwd: overrides.cwd ?? 'D:/repo',
+    env: overrides.env ?? {},
+    platform: overrides.platform ?? 'win32',
+    homeDir: overrides.homeDir ?? 'C:/Users/Ada',
     stdout: (text: string) => stdout.push(text),
     stderr: (text: string) => stderr.push(text),
-    exists: (filePath: string) => !filePath.includes('missing'),
+    exists: (filePath: string) => {
+      const normalized = filePath.replaceAll('\\', '/');
+      if (overrides.existing !== undefined) return existing.has(normalized);
+      return !normalized.includes('missing');
+    },
     resolvePath: (value: string) => value.replaceAll('\\', '/'),
   };
 
@@ -66,6 +82,61 @@ describe('momocat CLI dispatch', () => {
     expect(harness.stdout.join('')).toContain('Usage: momocat <command>');
     expect(harness.stdout.join('')).toContain('inspect projects');
     expect(harness.stdout.join('')).toContain('translate file');
+  });
+
+  it('prints top-level help with env command', async () => {
+    const harness = createHarness();
+    const exitCode = await runCli(['--help'], harness.deps, harness.io);
+
+    expect(exitCode).toBe(0);
+    expect(harness.stdout.join('')).toContain('env');
+  });
+
+  it('prints human-readable env self-check', async () => {
+    const harness = createHarness({
+      existing: ['D:/repo/.cat_data/cat_v1.db', 'D:/repo/.cat_data/ai-runtime.json'],
+    });
+
+    const exitCode = await runCli(['env'], harness.deps, harness.io);
+
+    expect(exitCode).toBe(0);
+    expect(harness.stderr.join('')).toBe('');
+    expect(harness.stdout.join('')).toContain('Momocat CLI Environment');
+    expect(harness.stdout.join('')).toContain('Database: D:/repo/.cat_data/cat_v1.db');
+    expect(harness.stdout.join('')).toContain('Source: source-checkout-fallback');
+    expect(harness.stdout.join('')).toContain(
+      'AI runtime config: D:/repo/.cat_data/ai-runtime.json (found)',
+    );
+    expect(harness.stdout.join('')).toContain('Proxy env: D:/repo/.cat_data/proxy.env (missing)');
+  });
+
+  it('prints machine-readable env JSON', async () => {
+    const harness = createHarness({
+      env: { MOMOCAT_USER_DATA_DIR: 'D:/userData' },
+      existing: ['D:/userData/cat_v1.db'],
+    });
+
+    const exitCode = await runCli(['env', '--json'], harness.deps, harness.io);
+
+    expect(exitCode).toBe(0);
+    const payload = JSON.parse(harness.stdout.join('')) as {
+      database: { path: string; source: string; exists: boolean };
+    };
+    expect(payload.database).toEqual({
+      path: 'D:/userData/cat_v1.db',
+      source: 'MOMOCAT_USER_DATA_DIR',
+      exists: true,
+    });
+  });
+
+  it('prints env missing database guidance without failing', async () => {
+    const harness = createHarness({ existing: [] });
+
+    const exitCode = await runCli(['env'], harness.deps, harness.io);
+
+    expect(exitCode).toBe(0);
+    expect(harness.stdout.join('')).toContain('Database: not found');
+    expect(harness.stdout.join('')).toContain('Open the desktop app once');
   });
 
   it('reports unknown commands with a help pointer', async () => {

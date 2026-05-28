@@ -52,6 +52,13 @@ export async function runCli(
       const { runInspectProjectsCliCommand } = await import('./commands/inspectProjectsCommand');
       return runInspectProjectsCliCommand(rest, deps, io);
     }
+    if (domain === 'env') {
+      const { runEnvCliCommand } = await import('./commands/envCommand');
+      return runEnvCliCommand(
+        [action, ...rest].filter((value): value is string => Boolean(value)),
+        io,
+      );
+    }
     if (domain === 'inspect' && action === 'localization') {
       const { runInspectLocalizationCliCommand } = await import(
         './commands/inspectLocalizationCommand'
@@ -83,6 +90,9 @@ function helpCommandFor(argv: string[]): string {
   if (domain === 'translate' && action === 'file') {
     return 'momocat translate file --help';
   }
+  if (domain === 'env') {
+    return 'momocat env --help';
+  }
   return 'momocat --help';
 }
 
@@ -90,6 +100,7 @@ function topLevelHelp(): string {
   return `Usage: momocat <command> [options]
 
 Commands:
+  env                    Show installed CLI, desktop data, and runtime environment.
   inspect projects       Inspect project readiness, resources, files, and provider status.
   inspect localization   Inspect TM/TB/MT prompt artifacts without provider requests.
   translate file         Translate an external spreadsheet with resumable sidecars.
