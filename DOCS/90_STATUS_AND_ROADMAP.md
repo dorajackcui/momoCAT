@@ -18,22 +18,26 @@ Agent-first CLI/headless localization. Shared capability lives behind
 
 ## Latest Focused Verification
 
-Verification date: 2026-05-27
+Verification date: 2026-05-28
 
 - Runtime TM focused tests passed for runtime TM modules, job hooks, and
   headless file translation coverage using mocked/local transports.
 - Window and Window Partial request-mode strategy tests passed.
 - `@cat/localization` typecheck and build passed, and the CLI build passed.
+- A standard real-provider smoke run completed through `momocat` using
+  Window Partial Mode. The artifacts are local operational output and must not
+  be copied into tracked docs.
 - Sensitive/path scan across docs plus Runtime TM source and tests returned
   only generic docs/test fixture references. No real provider config, base
   URLs, API keys, local paths, or private prompt/artifact data were added.
-- No real provider smoke tests were run.
 
 ## Roadmap
 
 ### Now
 
 - Keep active docs consolidated in outer numbered files.
+- Keep development specs and implementation plans in archive once their durable
+  facts have been absorbed into owner docs.
 - Keep CLI/headless behavior documented for work agents.
 - Keep architecture and request contracts documented for coding agents.
 - Runtime TM is implemented for headless file translate jobs using

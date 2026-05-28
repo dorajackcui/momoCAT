@@ -63,6 +63,22 @@ Context rows are prompt context only. They may carry source text or existing
 target text needed for continuity, but they do not receive per-request TM/TB
 blocks and they do not require provider output.
 
+## Runtime TM In Requests
+
+Runtime TM is job-local and currently enabled only for headless
+`translateFile()` jobs using `requestMode=window` or `requestMode=window-partial`.
+It is not enabled for inspect, legacy concurrent `translateUnits()`, or legacy
+desktop flows.
+
+Runtime references must merge into the existing TM and concordance prompt
+blocks. Do not add a separate Runtime TM prompt section. Runtime TM keeps
+independent prompt slots of at most 3 TM references and at most 3 concordance
+references, then merges with persistent references by rank.
+
+Runtime TM commit happens after task results have been persisted to checkpoint,
+events, snapshots, and final output surfaces. Resume rebuilds Runtime TM from
+reusable checkpoint results before continuing.
+
 ## Strict JSON Response
 
 ```json

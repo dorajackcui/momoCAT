@@ -1,5 +1,9 @@
 # 70_RUNTIME_TM_SPEC
 
+> Archived development spec. This is not active policy. Runtime TM's durable
+> behavior is now documented in `DOCS/50_MT_REQUEST_MODEL.md`,
+> `DOCS/60_TM_TB_REFERENCE.md`, and `DOCS/90_STATUS_AND_ROADMAP.md`.
+
 ## Purpose
 
 Design the job-local Runtime TM layer for headless file translation.

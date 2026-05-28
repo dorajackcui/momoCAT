@@ -22,6 +22,11 @@ incidents. This file is not active policy.
   `60_TM_TB_REFERENCE.md`.
 - Earlier implementation specs and plans in the retired specs/plans directory
   were retired as active policy.
+- Runtime TM development spec and implementation plan were retired from active
+  docs after implementation. Durable behavior now lives in
+  `50_MT_REQUEST_MODEL.md`, `60_TM_TB_REFERENCE.md`, and
+  `90_STATUS_AND_ROADMAP.md`; archived records are under
+  `DOCS/archive/runtime-tm/`.
 
 ## Retired Superpowers Specs And Plans
 

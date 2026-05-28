@@ -10,8 +10,6 @@ prompt composition.
 Read this when changing TM recall, concordance behavior, TB matching, or how
 references are selected for MT prompts.
 
-Read `70_RUNTIME_TM_SPEC.md` before changing job-local Runtime TM behavior.
-
 ## Current TM Flow
 
 - Mounted TM resources are resolved from the project before recall.
@@ -43,9 +41,24 @@ structured prompt references attached to request rows.
 TM, concordance, and TB references are attached to request rows. Read-only
 context rows in Partial Window Mode do not get per-row TM/TB prompt blocks.
 
-Runtime TM design is owned by `70_RUNTIME_TM_SPEC.md`. Runtime references must
-reuse the persistent TM recall path where possible and merge into the existing
-TM and concordance prompt blocks.
+Runtime references reuse the persistent TM recall path where possible and merge
+into the existing TM and concordance prompt blocks.
+
+## Runtime TM
+
+Runtime TM is an isolated, job-local TM used by headless file translation.
+It reuses the normal TM repository, service, module, and concordance recall
+path in an in-memory SQLite CAT database, then discards that database when the
+file job ends.
+
+Runtime TM accepts eligible `translated` and `skipped` results with non-empty
+source and target. This lets Window Partial Mode reuse both provider-produced
+targets and existing target text observed earlier in the same file job.
+
+Runtime TM must not write to Working TM, Main TM, or the persistent project
+database, and it must not appear as a user-managed TM resource. File jobs do
+not currently pass a global append cap; prompt selection remains capped by
+the independent 3 TM plus 3 concordance runtime reference slots.
 
 ## Key Code Entry Points
 

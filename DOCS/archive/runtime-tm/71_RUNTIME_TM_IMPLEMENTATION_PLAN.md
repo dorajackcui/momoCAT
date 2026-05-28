@@ -1,5 +1,9 @@
 # Runtime TM Implementation Plan
 
+> Archived implementation plan. This is not active policy. Runtime TM's
+> durable behavior is now documented in `DOCS/50_MT_REQUEST_MODEL.md`,
+> `DOCS/60_TM_TB_REFERENCE.md`, and `DOCS/90_STATUS_AND_ROADMAP.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a job-local Runtime TM for headless file translation so later Window Mode requests can reuse source-target pairs produced or observed earlier in the same file job.
@@ -14,7 +18,7 @@
 
 Read first:
 
-- `DOCS/70_RUNTIME_TM_SPEC.md`
+- `DOCS/archive/runtime-tm/70_RUNTIME_TM_SPEC.md`
 - `DOCS/50_MT_REQUEST_MODEL.md`
 - `DOCS/60_TM_TB_REFERENCE.md`
 - `packages/localization/src/job/TranslationJobRunner.ts`
@@ -1747,7 +1751,8 @@ git commit -m "test: cover runtime tm file translation"
 ### Task 9: Final Verification And Documentation Sync
 
 **Files:**
-- Modify: `DOCS/70_RUNTIME_TM_SPEC.md` only if implementation reveals a concrete spec correction.
+- Historical note: this task originally allowed edits to the then-active
+  `DOCS/70_RUNTIME_TM_SPEC.md`. That document is now archived beside this plan.
 - Modify: `DOCS/60_TM_TB_REFERENCE.md` only if final behavior differs from current wording.
 
 - [ ] **Step 1: Run focused Runtime TM tests**
@@ -1815,7 +1820,7 @@ Expected: matches are generic docs/test strings only. No real local paths, provi
 If Task 9 changed docs:
 
 ```powershell
-git add DOCS/70_RUNTIME_TM_SPEC.md DOCS/60_TM_TB_REFERENCE.md
+git add DOCS/archive/runtime-tm/70_RUNTIME_TM_SPEC.md DOCS/60_TM_TB_REFERENCE.md
 git commit -m "docs: sync runtime tm implementation notes"
 ```
 
