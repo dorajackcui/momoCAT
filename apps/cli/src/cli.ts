@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {
   runInspectLocalizationCommand,
@@ -26,6 +27,9 @@ export const defaultDependencies: CliDependencies = {
 
 export const defaultIO: CommandIO = {
   cwd: process.cwd(),
+  env: process.env,
+  platform: process.platform,
+  homeDir: os.homedir(),
   stdout: (text) => process.stdout.write(text),
   stderr: (text) => process.stderr.write(text),
   exists: (filePath) => fs.existsSync(filePath),
