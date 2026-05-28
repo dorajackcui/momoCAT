@@ -2,6 +2,10 @@ import { CATDatabase } from '@cat/db';
 import type { TagPolicy } from '@cat/core/tag';
 import { LocalizationInspector, type InspectFileInput } from '../LocalizationInspector';
 import type { LocalizationTargetBaseline } from '../types';
+import {
+  createCommandAIRuntimeConfigProvider,
+  loadProxyEnvFromFile,
+} from './runtimeEnvironment';
 
 export interface InspectLocalizationCommandConfig {
   dbPath: string;
@@ -14,12 +18,22 @@ export interface InspectLocalizationCommandConfig {
   requestMode?: 'window' | 'window-partial';
   targetBaseline?: LocalizationTargetBaseline;
   tagPolicy?: TagPolicy;
+  aiRuntimeConfigPath?: string;
+  proxyEnvPath?: string;
 }
 
 export async function runInspectLocalizationCommand(config: InspectLocalizationCommandConfig) {
+  loadProxyEnvFromFile(config.proxyEnvPath);
+  const aiRuntimeConfigProvider = await createCommandAIRuntimeConfigProvider({
+    aiRuntimeConfigPath: config.aiRuntimeConfigPath,
+  });
+
   const db = new CATDatabase(config.dbPath);
   try {
-    const inspector = new LocalizationInspector(db, { dbPath: config.dbPath });
+    const inspector = new LocalizationInspector(db, {
+      dbPath: config.dbPath,
+      aiRuntimeConfigProvider,
+    });
     const input: InspectFileInput = {
       projectId: config.projectId,
       inputPath: config.inputPath,

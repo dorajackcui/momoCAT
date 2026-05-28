@@ -2,6 +2,10 @@ import { CATDatabase } from '@cat/db';
 import type { TagPolicy } from '@cat/core/tag';
 import { LocalizationEngine } from '../LocalizationEngine';
 import type { LocalizationTargetBaseline, TranslateFileInput } from '../types';
+import {
+  createCommandAIRuntimeConfigProvider,
+  loadProxyEnvFromFile,
+} from './runtimeEnvironment';
 
 export interface TranslateFileCommandConfig {
   dbPath: string;
@@ -23,12 +27,22 @@ export interface TranslateFileCommandConfig {
   snapshotEveryUnits?: number;
   snapshotEverySeconds?: number;
   progressStdout?: boolean;
+  aiRuntimeConfigPath?: string;
+  proxyEnvPath?: string;
 }
 
 export async function runTranslateFileCommand(config: TranslateFileCommandConfig) {
+  loadProxyEnvFromFile(config.proxyEnvPath);
+  const aiRuntimeConfigProvider = await createCommandAIRuntimeConfigProvider({
+    aiRuntimeConfigPath: config.aiRuntimeConfigPath,
+  });
+
   const db = new CATDatabase(config.dbPath);
   try {
-    const engine = new LocalizationEngine(db, { dbPath: config.dbPath });
+    const engine = new LocalizationEngine(db, {
+      dbPath: config.dbPath,
+      aiRuntimeConfigProvider,
+    });
     const input: TranslateFileInput = {
       projectId: config.projectId,
       inputPath: config.inputPath,
