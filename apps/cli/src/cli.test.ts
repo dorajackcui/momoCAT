@@ -137,6 +137,19 @@ describe('momocat CLI dispatch', () => {
     expect(exitCode).toBe(0);
     expect(harness.stdout.join('')).toContain('Database: not found');
     expect(harness.stdout.join('')).toContain('Open the desktop app once');
+    expect(harness.stdout.join('')).toContain('MOMOCAT_DB');
+    expect(harness.stdout.join('')).not.toContain('pass --db');
+  });
+
+  it('prints env missing database guidance in JSON without invalid db flag advice', async () => {
+    const harness = createHarness({ existing: [] });
+
+    const exitCode = await runCli(['env', '--json'], harness.deps, harness.io);
+
+    expect(exitCode).toBe(0);
+    const payload = JSON.parse(harness.stdout.join('')) as { guidance: string };
+    expect(payload.guidance).toContain('MOMOCAT_DB');
+    expect(payload.guidance).not.toContain('pass --db');
   });
 
   it('reports unknown commands with a help pointer', async () => {

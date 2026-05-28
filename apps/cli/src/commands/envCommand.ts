@@ -1,7 +1,4 @@
-import {
-  formatMissingDatabaseMessage,
-  resolveDataEnvironment,
-} from '../env/dataEnvironment';
+import { resolveDataEnvironment } from '../env/dataEnvironment';
 import type { CommandIO } from '../parse/args';
 
 export interface EnvCommandConfig {
@@ -42,7 +39,7 @@ export function runEnvCliCommand(argv: string[], io: CommandIO): number {
             path: resolution.proxyEnvPath ?? null,
             exists: resolution.proxyEnvExists,
           },
-          guidance: resolution.exists ? null : formatMissingDatabaseMessage(resolution),
+          guidance: resolution.exists ? null : formatMissingEnvDatabaseMessage(resolution),
         },
         null,
         2,
@@ -77,7 +74,7 @@ function formatHumanEnv(
   const aiRuntimeStatus = resolution.aiRuntimeConfigExists ? 'found' : 'missing';
   const proxyStatus = resolution.proxyEnvExists ? 'found' : 'missing';
   const candidateLines = resolution.candidateDbPaths.map((candidate) => `  - ${candidate}`);
-  const guidance = resolution.exists ? '' : `\n${formatMissingDatabaseMessage(resolution)}\n`;
+  const guidance = resolution.exists ? '' : `\n${formatMissingEnvDatabaseMessage(resolution)}\n`;
 
   return `Momocat CLI Environment
 CLI version: ${CLI_VERSION}
@@ -91,6 +88,18 @@ Proxy env: ${resolution.proxyEnvPath ?? 'not found'} (${proxyStatus})
 Candidate databases:
 ${candidateLines.join('\n')}
 ${guidance}`;
+}
+
+function formatMissingEnvDatabaseMessage(
+  resolution: ReturnType<typeof resolveDataEnvironment>,
+): string {
+  const candidates = resolution.candidateDbPaths.map((candidate) => `  - ${candidate}`).join('\n');
+  return [
+    'Could not find Momocat database.',
+    'Open the desktop app once so it can create its user data, or set MOMOCAT_DB / MOMOCAT_USER_DATA_DIR before running momocat.',
+    'Checked:',
+    candidates,
+  ].join('\n');
 }
 
 function help(): string {
