@@ -28,7 +28,7 @@ export async function runInspectLocalizationCommand(config: InspectLocalizationC
     aiRuntimeConfigPath: config.aiRuntimeConfigPath,
   });
 
-  const db = new CATDatabase(config.dbPath);
+  const db = new CATDatabase(config.dbPath, { fileMustExist: true });
   try {
     const inspector = new LocalizationInspector(db, {
       dbPath: config.dbPath,

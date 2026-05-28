@@ -37,7 +37,7 @@ export async function runTranslateFileCommand(config: TranslateFileCommandConfig
     aiRuntimeConfigPath: config.aiRuntimeConfigPath,
   });
 
-  const db = new CATDatabase(config.dbPath);
+  const db = new CATDatabase(config.dbPath, { fileMustExist: true });
   try {
     const engine = new LocalizationEngine(db, {
       dbPath: config.dbPath,
