@@ -52,12 +52,25 @@ function createHarness(
 }
 
 describe('momocat CLI dispatch', () => {
-  it('depends only on @cat/localization at runtime', () => {
+  it('declares runtime dependencies and package files for standalone CLI distribution', () => {
     const packageJson = JSON.parse(
       readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
-    ) as { dependencies?: Record<string, string> };
+    ) as {
+      private?: boolean;
+      dependencies?: Record<string, string>;
+      files?: string[];
+    };
 
-    expect(packageJson.dependencies).toEqual({ '@cat/localization': '*' });
+    expect(packageJson.private).toBeUndefined();
+    expect(packageJson.dependencies).toEqual({
+      'better-sqlite3': '^12.6.2',
+      xlsx: '^0.18.5',
+    });
+    expect(packageJson.files).toEqual([
+      'dist/index.mjs',
+      'dist/src/**/*.d.ts',
+      'README.md',
+    ]);
   });
 
   it('keeps the root cli helper separate from build output', () => {
