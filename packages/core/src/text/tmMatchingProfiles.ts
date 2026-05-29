@@ -2,6 +2,7 @@ export type TMTextProfile = 'default' | 'english';
 
 const MAX_ENGLISH_TM_RECALL_TERMS = 32;
 const WORD_RE = /[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu;
+const SIMPLE_WORD_RE = /[\p{L}\p{N}]+/gu;
 const LETTER_RE = /\p{L}/u;
 const ENGLISH_STOPWORDS = new Set([
   'a',
@@ -83,6 +84,8 @@ export function buildEnglishTMRecallTerms(text: string): string[] {
 }
 
 export function hasEnglishTMConcordanceEvidence(queryText: string, candidateText: string): boolean {
+  if (!hasNamedEnglishPhraseShape(candidateText)) return false;
+
   const query = normalizeTextForTMSimilarity(queryText, 'english');
   const candidate = normalizeTextForTMSimilarity(candidateText, 'english');
   const queryTokens = query.split(/\s+/).filter(Boolean);
@@ -90,27 +93,11 @@ export function hasEnglishTMConcordanceEvidence(queryText: string, candidateText
 
   if (queryTokens.length === 0 || candidateTokens.length === 0) return false;
 
-  if (queryTokens.length === 1 || candidateTokens.length === 1) {
-    return (
-      queryTokens.length === 1 &&
-      candidateTokens.length === 1 &&
-      queryTokens[0] === candidateTokens[0] &&
-      isSignificantEnglishToken(queryTokens[0])
-    );
-  }
-
   const queryPhrases = buildSignificantEnglishPhrases(queryTokens);
   const candidatePhrases = buildSignificantEnglishPhrases(candidateTokens);
 
   if (candidatePhrases.some((phrase) => containsCanonicalPhrase(query, phrase))) return true;
-  if (queryPhrases.some((phrase) => containsCanonicalPhrase(candidate, phrase))) return true;
-
-  const overlap = longestCommonTokenRun(queryTokens, candidateTokens);
-  if (overlap < 2) return false;
-
-  const candidateCoverage = overlap / candidateTokens.length;
-  const queryCoverage = overlap / queryTokens.length;
-  return candidateCoverage >= 0.9 && queryCoverage < 0.9;
+  return queryPhrases.some((phrase) => phrase === candidate);
 }
 
 function addRecallTerm(target: Set<string>, value: string | null): void {
@@ -128,6 +115,23 @@ function containsCanonicalPhrase(text: string, phrase: string): boolean {
   return ` ${text} `.includes(` ${phrase} `);
 }
 
+function hasNamedEnglishPhraseShape(text: string): boolean {
+  const significantTokens = Array.from(text.normalize('NFKC').matchAll(SIMPLE_WORD_RE))
+    .map((match) => match[0])
+    .filter((token) => isSignificantEnglishToken(token.toLowerCase()));
+
+  return (
+    significantTokens.length >= 2 &&
+    significantTokens.length <= 4 &&
+    significantTokens.every(isCapitalizedWord)
+  );
+}
+
+function isCapitalizedWord(token: string): boolean {
+  const firstLetter = token.match(/\p{L}/u)?.[0];
+  return Boolean(firstLetter && firstLetter === firstLetter.toUpperCase());
+}
+
 function buildSignificantEnglishPhrases(tokens: string[]): string[] {
   const phrases: string[] = [];
   const maxWindow = Math.min(4, tokens.length);
@@ -143,23 +147,6 @@ function buildSignificantEnglishPhrases(tokens: string[]): string[] {
   }
 
   return Array.from(new Set(phrases));
-}
-
-function longestCommonTokenRun(a: string[], b: string[]): number {
-  let best = 0;
-  let previous = new Array(b.length + 1).fill(0);
-
-  for (let i = 1; i <= a.length; i += 1) {
-    const current = new Array(b.length + 1).fill(0);
-    for (let j = 1; j <= b.length; j += 1) {
-      if (a[i - 1] !== b[j - 1]) continue;
-      current[j] = previous[j - 1] + 1;
-      best = Math.max(best, current[j]);
-    }
-    previous = current;
-  }
-
-  return best;
 }
 
 function addTrailingWordInflectionTerms(target: Set<string>, value: string): void {

@@ -439,5 +439,12 @@ describe('TM Matching Profiles', () => {
     expect(hasEnglishTMConcordanceEvidence('Tree', 'Lumie Tree')).toBe(false);
     expect(hasEnglishTMConcordanceEvidence('Open the menu.', 'The Curator')).toBe(false);
     expect(hasEnglishTMConcordanceEvidence('The value changed.', 'The Truth')).toBe(false);
+    expect(hasEnglishTMConcordanceEvidence('Open the menu', 'Open the menu settings')).toBe(
+      false,
+    );
+    expect(hasEnglishTMConcordanceEvidence('The value changed', 'The value changed now')).toBe(
+      false,
+    );
+    expect(hasEnglishTMConcordanceEvidence('menu settings', 'open menu settings')).toBe(false);
   });
 });
