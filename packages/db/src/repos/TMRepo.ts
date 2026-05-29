@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import type { TMEntry, Token } from '@cat/core/models';
+import { buildEnglishTMRecallTerms } from '@cat/core/text';
 import { randomUUID } from 'crypto';
 import type {
   MountedTMRecord,
@@ -26,6 +27,7 @@ interface TMRecallQueryPlan {
   secondaryCjkFragments: string[];
   shortCjkTerms: string[];
   latinTerms: string[];
+  englishTerms: string[];
 }
 
 interface TMConcordanceRecallQueryPlan {
@@ -34,6 +36,7 @@ interface TMConcordanceRecallQueryPlan {
   longCjkFragments: string[];
   latinTerms: string[];
   shortCjkTerms: string[];
+  englishTerms: string[];
 }
 
 interface TMConcordanceRecallStats {
@@ -253,7 +256,7 @@ export class TMRepo {
     const resolvedTmIds = tmIds ?? this.getProjectMountedTMs(projectId).map((tm) => tm.id);
     if (resolvedTmIds.length === 0) return [];
 
-    const plan = this.buildTMRecallQueryPlan(sourceText);
+    const plan = this.buildTMRecallQueryPlan(sourceText, options.profile);
     const accepted: TMRecallDbRow[] = [];
     const seenIds = new Set<string>();
     const scope = options.scope ?? 'source';
@@ -264,7 +267,7 @@ export class TMRepo {
 
     this.collectFtsRecallTier({
       tmIds: resolvedTmIds,
-      terms: [...plan.exactTerms, ...plan.latinTerms],
+      terms: [...plan.exactTerms, ...plan.latinTerms, ...plan.englishTerms],
       sourceText,
       plan,
       scope,
@@ -351,7 +354,7 @@ export class TMRepo {
     const resolvedTmIds = tmIds ?? this.getProjectMountedTMs(projectId).map((tm) => tm.id);
     if (resolvedTmIds.length === 0) return [];
 
-    const plan = this.buildTMConcordanceRecallQueryPlan(queryText);
+    const plan = this.buildTMConcordanceRecallQueryPlan(queryText, options.profile);
     const rawLimit = this.clampConcordanceRawLimit(options.rawLimit, maxResults);
     const rows = this.collectConcordanceRecallRows({
       tmIds: resolvedTmIds,
@@ -375,7 +378,10 @@ export class TMRepo {
     return diversified.map((row) => this.mapTMEntryDbRow(row));
   }
 
-  private buildTMConcordanceRecallQueryPlan(queryText: string): TMConcordanceRecallQueryPlan {
+  private buildTMConcordanceRecallQueryPlan(
+    queryText: string,
+    profile?: 'english',
+  ): TMConcordanceRecallQueryPlan {
     const terms = this.extractSearchTerms(queryText);
     const cjkComponents = this.uniqueTerms(terms.flatMap((term) => this.extractCjkComponents(term)));
     const cjk3 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 3));
@@ -405,6 +411,10 @@ export class TMRepo {
         this.uniqueTerms(cjk2).filter((term) => !WEAK_SHORT_CJK_TERMS.has(term)),
         TM_CONCORDANCE_RECALL_SHORT_CJK_LIMIT,
       ),
+      englishTerms:
+        profile === 'english'
+          ? this.selectSpreadFragments(buildEnglishTMRecallTerms(queryText), 32)
+          : [],
     };
   }
 
@@ -420,7 +430,7 @@ export class TMRepo {
     const accepted: TMRecallDbRow[] = [];
     const seenIds = new Set<string>();
     const tiers = [
-      [...params.plan.cjk4Fragments, ...params.plan.latinTerms],
+      [...params.plan.cjk4Fragments, ...params.plan.latinTerms, ...params.plan.englishTerms],
       params.plan.longCjkFragments,
       params.plan.cjk3Fragments,
     ];
@@ -841,7 +851,7 @@ export class TMRepo {
     }
   }
 
-  private buildTMRecallQueryPlan(sourceText: string): TMRecallQueryPlan {
+  private buildTMRecallQueryPlan(sourceText: string, profile?: 'english'): TMRecallQueryPlan {
     const terms = this.extractSearchTerms(sourceText);
     const cjkComponents = this.uniqueTerms(terms.flatMap((term) => this.extractCjkComponents(term)));
     const primary4 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 4));
@@ -867,6 +877,10 @@ export class TMRepo {
       latinTerms: this.uniqueTerms(
         terms.filter((term) => term.length >= 3 && !ONLY_CJK_RE.test(term)),
       ),
+      englishTerms:
+        profile === 'english'
+          ? this.selectSpreadFragments(buildEnglishTMRecallTerms(sourceText), 32)
+          : [],
     };
   }
 
@@ -908,6 +922,14 @@ export class TMRepo {
 
     if (
       plan.latinTerms.some((term) => term.length >= 3 && normalizedCandidate.includes(term.toLowerCase()))
+    ) {
+      return true;
+    }
+
+    if (
+      plan.englishTerms.some(
+        (term) => term.length >= 3 && normalizedCandidate.includes(term.toLowerCase()),
+      )
     ) {
       return true;
     }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Segment, TMEntry } from '@cat/core/models';
-import { serializeTokensToTextOnly } from '@cat/core/text';
+import { resolveTMTextProfile, serializeTokensToTextOnly } from '@cat/core/text';
 import { CATDatabase } from '../../../../../packages/db/src';
 import { TMService, type TMMatch } from './TMService';
 import type { ProjectRepository, TMRepository } from './ports';
@@ -76,6 +76,8 @@ function createRuntimeTMEntry(
     sourceText: string;
     targetText: string;
     projectId: number;
+    srcLang?: string;
+    tgtLang?: string;
   },
 ): TMEntryWithTmId {
   const now = new Date().toISOString();
@@ -83,8 +85,8 @@ function createRuntimeTMEntry(
     id: `runtime-${params.srcHash}`,
     tmId,
     projectId: params.projectId,
-    srcLang: 'zh-CN',
-    tgtLang: 'fr-FR',
+    srcLang: params.srcLang ?? 'zh-CN',
+    tgtLang: params.tgtLang ?? 'fr-FR',
     srcHash: params.srcHash,
     matchKey: params.sourceText.toLowerCase(),
     tagsSignature: '',
@@ -128,6 +130,30 @@ function seedCrowdedContainedCjkFixture(db: CATDatabase): { projectId: number; t
       targetText: 'Souverain de la fraicheur',
     }),
   );
+
+  return { projectId, tmId };
+}
+
+function seedEnglishTMFixture(db: CATDatabase): { projectId: number; tmId: string } {
+  const projectId = db.createProject('Trace English TM Match', 'en-US', 'fr-FR');
+  const tmId = db.createTM('TM_EN_TEST', 'en-US', 'fr-FR', 'main');
+  db.mountTMToProject(projectId, tmId, 10, 'read');
+
+  for (const entry of [
+    { srcHash: 'api', sourceText: 'API', targetText: 'API' },
+    { srcHash: 'lumie-tree', sourceText: 'Lumie Tree', targetText: 'arbre Lumie' },
+  ]) {
+    db.upsertTMEntry(
+      createRuntimeTMEntry(tmId, {
+        projectId,
+        srcHash: entry.srcHash,
+        sourceText: entry.sourceText,
+        targetText: entry.targetText,
+        srcLang: 'en-US',
+        tgtLang: 'fr-FR',
+      }),
+    );
+  }
 
   return { projectId, tmId };
 }
@@ -374,6 +400,9 @@ async function traceActiveTMMatchFlow(params: TraceActiveTMMatchFlowParams) {
   const tmIds = mountedTMs.map((tm) => tm.id);
   const sourceTextOnly = serializeTokensToTextOnly(segment.sourceTokens);
   const sourceNormalized = debugService.normalizeForSimilarity(sourceTextOnly);
+  const project = params.db.getProject(params.projectId);
+  const textProfile = resolveTMTextProfile(project?.srcLang);
+  const englishRecallOptions = textProfile === 'english' ? ({ profile: 'english' } as const) : {};
   const exactHashMatches = mountedTMs
     .map((tm) => params.db.findTMEntryByHash(tm.id, segment.srcHash) as TMEntryWithTmId | undefined)
     .filter((match): match is TMEntryWithTmId => Boolean(match));
@@ -381,13 +410,13 @@ async function traceActiveTMMatchFlow(params: TraceActiveTMMatchFlowParams) {
     params.projectId,
     sourceTextOnly,
     tmIds,
-    { scope: 'source', limit: 50 },
+    { scope: 'source', limit: 50, ...englishRecallOptions },
   ) as TMEntryWithTmId[];
   const concordanceCandidates = params.db.searchTMConcordanceRecallCandidates(
     params.projectId,
     sourceTextOnly,
     tmIds,
-    { scope: 'source', limit: 50, rawLimit: 200 },
+    { scope: 'source', limit: 50, rawLimit: 200, ...englishRecallOptions },
   ) as TMEntryWithTmId[];
   const candidateScoring = traceCandidateScoring({
     service,
@@ -513,6 +542,29 @@ async function runEnvConfiguredTrace(config: TraceEnvConfig) {
 }
 
 describe('TM match flow trace', () => {
+  it('recalls and scores English acronym punctuation variants through active TM flow', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const { projectId } = seedEnglishTMFixture(db);
+      const trace = await traceActiveTMMatchFlow({
+        db,
+        projectId,
+        source: 'A.P.I.',
+        srcHash: 'source-hash',
+        targetHashes: ['api'],
+      });
+
+      expect(trace.step3FuzzyRecall.targets.api).toHaveLength(1);
+      expect(trace.step6FinalMatches[0]).toMatchObject({
+        srcHash: 'api',
+        kind: 'tm',
+        similarity: 99,
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   it('summarizes only the requested focus source hashes', async () => {
     const db = new CATDatabase(':memory:');
     try {
