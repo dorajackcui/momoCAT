@@ -17,7 +17,7 @@
   },
   "build": {
     "appId": "com.simplecat.tool",
-    "productName": "Simple CAT Tool",
+    "productName": "momoCAT",
     "mac": {
       "target": "dmg",
       "icon": "build/icon.icns",
