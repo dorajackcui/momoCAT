@@ -565,6 +565,61 @@ describe('TM match flow trace', () => {
     }
   });
 
+  it('recalls English plural phrase concordance without matching a single ordinary token', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const { projectId } = seedEnglishTMFixture(db);
+      const pluralTrace = await traceActiveTMMatchFlow({
+        db,
+        projectId,
+        source: 'The Lumie Trees shimmer near the plaza.',
+        srcHash: 'plural-source-hash',
+        targetHashes: ['lumie-tree'],
+      });
+
+      expect(pluralTrace.step4ConcordanceRecall.targets['lumie-tree']).toHaveLength(1);
+      expect(pluralTrace.step6FinalMatches.map((match) => match.srcHash)).toContain('lumie-tree');
+      expect(
+        pluralTrace.step6FinalMatches.find((match) => match.srcHash === 'lumie-tree'),
+      ).toMatchObject({
+        kind: 'concordance',
+        srcHash: 'lumie-tree',
+      });
+
+      const weakTrace = await traceActiveTMMatchFlow({
+        db,
+        projectId,
+        source: 'Tree',
+        srcHash: 'weak-source-hash',
+        targetHashes: ['lumie-tree'],
+      });
+
+      expect(weakTrace.step6FinalMatches.map((match) => match.srcHash)).not.toContain(
+        'lumie-tree',
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('rejects English acronym punctuation concordance noise from final matches', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const { projectId } = seedEnglishTMFixture(db);
+      const trace = await traceActiveTMMatchFlow({
+        db,
+        projectId,
+        source: 'A.P.I. request timed out',
+        srcHash: 'api-noise-source-hash',
+        targetHashes: ['api'],
+      });
+
+      expect(trace.step6FinalMatches.map((match) => match.srcHash)).not.toContain('api');
+    } finally {
+      db.close();
+    }
+  });
+
   it('summarizes only the requested focus source hashes', async () => {
     const db = new CATDatabase(':memory:');
     try {

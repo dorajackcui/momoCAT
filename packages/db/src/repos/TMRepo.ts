@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import type { TMEntry, Token } from '@cat/core/models';
-import { buildEnglishTMRecallTerms } from '@cat/core/text';
+import { buildEnglishTMRecallTerms, hasEnglishTMConcordanceEvidence } from '@cat/core/text';
 import { randomUUID } from 'crypto';
 import type {
   MountedTMRecord,
@@ -360,6 +360,7 @@ export class TMRepo {
       tmIds: resolvedTmIds,
       queryText,
       plan,
+      profile: options.profile,
       maxResults: rawLimit,
       rawLimit,
       stats,
@@ -422,6 +423,7 @@ export class TMRepo {
     tmIds: string[];
     queryText: string;
     plan: TMConcordanceRecallQueryPlan;
+    profile?: 'english';
     maxResults: number;
     rawLimit: number;
     stats: TMConcordanceRecallStats;
@@ -475,6 +477,7 @@ export class TMRepo {
     tmIds: string[];
     queryText: string;
     plan: TMConcordanceRecallQueryPlan;
+    profile?: 'english';
     maxResults: number;
     rawLimit: number;
     stats: TMConcordanceRecallStats;
@@ -521,6 +524,7 @@ export class TMRepo {
       seenIds: params.seenIds,
       maxResults: params.maxResults,
       stats: params.stats,
+      profile: params.profile,
     });
   }
 
@@ -528,6 +532,7 @@ export class TMRepo {
     tmIds: string[];
     queryText: string;
     terms: string[];
+    profile?: 'english';
     maxResults: number;
     rawLimit: number;
     stats: TMConcordanceRecallStats;
@@ -579,6 +584,7 @@ export class TMRepo {
         seenIds: params.seenIds,
         maxResults: params.maxResults,
         stats: params.stats,
+        profile: params.profile,
       });
       if (
         batchIndex < batches.length - 1 &&
@@ -594,6 +600,7 @@ export class TMRepo {
     tmIds: string[];
     queryText: string;
     plan: TMConcordanceRecallQueryPlan;
+    profile?: 'english';
     maxResults: number;
     rawLimit: number;
     stats: TMConcordanceRecallStats;
@@ -647,6 +654,7 @@ export class TMRepo {
         seenIds: params.seenIds,
         maxResults: params.maxResults,
         stats: params.stats,
+        profile: params.profile,
       });
       if (
         batchIndex < batches.length - 1 &&
@@ -665,11 +673,16 @@ export class TMRepo {
     seenIds: Set<string>;
     maxResults: number;
     stats: TMConcordanceRecallStats;
+    profile?: 'english';
   }): void {
     for (const row of params.rows) {
       if (params.accepted.length >= params.maxResults) break;
       if (params.seenIds.has(row.id)) continue;
-      if (!this.hasConcordanceRecallEvidence(params.queryText, row)) continue;
+      const hasEvidence =
+        params.profile === 'english'
+          ? hasEnglishTMConcordanceEvidence(params.queryText, row.ftsSrcText)
+          : this.hasConcordanceRecallEvidence(params.queryText, row);
+      if (!hasEvidence) continue;
 
       params.seenIds.add(row.id);
       params.accepted.push(row);
