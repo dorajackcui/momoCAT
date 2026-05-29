@@ -217,6 +217,71 @@ describe('TMService.findMatches', () => {
     });
   });
 
+  it('scores English acronym punctuation variants as high TM matches when recalled', async () => {
+    const source = 'A.P.I.';
+    const service = createService({
+      srcLang: 'en-US',
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      recallEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'api',
+          sourceText: 'API',
+          targetText: 'API',
+        }),
+      ],
+      concordanceEntries: [],
+    });
+
+    const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      kind: 'tm',
+      srcHash: 'api',
+      similarity: 99,
+    });
+  });
+
+  it('does not use English scoring for non-English projects', async () => {
+    const service = createService({
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      recallEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'api',
+          sourceText: 'API',
+          targetText: 'API',
+        }),
+      ],
+      concordanceEntries: [],
+    });
+
+    const matches = await service.findMatches(1, createSegment('A.P.I.', 'source-hash'));
+
+    expect(matches).toHaveLength(0);
+  });
+
+  it('does not turn weak English token overlap into a TM match', async () => {
+    const service = createService({
+      srcLang: 'en-US',
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      recallEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'the-truth',
+          sourceText: 'The Truth',
+          targetText: 'la Verite',
+        }),
+      ],
+      concordanceEntries: [],
+    });
+
+    const matches = await service.findMatches(
+      1,
+      createSegment('The value changed.', 'source-hash'),
+    );
+
+    expect(matches).toHaveLength(0);
+  });
+
   it('merges fuzzy and concordance recall candidates for active TM matching', async () => {
     const source = '阿茉玻 清新天王';
     const searchTMFuzzyRecallCandidates = vi.fn().mockReturnValue([]);

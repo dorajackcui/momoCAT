@@ -120,6 +120,7 @@ export class TMService {
     const englishRecallOptions = textProfile === 'english' ? ({ profile: 'english' } as const) : {};
     const sourceTextOnly = serializeTokensToTextOnly(segment.sourceTokens);
     const sourceNormalized = this.normalizeForSimilarity(sourceTextOnly);
+    const sourceProfileNormalized = normalizeTextForTMSimilarity(sourceTextOnly, textProfile);
 
     const results: RankedTMMatch[] = [];
     const seenHashes = new Set<string>();
@@ -188,6 +189,7 @@ export class TMService {
 
       const candTextOnly = serializeTokensToTextOnly(cand.sourceTokens);
       const candNormalized = this.normalizeForSimilarity(candTextOnly);
+      const candProfileNormalized = normalizeTextForTMSimilarity(candTextOnly, textProfile);
       const sourceLength = Array.from(sourceNormalized).length;
       const candidateLength = Array.from(candNormalized).length;
       if (
@@ -228,6 +230,13 @@ export class TMService {
             ),
           );
         }
+      }
+
+      if (textProfile === 'english') {
+        standardSimilarity = Math.max(
+          standardSimilarity,
+          this.computeProfileStandardSimilarity(sourceProfileNormalized, candProfileNormalized),
+        );
       }
 
       const tm = mountedTMs.find((t) => t.id === cand.tmId);
@@ -307,6 +316,26 @@ export class TMService {
     const maxLen = Math.max(a.length, b.length);
     if (maxLen === 0) return 100;
     return Math.floor((1 - Math.abs(a.length - b.length) / maxLen) * 100);
+  }
+
+  private computeProfileStandardSimilarity(a: string, b: string): number {
+    if (!a || !b) return 0;
+    if (a === b) return 99;
+
+    const maxPossibleByLength = this.computeMaxLengthBound(a, b);
+    if (maxPossibleByLength < TMService.MIN_SIMILARITY) return 0;
+
+    const levSimilarity = this.computeLevenshteinSimilarity(a, b);
+    const diceSimilarity = this.computeDiceSimilarity(a, b);
+    const bonus = this.computeSimilarityBonus(a, b);
+    return Math.min(
+      99,
+      Math.round(
+        levSimilarity * TMService.LEVENSHTEIN_WEIGHT +
+          diceSimilarity * TMService.DICE_WEIGHT +
+          bonus,
+      ),
+    );
   }
 
   private computeLevenshteinSimilarity(a: string, b: string): number {
