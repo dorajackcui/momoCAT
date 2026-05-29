@@ -214,8 +214,6 @@ export class TMService {
       if (
         textProfile === 'english' &&
         this.shouldSuppressEnglishFuzzyOnlyPhraseSubmatch({
-          sourceText: sourceTextOnly,
-          candidateText: candTextOnly,
           sourceCanonical: sourceProfileNormalized,
           candidateCanonical: candProfileNormalized,
           fromFuzzy: candidateState.fromFuzzy,
@@ -364,8 +362,6 @@ export class TMService {
   }
 
   private shouldSuppressEnglishFuzzyOnlyPhraseSubmatch(params: {
-    sourceText: string;
-    candidateText: string;
     sourceCanonical: string;
     candidateCanonical: string;
     fromFuzzy: boolean;
@@ -373,29 +369,29 @@ export class TMService {
   }): boolean {
     if (!params.fromFuzzy || params.fromConcordance) return false;
     if (params.sourceCanonical === params.candidateCanonical) return false;
-    if (this.hasMatchingRawAcronymEvidence(params.sourceText, params.candidateText)) return false;
     if (!this.isShortEnglishPhraseCandidate(params.candidateCanonical)) return false;
-    return !this.containsCanonicalPhrase(params.sourceCanonical, params.candidateCanonical);
-  }
-
-  private hasMatchingRawAcronymEvidence(sourceText: string, candidateText: string): boolean {
-    const candidateTokens =
-      candidateText.normalize('NFKC').match(/[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu) ?? [];
-    return candidateTokens.some((token) => {
-      if (!this.isUppercaseAcronymShape(token)) return false;
-      return this.hasRawAcronymRepresentation(sourceText, token.replace(/\./g, '').toLowerCase());
-    });
+    return (
+      !this.containsCanonicalPhrase(params.sourceCanonical, params.candidateCanonical) &&
+      this.countSignificantEnglishTokens(params.candidateCanonical) >
+        this.countSignificantEnglishTokens(params.sourceCanonical)
+    );
   }
 
   private isShortEnglishPhraseCandidate(candidateCanonical: string): boolean {
-    const tokens = candidateCanonical.split(/\s+/).filter(Boolean);
-    const significantTokens = tokens.filter(
-      (token) =>
-        token.length >= 3 &&
-        /[a-z]/u.test(token) &&
-        !TMService.ENGLISH_PHRASE_STOPWORDS.has(token),
+    const significantTokenCount = this.countSignificantEnglishTokens(candidateCanonical);
+    return significantTokenCount >= 2 && significantTokenCount <= 4;
+  }
+
+  private countSignificantEnglishTokens(text: string): number {
+    return text.split(/\s+/).filter((token) => this.isSignificantEnglishToken(token)).length;
+  }
+
+  private isSignificantEnglishToken(token: string): boolean {
+    return (
+      token.length >= 2 &&
+      /[a-z]/u.test(token) &&
+      !TMService.ENGLISH_PHRASE_STOPWORDS.has(token)
     );
-    return significantTokens.length >= 2 && significantTokens.length <= 4;
   }
 
   private containsCanonicalPhrase(text: string, phrase: string): boolean {

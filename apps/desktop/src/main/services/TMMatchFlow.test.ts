@@ -317,8 +317,6 @@ function traceCandidateScoring(params: {
     if (
       params.textProfile === 'english' &&
       shouldSuppressEnglishFuzzyOnlyPhraseSubmatch({
-        sourceText: params.sourceTextOnly,
-        candidateText: candTextOnly,
         sourceCanonical: sourceProfileNormalized,
         candidateCanonical: candProfileNormalized,
         fromFuzzy: candidateState.fromFuzzy,
@@ -457,8 +455,6 @@ function traceCandidateScoring(params: {
 }
 
 function shouldSuppressEnglishFuzzyOnlyPhraseSubmatch(params: {
-  sourceText: string;
-  candidateText: string;
   sourceCanonical: string;
   candidateCanonical: string;
   fromFuzzy: boolean;
@@ -466,39 +462,27 @@ function shouldSuppressEnglishFuzzyOnlyPhraseSubmatch(params: {
 }): boolean {
   if (!params.fromFuzzy || params.fromConcordance) return false;
   if (params.sourceCanonical === params.candidateCanonical) return false;
-  if (hasMatchingRawAcronymEvidence(params.sourceText, params.candidateText)) return false;
   if (!isShortEnglishPhraseCandidate(params.candidateCanonical)) return false;
-  return !` ${params.sourceCanonical} `.includes(` ${params.candidateCanonical} `);
-}
-
-function hasMatchingRawAcronymEvidence(sourceText: string, candidateText: string): boolean {
-  const tokens =
-    candidateText.normalize('NFKC').match(/[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu) ?? [];
-  return tokens.some((token) => {
-    if (!isUppercaseAcronymShape(token)) return false;
-    return hasRawAcronymRepresentation(sourceText, token.replace(/\./g, '').toLowerCase());
-  });
-}
-
-function hasRawAcronymRepresentation(text: string, canonical: string): boolean {
-  const tokens = text.normalize('NFKC').match(/[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu) ?? [];
-  return tokens.some((token) => {
-    if (!isUppercaseAcronymShape(token)) return false;
-    return token.replace(/\./g, '').toLowerCase() === canonical;
-  });
-}
-
-function isUppercaseAcronymShape(token: string): boolean {
-  return /^[A-Z]{2,5}$/u.test(token) || /^[A-Z](?:\.[A-Z]){1,4}\.?$/u.test(token);
+  return (
+    !` ${params.sourceCanonical} `.includes(` ${params.candidateCanonical} `) &&
+    countSignificantEnglishTokens(params.candidateCanonical) >
+      countSignificantEnglishTokens(params.sourceCanonical)
+  );
 }
 
 function isShortEnglishPhraseCandidate(candidateCanonical: string): boolean {
-  const tokens = candidateCanonical.split(/\s+/).filter(Boolean);
-  const significantTokens = tokens.filter(
-    (token) =>
-      token.length >= 3 && /[a-z]/u.test(token) && !ENGLISH_PHRASE_STOPWORDS.has(token),
+  const significantTokenCount = countSignificantEnglishTokens(candidateCanonical);
+  return significantTokenCount >= 2 && significantTokenCount <= 4;
+}
+
+function countSignificantEnglishTokens(text: string): number {
+  return text.split(/\s+/).filter(isSignificantEnglishToken).length;
+}
+
+function isSignificantEnglishToken(token: string): boolean {
+  return (
+    token.length >= 2 && /[a-z]/u.test(token) && !ENGLISH_PHRASE_STOPWORDS.has(token)
   );
-  return significantTokens.length >= 2 && significantTokens.length <= 4;
 }
 
 async function traceActiveTMMatchFlow(params: TraceActiveTMMatchFlowParams) {
@@ -741,6 +725,30 @@ describe('TM match flow trace', () => {
         'api-menu-settings',
       );
       expect(containedTrace.step6FinalMatches.map((match) => match.srcHash)).not.toContain(
+        'us-menu-settings',
+      );
+
+      const apiPartialTrace = await traceActiveTMMatchFlow({
+        db,
+        projectId,
+        source: 'API Menu',
+        srcHash: 'api-partial-source-hash',
+        targetHashes: ['api-menu-settings'],
+      });
+
+      expect(apiPartialTrace.step6FinalMatches.map((match) => match.srcHash)).not.toContain(
+        'api-menu-settings',
+      );
+
+      const usPartialTrace = await traceActiveTMMatchFlow({
+        db,
+        projectId,
+        source: 'US Settings',
+        srcHash: 'us-partial-source-hash',
+        targetHashes: ['us-menu-settings'],
+      });
+
+      expect(usPartialTrace.step6FinalMatches.map((match) => match.srcHash)).not.toContain(
         'us-menu-settings',
       );
     } finally {
