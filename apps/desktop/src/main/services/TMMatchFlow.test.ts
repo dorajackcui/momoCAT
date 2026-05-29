@@ -177,6 +177,16 @@ function seedEnglishTMFixture(db: CATDatabase): { projectId: number; tmId: strin
       sourceText: 'open menu settings',
       targetText: 'parametres du menu minuscule',
     },
+    {
+      srcHash: 'api-menu-settings',
+      sourceText: 'API Menu Settings',
+      targetText: 'parametres API',
+    },
+    {
+      srcHash: 'us-menu-settings',
+      sourceText: 'US Menu Settings',
+      targetText: 'parametres US',
+    },
   ]) {
     db.upsertTMEntry(
       createRuntimeTMEntry(tmId, {
@@ -307,6 +317,7 @@ function traceCandidateScoring(params: {
     if (
       params.textProfile === 'english' &&
       shouldSuppressEnglishFuzzyOnlyPhraseSubmatch({
+        sourceText: params.sourceTextOnly,
         candidateText: candTextOnly,
         sourceCanonical: sourceProfileNormalized,
         candidateCanonical: candProfileNormalized,
@@ -446,6 +457,7 @@ function traceCandidateScoring(params: {
 }
 
 function shouldSuppressEnglishFuzzyOnlyPhraseSubmatch(params: {
+  sourceText: string;
   candidateText: string;
   sourceCanonical: string;
   candidateCanonical: string;
@@ -454,16 +466,30 @@ function shouldSuppressEnglishFuzzyOnlyPhraseSubmatch(params: {
 }): boolean {
   if (!params.fromFuzzy || params.fromConcordance) return false;
   if (params.sourceCanonical === params.candidateCanonical) return false;
-  if (hasUppercaseAcronymToken(params.candidateText)) return false;
+  if (hasMatchingRawAcronymEvidence(params.sourceText, params.candidateText)) return false;
   if (!isShortEnglishPhraseCandidate(params.candidateCanonical)) return false;
   return !` ${params.sourceCanonical} `.includes(` ${params.candidateCanonical} `);
 }
 
-function hasUppercaseAcronymToken(text: string): boolean {
+function hasMatchingRawAcronymEvidence(sourceText: string, candidateText: string): boolean {
+  const tokens =
+    candidateText.normalize('NFKC').match(/[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu) ?? [];
+  return tokens.some((token) => {
+    if (!isUppercaseAcronymShape(token)) return false;
+    return hasRawAcronymRepresentation(sourceText, token.replace(/\./g, '').toLowerCase());
+  });
+}
+
+function hasRawAcronymRepresentation(text: string, canonical: string): boolean {
   const tokens = text.normalize('NFKC').match(/[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu) ?? [];
-  return tokens.some(
-    (token) => /^[A-Z]{2,5}$/u.test(token) || /^[A-Z](?:\.[A-Z]){1,4}\.?$/u.test(token),
-  );
+  return tokens.some((token) => {
+    if (!isUppercaseAcronymShape(token)) return false;
+    return token.replace(/\./g, '').toLowerCase() === canonical;
+  });
+}
+
+function isUppercaseAcronymShape(token: string): boolean {
+  return /^[A-Z]{2,5}$/u.test(token) || /^[A-Z](?:\.[A-Z]){1,4}\.?$/u.test(token);
 }
 
 function isShortEnglishPhraseCandidate(candidateCanonical: string): boolean {
@@ -694,15 +720,28 @@ describe('TM match flow trace', () => {
         projectId,
         source: 'Menu Settings',
         srcHash: 'contained-source-hash',
-        targetHashes: ['open-menu-settings', 'lower-open-menu-settings'],
+        targetHashes: [
+          'open-menu-settings',
+          'lower-open-menu-settings',
+          'api-menu-settings',
+          'us-menu-settings',
+        ],
       });
 
       expect(containedTrace.step4ConcordanceRecall.targets['open-menu-settings']).toHaveLength(0);
+      expect(containedTrace.step4ConcordanceRecall.targets['api-menu-settings']).toHaveLength(0);
+      expect(containedTrace.step4ConcordanceRecall.targets['us-menu-settings']).toHaveLength(0);
       expect(containedTrace.step6FinalMatches.map((match) => match.srcHash)).not.toContain(
         'open-menu-settings',
       );
       expect(containedTrace.step6FinalMatches.map((match) => match.srcHash)).not.toContain(
         'lower-open-menu-settings',
+      );
+      expect(containedTrace.step6FinalMatches.map((match) => match.srcHash)).not.toContain(
+        'api-menu-settings',
+      );
+      expect(containedTrace.step6FinalMatches.map((match) => match.srcHash)).not.toContain(
+        'us-menu-settings',
       );
     } finally {
       db.close();

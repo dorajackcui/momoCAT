@@ -214,6 +214,7 @@ export class TMService {
       if (
         textProfile === 'english' &&
         this.shouldSuppressEnglishFuzzyOnlyPhraseSubmatch({
+          sourceText: sourceTextOnly,
           candidateText: candTextOnly,
           sourceCanonical: sourceProfileNormalized,
           candidateCanonical: candProfileNormalized,
@@ -363,6 +364,7 @@ export class TMService {
   }
 
   private shouldSuppressEnglishFuzzyOnlyPhraseSubmatch(params: {
+    sourceText: string;
     candidateText: string;
     sourceCanonical: string;
     candidateCanonical: string;
@@ -371,14 +373,18 @@ export class TMService {
   }): boolean {
     if (!params.fromFuzzy || params.fromConcordance) return false;
     if (params.sourceCanonical === params.candidateCanonical) return false;
-    if (this.hasUppercaseAcronymToken(params.candidateText)) return false;
+    if (this.hasMatchingRawAcronymEvidence(params.sourceText, params.candidateText)) return false;
     if (!this.isShortEnglishPhraseCandidate(params.candidateCanonical)) return false;
     return !this.containsCanonicalPhrase(params.sourceCanonical, params.candidateCanonical);
   }
 
-  private hasUppercaseAcronymToken(text: string): boolean {
-    const tokens = text.normalize('NFKC').match(/[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu) ?? [];
-    return tokens.some((token) => this.isUppercaseAcronymShape(token));
+  private hasMatchingRawAcronymEvidence(sourceText: string, candidateText: string): boolean {
+    const candidateTokens =
+      candidateText.normalize('NFKC').match(/[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu) ?? [];
+    return candidateTokens.some((token) => {
+      if (!this.isUppercaseAcronymShape(token)) return false;
+      return this.hasRawAcronymRepresentation(sourceText, token.replace(/\./g, '').toLowerCase());
+    });
   }
 
   private isShortEnglishPhraseCandidate(candidateCanonical: string): boolean {
