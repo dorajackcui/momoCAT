@@ -1,10 +1,7 @@
 import type { Segment } from '@cat/core/models';
-import { serializeTokensToDisplayText } from '@cat/core/text';
+import { buildTMPromptReferences } from '@cat/localization/modules/TMModule';
+import { buildTBPromptReferences } from '@cat/localization/modules/TBModule';
 import type { PromptReferenceResolvers, TranslationPromptReferences } from './types';
-
-const MAX_TM_PROMPT_REFERENCES = 3;
-const MAX_CONCORDANCE_PROMPT_REFERENCES = 3;
-const MAX_TB_PROMPT_REFERENCES = 100;
 
 interface ResolveTranslationPromptReferencesParams {
   projectId: number;
@@ -23,30 +20,15 @@ export async function resolveTranslationPromptReferences(
         params.projectId,
         params.segment,
       );
-      const standardTmMatches = tmMatches.filter((match) => match.kind === 'tm');
-      const concordanceMatches = tmMatches.filter((match) => match.kind === 'concordance');
+      const selectedReferences = buildTMPromptReferences(tmMatches);
 
-      if (standardTmMatches.length > 0) {
-        references.tmReferences = standardTmMatches
-          .slice(0, MAX_TM_PROMPT_REFERENCES)
-          .map((match) => ({
-            similarity: match.similarity,
-            tmName: match.tmName,
-            sourceText: serializeTokensToDisplayText(match.sourceTokens),
-            targetText: serializeTokensToDisplayText(match.targetTokens),
-          }));
-        references.tmReference = references.tmReferences[0];
+      if (selectedReferences.tmReferences.length > 0) {
+        references.tmReferences = selectedReferences.tmReferences;
+        references.tmReference = selectedReferences.tmReferences[0];
       }
 
-      if (concordanceMatches.length > 0) {
-        references.concordanceReferences = concordanceMatches
-          .slice(0, MAX_CONCORDANCE_PROMPT_REFERENCES)
-          .map((match) => ({
-            tmName: match.tmName,
-            matchedSourceText: match.matchedSourceText,
-            sourceText: serializeTokensToDisplayText(match.sourceTokens),
-            targetText: serializeTokensToDisplayText(match.targetTokens),
-          }));
+      if (selectedReferences.concordanceReferences.length > 0) {
+        references.concordanceReferences = selectedReferences.concordanceReferences;
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -63,11 +45,7 @@ export async function resolveTranslationPromptReferences(
         params.segment,
       );
       if (tbMatches.length > 0) {
-        references.tbReferences = tbMatches.slice(0, MAX_TB_PROMPT_REFERENCES).map((match) => ({
-          srcTerm: match.srcTerm,
-          tgtTerm: match.tgtTerm,
-          note: match.note ?? null,
-        }));
+        references.tbReferences = buildTBPromptReferences(tbMatches);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

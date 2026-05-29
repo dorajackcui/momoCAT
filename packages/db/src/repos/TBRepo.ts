@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import type { TBEntry } from '@cat/core/models';
-import { buildTermSearchPlan, normalizeTermForLookup } from '@cat/core/text';
+import { buildTermSearchPlanForLocale, normalizeTermForLookup } from '@cat/core/text';
 import { randomUUID } from 'crypto';
 import type { MountedTBRecord, ProjectTermEntryRecord, TBRecord } from '../types';
 
@@ -123,7 +123,7 @@ export class TBRepo {
     const mountedTbIds = this.getProjectMountedTermBases(projectId).map((tb) => tb.id);
     if (mountedTbIds.length === 0) return [];
 
-    const searchPlan = buildTermSearchPlan(sourceText, {
+    const searchPlan = buildTermSearchPlanForLocale(sourceText, {
       locale: options?.srcLang,
       maxFragments: 36,
     });

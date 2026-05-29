@@ -1,6 +1,6 @@
 import type { Segment, TBEntry, TBMatch } from '@cat/core/models';
 import {
-  findTermPositionsInText,
+  findTermPositionsInTextForLocale,
   serializeTokensToSearchText,
   suppressNestedTermMatches,
 } from '@cat/core/text';
@@ -44,7 +44,7 @@ export class TBService {
 
     for (const entry of entries) {
       if (seenSrcNorm.has(entry.srcNorm)) continue;
-      const positions = findTermPositionsInText(sourceText, entry.srcTerm, {
+      const positions = findTermPositionsInTextForLocale(sourceText, entry.srcTerm, {
         locale: project.srcLang,
       });
       if (positions.length === 0) continue;

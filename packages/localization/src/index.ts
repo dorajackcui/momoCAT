@@ -105,8 +105,22 @@ export {
   type AiRuntimeConfig,
 } from './providers/AIRuntimeConfigService';
 export { AIProviderTransport } from './providers/AIProviderTransport';
-export { TMModule, mapTMEngineReferences } from './modules/TMModule';
-export { TBModule, mapTBEngineReferences } from './modules/TBModule';
+export {
+  DEFAULT_TM_PROMPT_REFERENCE_LIMITS,
+  MAX_CONCORDANCE_PROMPT_REFERENCES,
+  MAX_ENGINE_TM_REFERENCES,
+  MAX_TM_PROMPT_REFERENCES,
+  TMModule,
+  buildTMPromptReferences,
+  mapTMEngineReferences,
+} from './modules/TMModule';
+export {
+  MAX_ENGINE_TB_REFERENCES,
+  MAX_TB_PROMPT_REFERENCES,
+  TBModule,
+  buildTBPromptReferences,
+  mapTBEngineReferences,
+} from './modules/TBModule';
 export { MTModule } from './modules/MTModule';
 export type {
   ComposeBatchPromptInput,

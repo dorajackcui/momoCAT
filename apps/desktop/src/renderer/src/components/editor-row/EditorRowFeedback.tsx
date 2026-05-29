@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Segment } from '@cat/core/models';
 
 interface EditorRowFeedbackProps {
@@ -41,7 +41,6 @@ export const EditorRowFeedback: React.FC<EditorRowFeedbackProps> = ({
   saveError,
   contextText = '',
 }) => {
-  const [isContextExpanded, setIsContextExpanded] = useState(false);
   const [contextCopied, setContextCopied] = useState(false);
   const contextCopiedTimerRef = useRef<number | null>(null);
 
@@ -52,13 +51,6 @@ export const EditorRowFeedback: React.FC<EditorRowFeedbackProps> = ({
       }
     };
   }, []);
-
-  const isLongContext = contextText.length > 120;
-  const displayContext = useMemo(
-    () =>
-      isContextExpanded || !isLongContext ? contextText : `${contextText.substring(0, 110)}...`,
-    [contextText, isContextExpanded, isLongContext],
-  );
 
   const handleCopyContext = useCallback(
     async (event: React.MouseEvent) => {
@@ -106,25 +98,16 @@ export const EditorRowFeedback: React.FC<EditorRowFeedbackProps> = ({
       )}
 
       {contextText && (
-        <div className="mt-1 px-1 group">
+        <div className="mt-auto px-1 pt-1 max-w-full overflow-hidden group">
           <div
             onClick={(event) => void handleCopyContext(event)}
-            title="Click to copy context"
-            className="text-[11px] text-text-faint italic leading-snug cursor-copy hover:text-text-muted transition-colors"
+            title={contextText}
+            className="flex min-w-0 max-w-full items-center gap-1 text-[10px] text-text-faint italic leading-4 cursor-copy hover:text-text-muted transition-colors"
           >
-            {displayContext}
-            {isLongContext && (
-              <button
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setIsContextExpanded((prev) => !prev);
-                }}
-                className="ml-1 text-brand hover:text-brand font-medium not-italic"
-              >
-                {isContextExpanded ? 'Collapse' : 'more'}
-              </button>
-            )}
-            <span className="ml-1 inline-flex h-3 w-3 items-center justify-center text-success">
+            <span className="block min-w-0 flex-1 truncate whitespace-nowrap">
+              {contextText}
+            </span>
+            <span className="inline-flex h-3 w-3 shrink-0 items-center justify-center text-success">
               <svg
                 className={`w-3 h-3 transition-opacity duration-150 ${contextCopied ? 'opacity-100' : 'opacity-0'}`}
                 fill="none"

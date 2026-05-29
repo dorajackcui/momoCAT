@@ -42,7 +42,7 @@
 
     --radius-panel: 14px;
     --radius-control: 10px;
-    --font-weight-editor-text: 460;
+    --font-weight-editor-text: 500;
 
     --shadow-panel: 0 1px 2px rgba(30, 24, 20, 0.05), 0 8px 24px rgba(30, 24, 20, 0.04);
     --shadow-float: 0 18px 50px rgba(30, 24, 20, 0.14);
@@ -286,7 +286,7 @@
   }
 
   .editor-target-text-layer {
-    @apply editor-text-base pl-1.5 pr-12 py-0.5;
+    @apply editor-text-base pl-0.5 pr-12 py-0.5;
     color: rgb(var(--color-editor-text));
   }
 

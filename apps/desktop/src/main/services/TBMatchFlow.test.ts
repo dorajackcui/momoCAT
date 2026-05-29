@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Segment, TBEntry, TBMatch } from '@cat/core/models';
 import {
-  buildTermSearchPlan,
-  findTermPositionsInText,
+  buildTermSearchPlanForLocale,
+  findTermPositionsInTextForLocale,
   normalizeTermForLookup,
   serializeTokensToSearchText,
   suppressNestedTermMatches,
@@ -159,7 +159,7 @@ function traceCandidateFinalMatching(params: {
       };
     }
 
-    const positions = findTermPositionsInText(params.sourceText, entry.srcTerm, {
+    const positions = findTermPositionsInTextForLocale(params.sourceText, entry.srcTerm, {
       locale: params.srcLang,
     });
     if (positions.length === 0) {
@@ -193,7 +193,7 @@ async function traceTBMatchFlow(params: TraceTBMatchFlowParams) {
   const segment = params.segment ?? createSegment(params.source ?? '');
   const sourceText = serializeTokensToSearchText(segment.sourceTokens);
   const mountedTBs = params.db.getProjectMountedTermBases(params.projectId);
-  const searchPlan = buildTermSearchPlan(sourceText, {
+  const searchPlan = buildTermSearchPlanForLocale(sourceText, {
     locale: project.srcLang,
     maxFragments: 36,
   });
@@ -360,6 +360,119 @@ describe('TB match flow trace', () => {
       expect(trace.step6FinalMatches.focusMatches.map((match) => match.tgtTerm)).toEqual([
         'patriaigle',
       ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('recalls English profile alias candidates before final matching', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Trace English Alias TB Match', 'en-US', 'fr-FR');
+      const tbId = db.createTermBase('English Alias Terms', 'en-US', 'fr-FR');
+      db.mountTermBaseToProject(projectId, tbId, 1);
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'tb-account',
+        tbId,
+        srcLang: 'en-US',
+        srcTerm: 'account',
+        tgtTerm: 'compte',
+      });
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'tb-real-time',
+        tbId,
+        srcLang: 'en-US',
+        srcTerm: 'real time',
+        tgtTerm: 'temps reel',
+      });
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'tb-us',
+        tbId,
+        srcLang: 'en-US',
+        srcTerm: 'US',
+        tgtTerm: 'Etats-Unis',
+      });
+
+      const trace = await traceTBMatchFlow({
+        db,
+        projectId,
+        source: 'Accounts use real-time U.S. settings.',
+        focusSrcTerms: ['account', 'real time', 'US'],
+      });
+
+      expect(trace.step3RepoCandidateRecall.focusCandidates.map((entry) => entry.srcTerm)).toEqual(
+        expect.arrayContaining(['account', 'real time', 'US']),
+      );
+      expect(trace.step6FinalMatches.focusMatches.map((match) => match.srcTerm)).toEqual(
+        expect.arrayContaining(['account', 'real time', 'US']),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('recalls English multi-word final-word plurals through repo candidates', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Trace English Multi Word Plurals', 'en-US', 'fr-FR');
+      const tbId = db.createTermBase('English Multi Word Terms', 'en-US', 'fr-FR');
+      db.mountTermBaseToProject(projectId, tbId, 1);
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'tb-nela-bird',
+        tbId,
+        srcLang: 'en-US',
+        srcTerm: 'Nela Bird',
+        tgtTerm: 'oiseau Nela',
+      });
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'tb-masquerade-lynx',
+        tbId,
+        srcLang: 'en-US',
+        srcTerm: 'Masquerade Lynx',
+        tgtTerm: 'lynx masque',
+      });
+
+      const trace = await traceTBMatchFlow({
+        db,
+        projectId,
+        source: 'Nela Birds and Masquerade Lynxes appear.',
+        focusSrcTerms: ['Nela Bird', 'Masquerade Lynx'],
+      });
+
+      expect(trace.step3RepoCandidateRecall.focusCandidates.map((entry) => entry.srcTerm)).toEqual(
+        expect.arrayContaining(['Nela Bird', 'Masquerade Lynx']),
+      );
+      expect(trace.step6FinalMatches.focusMatches.map((match) => match.srcTerm)).toEqual(
+        expect.arrayContaining(['Nela Bird', 'Masquerade Lynx']),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('does not use English alias recall for non-English project source locale', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Trace French TB Match Guard', 'fr-FR', 'en-US');
+      const tbId = db.createTermBase('French Terms', 'fr-FR', 'en-US');
+      db.mountTermBaseToProject(projectId, tbId, 1);
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'tb-french-account-guard',
+        tbId,
+        srcLang: 'fr-FR',
+        srcTerm: 'account',
+        tgtTerm: 'compte',
+      });
+
+      const trace = await traceTBMatchFlow({
+        db,
+        projectId,
+        source: 'Accounts are synced.',
+        focusSrcTerms: ['account'],
+      });
+
+      expect(trace.step3RepoCandidateRecall.focusCandidates).toEqual([]);
+      expect(trace.step6FinalMatches.focusMatches).toEqual([]);
     } finally {
       db.close();
     }

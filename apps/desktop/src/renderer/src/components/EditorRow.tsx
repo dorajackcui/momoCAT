@@ -191,7 +191,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
       </div>
 
       <div
-        className={`px-1.5 py-0.5 relative ${
+        className={`px-1.5 py-0.5 relative flex min-h-full flex-col ${
           qaIssues.some((issue) => issue.severity === 'error')
             ? 'bg-danger-soft/40'
             : qaIssues.some((issue) => issue.severity === 'warning')

@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { Token } from '../models';
 import {
   buildTermSearchPlan,
+  buildTermSearchPlanForLocale,
   buildTermSearchFragments,
   computeMatchKey,
   findTermPositionsInText,
+  findTermPositionsInTextForLocale,
   normalizeTermForLookup,
   serializeTokensToDisplayText,
   serializeTokensToSearchText,
@@ -128,6 +130,235 @@ describe('Term Matching Helpers', () => {
     const positions = findTermPositionsInText('请保护你的ＡＰＩ key。', 'API key');
     expect(positions).toHaveLength(1);
     expect(positions[0].start).toBe(5);
+  });
+
+  it('uses English final-position profile variants while non-English stays strict', () => {
+    expect(
+      findTermPositionsInTextForLocale('Accounts are synced.', 'account', { locale: 'en-US' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale("User's profile opens.", 'user', { locale: 'en-US' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('real-time updates are enabled.', 'real time', {
+        locale: 'en-US',
+      }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('U.S. market support is enabled.', 'US', {
+        locale: 'en-US',
+      }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('U.S. market', 'US', { locale: 'en-US' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('A.P.I. limits apply.', 'API', { locale: 'en-US' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('Classes start now.', 'class', { locale: 'en-US' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('Buses arrive soon.', 'bus', { locale: 'en-US' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('Gases expand quickly.', 'gas', { locale: 'en-US' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('Quizzes start today.', 'quiz', { locale: 'en-US' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('This uses memory.', 'use', { locale: 'en-US' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('This causes delay.', 'cause', { locale: 'en-US' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('The switch fuses shut.', 'fuse', { locale: 'en-US' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('The houses are ready.', 'house', { locale: 'en-US' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('The process pauses here.', 'pause', { locale: 'en-US' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('This reuses memory.', 'reuse', { locale: 'en-US' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('This abuses access.', 'abuse', { locale: 'en-US' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('Nela Birds gather nearby.', 'Nela Bird', {
+        locale: 'en-US',
+      }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('Masquerade Lynxes appear.', 'Masquerade Lynx', {
+        locale: 'en-US',
+      }),
+    ).toHaveLength(1);
+
+    expect(
+      findTermPositionsInTextForLocale('Accounts are synced.', 'account', { locale: 'fr-FR' }),
+    ).toHaveLength(0);
+    expect(
+      findTermPositionsInTextForLocale('winter event', 'win', { locale: 'en-US' }),
+    ).toHaveLength(0);
+    expect(
+      findTermPositionsInTextForLocale('Open the menu.', 'The Curator', {
+        locale: 'en-US',
+      }),
+    ).toHaveLength(0);
+    expect(
+      findTermPositionsInTextForLocale('Find curator notes.', 'The Curator', {
+        locale: 'en-US',
+      }),
+    ).toHaveLength(0);
+    expect(
+      findTermPositionsInTextForLocale('请检查 Accounts', 'account', { locale: 'en-US' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('real time updates', 'R.E.A.L.', {
+        locale: 'en-US',
+      }),
+    ).toHaveLength(0);
+    expect(
+      findTermPositionsInTextForLocale('it is ready', 'I.T.', { locale: 'en-US' }),
+    ).toHaveLength(0);
+  });
+
+  it('adds English search-plan aliases without changing CJK plans', () => {
+    const englishPlan = buildTermSearchPlanForLocale('Accounts use real-time U.S. settings.', {
+      locale: 'en-US',
+      maxFragments: 12,
+    });
+
+    expect(englishPlan.exactLookupTerms).toEqual(
+      expect.arrayContaining(['account', 'real time', 'real-time', 'us']),
+    );
+    expect(englishPlan.ftsFragments.length).toBeLessThanOrEqual(24);
+
+    expect(
+      buildTermSearchPlanForLocale('Cases and bases are supported.', {
+        locale: 'en-US',
+        maxFragments: 12,
+      }).exactLookupTerms,
+    ).toEqual(expect.arrayContaining(['case', 'base']));
+
+    const acronymPlan = buildTermSearchPlanForLocale('API limits apply.', {
+      locale: 'en-US',
+      maxFragments: 12,
+    });
+    expect(acronymPlan.exactLookupTerms).toEqual(expect.arrayContaining(['a.p.i.']));
+
+    const ordinaryWordPlan = buildTermSearchPlanForLocale('real time is ready.', {
+      locale: 'en-US',
+      maxFragments: 12,
+    });
+    expect(ordinaryWordPlan.exactLookupTerms).not.toEqual(
+      expect.arrayContaining(['r.e.a.l.', 't.i.m.e.', 'i.s.', 'r.e.a.d.y.']),
+    );
+
+    const mixedEnglishPlan = buildTermSearchPlanForLocale('璇锋鏌?Accounts', {
+      locale: 'en-US',
+      maxFragments: 12,
+    });
+    expect(mixedEnglishPlan.exactLookupTerms).toEqual(expect.arrayContaining(['account']));
+
+    const pluralPlan = buildTermSearchPlanForLocale(
+      'Classes, buses, cases, bases, gases, quizzes.',
+      {
+        locale: 'en-US',
+        maxFragments: 12,
+      },
+    );
+    expect(pluralPlan.exactLookupTerms).toEqual(
+      expect.arrayContaining(['class', 'bus', 'case', 'base', 'gas', 'quiz']),
+    );
+    expect(pluralPlan.exactLookupTerms).not.toEqual(
+      expect.arrayContaining(['classe', 'buse', 'cas', 'bas', 'gase', 'quizz']),
+    );
+
+    const usesPlan = buildTermSearchPlanForLocale('This uses memory.', {
+      locale: 'en-US',
+      maxFragments: 12,
+    });
+    expect(usesPlan.exactLookupTerms).toEqual(expect.arrayContaining(['use']));
+    expect(usesPlan.exactLookupTerms).not.toEqual(expect.arrayContaining(['us']));
+
+    const causesPlan = buildTermSearchPlanForLocale('This causes delay.', {
+      locale: 'en-US',
+      maxFragments: 12,
+    });
+    expect(causesPlan.exactLookupTerms).toEqual(expect.arrayContaining(['cause']));
+    expect(causesPlan.exactLookupTerms).not.toEqual(expect.arrayContaining(['caus']));
+
+    const fusesPlan = buildTermSearchPlanForLocale('The switch fuses shut.', {
+      locale: 'en-US',
+      maxFragments: 12,
+    });
+    expect(fusesPlan.exactLookupTerms).toEqual(expect.arrayContaining(['fuse']));
+    expect(fusesPlan.exactLookupTerms).not.toEqual(expect.arrayContaining(['fus']));
+
+    const sesSuffixPlan = buildTermSearchPlanForLocale(
+      'The houses pause, reuses, and abuses checks.',
+      {
+        locale: 'en-US',
+        maxFragments: 12,
+      },
+    );
+    expect(sesSuffixPlan.exactLookupTerms).toEqual(
+      expect.arrayContaining(['house', 'pause', 'reuse', 'abuse']),
+    );
+    expect(sesSuffixPlan.exactLookupTerms).not.toEqual(
+      expect.arrayContaining(['hous', 'paus', 'reus', 'abus']),
+    );
+
+    const strictHeavyText = [
+      'aa',
+      'bb',
+      'cc',
+      'dd',
+      'ee',
+      'ff',
+      'gg',
+      'hh',
+      'ii',
+      'jj',
+      'kk',
+      'll',
+      'mm',
+      'nn',
+      'oo',
+      'pp',
+      'qq',
+      'rr',
+      'ss',
+      'tt',
+      'uu',
+      'vv',
+      'ww',
+      'xx',
+      'yy',
+      'zz',
+    ].join(' ');
+    const strictPlan = buildTermSearchPlan(strictHeavyText, {
+      locale: 'en-US',
+      maxFragments: 12,
+    });
+    const aliasPlan = buildTermSearchPlanForLocale(strictHeavyText, {
+      locale: 'en-US',
+      maxFragments: 12,
+    });
+    expect(aliasPlan.exactLookupTerms).toEqual(
+      expect.arrayContaining(strictPlan.exactLookupTerms),
+    );
+
+    const cjkOptions = { locale: 'zh-CN', maxFragments: 12 };
+    expect(buildTermSearchPlanForLocale('请检查AI、3D和奖励', cjkOptions)).toEqual(
+      buildTermSearchPlan('请检查AI、3D和奖励', cjkOptions),
+    );
   });
 
   it('suppresses only fully nested shorter matches and keeps partial overlaps', () => {

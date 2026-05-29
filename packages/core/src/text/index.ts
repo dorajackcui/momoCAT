@@ -11,6 +11,10 @@ export {
   type TermSearchOptions,
 } from './termMatching';
 export {
+  buildTermSearchPlanForLocale,
+  findTermPositionsInTextForLocale,
+} from './termMatchingProfiles';
+export {
   computeMatchKey,
   computeSrcHash,
   serializeTokensToDisplayText,

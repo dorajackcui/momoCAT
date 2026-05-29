@@ -36,6 +36,13 @@ confirm the intended path before changing recall policy.
 Mounted TB resources are queried for source terms. Selected terms become
 structured prompt references attached to request rows.
 
+TB matching resolves a source-language profile from the project source locale.
+The default/CJK profile uses strict normalized term matching. English source
+projects add a conservative overlay for regular plural/singular forms,
+possessives, hyphen/space equivalents, and dotted acronym equivalents for
+uppercase acronym-shaped tokens. English TB recall does not use fuzzy
+edit-distance matching or general stemming.
+
 ## MT Prompt Inputs
 
 TM, concordance, and TB references are attached to request rows. Read-only
@@ -86,6 +93,11 @@ the independent 3 TM plus 3 concordance runtime reference slots.
 3. Check selected TM/TB artifacts in the inspect JSON sidecar.
 4. Only run real translate after the inspect artifacts show the expected
    references.
+
+For English source projects, inspect both candidate recall and final TB matches
+when debugging terminology. Candidate aliases and final variant matching should
+agree; if candidates appear without final matches, check the source-language
+profile rules before changing SQL recall.
 
 ## Historical Notes
 

@@ -83,6 +83,187 @@ describe('TBService', () => {
     expect(matches[0].tgtTerm).toBe('hiver');
   });
 
+  it('accepts conservative English variants in final matching', async () => {
+    const service = createServiceWithEntries([
+      {
+        id: 'tb-en-account',
+        tbId: 'tb-en',
+        srcTerm: 'account',
+        tgtTerm: 'compte',
+        srcNorm: 'account',
+        note: null,
+        createdAt: '',
+        updatedAt: '',
+        usageCount: 1,
+        tbName: 'English TB',
+        priority: 1,
+      },
+      {
+        id: 'tb-en-user',
+        tbId: 'tb-en',
+        srcTerm: 'user',
+        tgtTerm: 'utilisateur',
+        srcNorm: 'user',
+        note: null,
+        createdAt: '',
+        updatedAt: '',
+        usageCount: 1,
+        tbName: 'English TB',
+        priority: 2,
+      },
+      {
+        id: 'tb-en-real-time',
+        tbId: 'tb-en',
+        srcTerm: 'real time',
+        tgtTerm: 'temps reel',
+        srcNorm: 'real time',
+        note: null,
+        createdAt: '',
+        updatedAt: '',
+        usageCount: 1,
+        tbName: 'English TB',
+        priority: 3,
+      },
+      {
+        id: 'tb-en-us',
+        tbId: 'tb-en',
+        srcTerm: 'US',
+        tgtTerm: 'Etats-Unis',
+        srcNorm: 'us',
+        note: null,
+        createdAt: '',
+        updatedAt: '',
+        usageCount: 1,
+        tbName: 'English TB',
+        priority: 4,
+      },
+    ]);
+
+    const matches = await service.findMatches(
+      1,
+      buildSegment("Accounts sync from the user's real-time U.S. profile."),
+    );
+
+    expect(matches.map((match) => match.srcTerm)).toEqual(['real time', 'account', 'user', 'US']);
+  });
+
+  it('keeps non-English final matching strict', async () => {
+    const service = createServiceWithEntries(
+      [
+        {
+          id: 'tb-fr-account',
+          tbId: 'tb-fr',
+          srcTerm: 'account',
+          tgtTerm: 'compte',
+          srcNorm: 'account',
+          note: null,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 1,
+          tbName: 'French TB',
+          priority: 1,
+        },
+      ],
+      { srcLang: 'fr-FR' },
+    );
+
+    const matches = await service.findMatches(1, buildSegment('Accounts are synced.'));
+
+    expect(matches).toHaveLength(0);
+  });
+
+  it('does not match a multi-word English term from one component word', async () => {
+    const service = createServiceWithEntries([], {
+      srcLang: 'en-US',
+      searchEntries: [
+        {
+          id: 'tb-the-curator',
+          tbId: 'tb-noise',
+          srcTerm: 'The Curator',
+          tgtTerm: 'la Curatrice',
+          srcNorm: 'the curator',
+          note: null,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 1,
+          tbName: 'Noise TB',
+          priority: 1,
+        },
+        {
+          id: 'tb-the-serpent',
+          tbId: 'tb-noise',
+          srcTerm: 'The Serpent',
+          tgtTerm: 'le serpent',
+          srcNorm: 'the serpent',
+          note: null,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 1,
+          tbName: 'Noise TB',
+          priority: 2,
+        },
+        {
+          id: 'tb-fan-feather',
+          tbId: 'tb-noise',
+          srcTerm: 'Fan Feather',
+          tgtTerm: "plume d'eventail",
+          srcNorm: 'fan feather',
+          note: null,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 1,
+          tbName: 'Noise TB',
+          priority: 3,
+        },
+      ],
+    });
+
+    const matches = await service.findMatches(1, buildSegment('Open the menu.'));
+
+    expect(matches).toEqual([]);
+  });
+
+  it('matches multi-word English terms when only the final word is pluralized', async () => {
+    const service = createServiceWithEntries([], {
+      srcLang: 'en-US',
+      searchEntries: [
+        {
+          id: 'tb-nela-bird',
+          tbId: 'tb-en',
+          srcTerm: 'Nela Bird',
+          tgtTerm: 'oiseau Nela',
+          srcNorm: 'nela bird',
+          note: null,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 1,
+          tbName: 'English TB',
+          priority: 1,
+        },
+        {
+          id: 'tb-masquerade-lynx',
+          tbId: 'tb-en',
+          srcTerm: 'Masquerade Lynx',
+          tgtTerm: 'lynx masque',
+          srcNorm: 'masquerade lynx',
+          note: null,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 1,
+          tbName: 'English TB',
+          priority: 2,
+        },
+      ],
+    });
+
+    const matches = await service.findMatches(
+      1,
+      buildSegment('Nela Birds and Masquerade Lynxes appear.'),
+    );
+
+    expect(matches.map((match) => match.srcTerm)).toEqual(['Masquerade Lynx', 'Nela Bird']);
+  });
+
   it('matches cjk term in sentence', async () => {
     const service = createServiceWithEntries([
       {

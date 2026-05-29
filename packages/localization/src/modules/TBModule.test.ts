@@ -76,6 +76,104 @@ describe('TBModule', () => {
     }
   });
 
+  it('recalls English TB references for inflected, hyphenated, and dotted source terms', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('English TB Recall', 'en-US', 'fr-FR');
+      const tbId = db.createTermBase('English Client Terms', 'en-US', 'fr-FR');
+      db.mountTermBaseToProject(projectId, tbId, 20);
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'term-account',
+        tbId,
+        srcLang: 'en-US',
+        srcTerm: 'account',
+        tgtTerm: 'compte',
+      });
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'term-real-time',
+        tbId,
+        srcLang: 'en-US',
+        srcTerm: 'real time',
+        tgtTerm: 'temps reel',
+      });
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'term-us',
+        tbId,
+        srcLang: 'en-US',
+        srcTerm: 'US',
+        tgtTerm: 'Etats-Unis',
+      });
+
+      const segment = createTransientSegment(
+        { id: 'unit-english-recall', source: 'Accounts use real-time U.S. settings.' },
+        0,
+        {
+          projectId,
+          sourceLanguage: 'en-US',
+          targetLanguage: 'fr-FR',
+        },
+      );
+      const projectRepo = new SqliteProjectRepository(db);
+      const tbRepo = new SqliteTBRepository(db);
+      const module = new TBModule({
+        tbRepo,
+        tbService: new TBService(projectRepo, tbRepo),
+      });
+
+      const artifact = await module.inspect(projectId, segment);
+
+      expect(artifact.rawMatches.map((match) => match.srcTerm)).toEqual(
+        expect.arrayContaining(['account', 'real time', 'US']),
+      );
+      expect(artifact.selectedReferences.map((reference) => reference.srcTerm)).toEqual(
+        expect.arrayContaining(['account', 'real time', 'US']),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('does not apply English TB recall rules to non-English source projects', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('French TB Guard', 'fr-FR', 'en-US');
+      const tbId = db.createTermBase('French Client Terms', 'fr-FR', 'en-US');
+      db.mountTermBaseToProject(projectId, tbId, 20);
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'term-account-fr-source',
+        tbId,
+        srcLang: 'fr-FR',
+        srcTerm: 'account',
+        tgtTerm: 'compte',
+      });
+
+      const segment = createTransientSegment(
+        { id: 'unit-french-guard', source: 'Accounts are synced.' },
+        0,
+        {
+          projectId,
+          sourceLanguage: 'fr-FR',
+          targetLanguage: 'en-US',
+        },
+      );
+      const projectRepo = new SqliteProjectRepository(db);
+      const tbRepo = new SqliteTBRepository(db);
+      const module = new TBModule({
+        tbRepo,
+        tbService: new TBService(projectRepo, tbRepo),
+      });
+
+      const artifact = await module.inspect(projectId, segment);
+
+      expect(artifact.rawMatches.map((match) => match.srcTerm)).not.toContain('account');
+      expect(artifact.selectedReferences.map((reference) => reference.srcTerm)).not.toContain(
+        'account',
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('caps selected references at 100', async () => {
     const segment = createTransientSegment({ id: 'unit-2', source: 'source' }, 0);
     const matches = Array.from({ length: 105 }, (_, index) => createTBMatch(index));
