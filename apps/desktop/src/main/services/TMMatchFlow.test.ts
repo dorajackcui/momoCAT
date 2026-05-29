@@ -142,6 +142,11 @@ function seedEnglishTMFixture(db: CATDatabase): { projectId: number; tmId: strin
   for (const entry of [
     { srcHash: 'api', sourceText: 'API', targetText: 'API' },
     { srcHash: 'lumie-tree', sourceText: 'Lumie Tree', targetText: 'arbre Lumie' },
+    {
+      srcHash: 'open-menu-settings',
+      sourceText: 'Open Menu Settings',
+      targetText: 'parametres du menu',
+    },
   ]) {
     db.upsertTMEntry(
       createRuntimeTMEntry(tmId, {
@@ -597,6 +602,19 @@ describe('TM match flow trace', () => {
       expect(weakTrace.step6FinalMatches.map((match) => match.srcHash)).not.toContain(
         'lumie-tree',
       );
+
+      const containedTrace = await traceActiveTMMatchFlow({
+        db,
+        projectId,
+        source: 'Menu Settings',
+        srcHash: 'contained-source-hash',
+        targetHashes: ['open-menu-settings'],
+      });
+
+      expect(containedTrace.step4ConcordanceRecall.targets['open-menu-settings']).toHaveLength(0);
+      expect(containedTrace.step6FinalMatches.map((match) => match.srcHash)).not.toContain(
+        'open-menu-settings',
+      );
     } finally {
       db.close();
     }
@@ -614,6 +632,7 @@ describe('TM match flow trace', () => {
         targetHashes: ['api'],
       });
 
+      expect(trace.step4ConcordanceRecall.targets.api).toHaveLength(0);
       expect(trace.step6FinalMatches.map((match) => match.srcHash)).not.toContain('api');
     } finally {
       db.close();

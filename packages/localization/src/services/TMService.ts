@@ -1,5 +1,6 @@
 import { type Segment, type TMEntry } from '@cat/core/models';
 import {
+  hasEnglishTMConcordanceEvidence,
   normalizeTextForTMSimilarity,
   resolveTMTextProfile,
   serializeTokensToDisplayText,
@@ -190,6 +191,16 @@ export class TMService {
       const candTextOnly = serializeTokensToTextOnly(cand.sourceTokens);
       const candNormalized = this.normalizeForSimilarity(candTextOnly);
       const candProfileNormalized = normalizeTextForTMSimilarity(candTextOnly, textProfile);
+      if (
+        textProfile === 'english' &&
+        candidateState.fromFuzzy &&
+        !candidateState.fromConcordance &&
+        sourceProfileNormalized !== candProfileNormalized &&
+        hasEnglishTMConcordanceEvidence(candTextOnly, candTextOnly) &&
+        !hasEnglishTMConcordanceEvidence(sourceTextOnly, candTextOnly)
+      ) {
+        continue;
+      }
       const sourceLength = Array.from(sourceNormalized).length;
       const candidateLength = Array.from(candNormalized).length;
       if (
