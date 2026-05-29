@@ -304,6 +304,68 @@ describe('TMService.findMatches', () => {
     });
   });
 
+  it('does not score embedded short English dotted acronyms against lowercase ordinary words', async () => {
+    const service = createService({
+      srcLang: 'en-US',
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      recallEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'it-team',
+          sourceText: 'it team',
+          targetText: 'equipe informatique',
+        }),
+      ],
+      concordanceEntries: [],
+    });
+
+    const matches = await service.findMatches(1, createSegment('I.T. team', 'source-hash'));
+
+    expect(matches).toHaveLength(0);
+  });
+
+  it('does not score embedded short English dotted acronyms against lowercase settings text', async () => {
+    const service = createService({
+      srcLang: 'en-US',
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      recallEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'us-settings',
+          sourceText: 'us settings',
+          targetText: 'parametres',
+        }),
+      ],
+      concordanceEntries: [],
+    });
+
+    const matches = await service.findMatches(1, createSegment('U.S. settings', 'source-hash'));
+
+    expect(matches).toHaveLength(0);
+  });
+
+  it('scores embedded short English dotted acronyms against uppercase acronym text', async () => {
+    const service = createService({
+      srcLang: 'en-US',
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      recallEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'us-settings',
+          sourceText: 'US settings',
+          targetText: 'parametres US',
+        }),
+      ],
+      concordanceEntries: [],
+    });
+
+    const matches = await service.findMatches(1, createSegment('U.S. settings', 'source-hash'));
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      kind: 'tm',
+      srcHash: 'us-settings',
+      similarity: 99,
+    });
+  });
+
   it('does not use English scoring for non-English projects', async () => {
     const service = createService({
       mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],

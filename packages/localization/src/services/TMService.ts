@@ -226,18 +226,32 @@ export class TMService {
       }
 
       if (textProfile === 'english') {
-        const profileSimilarity =
-          sourceProfileNormalized === candProfileNormalized
-            ? this.computeEnglishExactCanonicalSimilarity(
-                sourceTextOnly,
-                candTextOnly,
-                sourceProfileNormalized,
-              )
-            : this.computeProfileStandardSimilarity(sourceProfileNormalized, candProfileNormalized);
-        standardSimilarity = Math.max(
-          standardSimilarity,
-          profileSimilarity,
-        );
+        if (sourceProfileNormalized === candProfileNormalized) {
+          const profileSimilarity = this.computeEnglishExactCanonicalSimilarity(
+            sourceTextOnly,
+            candTextOnly,
+            sourceProfileNormalized,
+          );
+          if (
+            profileSimilarity === 0 &&
+            this.hasShortLetterCanonicalToken(sourceProfileNormalized)
+          ) {
+            standardSimilarity = 0;
+            localOverlap = {
+              score: 0,
+              matchedSourceText: '',
+              sourceCoverage: 0,
+              entryCoverage: 0,
+            };
+          } else {
+            standardSimilarity = Math.max(standardSimilarity, profileSimilarity);
+          }
+        } else {
+          standardSimilarity = Math.max(
+            standardSimilarity,
+            this.computeProfileStandardSimilarity(sourceProfileNormalized, candProfileNormalized),
+          );
+        }
       }
 
       const tm = mountedTMs.find((t) => t.id === cand.tmId);
@@ -334,19 +348,36 @@ export class TMService {
     canonical: string,
   ): number {
     if (!canonical) return 0;
-    if (!/^[a-z]{1,2}$/u.test(canonical)) return 99;
-    if (
-      this.isUppercaseAcronymShape(sourceText) &&
-      this.isUppercaseAcronymShape(candidateText)
-    ) {
-      return 99;
-    }
-    return 0;
+    const shortLetterTokens = this.getShortLetterCanonicalTokens(canonical);
+    if (shortLetterTokens.length === 0) return 99;
+
+    return shortLetterTokens.every(
+      (token) =>
+        this.hasRawAcronymRepresentation(sourceText, token) &&
+        this.hasRawAcronymRepresentation(candidateText, token),
+    )
+      ? 99
+      : 0;
   }
 
-  private isUppercaseAcronymShape(text: string): boolean {
-    const normalized = text.normalize('NFKC').trim();
-    return /^[A-Z]{2,5}$/u.test(normalized) || /^[A-Z](?:\.[A-Z]){1,4}\.?$/u.test(normalized);
+  private hasShortLetterCanonicalToken(canonical: string): boolean {
+    return this.getShortLetterCanonicalTokens(canonical).length > 0;
+  }
+
+  private getShortLetterCanonicalTokens(canonical: string): string[] {
+    return canonical.split(/\s+/).filter((token) => /^[a-z]{1,2}$/u.test(token));
+  }
+
+  private hasRawAcronymRepresentation(text: string, canonical: string): boolean {
+    const tokens = text.normalize('NFKC').match(/[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu) ?? [];
+    return tokens.some((token) => {
+      if (!this.isUppercaseAcronymShape(token)) return false;
+      return token.replace(/\./g, '').toLowerCase() === canonical;
+    });
+  }
+
+  private isUppercaseAcronymShape(token: string): boolean {
+    return /^[A-Z]{2,5}$/u.test(token) || /^[A-Z](?:\.[A-Z]){1,4}\.?$/u.test(token);
   }
 
   private computeWeightedStandardSimilarity(a: string, b: string): number {
