@@ -166,6 +166,8 @@ function seedEnglishTMFixture(db: CATDatabase): { projectId: number; tmId: strin
 
   for (const entry of [
     { srcHash: 'api', sourceText: 'API', targetText: 'API' },
+    { srcHash: 'us', sourceText: 'US', targetText: 'US' },
+    { srcHash: 'lower-us', sourceText: 'us', targetText: 'us lowercase' },
     { srcHash: 'lumie-tree', sourceText: 'Lumie Tree', targetText: 'arbre Lumie' },
     {
       srcHash: 'open-menu-settings',
@@ -657,6 +659,24 @@ describe('TM match flow trace', () => {
         kind: 'tm',
         similarity: 99,
       });
+
+      const shortAcronymTrace = await traceActiveTMMatchFlow({
+        db,
+        projectId,
+        source: 'U.S.',
+        srcHash: 'short-acronym-source-hash',
+        targetHashes: ['us', 'lower-us'],
+      });
+
+      expect(shortAcronymTrace.step3FuzzyRecall.targets.us).toHaveLength(1);
+      expect(shortAcronymTrace.step6FinalMatches[0]).toMatchObject({
+        srcHash: 'us',
+        kind: 'tm',
+        similarity: 99,
+      });
+      expect(shortAcronymTrace.step6FinalMatches.map((match) => match.srcHash)).not.toContain(
+        'lower-us',
+      );
     } finally {
       db.close();
     }

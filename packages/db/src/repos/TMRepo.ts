@@ -28,6 +28,7 @@ interface TMRecallQueryPlan {
   shortCjkTerms: string[];
   latinTerms: string[];
   englishTerms: string[];
+  englishShortAcronymTerms: string[];
 }
 
 interface TMConcordanceRecallQueryPlan {
@@ -37,6 +38,7 @@ interface TMConcordanceRecallQueryPlan {
   latinTerms: string[];
   shortCjkTerms: string[];
   englishTerms: string[];
+  englishShortAcronymTerms: string[];
 }
 
 interface TMConcordanceRecallStats {
@@ -390,6 +392,10 @@ export class TMRepo {
     const cjk5 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 5));
     const cjk6 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 6));
     const cjk2 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 2));
+    const englishTerms =
+      profile === 'english'
+        ? this.selectSpreadFragments(buildEnglishTMRecallTerms(queryText), 32)
+        : [];
 
     return {
       cjk4Fragments: this.selectSpreadFragments(
@@ -412,10 +418,10 @@ export class TMRepo {
         this.uniqueTerms(cjk2).filter((term) => !WEAK_SHORT_CJK_TERMS.has(term)),
         TM_CONCORDANCE_RECALL_SHORT_CJK_LIMIT,
       ),
-      englishTerms:
-        profile === 'english'
-          ? this.selectSpreadFragments(buildEnglishTMRecallTerms(queryText), 32)
-          : [],
+      englishTerms,
+      englishShortAcronymTerms: englishTerms.filter((term) =>
+        this.isShortEnglishAcronymRecallTerm(term),
+      ),
     };
   }
 
@@ -608,9 +614,10 @@ export class TMRepo {
     accepted: TMRecallDbRow[];
     seenIds: Set<string>;
   }): void {
-    const terms = this.uniqueTerms(params.plan.shortCjkTerms).filter(
-      (term) => term.length === 2 && !WEAK_SHORT_CJK_TERMS.has(term),
-    );
+    const terms = this.uniqueTerms([
+      ...params.plan.shortCjkTerms,
+      ...params.plan.englishShortAcronymTerms,
+    ]).filter((term) => term.length === 2 && !WEAK_SHORT_CJK_TERMS.has(term));
     if (terms.length === 0) return;
 
     const placeholders = params.tmIds.map(() => '?').join(',');
@@ -810,7 +817,7 @@ export class TMRepo {
     seenIds: Set<string>;
     maxResults: number;
   }): void {
-    const terms = this.uniqueTerms(params.terms)
+    const terms = this.uniqueTerms([...params.terms, ...params.plan.englishShortAcronymTerms])
       .filter((term) => term.length === 2 && !WEAK_SHORT_CJK_TERMS.has(term))
       .slice(0, TM_RECALL_SHORT_TERM_LIMIT);
     if (terms.length === 0 || params.accepted.length >= params.maxResults) return;
@@ -872,6 +879,10 @@ export class TMRepo {
     const primary6 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 6));
     const secondary3 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 3));
     const short2 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 2));
+    const englishTerms =
+      profile === 'english'
+        ? this.selectSpreadFragments(buildEnglishTMRecallTerms(sourceText), 32)
+        : [];
 
     return {
       exactTerms: this.uniqueTerms(terms.filter((term) => term.length >= 3)),
@@ -890,10 +901,10 @@ export class TMRepo {
       latinTerms: this.uniqueTerms(
         terms.filter((term) => term.length >= 3 && !ONLY_CJK_RE.test(term)),
       ),
-      englishTerms:
-        profile === 'english'
-          ? this.selectSpreadFragments(buildEnglishTMRecallTerms(sourceText), 32)
-          : [],
+      englishTerms,
+      englishShortAcronymTerms: englishTerms.filter((term) =>
+        this.isShortEnglishAcronymRecallTerm(term),
+      ),
     };
   }
 
@@ -939,11 +950,7 @@ export class TMRepo {
       return true;
     }
 
-    if (
-      plan.englishTerms.some(
-        (term) => term.length >= 3 && normalizedCandidate.includes(term.toLowerCase()),
-      )
-    ) {
+    if (plan.englishTerms.some((term) => this.hasEnglishRecallTermEvidence(candidateText, term))) {
       return true;
     }
 
@@ -968,6 +975,29 @@ export class TMRepo {
           (component) => component === term || (component.length <= 4 && component.includes(term)),
         )
       );
+    });
+  }
+
+  private hasEnglishRecallTermEvidence(candidateText: string, term: string): boolean {
+    const normalizedTerm = term.toLowerCase();
+    if (normalizedTerm.length >= 3) {
+      return candidateText.toLowerCase().includes(normalizedTerm);
+    }
+    return (
+      this.isShortEnglishAcronymRecallTerm(normalizedTerm) &&
+      this.hasRawShortEnglishAcronym(candidateText, normalizedTerm)
+    );
+  }
+
+  private isShortEnglishAcronymRecallTerm(term: string): boolean {
+    return /^[a-z]{2}$/u.test(term);
+  }
+
+  private hasRawShortEnglishAcronym(text: string, canonical: string): boolean {
+    const tokens = text.normalize('NFKC').match(/[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu) ?? [];
+    return tokens.some((token) => {
+      if (!/^[A-Z]{2}$/u.test(token) && !/^[A-Z]\.[A-Z]\.?$/u.test(token)) return false;
+      return token.replace(/\./g, '').toLowerCase() === canonical;
     });
   }
 
