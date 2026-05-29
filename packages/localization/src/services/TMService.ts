@@ -218,24 +218,25 @@ export class TMService {
         const maxPossibleByLength = this.computeMaxLengthBound(sourceNormalized, candNormalized);
 
         if (maxPossibleByLength >= TMService.MIN_SIMILARITY) {
-          const levSimilarity = this.computeLevenshteinSimilarity(sourceNormalized, candNormalized);
-          const diceSimilarity = this.computeDiceSimilarity(sourceNormalized, candNormalized);
-          const bonus = this.computeSimilarityBonus(sourceNormalized, candNormalized);
-          standardSimilarity = Math.min(
-            99,
-            Math.round(
-              levSimilarity * TMService.LEVENSHTEIN_WEIGHT +
-                diceSimilarity * TMService.DICE_WEIGHT +
-                bonus,
-            ),
+          standardSimilarity = this.computeWeightedStandardSimilarity(
+            sourceNormalized,
+            candNormalized,
           );
         }
       }
 
       if (textProfile === 'english') {
+        const profileSimilarity =
+          sourceProfileNormalized === candProfileNormalized
+            ? this.computeEnglishExactCanonicalSimilarity(
+                sourceTextOnly,
+                candTextOnly,
+                sourceProfileNormalized,
+              )
+            : this.computeProfileStandardSimilarity(sourceProfileNormalized, candProfileNormalized);
         standardSimilarity = Math.max(
           standardSimilarity,
-          this.computeProfileStandardSimilarity(sourceProfileNormalized, candProfileNormalized),
+          profileSimilarity,
         );
       }
 
@@ -320,11 +321,35 @@ export class TMService {
 
   private computeProfileStandardSimilarity(a: string, b: string): number {
     if (!a || !b) return 0;
-    if (a === b) return 99;
 
     const maxPossibleByLength = this.computeMaxLengthBound(a, b);
     if (maxPossibleByLength < TMService.MIN_SIMILARITY) return 0;
 
+    return this.computeWeightedStandardSimilarity(a, b);
+  }
+
+  private computeEnglishExactCanonicalSimilarity(
+    sourceText: string,
+    candidateText: string,
+    canonical: string,
+  ): number {
+    if (!canonical) return 0;
+    if (!/^[a-z]{1,2}$/u.test(canonical)) return 99;
+    if (
+      this.isUppercaseAcronymShape(sourceText) &&
+      this.isUppercaseAcronymShape(candidateText)
+    ) {
+      return 99;
+    }
+    return 0;
+  }
+
+  private isUppercaseAcronymShape(text: string): boolean {
+    const normalized = text.normalize('NFKC').trim();
+    return /^[A-Z]{2,5}$/u.test(normalized) || /^[A-Z](?:\.[A-Z]){1,4}\.?$/u.test(normalized);
+  }
+
+  private computeWeightedStandardSimilarity(a: string, b: string): number {
     const levSimilarity = this.computeLevenshteinSimilarity(a, b);
     const diceSimilarity = this.computeDiceSimilarity(a, b);
     const bonus = this.computeSimilarityBonus(a, b);

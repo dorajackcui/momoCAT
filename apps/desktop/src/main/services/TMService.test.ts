@@ -242,6 +242,68 @@ describe('TMService.findMatches', () => {
     });
   });
 
+  it('does not score short English dotted acronyms against lowercase ordinary words', async () => {
+    const service = createService({
+      srcLang: 'en-US',
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      recallEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'it',
+          sourceText: 'it',
+          targetText: 'it',
+        }),
+      ],
+      concordanceEntries: [],
+    });
+
+    const matches = await service.findMatches(1, createSegment('I.T.', 'source-hash'));
+
+    expect(matches).toHaveLength(0);
+  });
+
+  it('does not score short English dotted acronyms against lowercase country words', async () => {
+    const service = createService({
+      srcLang: 'en-US',
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      recallEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'us',
+          sourceText: 'us',
+          targetText: 'nous',
+        }),
+      ],
+      concordanceEntries: [],
+    });
+
+    const matches = await service.findMatches(1, createSegment('U.S.', 'source-hash'));
+
+    expect(matches).toHaveLength(0);
+  });
+
+  it('scores short English dotted acronyms against uppercase acronym text', async () => {
+    const service = createService({
+      srcLang: 'en-US',
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      recallEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'us',
+          sourceText: 'US',
+          targetText: 'US',
+        }),
+      ],
+      concordanceEntries: [],
+    });
+
+    const matches = await service.findMatches(1, createSegment('U.S.', 'source-hash'));
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      kind: 'tm',
+      srcHash: 'us',
+      similarity: 99,
+    });
+  });
+
   it('does not use English scoring for non-English projects', async () => {
     const service = createService({
       mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
