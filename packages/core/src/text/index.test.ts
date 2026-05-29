@@ -410,6 +410,12 @@ describe('TM Matching Profiles', () => {
     expect(normalizeTextForTMSimilarity('Masquerade Lynxes', 'english')).toBe(
       'masquerade lynx',
     );
+    expect(normalizeTextForTMSimilarity('This does news updates.', 'english')).toBe(
+      'this does news update',
+    );
+    expect(normalizeTextForTMSimilarity('Series species analysis.', 'english')).toBe(
+      'series species analysis',
+    );
   });
 
   it('builds bounded English TM recall terms without ordinary acronym overreach', () => {
@@ -423,6 +429,9 @@ describe('TM Matching Profiles', () => {
     expect(buildEnglishTMRecallTerms('real time is ready')).not.toEqual(
       expect.arrayContaining(['r.e.a.l.', 't.i.m.e.', 'i.s.', 'r.e.a.d.y.']),
     );
+    expect(buildEnglishTMRecallTerms('This does news updates.')).not.toEqual(
+      expect.arrayContaining(['thi', 'doe', 'new']),
+    );
     expect(buildEnglishTMRecallTerms('a '.repeat(80)).length).toBeLessThanOrEqual(32);
   });
 
@@ -435,6 +444,9 @@ describe('TM Matching Profiles', () => {
     );
     expect(hasEnglishTMConcordanceEvidence('Look at Lumie-Tree now.', 'Lumie Tree')).toBe(
       true,
+    );
+    expect(hasEnglishTMConcordanceEvidence('Look at lumie tree now.', 'lumie tree')).toBe(
+      false,
     );
     expect(hasEnglishTMConcordanceEvidence('Tree', 'Lumie Tree')).toBe(false);
     expect(hasEnglishTMConcordanceEvidence('Open the menu.', 'The Curator')).toBe(false);
