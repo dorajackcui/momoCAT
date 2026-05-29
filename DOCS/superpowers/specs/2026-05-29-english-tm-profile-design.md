@@ -12,6 +12,25 @@ strict/CJK-capable matcher as the shared foundation, and add a source-language
 profile layer for English-specific recall and scoring. English rules must be
 opt-in through `project.srcLang`; they must not leak into CJK/default matching.
 
+## Non-Negotiable Constraints
+
+- The boundary between shared TM flow, default/CJK behavior, and English-only
+  behavior must stay explicit. Shared flow can be reused, but English variants
+  must live behind profile dispatch instead of being mixed into CJK/default
+  logic.
+- The English TM profile must be easy to iterate. New English rules should be
+  added by extending small profile helpers and tests, not by changing scattered
+  service/repository conditionals.
+- Existing CJK/default matching behavior must remain equivalent when the
+  English profile is not selected. CJK recall fragments, local-overlap scoring,
+  contained-CJK promotion, diversity bucketing, thresholds, sorting, and caps
+  are not in scope for this work.
+- Any English recall expansion must be paired with final evidence gates so that
+  candidate recall cannot become final-match noise.
+- No schema or import-time alias materialization should be introduced in v1;
+  derived English behavior remains retrieval/scoring-side so rules can evolve
+  safely.
+
 ## Background
 
 The current active TM flow is shared for all languages:
