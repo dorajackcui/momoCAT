@@ -93,11 +93,7 @@ export function hasEnglishTMConcordanceEvidence(queryText: string, candidateText
 
   if (queryTokens.length === 0 || candidateTokens.length === 0) return false;
 
-  const queryPhrases = buildSignificantEnglishPhrases(queryTokens);
-  const candidatePhrases = buildSignificantEnglishPhrases(candidateTokens);
-
-  if (candidatePhrases.some((phrase) => containsCanonicalPhrase(query, phrase))) return true;
-  return queryPhrases.some((phrase) => phrase === candidate);
+  return containsCanonicalPhrase(query, candidate);
 }
 
 function addRecallTerm(target: Set<string>, value: string | null): void {

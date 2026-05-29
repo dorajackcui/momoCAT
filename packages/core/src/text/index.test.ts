@@ -446,5 +446,10 @@ describe('TM Matching Profiles', () => {
       false,
     );
     expect(hasEnglishTMConcordanceEvidence('menu settings', 'open menu settings')).toBe(false);
+    expect(hasEnglishTMConcordanceEvidence('menu settings', 'Open Menu Settings')).toBe(false);
+    expect(hasEnglishTMConcordanceEvidence('Open Menu', 'Open Menu Settings')).toBe(false);
+    expect(hasEnglishTMConcordanceEvidence('The Value Changed', 'The Value Changed Now')).toBe(
+      false,
+    );
   });
 });
