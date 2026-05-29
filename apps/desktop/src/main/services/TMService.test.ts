@@ -393,6 +393,76 @@ describe('TMService.findMatches', () => {
     });
   });
 
+  it('does not score fuzzy English acronym collisions against lowercase ordinary words', async () => {
+    const service = createService({
+      srcLang: 'en-US',
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      recallEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'it-team-update-now',
+          sourceText: 'it team update now',
+          targetText: 'mise a jour equipe informatique',
+        }),
+      ],
+      concordanceEntries: [],
+    });
+
+    const matches = await service.findMatches(
+      1,
+      createSegment('I.T. team updates', 'source-hash'),
+    );
+
+    expect(matches).toHaveLength(0);
+  });
+
+  it('does not score fuzzy English acronym collisions against lowercase settings text', async () => {
+    const service = createService({
+      srcLang: 'en-US',
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      recallEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'us-settings-pane',
+          sourceText: 'us settings pane',
+          targetText: 'volet parametres',
+        }),
+      ],
+      concordanceEntries: [],
+    });
+
+    const matches = await service.findMatches(
+      1,
+      createSegment('U.S. settings panel', 'source-hash'),
+    );
+
+    expect(matches).toHaveLength(0);
+  });
+
+  it('scores fuzzy English acronym variants when both sides have acronym evidence', async () => {
+    const service = createService({
+      srcLang: 'en-US',
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      recallEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'us-settings-pane',
+          sourceText: 'US settings pane',
+          targetText: 'volet parametres US',
+        }),
+      ],
+      concordanceEntries: [],
+    });
+
+    const matches = await service.findMatches(
+      1,
+      createSegment('U.S. settings panel', 'source-hash'),
+    );
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      kind: 'tm',
+      srcHash: 'us-settings-pane',
+    });
+  });
+
   it('keeps ordinary short English words matching through existing scoring', async () => {
     const service = createService({
       srcLang: 'en-US',

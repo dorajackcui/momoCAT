@@ -226,30 +226,28 @@ export class TMService {
       }
 
       if (textProfile === 'english') {
-        if (sourceProfileNormalized === candProfileNormalized) {
+        if (
+          this.hasOneSidedShortAcronymCollision(
+            sourceTextOnly,
+            candTextOnly,
+            sourceProfileNormalized,
+            candProfileNormalized,
+          )
+        ) {
+          standardSimilarity = 0;
+          localOverlap = {
+            score: 0,
+            matchedSourceText: '',
+            sourceCoverage: 0,
+            entryCoverage: 0,
+          };
+        } else if (sourceProfileNormalized === candProfileNormalized) {
           const profileSimilarity = this.computeEnglishExactCanonicalSimilarity(
             sourceTextOnly,
             candTextOnly,
             sourceProfileNormalized,
           );
-          if (
-            profileSimilarity === 0 &&
-            this.hasShortLetterCanonicalAcronymEvidence(
-              sourceTextOnly,
-              candTextOnly,
-              sourceProfileNormalized,
-            )
-          ) {
-            standardSimilarity = 0;
-            localOverlap = {
-              score: 0,
-              matchedSourceText: '',
-              sourceCoverage: 0,
-              entryCoverage: 0,
-            };
-          } else {
-            standardSimilarity = Math.max(standardSimilarity, profileSimilarity);
-          }
+          standardSimilarity = Math.max(standardSimilarity, profileSimilarity);
         } else {
           standardSimilarity = Math.max(
             standardSimilarity,
@@ -365,16 +363,21 @@ export class TMService {
     return 99;
   }
 
-  private hasShortLetterCanonicalAcronymEvidence(
+  private hasOneSidedShortAcronymCollision(
     sourceText: string,
     candidateText: string,
-    canonical: string,
+    sourceCanonical: string,
+    candidateCanonical: string,
   ): boolean {
-    return this.getShortLetterCanonicalTokens(canonical).some(
-      (token) =>
-        this.hasRawAcronymRepresentation(sourceText, token) ||
-        this.hasRawAcronymRepresentation(candidateText, token),
-    );
+    const sourceTokens = new Set(this.getShortLetterCanonicalTokens(sourceCanonical));
+    const candidateTokens = new Set(this.getShortLetterCanonicalTokens(candidateCanonical));
+    for (const token of sourceTokens) {
+      if (!candidateTokens.has(token)) continue;
+      const sourceHasAcronym = this.hasRawAcronymRepresentation(sourceText, token);
+      const candidateHasAcronym = this.hasRawAcronymRepresentation(candidateText, token);
+      if (sourceHasAcronym !== candidateHasAcronym) return true;
+    }
+    return false;
   }
 
   private getShortLetterCanonicalTokens(canonical: string): string[] {
