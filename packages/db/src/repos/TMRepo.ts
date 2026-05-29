@@ -38,7 +38,6 @@ interface TMConcordanceRecallQueryPlan {
   latinTerms: string[];
   shortCjkTerms: string[];
   englishTerms: string[];
-  englishShortAcronymTerms: string[];
 }
 
 interface TMConcordanceRecallStats {
@@ -308,6 +307,18 @@ export class TMRepo {
     }
 
     if (accepted.length < Math.min(collectionLimit, TM_RECALL_SHORT_TRIGGER)) {
+      this.collectEnglishShortAcronymExactSourceTier({
+        tmIds: resolvedTmIds,
+        sourceText,
+        plan,
+        scope,
+        accepted,
+        seenIds,
+        maxResults: collectionLimit,
+      });
+    }
+
+    if (accepted.length < Math.min(collectionLimit, TM_RECALL_SHORT_TRIGGER)) {
       this.collectLikeRecallTier({
         tmIds: resolvedTmIds,
         terms: plan.shortCjkTerms,
@@ -419,9 +430,6 @@ export class TMRepo {
         TM_CONCORDANCE_RECALL_SHORT_CJK_LIMIT,
       ),
       englishTerms,
-      englishShortAcronymTerms: englishTerms.filter((term) =>
-        this.isShortEnglishAcronymRecallTerm(term),
-      ),
     };
   }
 
@@ -614,10 +622,9 @@ export class TMRepo {
     accepted: TMRecallDbRow[];
     seenIds: Set<string>;
   }): void {
-    const terms = this.uniqueTerms([
-      ...params.plan.shortCjkTerms,
-      ...params.plan.englishShortAcronymTerms,
-    ]).filter((term) => term.length === 2 && !WEAK_SHORT_CJK_TERMS.has(term));
+    const terms = this.uniqueTerms(params.plan.shortCjkTerms).filter(
+      (term) => term.length === 2 && !WEAK_SHORT_CJK_TERMS.has(term),
+    );
     if (terms.length === 0) return;
 
     const placeholders = params.tmIds.map(() => '?').join(',');
@@ -799,6 +806,63 @@ export class TMRepo {
     }
   }
 
+  private collectEnglishShortAcronymExactSourceTier(params: {
+    tmIds: string[];
+    sourceText: string;
+    plan: TMRecallQueryPlan;
+    scope: TMRecallOptions['scope'];
+    accepted: TMRecallDbRow[];
+    seenIds: Set<string>;
+    maxResults: number;
+  }): void {
+    const terms = this.uniqueTerms(params.plan.englishShortAcronymTerms);
+    if (terms.length === 0 || params.accepted.length >= params.maxResults) return;
+
+    const forms = this.uniqueTerms(terms.flatMap((term) => this.buildShortAcronymRawForms(term)));
+    if (forms.length === 0) return;
+
+    const placeholders = params.tmIds.map(() => '?').join(',');
+    const formPlaceholders = forms.map(() => '?').join(',');
+    const remaining = Math.min(params.maxResults - params.accepted.length, forms.length * 4);
+    if (remaining <= 0) return;
+
+    const rows = this.db
+      .prepare(`
+        SELECT tm_entries.*, tm_fts.srcText AS ftsSrcText, tm_fts.tgtText AS ftsTgtText
+        FROM tm_fts
+        JOIN tm_entries ON tm_fts.tmEntryId = tm_entries.id
+        WHERE tm_fts.tmId IN (${placeholders}) AND tm_fts.srcText IN (${formPlaceholders})
+        ORDER BY length(tm_fts.srcText) ASC, tm_entries.usageCount DESC, tm_entries.updatedAt DESC, tm_entries.id ASC
+        LIMIT ?
+      `)
+      .all(...params.tmIds, ...forms, remaining) as TMRecallDbRow[];
+
+    for (const row of rows) {
+      if (params.seenIds.has(row.id)) continue;
+      if (
+        !this.hasRecallEvidence({
+          sourceText: params.sourceText,
+          candidate: row,
+          plan: params.plan,
+          scope: params.scope ?? 'source',
+          allowShortOnly: false,
+        })
+      ) {
+        continue;
+      }
+
+      params.seenIds.add(row.id);
+      params.accepted.push(row);
+      if (params.accepted.length >= params.maxResults) break;
+    }
+  }
+
+  private buildShortAcronymRawForms(term: string): string[] {
+    if (!this.isShortEnglishAcronymRecallTerm(term)) return [];
+    const upper = term.toUpperCase();
+    return [upper, `${upper[0]}.${upper[1]}.`, `${upper[0]}.${upper[1]}`];
+  }
+
   private buildFtsRecallQuery(terms: string[], scope: TMRecallOptions['scope']): string {
     const query = terms.map((term) => `"${term.replace(/"/g, '""')}"`).join(' OR ');
     if ((scope ?? 'source') === 'source') {
@@ -817,7 +881,7 @@ export class TMRepo {
     seenIds: Set<string>;
     maxResults: number;
   }): void {
-    const terms = this.uniqueTerms([...params.terms, ...params.plan.englishShortAcronymTerms])
+    const terms = this.uniqueTerms(params.terms)
       .filter((term) => term.length === 2 && !WEAK_SHORT_CJK_TERMS.has(term))
       .slice(0, TM_RECALL_SHORT_TERM_LIMIT);
     if (terms.length === 0 || params.accepted.length >= params.maxResults) return;

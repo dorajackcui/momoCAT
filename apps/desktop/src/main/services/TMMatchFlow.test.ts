@@ -103,6 +103,7 @@ function createRuntimeTMEntry(
     projectId: number;
     srcLang?: string;
     tgtLang?: string;
+    usageCount?: number;
   },
 ): TMEntryWithTmId {
   const now = new Date().toISOString();
@@ -117,7 +118,7 @@ function createRuntimeTMEntry(
     tagsSignature: '',
     sourceTokens: [{ type: 'text', content: params.sourceText }],
     targetTokens: [{ type: 'text', content: params.targetText }],
-    usageCount: 1,
+    usageCount: params.usageCount ?? 1,
     createdAt: now,
     updatedAt: now,
   };
@@ -644,7 +645,7 @@ describe('TM match flow trace', () => {
   it('recalls and scores English acronym punctuation variants through active TM flow', async () => {
     const db = new CATDatabase(':memory:');
     try {
-      const { projectId } = seedEnglishTMFixture(db);
+      const { projectId, tmId } = seedEnglishTMFixture(db);
       const trace = await traceActiveTMMatchFlow({
         db,
         projectId,
@@ -677,6 +678,34 @@ describe('TM match flow trace', () => {
       expect(shortAcronymTrace.step6FinalMatches.map((match) => match.srcHash)).not.toContain(
         'lower-us',
       );
+
+      for (let index = 0; index < 35; index += 1) {
+        db.upsertTMEntry(
+          createRuntimeTMEntry(tmId, {
+            projectId,
+            srcHash: `ordinary-us-noise-${index}`,
+            sourceText: `must use ordinary setting ${index}`,
+            targetText: `bruit ${index}`,
+            srcLang: 'en-US',
+            tgtLang: 'fr-FR',
+            usageCount: 100 + index,
+          }),
+        );
+      }
+
+      const crowdedShortAcronymTrace = await traceActiveTMMatchFlow({
+        db,
+        projectId,
+        source: 'U.S.',
+        srcHash: 'crowded-short-acronym-source-hash',
+        targetHashes: ['us'],
+      });
+
+      expect(crowdedShortAcronymTrace.step3FuzzyRecall.targets.us).toHaveLength(1);
+      expect(crowdedShortAcronymTrace.step6FinalMatches[0]).toMatchObject({
+        srcHash: 'us',
+        kind: 'tm',
+      });
     } finally {
       db.close();
     }
