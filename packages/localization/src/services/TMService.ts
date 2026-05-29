@@ -234,7 +234,11 @@ export class TMService {
           );
           if (
             profileSimilarity === 0 &&
-            this.hasShortLetterCanonicalToken(sourceProfileNormalized)
+            this.hasShortLetterCanonicalAcronymEvidence(
+              sourceTextOnly,
+              candTextOnly,
+              sourceProfileNormalized,
+            )
           ) {
             standardSimilarity = 0;
             localOverlap = {
@@ -351,17 +355,26 @@ export class TMService {
     const shortLetterTokens = this.getShortLetterCanonicalTokens(canonical);
     if (shortLetterTokens.length === 0) return 99;
 
-    return shortLetterTokens.every(
-      (token) =>
-        this.hasRawAcronymRepresentation(sourceText, token) &&
-        this.hasRawAcronymRepresentation(candidateText, token),
-    )
-      ? 99
-      : 0;
+    for (const token of shortLetterTokens) {
+      const sourceHasAcronym = this.hasRawAcronymRepresentation(sourceText, token);
+      const candidateHasAcronym = this.hasRawAcronymRepresentation(candidateText, token);
+      if (!sourceHasAcronym && !candidateHasAcronym) continue;
+      if (!sourceHasAcronym || !candidateHasAcronym) return 0;
+    }
+
+    return 99;
   }
 
-  private hasShortLetterCanonicalToken(canonical: string): boolean {
-    return this.getShortLetterCanonicalTokens(canonical).length > 0;
+  private hasShortLetterCanonicalAcronymEvidence(
+    sourceText: string,
+    candidateText: string,
+    canonical: string,
+  ): boolean {
+    return this.getShortLetterCanonicalTokens(canonical).some(
+      (token) =>
+        this.hasRawAcronymRepresentation(sourceText, token) ||
+        this.hasRawAcronymRepresentation(candidateText, token),
+    );
   }
 
   private getShortLetterCanonicalTokens(canonical: string): string[] {

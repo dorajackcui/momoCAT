@@ -366,6 +366,57 @@ describe('TMService.findMatches', () => {
     });
   });
 
+  it('allows ordinary short English words around matching acronym evidence', async () => {
+    const service = createService({
+      srcLang: 'en-US',
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      recallEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'go-to-us-settings',
+          sourceText: 'Go to US settings',
+          targetText: 'aller aux parametres US',
+        }),
+      ],
+      concordanceEntries: [],
+    });
+
+    const matches = await service.findMatches(
+      1,
+      createSegment('Go to U.S. settings', 'source-hash'),
+    );
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      kind: 'tm',
+      srcHash: 'go-to-us-settings',
+      similarity: 99,
+    });
+  });
+
+  it('keeps ordinary short English words matching through existing scoring', async () => {
+    const service = createService({
+      srcLang: 'en-US',
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      recallEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'go-home',
+          sourceText: 'go home',
+          targetText: 'rentre',
+        }),
+      ],
+      concordanceEntries: [],
+    });
+
+    const matches = await service.findMatches(1, createSegment('Go home', 'source-hash'));
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      kind: 'tm',
+      srcHash: 'go-home',
+      similarity: 99,
+    });
+  });
+
   it('does not use English scoring for non-English projects', async () => {
     const service = createService({
       mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
