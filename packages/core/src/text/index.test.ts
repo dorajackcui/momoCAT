@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { Token } from '../models';
 import {
+  buildEnglishTMRecallTerms,
   buildTermSearchPlan,
   buildTermSearchPlanForLocale,
   buildTermSearchFragments,
   computeMatchKey,
   findTermPositionsInText,
   findTermPositionsInTextForLocale,
+  hasEnglishTMConcordanceEvidence,
+  normalizeTextForTMSimilarity,
   normalizeTermForLookup,
+  resolveTMTextProfile,
   serializeTokensToDisplayText,
   serializeTokensToSearchText,
   serializeTokensToTextOnly,
@@ -379,5 +383,61 @@ describe('Term Matching Helpers', () => {
 
     expect(matches).toHaveLength(2);
     expect(matches.map((match) => match.id)).toEqual(['long', 'partial']);
+  });
+});
+
+describe('TM Matching Profiles', () => {
+  it('resolves only English locales to the English TM profile', () => {
+    expect(resolveTMTextProfile('en')).toBe('english');
+    expect(resolveTMTextProfile('en-US')).toBe('english');
+    expect(resolveTMTextProfile('EN-gb')).toBe('english');
+    expect(resolveTMTextProfile('zh-CN')).toBe('default');
+    expect(resolveTMTextProfile('ja-JP')).toBe('default');
+    expect(resolveTMTextProfile('fr-FR')).toBe('default');
+    expect(resolveTMTextProfile(undefined)).toBe('default');
+  });
+
+  it('keeps default TM similarity normalization equivalent to current behavior', () => {
+    expect(normalizeTextForTMSimilarity('  A.P.I.   KEY  ', 'default')).toBe('a.p.i. key');
+  });
+
+  it('canonicalizes conservative English TM variants', () => {
+    expect(normalizeTextForTMSimilarity('A.P.I.', 'english')).toBe('api');
+    expect(normalizeTextForTMSimilarity('real-time updates', 'english')).toBe(
+      'real time update',
+    );
+    expect(normalizeTextForTMSimilarity('Lumie Trees', 'english')).toBe('lumie tree');
+    expect(normalizeTextForTMSimilarity('Masquerade Lynxes', 'english')).toBe(
+      'masquerade lynx',
+    );
+  });
+
+  it('builds bounded English TM recall terms without ordinary acronym overreach', () => {
+    expect(buildEnglishTMRecallTerms('API limits for Lumie Trees')).toEqual(
+      expect.arrayContaining(['api', 'a.p.i.', 'lumie tree', 'lumie trees']),
+    );
+    expect(buildEnglishTMRecallTerms('A.P.I. limits')).toEqual(expect.arrayContaining(['api']));
+    expect(buildEnglishTMRecallTerms('real-time updates')).toEqual(
+      expect.arrayContaining(['real time', 'real-time']),
+    );
+    expect(buildEnglishTMRecallTerms('real time is ready')).not.toEqual(
+      expect.arrayContaining(['r.e.a.l.', 't.i.m.e.', 'i.s.', 'r.e.a.d.y.']),
+    );
+    expect(buildEnglishTMRecallTerms('a '.repeat(80)).length).toBeLessThanOrEqual(32);
+  });
+
+  it('requires phrase-level evidence for English TM concordance', () => {
+    expect(hasEnglishTMConcordanceEvidence('Look at Lumie Tree now.', 'Lumie Tree')).toBe(
+      true,
+    );
+    expect(hasEnglishTMConcordanceEvidence('Look at Lumie Trees now.', 'Lumie Tree')).toBe(
+      true,
+    );
+    expect(hasEnglishTMConcordanceEvidence('Look at Lumie-Tree now.', 'Lumie Tree')).toBe(
+      true,
+    );
+    expect(hasEnglishTMConcordanceEvidence('Tree', 'Lumie Tree')).toBe(false);
+    expect(hasEnglishTMConcordanceEvidence('Open the menu.', 'The Curator')).toBe(false);
+    expect(hasEnglishTMConcordanceEvidence('The value changed.', 'The Truth')).toBe(false);
   });
 });

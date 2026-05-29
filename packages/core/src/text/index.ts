@@ -15,6 +15,13 @@ export {
   findTermPositionsInTextForLocale,
 } from './termMatchingProfiles';
 export {
+  buildEnglishTMRecallTerms,
+  hasEnglishTMConcordanceEvidence,
+  normalizeTextForTMSimilarity,
+  resolveTMTextProfile,
+  type TMTextProfile,
+} from './tmMatchingProfiles';
+export {
   computeMatchKey,
   computeSrcHash,
   serializeTokensToDisplayText,
