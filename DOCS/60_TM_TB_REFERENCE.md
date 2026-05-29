@@ -22,6 +22,29 @@ references are selected for MT prompts.
 - Selected TM and concordance references are passed to localization prompt
   composition as structured artifacts.
 
+## English TM Profile
+
+TM matching resolves a source-language profile from the project source locale.
+Default/CJK projects keep the existing recall, normalization, scoring,
+concordance, diversity, and cap behavior.
+
+English source projects use a small profile-specific overlay for active TM
+matching. Recall adds bounded English variants for regular singular/plural
+forms, hyphen/space equivalents, and dotted acronym equivalents. These recall
+variants only widen the candidate pool; final scoring and evidence gates still
+decide whether a match is emitted.
+
+English scoring compares canonical forms for conservative variants such as
+`A.P.I.`/`API`, `Lumie Trees`/`Lumie Tree`, and hyphenated compounds. Short
+acronym handling rejects one-sided acronym collisions like `U.S.` versus
+ordinary lowercase `us`.
+
+English concordance requires phrase-level evidence for multi-word candidates.
+Single ordinary-token overlap such as `Tree` for `Lumie Tree` or stopword-heavy
+overlap such as `the` for `The Truth` is not sufficient. Short English phrase
+fuzzy candidates are also suppressed unless the full canonical candidate phrase
+appears in the source.
+
 ## Concordance Behavior
 
 Concordance recall contributes source-side evidence when a full TM match is not
@@ -94,10 +117,10 @@ the independent 3 TM plus 3 concordance runtime reference slots.
 4. Only run real translate after the inspect artifacts show the expected
    references.
 
-For English source projects, inspect both candidate recall and final TB matches
-when debugging terminology. Candidate aliases and final variant matching should
-agree; if candidates appear without final matches, check the source-language
-profile rules before changing SQL recall.
+For English source projects, inspect both candidate recall and final TM/TB
+matches when debugging terminology. Candidate variants and final profile gates
+should agree; if candidates appear without final matches, check the
+source-language profile rules before changing SQL recall.
 
 ## Historical Notes
 
