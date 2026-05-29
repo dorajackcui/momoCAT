@@ -1,5 +1,10 @@
 import { type Segment, type TMEntry } from '@cat/core/models';
-import { serializeTokensToDisplayText, serializeTokensToTextOnly } from '@cat/core/text';
+import {
+  normalizeTextForTMSimilarity,
+  resolveTMTextProfile,
+  serializeTokensToDisplayText,
+  serializeTokensToTextOnly,
+} from '@cat/core/text';
 import { randomUUID } from 'crypto';
 import { distance } from 'fastest-levenshtein';
 import type { ProjectRepository, TMRepository } from '../ports';
@@ -110,6 +115,9 @@ export class TMService {
     const mountedTMs = this.tmRepo.getProjectMountedTMs(projectId);
     if (mountedTMs.length === 0) return [];
 
+    const project = this.projectRepo.getProject(projectId);
+    const textProfile = resolveTMTextProfile(project?.srcLang);
+    const englishRecallOptions = textProfile === 'english' ? ({ profile: 'english' } as const) : {};
     const sourceTextOnly = serializeTokensToTextOnly(segment.sourceTokens);
     const sourceNormalized = this.normalizeForSimilarity(sourceTextOnly);
 
@@ -140,13 +148,13 @@ export class TMService {
       projectId,
       sourceTextOnly,
       tmIds,
-      { scope: 'source', limit: 50 },
+      { scope: 'source', limit: 50, ...englishRecallOptions },
     );
     const concordanceCandidates = this.tmRepo.searchTMConcordanceRecallCandidates(
       projectId,
       sourceTextOnly,
       tmIds,
-      { scope: 'source', limit: 50, rawLimit: 200 },
+      { scope: 'source', limit: 50, rawLimit: 200, ...englishRecallOptions },
     );
     const candidateMap = new Map<
       string,
@@ -292,7 +300,7 @@ export class TMService {
   }
 
   private normalizeForSimilarity(text: string): string {
-    return text.toLowerCase().replace(/\s+/g, ' ').trim();
+    return normalizeTextForTMSimilarity(text, 'default');
   }
 
   private computeMaxLengthBound(a: string, b: string): number {

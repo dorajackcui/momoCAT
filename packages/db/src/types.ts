@@ -43,12 +43,14 @@ export type TMRecallScope = 'source' | 'source-and-target';
 export interface TMRecallOptions {
   scope?: TMRecallScope;
   limit?: number;
+  profile?: 'english';
 }
 
 export interface TMConcordanceRecallOptions {
   scope?: 'source';
   limit?: number;
   rawLimit?: number;
+  profile?: 'english';
 }
 
 export interface TBRecord {

@@ -77,6 +77,7 @@ function createConcordanceEntry(
 
 function createService(params: {
   mountedTMs: Array<{ id: string; name: string; type: 'working' | 'main' }>;
+  srcLang?: string;
   exactMatchByHash?: Record<string, TMEntry | undefined>;
   concordanceEntries?: Array<TMEntry & { tmId: string }>;
   recallEntries?: Array<TMEntry & { tmId: string }>;
@@ -87,7 +88,7 @@ function createService(params: {
   const projectRepo = {
     getProject: vi.fn().mockReturnValue({
       id: 1,
-      srcLang: 'zh-CN',
+      srcLang: params.srcLang ?? 'zh-CN',
       tgtLang: 'fr-FR',
     }),
   } as unknown as ProjectRepository;
@@ -96,7 +97,7 @@ function createService(params: {
     getProjectMountedTMs: vi.fn().mockReturnValue(
       params.mountedTMs.map((tm) => ({
         ...tm,
-        srcLang: 'zh-CN',
+        srcLang: params.srcLang ?? 'zh-CN',
         tgtLang: 'fr-FR',
         priority: 10,
         permission: tm.type === 'working' ? 'readwrite' : 'read',
@@ -168,6 +169,52 @@ describe('TMService.findMatches', () => {
       rawLimit: 200,
     });
     expect(matches.map((match) => match.srcHash)).toContain('pillar-drawing-hash');
+  });
+
+  it('passes the English profile to active TM recall only for English projects', async () => {
+    const source = 'A.P.I.';
+    const englishFuzzyRecall = vi.fn().mockReturnValue([]);
+    const englishConcordanceRecall = vi.fn().mockReturnValue([]);
+    const englishService = createService({
+      srcLang: 'en-US',
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      searchTMFuzzyRecallCandidates: englishFuzzyRecall,
+      searchTMConcordanceRecallCandidates: englishConcordanceRecall,
+    });
+
+    await englishService.findMatches(1, createSegment(source, 'source-hash'));
+
+    expect(englishFuzzyRecall).toHaveBeenCalledWith(1, source, ['tm-main'], {
+      scope: 'source',
+      limit: 50,
+      profile: 'english',
+    });
+    expect(englishConcordanceRecall).toHaveBeenCalledWith(1, source, ['tm-main'], {
+      scope: 'source',
+      limit: 50,
+      rawLimit: 200,
+      profile: 'english',
+    });
+
+    const cjkFuzzyRecall = vi.fn().mockReturnValue([]);
+    const cjkConcordanceRecall = vi.fn().mockReturnValue([]);
+    const cjkService = createService({
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      searchTMFuzzyRecallCandidates: cjkFuzzyRecall,
+      searchTMConcordanceRecallCandidates: cjkConcordanceRecall,
+    });
+
+    await cjkService.findMatches(1, createSegment(source, 'source-hash'));
+
+    expect(cjkFuzzyRecall).toHaveBeenCalledWith(1, source, ['tm-main'], {
+      scope: 'source',
+      limit: 50,
+    });
+    expect(cjkConcordanceRecall).toHaveBeenCalledWith(1, source, ['tm-main'], {
+      scope: 'source',
+      limit: 50,
+      rawLimit: 200,
+    });
   });
 
   it('merges fuzzy and concordance recall candidates for active TM matching', async () => {
