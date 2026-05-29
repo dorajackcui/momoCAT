@@ -463,11 +463,7 @@ function shouldSuppressEnglishFuzzyOnlyPhraseSubmatch(params: {
   if (!params.fromFuzzy || params.fromConcordance) return false;
   if (params.sourceCanonical === params.candidateCanonical) return false;
   if (!isShortEnglishPhraseCandidate(params.candidateCanonical)) return false;
-  return (
-    !` ${params.sourceCanonical} `.includes(` ${params.candidateCanonical} `) &&
-    countSignificantEnglishTokens(params.candidateCanonical) >
-      countSignificantEnglishTokens(params.sourceCanonical)
-  );
+  return !` ${params.sourceCanonical} `.includes(` ${params.candidateCanonical} `);
 }
 
 function isShortEnglishPhraseCandidate(candidateCanonical: string): boolean {
@@ -737,6 +733,18 @@ describe('TM match flow trace', () => {
       });
 
       expect(apiPartialTrace.step6FinalMatches.map((match) => match.srcHash)).not.toContain(
+        'api-menu-settings',
+      );
+
+      const apiEqualTokenMissTrace = await traceActiveTMMatchFlow({
+        db,
+        projectId,
+        source: 'API Menu Fails',
+        srcHash: 'api-equal-token-miss-source-hash',
+        targetHashes: ['api-menu-settings'],
+      });
+
+      expect(apiEqualTokenMissTrace.step6FinalMatches.map((match) => match.srcHash)).not.toContain(
         'api-menu-settings',
       );
 

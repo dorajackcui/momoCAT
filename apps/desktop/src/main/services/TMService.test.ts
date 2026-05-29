@@ -437,14 +437,14 @@ describe('TMService.findMatches', () => {
     expect(matches).toHaveLength(0);
   });
 
-  it('scores fuzzy English acronym variants when both sides have acronym evidence', async () => {
+  it('scores fuzzy English acronym variants when the full candidate phrase matches', async () => {
     const service = createService({
       srcLang: 'en-US',
       mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
       recallEntries: [
         createConcordanceEntry('tm-main', {
-          srcHash: 'us-settings-pane',
-          sourceText: 'US settings pane',
+          srcHash: 'go-us-settings',
+          sourceText: 'Go to US settings',
           targetText: 'volet parametres US',
         }),
       ],
@@ -453,13 +453,13 @@ describe('TMService.findMatches', () => {
 
     const matches = await service.findMatches(
       1,
-      createSegment('U.S. settings panel', 'source-hash'),
+      createSegment('Go to U.S. settings', 'source-hash'),
     );
 
     expect(matches).toHaveLength(1);
     expect(matches[0]).toMatchObject({
       kind: 'tm',
-      srcHash: 'us-settings-pane',
+      srcHash: 'go-us-settings',
     });
   });
 

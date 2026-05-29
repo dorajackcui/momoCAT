@@ -370,11 +370,7 @@ export class TMService {
     if (!params.fromFuzzy || params.fromConcordance) return false;
     if (params.sourceCanonical === params.candidateCanonical) return false;
     if (!this.isShortEnglishPhraseCandidate(params.candidateCanonical)) return false;
-    return (
-      !this.containsCanonicalPhrase(params.sourceCanonical, params.candidateCanonical) &&
-      this.countSignificantEnglishTokens(params.candidateCanonical) >
-        this.countSignificantEnglishTokens(params.sourceCanonical)
-    );
+    return !this.containsCanonicalPhrase(params.sourceCanonical, params.candidateCanonical);
   }
 
   private isShortEnglishPhraseCandidate(candidateCanonical: string): boolean {
