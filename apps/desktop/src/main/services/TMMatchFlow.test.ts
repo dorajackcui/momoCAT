@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Segment, TMEntry } from '@cat/core/models';
-import { resolveTMTextProfile, serializeTokensToTextOnly } from '@cat/core/text';
+import {
+  normalizeTextForTMSimilarity,
+  resolveTMTextProfile,
+  serializeTokensToTextOnly,
+} from '@cat/core/text';
 import { CATDatabase } from '../../../../../packages/db/src';
 import { TMService, type TMMatch } from './TMService';
 import type { ProjectRepository, TMRepository } from './ports';
@@ -53,6 +57,27 @@ interface TraceEnvConfig {
 
 const ACTIVE_SOURCE = '阿茉玻曾见证清新天王将因绝望病逝世的心愿精灵送回星空。';
 const TARGET_HASHES = ['amo-glass', 'fresh-king'];
+const ENGLISH_PHRASE_STOPWORDS = new Set([
+  'a',
+  'an',
+  'and',
+  'are',
+  'as',
+  'at',
+  'be',
+  'by',
+  'for',
+  'from',
+  'in',
+  'is',
+  'it',
+  'of',
+  'on',
+  'or',
+  'the',
+  'to',
+  'with',
+]);
 
 function createSegment(sourceText: string, srcHash: string): Segment {
   return {
@@ -147,6 +172,11 @@ function seedEnglishTMFixture(db: CATDatabase): { projectId: number; tmId: strin
       sourceText: 'Open Menu Settings',
       targetText: 'parametres du menu',
     },
+    {
+      srcHash: 'lower-open-menu-settings',
+      sourceText: 'open menu settings',
+      targetText: 'parametres du menu minuscule',
+    },
   ]) {
     db.upsertTMEntry(
       createRuntimeTMEntry(tmId, {
@@ -210,7 +240,9 @@ function summarizeRecall(entries: TMEntryWithTmId[], targetHashes: string[]) {
 function traceCandidateScoring(params: {
   service: TMService;
   mountedTMs: ReturnType<CATDatabase['getProjectMountedTMs']>;
+  sourceTextOnly: string;
   sourceNormalized: string;
+  textProfile: ReturnType<typeof resolveTMTextProfile>;
   exactHashMatches: TMEntryWithTmId[];
   fuzzyCandidates: TMEntryWithTmId[];
   concordanceCandidates: TMEntryWithTmId[];
@@ -247,6 +279,11 @@ function traceCandidateScoring(params: {
     const cand = candidateState.candidate;
     const candTextOnly = serializeTokensToTextOnly(cand.sourceTokens);
     const candNormalized = debugService.normalizeForSimilarity(candTextOnly);
+    const sourceProfileNormalized = normalizeTextForTMSimilarity(
+      params.sourceTextOnly,
+      params.textProfile,
+    );
+    const candProfileNormalized = normalizeTextForTMSimilarity(candTextOnly, params.textProfile);
     const sourceLength = Array.from(params.sourceNormalized).length;
     const candidateLength = Array.from(candNormalized).length;
     const base = {
@@ -264,6 +301,23 @@ function traceCandidateScoring(params: {
         ...base,
         accepted: false,
         droppedAt: 'seenHash',
+      };
+    }
+
+    if (
+      params.textProfile === 'english' &&
+      shouldSuppressEnglishFuzzyOnlyPhraseSubmatch({
+        candidateText: candTextOnly,
+        sourceCanonical: sourceProfileNormalized,
+        candidateCanonical: candProfileNormalized,
+        fromFuzzy: candidateState.fromFuzzy,
+        fromConcordance: candidateState.fromConcordance,
+      })
+    ) {
+      return {
+        ...base,
+        accepted: false,
+        droppedAt: 'englishFuzzyOnlyPhraseSubmatch',
       };
     }
 
@@ -391,6 +445,36 @@ function traceCandidateScoring(params: {
   });
 }
 
+function shouldSuppressEnglishFuzzyOnlyPhraseSubmatch(params: {
+  candidateText: string;
+  sourceCanonical: string;
+  candidateCanonical: string;
+  fromFuzzy: boolean;
+  fromConcordance: boolean;
+}): boolean {
+  if (!params.fromFuzzy || params.fromConcordance) return false;
+  if (params.sourceCanonical === params.candidateCanonical) return false;
+  if (hasUppercaseAcronymToken(params.candidateText)) return false;
+  if (!isShortEnglishPhraseCandidate(params.candidateCanonical)) return false;
+  return !` ${params.sourceCanonical} `.includes(` ${params.candidateCanonical} `);
+}
+
+function hasUppercaseAcronymToken(text: string): boolean {
+  const tokens = text.normalize('NFKC').match(/[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu) ?? [];
+  return tokens.some(
+    (token) => /^[A-Z]{2,5}$/u.test(token) || /^[A-Z](?:\.[A-Z]){1,4}\.?$/u.test(token),
+  );
+}
+
+function isShortEnglishPhraseCandidate(candidateCanonical: string): boolean {
+  const tokens = candidateCanonical.split(/\s+/).filter(Boolean);
+  const significantTokens = tokens.filter(
+    (token) =>
+      token.length >= 3 && /[a-z]/u.test(token) && !ENGLISH_PHRASE_STOPWORDS.has(token),
+  );
+  return significantTokens.length >= 2 && significantTokens.length <= 4;
+}
+
 async function traceActiveTMMatchFlow(params: TraceActiveTMMatchFlowParams) {
   const service = new TMService(
     params.db as unknown as ProjectRepository,
@@ -426,7 +510,9 @@ async function traceActiveTMMatchFlow(params: TraceActiveTMMatchFlowParams) {
   const candidateScoring = traceCandidateScoring({
     service,
     mountedTMs,
+    sourceTextOnly,
     sourceNormalized,
+    textProfile,
     exactHashMatches,
     fuzzyCandidates,
     concordanceCandidates,
@@ -608,12 +694,15 @@ describe('TM match flow trace', () => {
         projectId,
         source: 'Menu Settings',
         srcHash: 'contained-source-hash',
-        targetHashes: ['open-menu-settings'],
+        targetHashes: ['open-menu-settings', 'lower-open-menu-settings'],
       });
 
       expect(containedTrace.step4ConcordanceRecall.targets['open-menu-settings']).toHaveLength(0);
       expect(containedTrace.step6FinalMatches.map((match) => match.srcHash)).not.toContain(
         'open-menu-settings',
+      );
+      expect(containedTrace.step6FinalMatches.map((match) => match.srcHash)).not.toContain(
+        'lower-open-menu-settings',
       );
     } finally {
       db.close();

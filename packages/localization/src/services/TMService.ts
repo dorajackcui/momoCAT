@@ -1,6 +1,5 @@
 import { type Segment, type TMEntry } from '@cat/core/models';
 import {
-  hasEnglishTMConcordanceEvidence,
   normalizeTextForTMSimilarity,
   resolveTMTextProfile,
   serializeTokensToDisplayText,
@@ -56,6 +55,27 @@ export class TMService {
   private static readonly LOCAL_OVERLAP_CONCORDANCE_MIN_ADVANTAGE = 15;
   private static readonly LOCAL_OVERLAP_CONCORDANCE_MIN_ENTRY_COVERAGE = 90;
   private static readonly LOCAL_OVERLAP_CONCORDANCE_MAX_SOURCE_COVERAGE = 75;
+  private static readonly ENGLISH_PHRASE_STOPWORDS = new Set([
+    'a',
+    'an',
+    'and',
+    'are',
+    'as',
+    'at',
+    'be',
+    'by',
+    'for',
+    'from',
+    'in',
+    'is',
+    'it',
+    'of',
+    'on',
+    'or',
+    'the',
+    'to',
+    'with',
+  ]);
 
   private projectRepo: ProjectRepository;
   private tmRepo: TMRepository;
@@ -193,11 +213,13 @@ export class TMService {
       const candProfileNormalized = normalizeTextForTMSimilarity(candTextOnly, textProfile);
       if (
         textProfile === 'english' &&
-        candidateState.fromFuzzy &&
-        !candidateState.fromConcordance &&
-        sourceProfileNormalized !== candProfileNormalized &&
-        hasEnglishTMConcordanceEvidence(candTextOnly, candTextOnly) &&
-        !hasEnglishTMConcordanceEvidence(sourceTextOnly, candTextOnly)
+        this.shouldSuppressEnglishFuzzyOnlyPhraseSubmatch({
+          candidateText: candTextOnly,
+          sourceCanonical: sourceProfileNormalized,
+          candidateCanonical: candProfileNormalized,
+          fromFuzzy: candidateState.fromFuzzy,
+          fromConcordance: candidateState.fromConcordance,
+        })
       ) {
         continue;
       }
@@ -338,6 +360,40 @@ export class TMService {
 
   private normalizeForSimilarity(text: string): string {
     return normalizeTextForTMSimilarity(text, 'default');
+  }
+
+  private shouldSuppressEnglishFuzzyOnlyPhraseSubmatch(params: {
+    candidateText: string;
+    sourceCanonical: string;
+    candidateCanonical: string;
+    fromFuzzy: boolean;
+    fromConcordance: boolean;
+  }): boolean {
+    if (!params.fromFuzzy || params.fromConcordance) return false;
+    if (params.sourceCanonical === params.candidateCanonical) return false;
+    if (this.hasUppercaseAcronymToken(params.candidateText)) return false;
+    if (!this.isShortEnglishPhraseCandidate(params.candidateCanonical)) return false;
+    return !this.containsCanonicalPhrase(params.sourceCanonical, params.candidateCanonical);
+  }
+
+  private hasUppercaseAcronymToken(text: string): boolean {
+    const tokens = text.normalize('NFKC').match(/[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu) ?? [];
+    return tokens.some((token) => this.isUppercaseAcronymShape(token));
+  }
+
+  private isShortEnglishPhraseCandidate(candidateCanonical: string): boolean {
+    const tokens = candidateCanonical.split(/\s+/).filter(Boolean);
+    const significantTokens = tokens.filter(
+      (token) =>
+        token.length >= 3 &&
+        /[a-z]/u.test(token) &&
+        !TMService.ENGLISH_PHRASE_STOPWORDS.has(token),
+    );
+    return significantTokens.length >= 2 && significantTokens.length <= 4;
+  }
+
+  private containsCanonicalPhrase(text: string, phrase: string): boolean {
+    return ` ${text} `.includes(` ${phrase} `);
   }
 
   private computeMaxLengthBound(a: string, b: string): number {
