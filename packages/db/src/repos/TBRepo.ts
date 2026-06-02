@@ -143,7 +143,7 @@ export class TBRepo {
           )
         : [];
 
-    return this.mergeSearchCandidates(limit, ftsCandidates, exactCandidates);
+    return this.mergeSearchCandidates(limit, exactCandidates, ftsCandidates);
   }
 
   public insertTBEntryIfAbsentBySrcTerm(params: {
@@ -320,25 +320,29 @@ export class TBRepo {
 
   private mergeSearchCandidates(
     limit: number,
-    ...groups: ProjectTermEntryRecord[][]
+    exactCandidates: ProjectTermEntryRecord[],
+    ftsCandidates: ProjectTermEntryRecord[],
   ): Array<TBEntry & { tbName: string; priority: number }> {
     const merged = new Map<string, ProjectTermEntryRecord>();
 
-    for (const group of groups) {
-      for (const row of group) {
+    for (const group of [exactCandidates, ftsCandidates]) {
+      for (const row of this.sortSearchCandidates(group)) {
+        if (merged.size >= limit) break;
         if (!merged.has(row.id)) {
           merged.set(row.id, row);
         }
       }
     }
 
-    return Array.from(merged.values())
-      .sort((a, b) => {
-        if (a.priority !== b.priority) return a.priority - b.priority;
-        if (b.srcTerm.length !== a.srcTerm.length) return b.srcTerm.length - a.srcTerm.length;
-        return b.usageCount - a.usageCount;
-      })
-      .slice(0, limit);
+    return Array.from(merged.values());
+  }
+
+  private sortSearchCandidates(rows: ProjectTermEntryRecord[]): ProjectTermEntryRecord[] {
+    return rows.slice().sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      if (b.srcTerm.length !== a.srcTerm.length) return b.srcTerm.length - a.srcTerm.length;
+      return b.usageCount - a.usageCount;
+    });
   }
 
   private escapeFtsFragment(value: string): string {

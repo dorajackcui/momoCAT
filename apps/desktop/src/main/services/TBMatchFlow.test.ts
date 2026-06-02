@@ -450,6 +450,49 @@ describe('TB match flow trace', () => {
     }
   });
 
+  it('keeps exact alias candidates ahead of noisy FTS recall before final matching', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Trace English Exact Candidate Limit', 'en-US', 'fr-FR');
+      const tbId = db.createTermBase('English Exact Candidate Limit Terms', 'en-US', 'fr-FR');
+      db.mountTermBaseToProject(projectId, tbId, 1);
+
+      for (let index = 0; index < 220; index += 1) {
+        db.insertTBEntryIfAbsentBySrcTerm({
+          id: `tb-noisy-fts-candidate-${index}`,
+          tbId,
+          srcLang: 'en-US',
+          srcTerm: `The Very Long Noise Candidate ${String(index).padStart(3, '0')}`,
+          tgtTerm: `bruit ${index}`,
+        });
+      }
+
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'tb-emberpaw',
+        tbId,
+        srcLang: 'en-US',
+        srcTerm: 'Emberpaw',
+        tgtTerm: 'braisepatte',
+      });
+
+      const trace = await traceTBMatchFlow({
+        db,
+        projectId,
+        source: 'Emberpaws the',
+        focusSrcTerms: ['Emberpaw'],
+      });
+
+      expect(trace.step3RepoCandidateRecall.focusCandidates.map((entry) => entry.srcTerm)).toEqual([
+        'Emberpaw',
+      ]);
+      expect(trace.step6FinalMatches.focusMatches.map((match) => match.srcTerm)).toEqual([
+        'Emberpaw',
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('does not use English alias recall for non-English project source locale', async () => {
     const db = new CATDatabase(':memory:');
     try {

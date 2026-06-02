@@ -1,5 +1,9 @@
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import type { Segment } from '@cat/core/models';
 import { describe, expect, it } from 'vitest';
 import {
+  EditorRow,
   hasRefinableTargetText,
   normalizeRefinementInstruction,
   parseVisualizedNonPrintingSymbols,
@@ -40,6 +44,43 @@ describe('EditorRow AI refine decisions', () => {
   it('parses visualized non-printing symbols back to raw text', () => {
     const visualized = 'A·B⍽C⎵D⇥E↵\nF';
     expect(parseVisualizedNonPrintingSymbols(visualized)).toBe('A B\u00A0C\u202FD\tE\nF');
+  });
+});
+
+describe('EditorRow layout containment', () => {
+  it('keeps long context constrained to the target column', () => {
+    const segment: Segment = {
+      segmentId: 'layout-long-context',
+      fileId: 1,
+      orderIndex: 0,
+      sourceTokens: [{ type: 'text', content: 'Source text' }],
+      targetTokens: [],
+      status: 'new',
+      tagsSignature: '',
+      matchKey: 'source text',
+      srcHash: 'source-text',
+      meta: {
+        updatedAt: '2026-06-02T00:00:00.000Z',
+        context: `${'Very long context '.repeat(80)}tail`,
+      },
+    };
+
+    const html = renderToStaticMarkup(
+      React.createElement(EditorRow, {
+        segment,
+        rowNumber: 1,
+        isActive: true,
+        onActivate: () => undefined,
+        onChange: () => undefined,
+        onAITranslate: () => undefined,
+        onAIRefine: () => undefined,
+        onConfirm: () => undefined,
+      }),
+    );
+
+    expect(html).toContain('grid-cols-[30px_minmax(0,1fr)_4px_minmax(0,1fr)]');
+    expect(html).toContain('min-w-0 overflow-hidden');
+    expect(html).toContain('truncate whitespace-nowrap');
   });
 });
 

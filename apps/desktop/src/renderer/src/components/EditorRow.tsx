@@ -171,7 +171,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
 
   return (
     <div
-      className={`group grid grid-cols-[30px_1fr_4px_1fr] border-b border-border transition-colors ${
+      className={`group grid grid-cols-[30px_minmax(0,1fr)_4px_minmax(0,1fr)] border-b border-border transition-colors ${
         isActive ? 'bg-brand-soft/20' : 'hover:bg-muted/30'
       }`}
       onClick={() => onActivate(segment.segmentId)}
@@ -191,7 +191,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
       </div>
 
       <div
-        className={`px-1.5 py-0.5 relative flex min-h-full flex-col ${
+        className={`px-1.5 py-0.5 relative flex min-h-full min-w-0 overflow-hidden flex-col ${
           qaIssues.some((issue) => issue.severity === 'error')
             ? 'bg-danger-soft/40'
             : qaIssues.some((issue) => issue.severity === 'warning')
