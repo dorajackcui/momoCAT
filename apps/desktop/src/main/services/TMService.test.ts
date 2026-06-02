@@ -527,6 +527,32 @@ describe('TMService.findMatches', () => {
     expect(matches).toHaveLength(0);
   });
 
+  it('does not emit fuzzy-only English matches when the source is an ordinary substring', async () => {
+    const service = createService({
+      srcLang: 'en-US',
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      recallEntries: [
+        createConcordanceEntry('tm-main', {
+          srcHash: 'the-tree',
+          sourceText: 'The Tree',
+        }),
+        createConcordanceEntry('tm-main', {
+          srcHash: 'a-tree',
+          sourceText: 'A Tree',
+        }),
+        createConcordanceEntry('tm-main', {
+          srcHash: 'treetop',
+          sourceText: 'Treetop',
+        }),
+      ],
+      concordanceEntries: [],
+    });
+
+    const matches = await service.findMatches(1, createSegment('Tree', 'source-hash'));
+
+    expect(matches).toHaveLength(0);
+  });
+
   it('merges fuzzy and concordance recall candidates for active TM matching', async () => {
     const source = '阿茉玻 清新天王';
     const searchTMFuzzyRecallCandidates = vi.fn().mockReturnValue([]);

@@ -369,13 +369,10 @@ export class TMService {
   }): boolean {
     if (!params.fromFuzzy || params.fromConcordance) return false;
     if (params.sourceCanonical === params.candidateCanonical) return false;
-    if (!this.isShortEnglishPhraseCandidate(params.candidateCanonical)) return false;
+    const significantTokenCount = this.countSignificantEnglishTokens(params.candidateCanonical);
+    if (significantTokenCount === 0) return true;
+    if (significantTokenCount > 4) return false;
     return !this.containsCanonicalPhrase(params.sourceCanonical, params.candidateCanonical);
-  }
-
-  private isShortEnglishPhraseCandidate(candidateCanonical: string): boolean {
-    const significantTokenCount = this.countSignificantEnglishTokens(candidateCanonical);
-    return significantTokenCount >= 2 && significantTokenCount <= 4;
   }
 
   private countSignificantEnglishTokens(text: string): number {

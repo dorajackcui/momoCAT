@@ -465,13 +465,10 @@ function shouldSuppressEnglishFuzzyOnlyPhraseSubmatch(params: {
 }): boolean {
   if (!params.fromFuzzy || params.fromConcordance) return false;
   if (params.sourceCanonical === params.candidateCanonical) return false;
-  if (!isShortEnglishPhraseCandidate(params.candidateCanonical)) return false;
+  const significantTokenCount = countSignificantEnglishTokens(params.candidateCanonical);
+  if (significantTokenCount === 0) return true;
+  if (significantTokenCount > 4) return false;
   return !` ${params.sourceCanonical} `.includes(` ${params.candidateCanonical} `);
-}
-
-function isShortEnglishPhraseCandidate(candidateCanonical: string): boolean {
-  const significantTokenCount = countSignificantEnglishTokens(candidateCanonical);
-  return significantTokenCount >= 2 && significantTokenCount <= 4;
 }
 
 function countSignificantEnglishTokens(text: string): number {
