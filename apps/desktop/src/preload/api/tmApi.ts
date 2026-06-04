@@ -6,6 +6,7 @@ type TMApiKeys =
   | 'getMatches'
   | 'searchConcordance'
   | 'listTMs'
+  | 'getTMPreview'
   | 'createTM'
   | 'deleteTM'
   | 'getProjectMountedTMs'
@@ -28,6 +29,10 @@ export function createTMApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<TMApi
       >,
     listTMs: (type) =>
       ipcRenderer.invoke(IPC_CHANNELS.tm.list, type) as ReturnType<DesktopApi['listTMs']>,
+    getTMPreview: (tmId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.tm.preview, tmId) as ReturnType<
+        DesktopApi['getTMPreview']
+      >,
     createTM: (name, srcLang, tgtLang, type) =>
       ipcRenderer.invoke(IPC_CHANNELS.tm.create, name, srcLang, tgtLang, type) as ReturnType<
         DesktopApi['createTM']

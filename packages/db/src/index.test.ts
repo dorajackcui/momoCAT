@@ -553,6 +553,29 @@ describe("CATDatabase", () => {
       expect(allResults[0].srcHash).toBe("h2");
     });
 
+    it("should list TM entries with a preview-sized limit", () => {
+      const tmId = db.createTM("Preview TM", "en", "zh", "main");
+
+      for (let index = 0; index < 12; index += 1) {
+        db.upsertTMEntry({
+          id: `preview-entry-${index}`,
+          tmId,
+          srcHash: `preview-hash-${index}`,
+          matchKey: `source ${index}`,
+          tagsSignature: "",
+          sourceTokens: [{ type: "text", content: `Source ${index}` }],
+          targetTokens: [{ type: "text", content: `Target ${index}` }],
+          usageCount: index,
+        } as any);
+      }
+
+      const entries = db.listTMEntries(tmId, 10, 0);
+      const sources = entries.map((entry) => entry.sourceTokens[0]?.content);
+
+      expect(entries).toHaveLength(10);
+      expect(sources.every((source) => /^Source \d+$/.test(String(source)))).toBe(true);
+    });
+
     it("should keep concordance results diverse when one CJK overlap dominates", () => {
       const projectId = db.createProject("Concordance Diversity Project", "zh", "fr");
       const mainTmId = db.createTM("Main Concordance Diversity", "zh", "fr", "main");

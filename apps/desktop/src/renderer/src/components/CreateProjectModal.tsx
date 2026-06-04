@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import type { ProjectType } from '@cat/core/project';
+import { LanguageSelect } from './LanguageSelect';
+import { DEFAULT_PROJECT_SOURCE_LANG, DEFAULT_PROJECT_TARGET_LANG } from './languageOptions';
 
 interface CreateProjectModalProps {
   isOpen: boolean;
@@ -7,20 +9,6 @@ interface CreateProjectModalProps {
   onConfirm: (name: string, srcLang: string, tgtLang: string, projectType: ProjectType) => void;
   loading: boolean;
 }
-
-const LANGUAGE_OPTIONS = [
-  { label: 'Chinese (zh-CN)', value: 'zh-CN' },
-  { label: 'English (en-US)', value: 'en-US' },
-  { label: 'Japanese (ja-JP)', value: 'ja-JP' },
-  { label: 'Korean (ko-KR)', value: 'ko-KR' },
-  { label: 'German (de-DE)', value: 'de-DE' },
-  { label: 'French (fr-FR)', value: 'fr-FR' },
-  { label: 'Spanish (es-ES)', value: 'es-ES' },
-  { label: 'Italian (it-IT)', value: 'it-IT' },
-  { label: 'Portuguese (pt-PT)', value: 'pt-PT' },
-  { label: 'Thai (th-TH)', value: 'th-TH' },
-  { label: 'Bahasa Indonesia (id-ID)', value: 'id-ID' },
-] as const;
 
 export function CreateProjectModal({
   isOpen,
@@ -30,8 +18,8 @@ export function CreateProjectModal({
 }: CreateProjectModalProps) {
   const [name, setName] = useState('');
   const [projectType, setProjectType] = useState<ProjectType>('translation');
-  const [srcLang, setSrcLang] = useState('zh-CN');
-  const [tgtLang, setTgtLang] = useState('en-US');
+  const [srcLang, setSrcLang] = useState(DEFAULT_PROJECT_SOURCE_LANG);
+  const [tgtLang, setTgtLang] = useState(DEFAULT_PROJECT_TARGET_LANG);
 
   if (!isOpen) return null;
 
@@ -121,33 +109,21 @@ export function CreateProjectModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="field-label">Source Language</label>
-              <select
+              <LanguageSelect
                 value={srcLang}
-                onChange={(e) => setSrcLang(e.target.value)}
+                onChange={setSrcLang}
                 className="field-input"
                 required
-              >
-                {LANGUAGE_OPTIONS.map((language) => (
-                  <option key={language.value} value={language.value}>
-                    {language.label}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <div>
               <label className="field-label">Target Language</label>
-              <select
+              <LanguageSelect
                 value={tgtLang}
-                onChange={(e) => setTgtLang(e.target.value)}
+                onChange={setTgtLang}
                 className="field-input"
                 required
-              >
-                {LANGUAGE_OPTIONS.map((language) => (
-                  <option key={language.value} value={language.value}>
-                    {language.label}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
           </div>
 

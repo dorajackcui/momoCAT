@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { TMImportWizard } from './TMImportWizard';
+import { AssetPreviewModal } from './AssetPreviewModal';
+import { LanguageSelect } from './LanguageSelect';
 import { apiClient } from '../services/apiClient';
 import { feedbackService } from '../services/feedbackService';
+import { DEFAULT_ASSET_SOURCE_LANG, DEFAULT_ASSET_TARGET_LANG } from './languageOptions';
 import type {
   ImportExecutionResult,
   SpreadsheetPreviewData,
   StructuredJobError,
+  TMAssetPreview,
   TMImportOptions,
   TMWithStats,
 } from '../../../shared/ipc';
@@ -20,8 +24,8 @@ export const TMManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newSrc, setNewSrc] = useState('en-US');
-  const [newTgt, setNewTgt] = useState('zh-CN');
+  const [newSrc, setNewSrc] = useState(DEFAULT_ASSET_SOURCE_LANG);
+  const [newTgt, setNewTgt] = useState(DEFAULT_ASSET_TARGET_LANG);
 
   // Import State
   const [importingTMId, setImportingTMId] = useState<string | null>(null);
@@ -30,6 +34,10 @@ export const TMManager: React.FC = () => {
   const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
   const [importJobId, setImportJobId] = useState<string | null>(null);
   const [importNotice, setImportNotice] = useState<ImportNotice | null>(null);
+  const [previewTMId, setPreviewTMId] = useState<string | null>(null);
+  const [previewCache, setPreviewCache] = useState<Record<string, TMAssetPreview>>({});
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const loadTMs = async () => {
     setLoading(true);
@@ -47,6 +55,17 @@ export const TMManager: React.FC = () => {
     loadTMs();
   }, []);
 
+  const selectedPreviewTM = previewTMId ? tms.find((tm) => tm.id === previewTMId) ?? null : null;
+  const selectedPreview = previewTMId ? previewCache[previewTMId] ?? null : null;
+
+  const clearPreviewCache = (tmId: string) => {
+    setPreviewCache((current) => {
+      const next = { ...current };
+      delete next[tmId];
+      return next;
+    });
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName) return;
@@ -60,6 +79,30 @@ export const TMManager: React.FC = () => {
     }
   };
 
+  const handleOpenPreview = async (tmId: string, force: boolean = false) => {
+    setPreviewTMId(tmId);
+    setPreviewError(null);
+
+    if (!force && previewCache[tmId]) {
+      return;
+    }
+
+    setPreviewLoading(true);
+    try {
+      const preview = await apiClient.getTMPreview(tmId);
+      setPreviewCache((current) => ({ ...current, [tmId]: preview }));
+    } catch {
+      setPreviewError('Failed to load TM preview.');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleClosePreview = () => {
+    setPreviewTMId(null);
+    setPreviewError(null);
+  };
+
   const handleDelete = async (id: string) => {
     const confirmed = await feedbackService.confirm(
       'Are you sure you want to delete this Main TM? All data inside will be lost.',
@@ -67,6 +110,10 @@ export const TMManager: React.FC = () => {
     if (!confirmed) return;
     try {
       await apiClient.deleteTM(id);
+      clearPreviewCache(id);
+      if (previewTMId === id) {
+        handleClosePreview();
+      }
       loadTMs();
     } catch {
       feedbackService.error('Failed to delete TM');
@@ -110,6 +157,7 @@ export const TMManager: React.FC = () => {
   };
 
   const handleImportCompleted = (result: ImportExecutionResult) => {
+    const completedTMId = importingTMId;
     setImportNotice({
       tone: 'success',
       message: `Import completed: ${result.success} imported, ${result.skipped} skipped.`,
@@ -118,6 +166,9 @@ export const TMManager: React.FC = () => {
     setImportJobId(null);
     setImportingTMId(null);
     setImportFilePath(null);
+    if (completedTMId) {
+      clearPreviewCache(completedTMId);
+    }
     void loadTMs();
   };
 
@@ -147,6 +198,19 @@ export const TMManager: React.FC = () => {
         onConfirm={handleConfirmImport}
         onJobCompleted={handleImportCompleted}
         onJobFailed={handleImportFailed}
+      />
+      <AssetPreviewModal
+        kind="tm"
+        asset={selectedPreviewTM}
+        preview={selectedPreview}
+        loading={previewLoading}
+        error={previewError}
+        onClose={handleClosePreview}
+        onRetry={() => {
+          if (previewTMId) {
+            void handleOpenPreview(previewTMId, true);
+          }
+        }}
       />
 
       <div className="max-w-5xl mx-auto">
@@ -198,19 +262,17 @@ export const TMManager: React.FC = () => {
               </div>
               <div>
                 <label className="field-label !text-[10px]">Source</label>
-                <input
-                  type="text"
+                <LanguageSelect
                   value={newSrc}
-                  onChange={(e) => setNewSrc(e.target.value)}
+                  onChange={setNewSrc}
                   className="field-input !px-3 !py-2 text-sm"
                 />
               </div>
               <div>
                 <label className="field-label !text-[10px]">Target</label>
-                <input
-                  type="text"
+                <LanguageSelect
                   value={newTgt}
-                  onChange={(e) => setNewTgt(e.target.value)}
+                  onChange={setNewTgt}
                   className="field-input !px-3 !py-2 text-sm"
                 />
               </div>
@@ -271,6 +333,32 @@ export const TMManager: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => void handleOpenPreview(tm.id)}
+                      className="p-1.5 text-text-faint hover:text-brand hover:bg-brand-soft rounded-control transition-colors"
+                      title="Preview TM"
+                      aria-label={`Preview ${tm.name}`}
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 15.25A3.25 3.25 0 1012 8.75a3.25 3.25 0 000 6.5z"
+                        />
+                      </svg>
+                    </button>
                     <button
                       onClick={() => handleStartImport(tm.id)}
                       className="p-1.5 text-text-faint hover:text-brand hover:bg-brand-soft rounded-control transition-colors"

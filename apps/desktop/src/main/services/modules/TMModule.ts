@@ -50,6 +50,10 @@ export class TMModule {
     return this.queryService.listTMs(type);
   }
 
+  public async getTMPreview(tmId: string) {
+    return this.queryService.getTMPreview(tmId);
+  }
+
   public async createTM(
     name: string,
     srcLang: string,

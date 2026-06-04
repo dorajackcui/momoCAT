@@ -258,6 +258,10 @@ export class ProjectService {
     return this.tmModule.listTMs(type);
   }
 
+  public async getTMPreview(tmId: string) {
+    return this.tmModule.getTMPreview(tmId);
+  }
+
   public async createTM(
     name: string,
     srcLang: string,
@@ -290,6 +294,10 @@ export class ProjectService {
 
   public async listTBs() {
     return this.tbModule.listTBs();
+  }
+
+  public async getTBPreview(tbId: string) {
+    return this.tbModule.getTBPreview(tbId);
   }
 
   public async createTB(name: string, srcLang: string, tgtLang: string) {

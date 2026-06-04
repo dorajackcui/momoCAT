@@ -10,7 +10,9 @@ import {
 } from '../ports';
 import { TBService } from '../TBService';
 import { extractSheetRows } from '../../filters/sheetRows';
-import type { TBImportOptions } from '../../../shared/ipc';
+import type { TBAssetPreview, TBImportOptions } from '../../../shared/ipc';
+
+const ASSET_PREVIEW_ROW_LIMIT = 10;
 
 export interface ImportProgress {
   current: number;
@@ -54,6 +56,22 @@ export class TBModule {
       ...tb,
       stats: this.tbRepo.getTermBaseStats(tb.id),
     }));
+  }
+
+  public async getTBPreview(tbId: string): Promise<TBAssetPreview> {
+    const entries = this.tbRepo.listTBEntries(tbId, ASSET_PREVIEW_ROW_LIMIT, 0);
+
+    return {
+      tbId,
+      rows: entries.slice(0, ASSET_PREVIEW_ROW_LIMIT).map((entry) => ({
+        id: entry.id,
+        sourceTerm: entry.srcTerm,
+        targetTerm: entry.tgtTerm,
+        note: entry.note,
+        updatedAt: entry.updatedAt,
+        usageCount: entry.usageCount,
+      })),
+    };
   }
 
   public async mountTBToProject(projectId: number, tbId: string, priority?: number) {

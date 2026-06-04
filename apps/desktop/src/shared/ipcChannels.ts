@@ -25,6 +25,7 @@ export const IPC_CHANNELS = {
     getMatches: 'tm-get-matches',
     concordance: 'tm-concordance',
     list: 'tm-list',
+    preview: 'tm-preview',
     create: 'tm-create',
     remove: 'tm-delete',
     getMountedByProject: 'tm-project-mounted',
@@ -38,6 +39,7 @@ export const IPC_CHANNELS = {
   tb: {
     getMatches: 'tb-get-matches',
     list: 'tb-list',
+    preview: 'tb-preview',
     create: 'tb-create',
     remove: 'tb-delete',
     getMountedByProject: 'tb-project-mounted',

@@ -1318,6 +1318,20 @@ export class TMRepo {
     return this.db.prepare('SELECT * FROM tms ORDER BY updatedAt DESC').all() as TMRecord[];
   }
 
+  public listTMEntries(tmId: string, limit: number = 500, offset: number = 0): TMEntryRow[] {
+    const rows = this.db
+      .prepare(`
+      SELECT *
+      FROM tm_entries
+      WHERE tmId = ?
+      ORDER BY updatedAt DESC, id ASC
+      LIMIT ? OFFSET ?
+    `)
+      .all(tmId, limit, offset) as TMEntryDbRow[];
+
+    return rows.map((row) => this.mapTMEntryDbRow(row));
+  }
+
   public createTM(name: string, srcLang: string, tgtLang: string, type: TMType): string {
     const id = randomUUID();
     this.db

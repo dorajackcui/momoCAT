@@ -5,6 +5,7 @@ import type { DesktopApiSlice, IpcRendererLike } from './types';
 type TBApiKeys =
   | 'getTermMatches'
   | 'listTBs'
+  | 'getTBPreview'
   | 'createTB'
   | 'deleteTB'
   | 'getProjectMountedTBs'
@@ -20,6 +21,10 @@ export function createTBApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<TBApi
         DesktopApi['getTermMatches']
       >,
     listTBs: () => ipcRenderer.invoke(IPC_CHANNELS.tb.list) as ReturnType<DesktopApi['listTBs']>,
+    getTBPreview: (tbId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.tb.preview, tbId) as ReturnType<
+        DesktopApi['getTBPreview']
+      >,
     createTB: (name, srcLang, tgtLang) =>
       ipcRenderer.invoke(IPC_CHANNELS.tb.create, name, srcLang, tgtLang) as ReturnType<
         DesktopApi['createTB']

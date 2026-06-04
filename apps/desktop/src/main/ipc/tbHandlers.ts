@@ -33,6 +33,15 @@ export function registerTBHandlers({
 
   registerHandle(
     { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.tb.preview,
+    (_event, ...args) => {
+      const [tbId] = args as [string];
+      return projectService.getTBPreview(tbId);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.create,
     (_event, ...args) => {
       const [name, srcLang, tgtLang] = args as [string, string, string];

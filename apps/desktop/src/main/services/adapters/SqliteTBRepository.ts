@@ -37,6 +37,10 @@ export class SqliteTBRepository implements TBRepository {
     this.db.unmountTermBaseFromProject(projectId, tbId);
   }
 
+  listTBEntries(tbId: string, limit?: number, offset?: number): TBEntry[] {
+    return this.db.listTBEntries(tbId, limit, offset);
+  }
+
   listProjectTermEntries(projectId: number): Array<TBEntry & { tbName: string; priority: number }> {
     return this.db.listProjectTermEntries(projectId);
   }

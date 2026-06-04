@@ -100,6 +100,7 @@ export interface TMRepository {
   ): TMEntryWithTmId[];
 
   listTMs(type?: TMType): TMRecord[];
+  listTMEntries(tmId: string, limit?: number, offset?: number): TMEntryWithTmId[];
   createTM(name: string, srcLang: string, tgtLang: string, type: TMType): string;
   deleteTM(id: string): void;
   getTM(tmId: string): TMRecord | undefined;
@@ -118,6 +119,7 @@ export interface TBRepository {
   getProjectMountedTermBases(projectId: number): MountedTBRecord[];
   mountTermBaseToProject(projectId: number, tbId: string, priority?: number): void;
   unmountTermBaseFromProject(projectId: number, tbId: string): void;
+  listTBEntries(tbId: string, limit?: number, offset?: number): TBEntry[];
   listProjectTermEntries(projectId: number): Array<TBEntry & { tbName: string; priority: number }>;
   searchProjectTermEntries(
     projectId: number,

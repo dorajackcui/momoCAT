@@ -408,12 +408,11 @@ export class CATDatabase {
     return this.tmRepo.listTMs(type);
   }
 
-  public createTM(
-    name: string,
-    srcLang: string,
-    tgtLang: string,
-    type: TMType,
-  ): string {
+  public listTMEntries(tmId: string, limit: number = 500, offset: number = 0): TMEntryRow[] {
+    return this.tmRepo.listTMEntries(tmId, limit, offset);
+  }
+
+  public createTM(name: string, srcLang: string, tgtLang: string, type: TMType): string {
     return this.tmRepo.createTM(name, srcLang, tgtLang, type);
   }
 

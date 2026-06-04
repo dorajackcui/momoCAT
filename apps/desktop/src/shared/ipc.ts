@@ -57,6 +57,19 @@ export interface TMWithStats extends TMRecord {
   stats: { entryCount: number };
 }
 
+export interface TMPreviewRow {
+  id: string;
+  source: string;
+  target: string;
+  updatedAt: string;
+  usageCount: number;
+}
+
+export interface TMAssetPreview {
+  tmId: string;
+  rows: TMPreviewRow[];
+}
+
 export type MountedTM = DbMountedTMRecord & {
   entryCount: number;
 };
@@ -65,6 +78,20 @@ export type TBRecord = DbTBRecord;
 
 export interface TBWithStats extends TBRecord {
   stats: { entryCount: number };
+}
+
+export interface TBPreviewRow {
+  id: string;
+  sourceTerm: string;
+  targetTerm: string;
+  note?: string | null;
+  updatedAt: string;
+  usageCount: number;
+}
+
+export interface TBAssetPreview {
+  tbId: string;
+  rows: TBPreviewRow[];
 }
 
 export type MountedTB = DbMountedTBRecord & {
@@ -307,6 +334,7 @@ export interface DesktopApi {
   getTermMatches: (projectId: number, segment: Segment) => Promise<TBMatch[]>;
 
   listTMs: (type?: TMType) => Promise<TMWithStats[]>;
+  getTMPreview: (tmId: string) => Promise<TMAssetPreview>;
   createTM: (name: string, srcLang: string, tgtLang: string, type?: TMType) => Promise<string>;
   deleteTM: (tmId: string) => Promise<void>;
   getProjectMountedTMs: (projectId: number) => Promise<MountedTM[]>;
@@ -323,6 +351,7 @@ export interface DesktopApi {
   importTMEntries: (tmId: string, filePath: string, options: TMImportOptions) => Promise<string>;
 
   listTBs: () => Promise<TBWithStats[]>;
+  getTBPreview: (tbId: string) => Promise<TBAssetPreview>;
   createTB: (name: string, srcLang: string, tgtLang: string) => Promise<string>;
   deleteTB: (tbId: string) => Promise<void>;
   getProjectMountedTBs: (projectId: number) => Promise<MountedTB[]>;

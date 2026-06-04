@@ -47,6 +47,15 @@ export function registerTMHandlers({
 
   registerHandle(
     { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.tm.preview,
+    (_event, ...args) => {
+      const [tmId] = args as [string];
+      return projectService.getTMPreview(tmId);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.create,
     (_event, ...args) => {
       const [name, srcLang, tgtLang, type] = args as [string, string, string, TMType | undefined];

@@ -1,6 +1,9 @@
 import type { Segment } from '@cat/core/models';
 import type { TMConcordanceRecord, TMRepository } from '../../ports';
 import { TMService } from '../../TMService';
+import type { TMAssetPreview } from '../../../../shared/ipc';
+
+const ASSET_PREVIEW_ROW_LIMIT = 10;
 
 export class TMQueryService {
   constructor(
@@ -34,6 +37,21 @@ export class TMQueryService {
       ...tm,
       stats: this.tmRepo.getTMStats(tm.id),
     }));
+  }
+
+  public async getTMPreview(tmId: string): Promise<TMAssetPreview> {
+    const entries = this.tmRepo.listTMEntries(tmId, ASSET_PREVIEW_ROW_LIMIT, 0);
+
+    return {
+      tmId,
+      rows: entries.slice(0, ASSET_PREVIEW_ROW_LIMIT).map((entry) => ({
+        id: entry.id,
+        source: entry.sourceTokens.map((token) => token.content).join(''),
+        target: entry.targetTokens.map((token) => token.content).join(''),
+        updatedAt: entry.updatedAt,
+        usageCount: entry.usageCount,
+      })),
+    };
   }
 
   public async createTM(
