@@ -49,15 +49,24 @@ describe('Text Utilities', () => {
     expect(text).toBe('风荷 立柱');
   });
 
-  it('drops tags but preserves text spacing for TB matching', () => {
-    const text = serializeTokensToSearchText([
-      { type: 'text', content: 'API ' },
+  it('drops tags but keeps search boundaries around non-text tokens', () => {
+    const inlineTaggedText = serializeTokensToSearchText([
+      { type: 'text', content: 'API' },
       { type: 'tag', content: '<b>' },
       { type: 'text', content: 'key' },
       { type: 'tag', content: '</b>' },
     ]);
 
-    expect(text).toBe('API key');
+    expect(inlineTaggedText).toBe('API key');
+
+    const cjkTaggedText = serializeTokensToSearchText([
+      { type: 'text', content: '喵居商店购买获得' },
+      { type: 'tag', content: '{1}', meta: { id: '{1}' } },
+      { type: 'tag', content: '{1}', meta: { id: '{1}' } },
+      { type: 'text', content: '5.当任意单个小鱼干' },
+    ]);
+
+    expect(cjkTaggedText).toBe('喵居商店购买获得 5.当任意单个小鱼干');
   });
 });
 

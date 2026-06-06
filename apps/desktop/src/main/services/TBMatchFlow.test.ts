@@ -521,6 +521,74 @@ describe('TB match flow trace', () => {
     }
   });
 
+  it('recalls CJK terms across tag boundaries in long source text', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Trace CJK Garden TB Match', 'zh-CN', 'fr-FR');
+      const tbId = db.createTermBase('Garden CJK Terms', 'zh-CN', 'fr-FR');
+      db.mountTermBaseToProject(projectId, tbId, 1);
+
+      for (const entry of [
+        ['tb-garden-shop', '喵居商店', 'Boutique Miaou Maison'],
+        ['tb-swap-cat', '交换喵', 'Chat Échangeur'],
+        ['tb-snack-cat', '偷吃喵', 'Chat Gourmand'],
+        ['tb-dried-fish', '小鱼干', 'Petit Poisson Séché'],
+      ] as const) {
+        const [id, srcTerm, tgtTerm] = entry;
+        db.insertTBEntryIfAbsentBySrcTerm({
+          id,
+          tbId,
+          srcLang: 'zh-CN',
+          srcTerm,
+          tgtTerm,
+        });
+      }
+
+      const segment: Segment = {
+        segmentId: 'tb-garden-cjk-coverage',
+        fileId: 1,
+        orderIndex: 0,
+        sourceTokens: [
+          {
+            type: 'text',
+            content:
+              '1.划动荧幕时，使木架上所有小鱼干向指定方向移动{1}{1}2.每次移动会随机出现新的一个数量为2或4的小鱼干{1}{1}3.相同数量的小鱼干移动相碰时会合成升级为更多数量的小鱼干{1}{1}4.小游戏中可以使用道具来帮助整理小鱼干：{1}（1）交换喵：选中任意两个上下或左右相邻的小鱼干后，可以使其相互交换位置{1}（2）偷吃喵：选中任意一个小鱼干，可以让橘喵将它偷走吃掉{1}（3）每局游戏中每种道具最多可使用3次{1}（4）小游戏道具可通过喵居商店购买获得',
+          },
+          { type: 'tag', content: '{1}', meta: { id: '{1}' } },
+          { type: 'tag', content: '{1}', meta: { id: '{1}' } },
+          {
+            type: 'text',
+            content:
+              '5.当任意单个小鱼干达到指定数量时，会使本局喵币的奖励翻倍{1}{1}6.结算时根据木架内整理的所有小鱼干数量来获得对应的游戏分数，并通过游戏分数计算得到喵币{1}{1}7.单局分数低于10分无法获得喵币奖励',
+          },
+        ],
+        targetTokens: [],
+        status: 'new',
+        tagsSignature: '{1}',
+        matchKey: 'tb-garden-cjk-coverage',
+        srcHash: 'tb-garden-cjk-coverage',
+        meta: { updatedAt: new Date().toISOString() },
+      };
+
+      const trace = await traceTBMatchFlow({
+        db,
+        projectId,
+        segment,
+        focusSrcTerms: ['喵居商店'],
+      });
+
+      expect(trace.step3RepoCandidateRecall.focusCandidates.map((entry) => entry.srcTerm)).toEqual([
+        '喵居商店',
+      ]);
+      expect(trace.step4FallbackScan.wouldUseFullMountedScan).toBe(false);
+      expect(trace.step6FinalMatches.focusMatches.map((match) => match.tgtTerm)).toEqual([
+        'Boutique Miaou Maison',
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('tb-flow-env-trace', async () => {
     const config = readTraceEnvConfig(process.env);
     if (!config) return;

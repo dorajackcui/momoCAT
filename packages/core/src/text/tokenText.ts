@@ -14,9 +14,10 @@ export function serializeTokensToTextOnly(tokens: Token[]): string {
 
 export function serializeTokensToSearchText(tokens: Token[]): string {
   return tokens
-    .filter((token) => token.type === 'text')
-    .map((token) => token.content)
-    .join('');
+    .map((token) => (token.type === 'text' ? token.content : ' '))
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function computeMatchKey(tokens: Token[]): string {
