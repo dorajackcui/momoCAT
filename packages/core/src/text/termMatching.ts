@@ -25,6 +25,7 @@ const CJK_LIKE_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Scr
 const DEFAULT_MAX_FRAGMENTS = 24;
 const CJK_EXACT_TERM_MIN_SIZE = 2;
 const CJK_EXACT_TERM_MAX_SIZE = 8;
+const CJK_DISTRIBUTED_TAIL_COVERAGE_RATIO = 0.8;
 
 function normalizeTextWithIndexMap(
   value: string,
@@ -286,6 +287,65 @@ function takeFragments(
   return taken;
 }
 
+function findNearestUnusedFragmentIndex(
+  source: string[],
+  preferredIndex: number,
+  seen: Set<string>,
+  usedIndices: Set<number>,
+): number | null {
+  for (let distance = 0; distance < source.length; distance += 1) {
+    const left = preferredIndex - distance;
+    if (left >= 0 && !usedIndices.has(left) && !seen.has(source[left])) return left;
+
+    const right = preferredIndex + distance;
+    if (right < source.length && !usedIndices.has(right) && !seen.has(source[right])) {
+      return right;
+    }
+  }
+
+  return null;
+}
+
+function takeDistributedFragments(
+  target: string[],
+  source: string[],
+  count: number,
+  seen: Set<string>,
+): number {
+  if (count <= 0 || source.length === 0) return 0;
+  if (count >= source.length) return takeFragments(target, source, count, seen);
+
+  const usedIndices = new Set<number>();
+  const leadingCount = count <= 3 ? count : Math.max(1, Math.floor(count / 2));
+  let taken = takeFragments(target, source, leadingCount, seen);
+  if (taken >= count) return taken;
+
+  const distributedCount = count - taken;
+  const coverageEndIndex = Math.max(
+    0,
+    Math.floor((source.length - 1) * CJK_DISTRIBUTED_TAIL_COVERAGE_RATIO),
+  );
+  for (let slot = 0; slot < distributedCount; slot += 1) {
+    const preferredIndex =
+      distributedCount === 1
+        ? coverageEndIndex
+        : Math.round((coverageEndIndex * slot) / (distributedCount - 1));
+    const index = findNearestUnusedFragmentIndex(source, preferredIndex, seen, usedIndices);
+    if (index === null) continue;
+
+    usedIndices.add(index);
+    seen.add(source[index]);
+    target.push(source[index]);
+    taken += 1;
+  }
+
+  if (taken < count) {
+    taken += takeFragments(target, source, count - taken, seen);
+  }
+
+  return taken;
+}
+
 function normalizeBudget(budget: number, maxBudget: number): number {
   return Math.max(0, Math.min(budget, maxBudget));
 }
@@ -383,10 +443,10 @@ function buildFtsSearchFragments(tokens: string[], maxFragments: number): string
     );
     const length2Budget = Math.max(0, remainingBudget - length4Budget - longBudget);
 
-    takeFragments(selected, cjkLength3, length3Budget, seen);
-    takeFragments(selected, cjkLength4, length4Budget, seen);
-    takeFragments(selected, cjkLong, longBudget, seen);
-    takeFragments(selected, cjkLength2, length2Budget, seen);
+    takeDistributedFragments(selected, cjkLength3, length3Budget, seen);
+    takeDistributedFragments(selected, cjkLength4, length4Budget, seen);
+    takeDistributedFragments(selected, cjkLong, longBudget, seen);
+    takeDistributedFragments(selected, cjkLength2, length2Budget, seen);
   }
 
   if (hasGeneral) {
@@ -414,7 +474,17 @@ function buildFtsSearchFragments(tokens: string[], maxFragments: number): string
 
   for (const candidates of fillOrder) {
     if (selected.length >= maxFragments) break;
-    takeFragments(selected, candidates, maxFragments - selected.length, seen);
+    const remaining = maxFragments - selected.length;
+    if (
+      candidates === cjkLength3 ||
+      candidates === cjkLength4 ||
+      candidates === cjkLong ||
+      candidates === cjkLength2
+    ) {
+      takeDistributedFragments(selected, candidates, remaining, seen);
+    } else {
+      takeFragments(selected, candidates, remaining, seen);
+    }
   }
 
   return selected.slice(0, maxFragments);
