@@ -387,9 +387,13 @@ function tokenizeSearchText(
   };
 }
 
-function buildExactLookupTerms(tokens: string[]): string[] {
-  const shortExactTokens = tokens.filter((token) => !isPureCjkToken(token) && token.length <= 3);
-  const cjkTokens = tokens.filter((token) => isPureCjkToken(token));
+function buildExactLookupTerms(wholeTokens: string[], fragmentTokens: string[]): string[] {
+  const shortExactTokens = wholeTokens.filter(
+    (token) => !isPureCjkToken(token) && token.length <= 3,
+  );
+  const cjkTokens = fragmentTokens.filter(
+    (token) => isPureCjkToken(token) && Array.from(token).length >= CJK_EXACT_TERM_MIN_SIZE,
+  );
   if (cjkTokens.length === 0 && shortExactTokens.length === 0) return [];
 
   const groups = [buildCjkExactLookupTerms(cjkTokens), shortExactTokens];
@@ -526,7 +530,7 @@ export function buildTermSearchPlan(
 
   return {
     ftsFragments: buildFtsSearchFragments(tokens.fragmentTokens, maxFragments),
-    exactLookupTerms: buildExactLookupTerms(tokens.wholeTokens),
+    exactLookupTerms: buildExactLookupTerms(tokens.wholeTokens, tokens.fragmentTokens),
   };
 }
 

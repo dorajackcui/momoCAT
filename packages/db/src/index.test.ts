@@ -1408,6 +1408,37 @@ describe("CATDatabase", () => {
       );
     });
 
+    it("should recall mixed-script embedded CJK exact terms when FTS candidates are crowded", () => {
+      const projectId = db.createProject("TB Search Mixed CJK Exact", "zh-CN", "fr-FR");
+      const tbId = db.createTermBase("Mixed CJK Exact TB", "zh-CN", "fr-FR");
+      db.mountTermBaseToProject(projectId, tbId, 1);
+
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-mixed-cjk-exact-hit",
+        tbId,
+        srcLang: "zh-CN",
+        srcTerm: "喵居商店",
+        tgtTerm: "Boutique Miaou Maison",
+      });
+
+      for (let index = 0; index < 220; index += 1) {
+        db.insertTBEntryIfAbsentBySrcTerm({
+          id: `tb-mixed-cjk-noise-${index}`,
+          tbId,
+          srcLang: "zh-CN",
+          srcTerm: `喵居商店冗余候选${String(index).padStart(3, "0")}`,
+          tgtTerm: `candidat-bruit-${index}`,
+        });
+      }
+
+      const results = db.searchProjectTermEntries(projectId, "AI喵居商店suffix", {
+        srcLang: "zh-CN",
+        limit: 200,
+      });
+
+      expect(results.map((row) => row.srcTerm)).toContain("喵居商店");
+    });
+
     it("should recall short CJK exact matches even when mounted TB has more than 5000 rows", () => {
       const projectId = db.createProject("TB Short CJK Fallback", "zh-CN", "en-US");
       const tbId = db.createTermBase("Large TB", "zh-CN", "en-US");

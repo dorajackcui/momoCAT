@@ -174,6 +174,16 @@ describe('Term Matching Helpers', () => {
     expect(plan.exactLookupTerms).not.toEqual(expect.arrayContaining(['喵', '店', '奖']));
   });
 
+  it('builds CJK exact lookup terms from mixed-script source runs', () => {
+    const plan = buildTermSearchPlan('AI喵居商店suffix 与 A股 奖', {
+      locale: 'zh-CN',
+      maxFragments: 12,
+    });
+
+    expect(plan.exactLookupTerms).toEqual(expect.arrayContaining(['喵居商店', 'a股']));
+    expect(plan.exactLookupTerms).not.toEqual(expect.arrayContaining(['喵', '奖']));
+  });
+
   it('adds short non-cjk and mixed-script exact lookup terms without falling back to substrings', () => {
     const plan = buildTermSearchPlan('请检查 AI、3D、A股 和 奖。', {
       locale: 'zh-CN',
