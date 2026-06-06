@@ -111,6 +111,19 @@ describe('Term Matching Helpers', () => {
     expect(fragments).toEqual(expect.arrayContaining(['前段说', '结尾片']));
   });
 
+  it('distributes CJK FTS fragments to the true tail of one long token under a small budget', () => {
+    const fragments = buildTermSearchFragments(
+      '前段说明文字用于消耗片段预算中段继续提供更多普通描述内容后段仍然需要覆盖最终尾词',
+      {
+        locale: 'zh-CN',
+        maxFragments: 12,
+      },
+    );
+
+    expect(fragments.length).toBeLessThanOrEqual(12);
+    expect(fragments).toEqual(expect.arrayContaining(['前段说', '终尾词']));
+  });
+
   it('covers adjacent Chinese terms separated by punctuation while keeping short CJK fragments in budget', () => {
     const fragments = buildTermSearchFragments(
       '完成主线任务后，可获得限定称号【示例项·通用标题】，并在公告页查看领奖台安排。',

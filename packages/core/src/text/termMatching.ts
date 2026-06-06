@@ -25,7 +25,7 @@ const CJK_LIKE_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Scr
 const DEFAULT_MAX_FRAGMENTS = 24;
 const CJK_EXACT_TERM_MIN_SIZE = 2;
 const CJK_EXACT_TERM_MAX_SIZE = 8;
-const CJK_DISTRIBUTED_TAIL_COVERAGE_RATIO = 0.8;
+const CJK_DISTRIBUTED_LATE_COVERAGE_RATIO = 0.8;
 
 function normalizeTextWithIndexMap(
   value: string,
@@ -321,15 +321,27 @@ function takeDistributedFragments(
   if (taken >= count) return taken;
 
   const distributedCount = count - taken;
-  const coverageEndIndex = Math.max(
-    0,
-    Math.floor((source.length - 1) * CJK_DISTRIBUTED_TAIL_COVERAGE_RATIO),
+  const tailIndex = source.length - 1;
+  const coverageStartIndex = Math.min(tailIndex, leadingCount);
+  const lateCoverageIndex = Math.max(
+    coverageStartIndex,
+    Math.floor(tailIndex * CJK_DISTRIBUTED_LATE_COVERAGE_RATIO),
   );
+
   for (let slot = 0; slot < distributedCount; slot += 1) {
-    const preferredIndex =
-      distributedCount === 1
-        ? coverageEndIndex
-        : Math.round((coverageEndIndex * slot) / (distributedCount - 1));
+    let preferredIndex = tailIndex;
+
+    if (distributedCount > 1 && slot < distributedCount - 1) {
+      const preTailSlots = distributedCount - 1;
+      preferredIndex =
+        preTailSlots === 1
+          ? lateCoverageIndex
+          : Math.round(
+              coverageStartIndex +
+                ((lateCoverageIndex - coverageStartIndex) * slot) / (preTailSlots - 1),
+            );
+    }
+
     const index = findNearestUnusedFragmentIndex(source, preferredIndex, seen, usedIndices);
     if (index === null) continue;
 
