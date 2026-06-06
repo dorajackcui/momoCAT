@@ -1549,6 +1549,72 @@ describe("CATDatabase", () => {
       expect(results.map((row) => row.srcTerm)).toContain(longFtsOnlyTerm);
     });
 
+    it("should keep the top CJK exact candidate when the requested limit is one", () => {
+      const projectId = db.createProject("TB Search CJK Tiny Limit", "zh-CN", "fr-FR");
+      const tbId = db.createTermBase("CJK Tiny Limit TB", "zh-CN", "fr-FR");
+      db.mountTermBaseToProject(projectId, tbId, 1);
+
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-cjk-tiny-limit-exact",
+        tbId,
+        srcLang: "zh-CN",
+        srcTerm: "领奖台",
+        tgtTerm: "podium",
+      });
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-cjk-tiny-limit-fts",
+        tbId,
+        srcLang: "zh-CN",
+        srcTerm: "领奖台超长候选噪声",
+        tgtTerm: "bruit long",
+      });
+
+      const results = db.searchProjectTermEntries(projectId, "领奖台", {
+        srcLang: "zh-CN",
+        limit: 1,
+      });
+
+      expect(results.map((row) => row.srcTerm)).toEqual(["领奖台"]);
+    });
+
+    it("should keep English exact candidates ahead of FTS when exact lookup fills the candidate limit", () => {
+      const projectId = db.createProject("TB Search English Exact Crowds FTS", "en-US", "fr-FR");
+      const tbId = db.createTermBase("English Exact Crowds FTS TB", "en-US", "fr-FR");
+      db.mountTermBaseToProject(projectId, tbId, 1);
+
+      const exactTerms = Array.from({ length: 201 }, (_, index) => {
+        const first = String.fromCharCode(97 + Math.floor(index / 26));
+        const second = String.fromCharCode(97 + (index % 26));
+        return `${first}${second}`;
+      });
+      const longFtsOnlyTerm = "aa ab noisy fts candidate";
+
+      for (const [index, term] of exactTerms.entries()) {
+        db.insertTBEntryIfAbsentBySrcTerm({
+          id: `tb-english-exact-crowds-fts-${index}`,
+          tbId,
+          srcLang: "en-US",
+          srcTerm: term,
+          tgtTerm: `terme-exact-${index}`,
+        });
+      }
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-english-long-fts-only",
+        tbId,
+        srcLang: "en-US",
+        srcTerm: longFtsOnlyTerm,
+        tgtTerm: "terme-long",
+      });
+
+      const results = db.searchProjectTermEntries(projectId, exactTerms.join(" "), {
+        srcLang: "en-US",
+        limit: 200,
+      });
+
+      expect(results).toHaveLength(200);
+      expect(results.map((row) => row.srcTerm)).not.toContain(longFtsOnlyTerm);
+    });
+
     it("should reapply the requested limit after merging exact lookup candidates", () => {
       const projectId = db.createProject("TB Search Exact Limit", "zh-CN", "en-US");
       const tbId = db.createTermBase("Exact Limit TB", "zh-CN", "en-US");

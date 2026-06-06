@@ -6,6 +6,8 @@ import type { MountedTBRecord, ProjectTermEntryRecord, TBRecord } from '../types
 
 type TBEntryDbRow = TBEntry;
 const EXACT_CJK_BATCH_SIZE = 200;
+const CJK_LIKE_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+const CJK_SOURCE_LOCALE_RE = /^(zh|ja|ko|cmn|yue)(?:-|$)/i;
 
 export class TBRepo {
   private stmtDeleteTbFtsByEntryId: Database.Statement;
@@ -143,7 +145,9 @@ export class TBRepo {
           )
         : [];
 
-    return this.mergeSearchCandidates(limit, exactCandidates, ftsCandidates);
+    return this.mergeSearchCandidates(limit, exactCandidates, ftsCandidates, {
+      reserveFtsCandidates: this.shouldReserveFtsCandidates(sourceText, options?.srcLang),
+    });
   }
 
   public insertTBEntryIfAbsentBySrcTerm(params: {
@@ -322,13 +326,14 @@ export class TBRepo {
     limit: number,
     exactCandidates: ProjectTermEntryRecord[],
     ftsCandidates: ProjectTermEntryRecord[],
+    options?: { reserveFtsCandidates?: boolean },
   ): Array<TBEntry & { tbName: string; priority: number }> {
     const merged = new Map<string, ProjectTermEntryRecord>();
     const sortedExactCandidates = this.sortSearchCandidates(exactCandidates);
     const sortedFtsCandidates = this.sortSearchCandidates(ftsCandidates);
     const ftsReserve =
-      sortedExactCandidates.length >= limit && sortedFtsCandidates.length > 0
-        ? Math.min(limit, sortedFtsCandidates.length, Math.max(1, Math.floor(limit * 0.1)))
+      options?.reserveFtsCandidates && limit > 1 && sortedExactCandidates.length >= limit && sortedFtsCandidates.length > 0
+        ? Math.min(limit - 1, sortedFtsCandidates.length, Math.max(1, Math.floor(limit * 0.1)))
         : 0;
 
     const addCandidates = (rows: ProjectTermEntryRecord[], maxAdded = limit) => {
@@ -355,6 +360,12 @@ export class TBRepo {
     }
 
     return Array.from(merged.values());
+  }
+
+  private shouldReserveFtsCandidates(sourceText: string, srcLang?: string): boolean {
+    if (!CJK_LIKE_RE.test(sourceText)) return false;
+    if (!srcLang) return true;
+    return CJK_SOURCE_LOCALE_RE.test(srcLang);
   }
 
   private sortSearchCandidates(rows: ProjectTermEntryRecord[]): ProjectTermEntryRecord[] {
