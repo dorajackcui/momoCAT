@@ -1443,7 +1443,7 @@ describe("CATDatabase", () => {
       expect(results.map((row) => row.srcTerm)).toContain("领奖台");
     }, 15_000);
 
-    it("should recall single-character CJK terms alongside longer candidates", () => {
+    it("should not recall single-character CJK exact terms while preserving longer candidates", () => {
       const projectId = db.createProject("TB Search Single CJK", "zh-CN", "en-US");
       const tbId = db.createTermBase("Single CJK TB", "zh-CN", "en-US");
       db.mountTermBaseToProject(projectId, tbId, 1);
@@ -1472,9 +1472,8 @@ describe("CATDatabase", () => {
         },
       );
 
-      expect(results.map((row) => row.srcTerm)).toEqual(
-        expect.arrayContaining(["奖", "领奖台"]),
-      );
+      expect(results.map((row) => row.srcTerm)).toContain("领奖台");
+      expect(results.map((row) => row.srcTerm)).not.toContain("奖");
     });
 
     it("should reapply the requested limit after merging exact lookup candidates", () => {
@@ -1482,7 +1481,7 @@ describe("CATDatabase", () => {
       const tbId = db.createTermBase("Exact Limit TB", "zh-CN", "en-US");
       db.mountTermBaseToProject(projectId, tbId, 1);
 
-      for (const term of ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛"]) {
+      for (const term of ["甲乙", "丙丁", "戊己", "庚辛", "壬癸", "子丑", "寅卯", "辰巳"]) {
         db.insertTBEntryIfAbsentBySrcTerm({
           id: `tb-exact-limit-${term}`,
           tbId,
@@ -1492,13 +1491,13 @@ describe("CATDatabase", () => {
         });
       }
 
-      const results = db.searchProjectTermEntries(projectId, "甲乙丙丁戊己庚辛", {
+      const results = db.searchProjectTermEntries(projectId, "甲乙、丙丁、戊己、庚辛、壬癸、子丑、寅卯、辰巳", {
         srcLang: "zh-CN",
         limit: 3,
       });
 
       expect(results).toHaveLength(3);
-      expect(results.every((row) => row.srcTerm.length === 1)).toBe(true);
+      expect(results.every((row) => row.srcTerm.length === 2)).toBe(true);
     });
   });
 });
