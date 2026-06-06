@@ -123,8 +123,29 @@ describe('Term Matching Helpers', () => {
       expect.arrayContaining(['示例项', '通用标题']),
     );
     expect(plan.exactLookupTerms).toEqual(
-      expect.arrayContaining(['示例项', '通用标题', '示例', '标题', '示', '题']),
+      expect.arrayContaining(['示例项', '通用标题', '示例', '标题']),
     );
+    expect(plan.exactLookupTerms).not.toEqual(expect.arrayContaining(['示', '题']));
+  });
+
+  it('builds 2-8 character CJK exact lookup coverage for long source terminology', () => {
+    const plan = buildTermSearchPlan(
+      '小游戏道具可通过喵居商店购买获得，当任意单个小鱼干达到指定数量时，活动限定商店入口开放。',
+      {
+        locale: 'zh-CN',
+        maxFragments: 12,
+      },
+    );
+
+    expect(plan.exactLookupTerms).toEqual(
+      expect.arrayContaining([
+        '小鱼干',
+        '喵居商店',
+        '小游戏道具可',
+        '活动限定商店入口',
+      ]),
+    );
+    expect(plan.exactLookupTerms).not.toEqual(expect.arrayContaining(['喵', '店', '奖']));
   });
 
   it('adds short non-cjk and mixed-script exact lookup terms without falling back to substrings', () => {
@@ -133,10 +154,8 @@ describe('Term Matching Helpers', () => {
       maxFragments: 18,
     });
 
-    expect(plan.exactLookupTerms).toEqual(
-      expect.arrayContaining(['ai', '3d', 'a股', '奖']),
-    );
-    expect(plan.exactLookupTerms).not.toEqual(expect.arrayContaining(['a', '股']));
+    expect(plan.exactLookupTerms).toEqual(expect.arrayContaining(['ai', '3d', 'a股']));
+    expect(plan.exactLookupTerms).not.toEqual(expect.arrayContaining(['a', '股', '奖']));
   });
 
   it('matches width-normalized latin terminology', () => {

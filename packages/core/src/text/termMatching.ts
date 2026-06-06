@@ -23,7 +23,8 @@ export interface TermSearchPlan {
 const LETTER_OR_NUMBER_RE = /[\p{L}\p{N}]/u;
 const CJK_LIKE_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 const DEFAULT_MAX_FRAGMENTS = 24;
-const CJK_EXACT_TERM_SIZES = [4, 3, 2, 1];
+const CJK_EXACT_TERM_MIN_SIZE = 2;
+const CJK_EXACT_TERM_MAX_SIZE = 8;
 
 function normalizeTextWithIndexMap(
   value: string,
@@ -202,6 +203,16 @@ function buildNgramFragments(value: string, size: number): string[] {
   return fragments;
 }
 
+function buildCjkExactLookupTerms(tokens: string[]): string[] {
+  const groups: string[][] = [];
+
+  for (let size = CJK_EXACT_TERM_MAX_SIZE; size >= CJK_EXACT_TERM_MIN_SIZE; size -= 1) {
+    groups.push(flattenRoundRobin(tokens.map((token) => buildNgramFragments(token, size))));
+  }
+
+  return flattenRoundRobin(groups.map((group) => group.slice()));
+}
+
 function buildLongCjkFragments(value: string): string[] {
   const chars = Array.from(value);
   if (chars.length < 5) return [];
@@ -309,10 +320,7 @@ function buildExactLookupTerms(tokens: string[]): string[] {
   const cjkTokens = tokens.filter((token) => isPureCjkToken(token));
   if (cjkTokens.length === 0 && shortExactTokens.length === 0) return [];
 
-  const groups = CJK_EXACT_TERM_SIZES.map((size) =>
-    flattenRoundRobin(cjkTokens.map((token) => buildNgramFragments(token, size))),
-  );
-  groups.push(shortExactTokens);
+  const groups = [buildCjkExactLookupTerms(cjkTokens), shortExactTokens];
 
   return flattenRoundRobin(groups.map((group) => group.slice()));
 }
