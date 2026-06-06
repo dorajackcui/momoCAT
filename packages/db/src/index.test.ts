@@ -1507,6 +1507,48 @@ describe("CATDatabase", () => {
       expect(results.map((row) => row.srcTerm)).not.toContain("奖");
     });
 
+    it("should include FTS candidates when exact CJK candidates fill the candidate limit", () => {
+      const projectId = db.createProject("TB Search Exact Crowds FTS", "zh-CN", "fr-FR");
+      const tbId = db.createTermBase("Exact Crowds FTS TB", "zh-CN", "fr-FR");
+      db.mountTermBaseToProject(projectId, tbId, 1);
+
+      const exactTerms = Array.from({ length: 201 }, (_, index) => {
+        const firstVariant = String.fromCodePoint(0x4e00 + Math.floor(index / 32));
+        const secondVariant = String.fromCodePoint(0x4e80 + (index % 32));
+        return `测${firstVariant}试${secondVariant}词`;
+      });
+      const longFtsOnlyTerm = "超长术语候选尾部项目";
+
+      for (const [index, term] of exactTerms.entries()) {
+        db.insertTBEntryIfAbsentBySrcTerm({
+          id: `tb-exact-crowds-fts-${index}`,
+          tbId,
+          srcLang: "zh-CN",
+          srcTerm: term,
+          tgtTerm: `terme-exact-${index}`,
+        });
+      }
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-long-cjk-fts-only",
+        tbId,
+        srcLang: "zh-CN",
+        srcTerm: longFtsOnlyTerm,
+        tgtTerm: "terme-long",
+      });
+
+      const results = db.searchProjectTermEntries(
+        projectId,
+        [...exactTerms, longFtsOnlyTerm].join("、"),
+        {
+          srcLang: "zh-CN",
+          limit: 200,
+        },
+      );
+
+      expect(results.length).toBeLessThanOrEqual(200);
+      expect(results.map((row) => row.srcTerm)).toContain(longFtsOnlyTerm);
+    });
+
     it("should reapply the requested limit after merging exact lookup candidates", () => {
       const projectId = db.createProject("TB Search Exact Limit", "zh-CN", "en-US");
       const tbId = db.createTermBase("Exact Limit TB", "zh-CN", "en-US");

@@ -324,14 +324,34 @@ export class TBRepo {
     ftsCandidates: ProjectTermEntryRecord[],
   ): Array<TBEntry & { tbName: string; priority: number }> {
     const merged = new Map<string, ProjectTermEntryRecord>();
+    const sortedExactCandidates = this.sortSearchCandidates(exactCandidates);
+    const sortedFtsCandidates = this.sortSearchCandidates(ftsCandidates);
+    const ftsReserve =
+      sortedExactCandidates.length >= limit && sortedFtsCandidates.length > 0
+        ? Math.min(limit, sortedFtsCandidates.length, Math.max(1, Math.floor(limit * 0.1)))
+        : 0;
 
-    for (const group of [exactCandidates, ftsCandidates]) {
-      for (const row of this.sortSearchCandidates(group)) {
+    const addCandidates = (rows: ProjectTermEntryRecord[], maxAdded = limit) => {
+      let added = 0;
+
+      for (const row of rows) {
         if (merged.size >= limit) break;
+        if (added >= maxAdded) break;
         if (!merged.has(row.id)) {
           merged.set(row.id, row);
+          added += 1;
         }
       }
+
+      return added;
+    };
+
+    addCandidates(sortedExactCandidates, limit - ftsReserve);
+    addCandidates(sortedFtsCandidates, ftsReserve);
+
+    if (merged.size < limit) {
+      addCandidates(sortedExactCandidates);
+      addCandidates(sortedFtsCandidates);
     }
 
     return Array.from(merged.values());
