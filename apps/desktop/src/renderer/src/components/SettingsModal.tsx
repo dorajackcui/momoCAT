@@ -5,6 +5,10 @@ import type {
   ProxyMode,
   ProxySettings,
 } from '../../../shared/ipc';
+import {
+  chooseInitialProviderModel,
+  isSavedConnectionReuseActive,
+} from './aiProviderSelection';
 import { apiClient } from '../services/apiClient';
 import { notifyAIProvidersChanged } from '../services/aiProviderEvents';
 
@@ -109,6 +113,15 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     addingProvider ||
     deletingConnectionId !== null ||
     deletingProviderId !== null;
+  const savedConnectionReuseActive = isSavedConnectionReuseActive(
+    testedConnection,
+    connectionApiKeyInput,
+  );
+  const apiKeyPlaceholder = savedConnectionReuseActive
+    ? testedConnection?.apiKeyLast4
+      ? `Saved key ****${testedConnection.apiKeyLast4}; enter a new key to retest`
+      : 'Saved key will be reused; enter a new key to retest'
+    : 'sk-...';
 
   const reloadConnectionsAndProviders = async () => {
     const [connectionList, providerList] = await Promise.all([
@@ -182,6 +195,17 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     if (!providerNameInput.trim() || providerNameInput === previousDefault) {
       setProviderNameInput(buildProviderName(testedConnection, model));
     }
+  };
+
+  const handleUseConnection = (connection: AIConnectionSummary) => {
+    const model = chooseInitialProviderModel(connection, providers);
+    setConnectionNameInput(connection.name);
+    setConnectionBaseUrlInput(connection.baseUrl);
+    setConnectionApiKeyInput('');
+    setTestedConnection(connection);
+    setSelectedModel(model);
+    setProviderNameInput(buildProviderName(connection, model));
+    setStatus('Saved connection selected. Stored key will be reused when adding a provider.');
   };
 
   const handleAddProvider = async () => {
@@ -313,13 +337,21 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               resetTestedConnection();
             }}
             disabled={testingProvider}
-            placeholder="sk-..."
+            placeholder={apiKeyPlaceholder}
             className="field-input"
           />
         </div>
 
-        <button onClick={handleTestConnection} disabled={busy} className="btn-secondary w-full">
-          {testingProvider ? 'Testing...' : 'Test Connection'}
+        <button
+          onClick={handleTestConnection}
+          disabled={busy || savedConnectionReuseActive}
+          className="btn-secondary w-full"
+        >
+          {testingProvider
+            ? 'Testing...'
+            : savedConnectionReuseActive
+              ? 'Enter Key to Retest'
+              : 'Test Connection'}
         </button>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -398,13 +430,22 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         : 'Not configured'}
                     </div>
                   </div>
-                  <button
-                    onClick={() => void handleDeleteConnection(connectionItem.id)}
-                    disabled={busy}
-                    className="btn-secondary md:w-auto disabled:opacity-50"
-                  >
-                    {isDeleting ? 'Deleting...' : 'Delete Connection'}
-                  </button>
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                    <button
+                      onClick={() => handleUseConnection(connectionItem)}
+                      disabled={busy || connectionItem.discoveredModels.length === 0}
+                      className="btn-secondary md:w-auto disabled:opacity-50"
+                    >
+                      Use Connection
+                    </button>
+                    <button
+                      onClick={() => void handleDeleteConnection(connectionItem.id)}
+                      disabled={busy}
+                      className="btn-secondary md:w-auto disabled:opacity-50"
+                    >
+                      {isDeleting ? 'Deleting...' : 'Delete Connection'}
+                    </button>
+                  </div>
                 </div>
               );
             })

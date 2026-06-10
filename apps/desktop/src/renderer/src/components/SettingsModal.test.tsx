@@ -210,6 +210,38 @@ describe('SettingsModal', () => {
     expect(screen.getByText('Read only')).toBeInTheDocument();
   });
 
+  it('creates a provider from another model on a saved connection without retesting credentials', async () => {
+    apiClientMock.listAIConnections.mockResolvedValue([connection]);
+    apiClientMock.listAIProviders.mockResolvedValue([provider]);
+    apiClientMock.addAIProvider.mockResolvedValue({
+      ...provider,
+      id: 'provider:gpt-demo-mini',
+      name: 'OpenAI / gpt-demo-mini',
+      model: 'gpt-demo-mini',
+    });
+
+    render(<SettingsModal isOpen onClose={vi.fn()} />);
+
+    await screen.findByText('https://api.openai.com/v1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use Connection' }));
+
+    expect(screen.getByLabelText('Model')).toHaveValue('gpt-demo-mini');
+    expect(screen.getByLabelText('Provider Name')).toHaveValue('OpenAI / gpt-demo-mini');
+    expect(screen.getByRole('button', { name: 'Enter Key to Retest' })).toBeDisabled();
+    expect(apiClientMock.testAIConnection).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText('Add Provider'));
+
+    await waitFor(() =>
+      expect(apiClientMock.addAIProvider).toHaveBeenCalledWith({
+        name: 'OpenAI / gpt-demo-mini',
+        connectionId: 'connection:openai',
+        model: 'gpt-demo-mini',
+      }),
+    );
+  });
+
   it('deletes connections and providers from their rows', async () => {
     apiClientMock.listAIConnections.mockResolvedValue([connection]);
     apiClientMock.listAIProviders.mockResolvedValue([provider]);
