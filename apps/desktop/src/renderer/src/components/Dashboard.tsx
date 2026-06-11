@@ -13,7 +13,7 @@ interface DashboardProps {
     tgtLang: string,
     projectType: ProjectType,
   ) => void;
-  onDeleteProject: (id: number) => void;
+  onDeleteProject: (id: number, name: string) => void;
 }
 
 export function Dashboard({
@@ -93,7 +93,7 @@ export function Dashboard({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onDeleteProject(project.id);
+                    onDeleteProject(project.id, project.name);
                   }}
                   className="p-1.5 text-text-faint hover:text-danger hover:bg-danger-soft rounded-control transition-colors ml-2"
                   title="Delete Project"

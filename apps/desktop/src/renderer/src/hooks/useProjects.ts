@@ -1,11 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Project, ProjectType } from '@cat/core/project';
 import { apiClient } from '../services/apiClient';
-import { feedbackService } from '../services/feedbackService';
+import { feedbackService, type ConfirmOptions } from '../services/feedbackService';
 
 export interface ProjectWithStats extends Project {
   progress: number;
   fileCount: number;
+}
+
+export function buildDeleteProjectConfirmRequest(projectName: string): ConfirmOptions {
+  return {
+    title: 'Delete Project',
+    message: 'This will permanently delete this project and remove all files and translations.',
+    confirmLabel: 'Delete Project',
+    confirmVariant: 'danger',
+    requiredText: projectName,
+    requiredTextLabel: 'Type the project name to confirm',
+  };
 }
 
 export function useProjects() {
@@ -49,10 +60,8 @@ export function useProjects() {
     }
   };
 
-  const deleteProject = async (projectId: number) => {
-    const confirmed = await feedbackService.confirm(
-      'Are you sure you want to delete this project? This will remove all files and translations.',
-    );
+  const deleteProject = async (projectId: number, projectName: string) => {
+    const confirmed = await feedbackService.confirm(buildDeleteProjectConfirmRequest(projectName));
     if (!confirmed) return;
 
     setLoading(true);

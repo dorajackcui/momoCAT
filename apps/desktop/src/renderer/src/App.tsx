@@ -8,6 +8,7 @@ import { TBManager } from './components/TBManager';
 import { SettingsModal } from './components/SettingsModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useProjects } from './hooks/useProjects';
+import { FeedbackHost } from './services/FeedbackHost';
 
 type View = 'dashboard' | 'projectDetail' | 'editor' | 'tms' | 'tbs';
 
@@ -53,27 +54,34 @@ function App(): JSX.Element {
     }
   };
 
+  const withFeedbackHost = (children: React.ReactNode) => (
+    <>
+      <FeedbackHost />
+      {children}
+    </>
+  );
+
   if (currentView === 'editor' && activeFileId !== null) {
-    return (
+    return withFeedbackHost(
       <ErrorBoundary>
         <Editor fileId={activeFileId} onBack={handleBackToProject} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
   }
 
   if (currentView === 'projectDetail' && activeProjectId !== null) {
-    return (
+    return withFeedbackHost(
       <ErrorBoundary>
         <ProjectDetail
           projectId={activeProjectId}
           onBack={handleBackToDashboard}
           onOpenFile={handleOpenFile}
         />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
   }
 
-  return (
+  return withFeedbackHost(
     <div className="app-shell">
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       <header className="app-topbar">
@@ -135,7 +143,7 @@ function App(): JSX.Element {
         <span>Ready</span>
         <span>Offline Mode • Spreadsheet-first v0.1</span>
       </footer>
-    </div>
+    </div>,
   );
 }
 
