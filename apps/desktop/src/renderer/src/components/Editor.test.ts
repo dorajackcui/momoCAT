@@ -5,15 +5,19 @@ import {
 } from './editor/editorVirtualizationFlag';
 
 describe('Editor virtualization flag', () => {
-  it('enables virtualization only when flag is set to "1"', () => {
+  it('enables virtualization by default unless explicitly disabled', () => {
     const enabledStorage = {
       getItem: (key: string) => (key === VIRTUALIZED_LIST_FLAG_KEY ? '1' : null),
     };
-    const disabledStorage = {
+    const defaultStorage = {
       getItem: () => null,
+    };
+    const disabledStorage = {
+      getItem: (key: string) => (key === VIRTUALIZED_LIST_FLAG_KEY ? '0' : null),
     };
 
     expect(isVirtualizedEditorListEnabled(enabledStorage)).toBe(true);
+    expect(isVirtualizedEditorListEnabled(defaultStorage)).toBe(true);
     expect(isVirtualizedEditorListEnabled(disabledStorage)).toBe(false);
   });
 });
