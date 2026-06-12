@@ -2057,7 +2057,10 @@ describe('AIModule.aiTranslateSegment', () => {
     const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
+      updateSegment: vi.fn().mockResolvedValue({
+        propagatedIds: ['single-propagated-1'],
+        serverAppliedAt: '2026-06-12T00:00:00.000Z',
+      }),
     } as unknown as SegmentService;
 
     const transport = {
@@ -2100,7 +2103,14 @@ describe('AIModule.aiTranslateSegment', () => {
 
     const result = await module.aiTranslateSegment('single-1');
 
-    expect(result).toEqual({ segmentId: 'single-1', status: 'translated' });
+    expect(result).toEqual({
+      segmentId: 'single-1',
+      targetTokens: expect.any(Array),
+      status: 'translated',
+      propagatedIds: ['single-propagated-1'],
+      serverAppliedAt: '2026-06-12T00:00:00.000Z',
+    });
+    expect(serializeTokensToDisplayText(result.targetTokens)).toBe('浣犲ソ涓栫晫');
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'single-1',
       expect.any(Array),
@@ -2139,7 +2149,10 @@ describe('AIModule.aiTranslateSegment', () => {
     const settingsRepo = createAISettingsRepository();
 
     const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
+      updateSegment: vi.fn().mockResolvedValue({
+        propagatedIds: [],
+        serverAppliedAt: '2026-06-12T00:00:01.000Z',
+      }),
     } as unknown as SegmentService;
 
     const transport = {
@@ -2154,7 +2167,13 @@ describe('AIModule.aiTranslateSegment', () => {
     const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
     const result = await module.aiTranslateSegment('single-review-1');
 
-    expect(result).toEqual({ segmentId: 'single-review-1', status: 'reviewed' });
+    expect(result).toEqual({
+      segmentId: 'single-review-1',
+      targetTokens: expect.any(Array),
+      status: 'reviewed',
+      propagatedIds: [],
+      serverAppliedAt: '2026-06-12T00:00:01.000Z',
+    });
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'single-review-1',
       expect.any(Array),
@@ -2234,7 +2253,15 @@ describe('AIModule.aiRefineSegment', () => {
 
     const result = await module.aiRefineSegment('refine-1', 'Make the tone concise');
 
-    expect(result).toEqual({ segmentId: 'refine-1', status: 'translated' });
+    expect(result).toEqual(
+      expect.objectContaining({
+        segmentId: 'refine-1',
+        targetTokens: [{ type: 'text', content: 'hello world target' }],
+        status: 'translated',
+        propagatedIds: [],
+        serverAppliedAt: expect.any(String),
+      }),
+    );
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'refine-1',
       expect.any(Array),
@@ -2359,7 +2386,15 @@ describe('AIModule.aiRefineSegment', () => {
     const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
     const result = await module.aiRefineSegment('refine-review-1', 'Fix terminology only');
 
-    expect(result).toEqual({ segmentId: 'refine-review-1', status: 'reviewed' });
+    expect(result).toEqual(
+      expect.objectContaining({
+        segmentId: 'refine-review-1',
+        targetTokens: [{ type: 'text', content: 'refined target' }],
+        status: 'reviewed',
+        propagatedIds: [],
+        serverAppliedAt: expect.any(String),
+      }),
+    );
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'refine-review-1',
       expect.any(Array),
@@ -2550,10 +2585,15 @@ describe('AIModule.segmentAIOperationLock', () => {
     await expect(module.aiTranslateSegment('lock-release-1')).rejects.toThrow(
       'temporary upstream error',
     );
-    await expect(module.aiTranslateSegment('lock-release-1')).resolves.toEqual({
-      segmentId: 'lock-release-1',
-      status: 'translated',
-    });
+    await expect(module.aiTranslateSegment('lock-release-1')).resolves.toEqual(
+      expect.objectContaining({
+        segmentId: 'lock-release-1',
+        targetTokens: [{ type: 'text', content: 'hello world target' }],
+        status: 'translated',
+        propagatedIds: [],
+        serverAppliedAt: expect.any(String),
+      }),
+    );
     expect(segmentService.updateSegment).toHaveBeenCalledTimes(1);
   });
 });

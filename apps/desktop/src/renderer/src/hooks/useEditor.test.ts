@@ -5,7 +5,11 @@ vi.mock('../services/apiClient', () => ({
   apiClient: {},
 }));
 
-import { createSegmentPersistor, useEditor } from './useEditor';
+import {
+  applyAISegmentTranslateResultToSegments,
+  createSegmentPersistor,
+  useEditor,
+} from './useEditor';
 
 function createSegment(segmentId: string, targetText: string): Segment {
   return {
@@ -202,6 +206,41 @@ describe('createSegmentPersistor', () => {
     const acceptsReload = (reload: UseEditorResult['reloadEditorData']) => reload;
     const reload = acceptsReload(async () => undefined);
     expect(typeof reload).toBe('function');
+  });
+
+  it('applies AI segment translate result to the current segment list immediately', () => {
+    const unchangedConfirmed = createSegment('seg-confirmed', 'keep qa');
+    unchangedConfirmed.status = 'confirmed';
+    unchangedConfirmed.qaIssues = [
+      { severity: 'warning', message: 'existing', ruleId: 'terminology' },
+    ];
+
+    const segments = [createSegment('seg-6', ''), createSegment('seg-7', ''), unchangedConfirmed];
+
+    const result = applyAISegmentTranslateResultToSegments(segments, {
+      segmentId: 'seg-6',
+      targetTokens: [{ type: 'text', content: 'AI target' }],
+      status: 'translated',
+      propagatedIds: ['seg-7'],
+      serverAppliedAt: '2026-06-12T00:00:00.000Z',
+    });
+
+    expect(result).not.toBe(segments);
+    expect(result.find((segment) => segment.segmentId === 'seg-6')).toMatchObject({
+      targetTokens: [{ type: 'text', content: 'AI target' }],
+      status: 'translated',
+      qaIssues: undefined,
+      autoFixSuggestions: undefined,
+    });
+    expect(result.find((segment) => segment.segmentId === 'seg-7')).toMatchObject({
+      targetTokens: [{ type: 'text', content: 'AI target' }],
+      status: 'draft',
+      qaIssues: undefined,
+      autoFixSuggestions: undefined,
+    });
+    expect(result.find((segment) => segment.segmentId === 'seg-confirmed')).toBe(
+      unchangedConfirmed,
+    );
   });
 
   it('keeps helper segment builder valid', () => {

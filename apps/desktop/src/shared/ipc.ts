@@ -244,7 +244,10 @@ export interface AITestTranslateResult {
 
 export interface AISegmentTranslateResult {
   segmentId: string;
+  targetTokens: Token[];
   status: SegmentStatus;
+  propagatedIds: string[];
+  serverAppliedAt: string;
 }
 
 export type AIBatchMode = 'default' | 'dialogue';

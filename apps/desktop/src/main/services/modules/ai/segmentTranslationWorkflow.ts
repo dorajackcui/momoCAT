@@ -86,9 +86,19 @@ export async function runSegmentTranslation(
       tbReferences: promptReferences.tbReferences,
     });
 
-    await deps.segmentService.updateSegment(segment.segmentId, targetTokens, aiStatus);
+    const updateResult = await deps.segmentService.updateSegment(
+      segment.segmentId,
+      targetTokens,
+      aiStatus,
+    );
 
-    return { segmentId: segment.segmentId, status: aiStatus };
+    return {
+      segmentId: segment.segmentId,
+      targetTokens,
+      status: aiStatus,
+      propagatedIds: updateResult?.propagatedIds ?? [],
+      serverAppliedAt: updateResult?.serverAppliedAt ?? new Date().toISOString(),
+    };
   });
 }
 
@@ -167,9 +177,19 @@ export async function runSegmentRefinement(
       tbReferences: promptReferences.tbReferences,
     });
 
-    await deps.segmentService.updateSegment(segment.segmentId, targetTokens, aiStatus);
+    const updateResult = await deps.segmentService.updateSegment(
+      segment.segmentId,
+      targetTokens,
+      aiStatus,
+    );
 
-    return { segmentId: segment.segmentId, status: aiStatus };
+    return {
+      segmentId: segment.segmentId,
+      targetTokens,
+      status: aiStatus,
+      propagatedIds: updateResult?.propagatedIds ?? [],
+      serverAppliedAt: updateResult?.serverAppliedAt ?? new Date().toISOString(),
+    };
   });
 }
 

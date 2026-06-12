@@ -4,6 +4,7 @@ import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import { TagValidator } from '@cat/core/qa';
 import { parseEditorTextToTokens, serializeTokensToEditorText } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
+import type { AISegmentTranslateResult } from '../../../shared/ipc';
 import { useActiveSegmentMatches } from './editor/useActiveSegmentMatches';
 import { createSegmentPersistor, useSegmentPersistence } from './editor/useSegmentPersistence';
 import { useEditorDataLoader } from './editor/useEditorDataLoader';
@@ -23,6 +24,42 @@ const VALID_SEGMENT_STATUSES: Set<SegmentStatus> = new Set([
 ]);
 
 export { createSegmentPersistor };
+
+export function applyAISegmentTranslateResultToSegments(
+  segments: Segment[],
+  result: AISegmentTranslateResult,
+): Segment[] {
+  const propagatedIds = new Set(result.propagatedIds ?? []);
+  let changed = false;
+
+  const nextSegments = segments.map((segment): Segment => {
+    if (segment.segmentId === result.segmentId) {
+      changed = true;
+      return {
+        ...segment,
+        targetTokens: result.targetTokens,
+        status: result.status,
+        qaIssues: result.status === 'confirmed' ? segment.qaIssues : undefined,
+        autoFixSuggestions: result.status === 'confirmed' ? segment.autoFixSuggestions : undefined,
+      };
+    }
+
+    if (propagatedIds.has(segment.segmentId)) {
+      changed = true;
+      return {
+        ...segment,
+        targetTokens: result.targetTokens,
+        status: 'draft',
+        qaIssues: undefined,
+        autoFixSuggestions: undefined,
+      };
+    }
+
+    return segment;
+  });
+
+  return changed ? nextSegments : segments;
+}
 
 export function useEditor({ activeFileId }: UseEditorProps) {
   const [segments, setSegments] = useState<Segment[]>([]);
@@ -300,7 +337,8 @@ export function useEditor({ activeFileId }: UseEditorProps) {
       clearSegmentSaveError(segmentId);
 
       try {
-        await apiClient.aiTranslateSegment(segmentId);
+        const result = await apiClient.aiTranslateSegment(segmentId);
+        setSegments((prev) => applyAISegmentTranslateResultToSegments(prev, result));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setSegmentSaveError(segmentId, `AI 翻译失败：${message}`);
@@ -347,7 +385,8 @@ export function useEditor({ activeFileId }: UseEditorProps) {
       clearSegmentSaveError(segmentId);
 
       try {
-        await apiClient.aiRefineSegment(segmentId, refinementInstruction);
+        const result = await apiClient.aiRefineSegment(segmentId, refinementInstruction);
+        setSegments((prev) => applyAISegmentTranslateResultToSegments(prev, result));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setSegmentSaveError(segmentId, `AI 微调失败：${message}`);
