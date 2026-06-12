@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ESTIMATED_EDITOR_ROW_HEIGHT,
+  getEditorVirtualizerInitialRect,
   isVirtualizedEditorListEnabled,
   VIRTUALIZED_LIST_FLAG_KEY,
 } from './editor/editorVirtualizationFlag';
@@ -19,5 +21,17 @@ describe('Editor virtualization flag', () => {
     expect(isVirtualizedEditorListEnabled(enabledStorage)).toBe(true);
     expect(isVirtualizedEditorListEnabled(defaultStorage)).toBe(true);
     expect(isVirtualizedEditorListEnabled(disabledStorage)).toBe(false);
+  });
+
+  it('uses a positive initial virtualizer height before the scroll container is measured', () => {
+    expect(getEditorVirtualizerInitialRect(0)).toEqual({
+      width: 0,
+      height: ESTIMATED_EDITOR_ROW_HEIGHT,
+    });
+    expect(getEditorVirtualizerInitialRect(undefined)).toEqual({
+      width: 0,
+      height: ESTIMATED_EDITOR_ROW_HEIGHT * 10,
+    });
+    expect(getEditorVirtualizerInitialRect(900)).toEqual({ width: 0, height: 900 });
   });
 });

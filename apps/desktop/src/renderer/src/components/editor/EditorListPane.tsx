@@ -1,8 +1,12 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { SearchableEditorSegment } from '../editorFilterUtils';
 import { EditorRow } from '../EditorRow';
 import type { EditorMatchMode } from '../editorFilterUtils';
+import {
+  ESTIMATED_EDITOR_ROW_HEIGHT,
+  getEditorVirtualizerInitialRect,
+} from './editorVirtualizationFlag';
 
 interface EditorListPaneProps {
   scrollParentRef: React.RefObject<HTMLDivElement | null>;
@@ -51,6 +55,13 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
   highlightMode,
   showNonPrintingSymbols,
 }) => {
+  const initialVirtualizerRect = useMemo(
+    () =>
+      getEditorVirtualizerInitialRect(
+        typeof window === 'undefined' ? undefined : window.innerHeight,
+      ),
+    [],
+  );
   const renderRow = useCallback(
     (item: SearchableEditorSegment) => (
       <EditorRow
@@ -104,9 +115,10 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: filteredSegments.length,
-    estimateSize: () => 72,
+    estimateSize: () => ESTIMATED_EDITOR_ROW_HEIGHT,
     getScrollElement: () => scrollParentRef.current,
     getItemKey: (index) => filteredSegments[index]?.segment.segmentId ?? index,
+    initialRect: initialVirtualizerRect,
     overscan: 8,
   });
 
