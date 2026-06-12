@@ -4,7 +4,7 @@ import {
   getDisplayTagPatterns,
   getEditorMarkerPatterns
 } from './TagPatternRegistry';
-import { createTagNumberMap, getTagContentByMarkerIndex, getUniqueTagContents } from './TagMapper';
+import { createTagNumberResolver, getTagContentByMarkerIndex, getUniqueTagContents } from './TagMapper';
 
 export type TagPolicy = 'default' | 'none';
 
@@ -39,6 +39,27 @@ const pushTextToken = (tokens: Token[], value: string): void => {
     return;
   }
   tokens.push({ type: 'text', content: value });
+};
+
+const pushTagToken = (tokens: Token[], value: string): void => {
+  tokens.push({
+    type: 'tag',
+    content: value,
+    meta: { id: value },
+  });
+};
+
+const findNextProtectedLineBreak = (
+  text: string,
+  startIndex: number,
+): { value: string; index: number } | null => {
+  for (let index = startIndex; index < text.length; index += 1) {
+    const value = text[index];
+    if (value === '\r' || value === '\n') {
+      return { value, index };
+    }
+  }
+  return null;
 };
 
 const detectTagType = (tagContent: string): TagType => {
@@ -114,13 +135,13 @@ export function formatTagAsMemoQMarker(tagContent: string, tagNumber: number): s
 }
 
 export function serializeTokensToEditorText(tokens: Token[], sourceTokens: Token[]): string {
-  const tagNumberByContent = createTagNumberMap(sourceTokens);
+  const resolveTagNumber = createTagNumberResolver(sourceTokens);
   let fallbackTagNumber = getUniqueTagContents(sourceTokens).length + 1;
 
   return tokens
     .map(token => {
       if (token.type !== 'tag') return token.content;
-      const tagNumber = tagNumberByContent.get(token.content) ?? fallbackTagNumber++;
+      const tagNumber = resolveTagNumber(token) ?? fallbackTagNumber++;
       return formatTagAsMemoQMarker(token.content, tagNumber);
     })
     .join('');
@@ -143,7 +164,7 @@ export function parseDisplayTextToTokens(
   // Fast path for common plain-text rows.
   const customPatterns = normalizedOptions.displayTagPatterns;
   const hasCustomPatterns = Array.isArray(customPatterns) && customPatterns.length > 0;
-  if (!hasCustomPatterns && !/[<{%]/.test(text)) {
+  if (!hasCustomPatterns && !/[<{%\r\n]/.test(text)) {
     return [{ type: 'text', content: text }];
   }
 
@@ -152,14 +173,14 @@ export function parseDisplayTextToTokens(
   let cursor = 0;
 
   while (cursor < text.length) {
-    let nextCandidate: { match: RegExpExecArray; index: number } | null = null;
+    let nextCandidate = findNextProtectedLineBreak(text, cursor);
 
     for (const pattern of patterns) {
       pattern.lastIndex = cursor;
       const match = pattern.exec(text);
       if (!match || match[0].length === 0) continue;
       if (!nextCandidate || match.index < nextCandidate.index) {
-        nextCandidate = { match, index: match.index };
+        nextCandidate = { value: match[0], index: match.index };
       }
     }
 
@@ -172,13 +193,9 @@ export function parseDisplayTextToTokens(
       pushTextToken(tokens, text.substring(cursor, nextCandidate.index));
     }
 
-    tokens.push({
-      type: 'tag',
-      content: nextCandidate.match[0],
-      meta: { id: nextCandidate.match[0] }
-    });
+    pushTagToken(tokens, nextCandidate.value);
 
-    cursor = nextCandidate.index + nextCandidate.match[0].length;
+    cursor = nextCandidate.index + nextCandidate.value.length;
   }
 
   return tokens.length > 0 ? tokens : [{ type: 'text', content: text }];
