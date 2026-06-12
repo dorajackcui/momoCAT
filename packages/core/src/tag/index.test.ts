@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TagMetadata, TagType, ValidationState } from "../models";
+import { serializeTokensToDisplayText } from "../text";
 import {
   computeTagsSignature,
   formatTagAsMemoQMarker,
@@ -39,6 +40,35 @@ describe("CAT Core Tokenizer", () => {
       content: "%s",
       meta: { id: "%s" },
     });
+  });
+
+  it("parses real CR and LF as protected standalone tags under default policy", () => {
+    const tokens = parseDisplayTextToTokens("A\r\nB\nC\rD");
+
+    expect(tokens).toEqual([
+      { type: "text", content: "A" },
+      { type: "tag", content: "\r", meta: { id: "\r" } },
+      { type: "tag", content: "\n", meta: { id: "\n" } },
+      { type: "text", content: "B" },
+      { type: "tag", content: "\n", meta: { id: "\n" } },
+      { type: "text", content: "C" },
+      { type: "tag", content: "\r", meta: { id: "\r" } },
+      { type: "text", content: "D" },
+    ]);
+    expect(tokens.filter((token) => token.type === "tag").map((token) => token.content)).toEqual([
+      "\r",
+      "\n",
+      "\n",
+      "\r",
+    ]);
+    expect(computeTagsSignature(tokens)).toBe(["\r", "\n", "\n", "\r"].join("|"));
+  });
+
+  it("keeps real CR and LF as plain text when tag policy is none", () => {
+    const tokens = parseDisplayTextToTokens("A\r\nB\nC", { tagPolicy: "none" });
+
+    expect(tokens).toEqual([{ type: "text", content: "A\r\nB\nC" }]);
+    expect(computeTagsSignature(tokens)).toBe("");
   });
 
   it("supports custom regex patterns for tag recognition", () => {
@@ -124,6 +154,31 @@ describe("Editor Tag Marker Conversion", () => {
     expect(serializeTokensToEditorText(targetTokens, [...sourceTokens])).toBe(
       "Hello {1>World<2}!",
     );
+  });
+
+  it("serializes real CR and LF tags as standalone markers and parses them back", () => {
+    const sourceWithLineBreaks = parseDisplayTextToTokens("A\r\nB\nC");
+
+    expect(serializeTokensToEditorText(sourceWithLineBreaks, sourceWithLineBreaks)).toBe(
+      "A{1}{2}B{3}C",
+    );
+
+    const parsed = parseEditorTextToTokens("X{1}{2}Y{3}Z", sourceWithLineBreaks);
+
+    expect(serializeTokensToDisplayText(parsed)).toBe("X\r\nY\nZ");
+    expect(parsed.filter((token) => token.type === "tag").map((token) => token.content)).toEqual([
+      "\r",
+      "\n",
+      "\n",
+    ]);
+  });
+
+  it("assigns separate marker numbers to repeated newline tags", () => {
+    const sourceWithRepeatedLineFeeds = parseDisplayTextToTokens("A\nB\nC");
+
+    expect(
+      serializeTokensToEditorText(sourceWithRepeatedLineFeeds, sourceWithRepeatedLineFeeds),
+    ).toBe("A{1}B{2}C");
   });
 
   it("serializes nameless closing tags as paired-end markers", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Segment, TBMatch } from "../models";
+import { computeTagsSignature, parseDisplayTextToTokens, parseEditorTextToTokens } from "../tag";
 import { validateSegmentTags, validateSegmentTerminology } from "./index";
 
 function buildSegment(
@@ -48,6 +49,24 @@ describe("Tag Integrity QA", () => {
     segment.targetTokens.push({ type: "tag", content: "{2}" });
     issues = validateSegmentTags(segment);
     expect(issues[0].ruleId).toBe("tag-extra");
+  });
+
+  it("treats a missing repeated protected newline tag as an error", () => {
+    const sourceTokens = parseDisplayTextToTokens("A\nB\nC");
+    const targetTokens = parseEditorTextToTokens("X{1}Y", sourceTokens);
+    const segment = {
+      ...buildSegment("A\nB\nC", ""),
+      sourceTokens,
+      targetTokens,
+      tagsSignature: computeTagsSignature(sourceTokens),
+    };
+
+    const issues = validateSegmentTags(segment);
+
+    expect(issues[0]).toMatchObject({
+      ruleId: "tag-missing",
+      severity: "error",
+    });
   });
 });
 
