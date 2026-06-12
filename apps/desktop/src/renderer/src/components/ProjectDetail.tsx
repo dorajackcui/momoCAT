@@ -4,6 +4,7 @@ import type { ProjectFileRecord } from '../../../shared/ipc';
 import { ColumnSelector } from './ColumnSelector';
 import { apiClient } from '../services/apiClient';
 import { feedbackService } from '../services/feedbackService';
+import type { AIFileJobTracker } from '../hooks/aiFileJobs';
 import { useProjectDetailData } from '../hooks/projectDetail/useProjectDetailData';
 import { useProjectFileImport } from '../hooks/projectDetail/useProjectFileImport';
 import { useProjectAI } from '../hooks/projectDetail/useProjectAI';
@@ -20,9 +21,15 @@ interface ProjectDetailProps {
   projectId: number;
   onBack: () => void;
   onOpenFile: (fileId: number) => void;
+  aiFileJobTracker: AIFileJobTracker;
 }
 
-export function ProjectDetail({ projectId, onBack, onOpenFile }: ProjectDetailProps) {
+export function ProjectDetail({
+  projectId,
+  onBack,
+  onOpenFile,
+  aiFileJobTracker,
+}: ProjectDetailProps) {
   const [activeTab, setActiveTab] = useState<'files' | 'tm' | 'tb'>('files');
   const [commitModalFile, setCommitModalFile] = useState<ProjectFileRecord | null>(null);
   const [commitTmId, setCommitTmId] = useState('');
@@ -67,6 +74,7 @@ export function ProjectDetail({ projectId, onBack, onOpenFile }: ProjectDetailPr
     setProject,
     loadData,
     runMutation,
+    fileJobTracker: aiFileJobTracker,
   });
 
   useEffect(() => {

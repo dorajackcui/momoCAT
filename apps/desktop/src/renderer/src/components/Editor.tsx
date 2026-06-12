@@ -12,13 +12,26 @@ import { isVirtualizedEditorListEnabled } from './editor/editorVirtualizationFla
 import { useEditorLayout } from '../hooks/editor/useEditorLayout';
 import { useConcordanceShortcut } from '../hooks/editor/useConcordanceShortcut';
 import { useEditorBatchActions } from '../hooks/editor/useEditorBatchActions';
+import type { AIFileJobTracker } from '../hooks/aiFileJobs';
 
 interface EditorProps {
   fileId: number;
   onBack: () => void;
+  aiFileJobTracker: AIFileJobTracker;
 }
 
-export const Editor: React.FC<EditorProps> = ({ fileId, onBack }) => {
+function clampJobProgress(progress: number): number {
+  return Math.max(0, Math.min(progress, 100));
+}
+
+function getAIJobProgressColor(status: string): string {
+  if (status === 'failed') return 'bg-danger';
+  if (status === 'completed') return 'bg-success';
+  if (status === 'cancelled') return 'bg-warning';
+  return 'bg-brand';
+}
+
+export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker }) => {
   const [file, setFile] = useState<ProjectFile | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [isSearchInputFocused, setIsSearchInputFocused] = useState(false);
@@ -105,7 +118,12 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack }) => {
     fileName: file?.name || null,
     supportsBatchActions,
     reloadEditorData,
+    aiFileJobTracker,
   });
+  const activeBatchAIJob = batchActions.activeBatchAIJob;
+  const activeBatchAIProgress = activeBatchAIJob
+    ? clampJobProgress(activeBatchAIJob.progress || 0)
+    : 0;
 
   const totalSegments = segments.length;
   const confirmedSegments = segments.filter((segment) => segment.status === 'confirmed').length;
@@ -198,6 +216,26 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack }) => {
           void batchActions.handleExport();
         }}
       />
+
+      {activeBatchAIJob && (
+        <div className="border-b border-border bg-surface px-4 py-2">
+          <div className="flex items-center justify-between gap-3 text-[11px] font-medium text-text-muted">
+            <span className="truncate">
+              {activeBatchAIJob.message ||
+                (activeBatchAIJob.status === 'completed' ? 'Completed' : 'AI translation running')}
+            </span>
+            <span className="shrink-0 tabular-nums">{Math.round(activeBatchAIProgress)}%</span>
+          </div>
+          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full transition-all duration-300 ${getAIJobProgressColor(
+                activeBatchAIJob.status,
+              )}`}
+              style={{ width: `${activeBatchAIProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       <div ref={layoutRef as React.RefObject<HTMLDivElement>} className="flex-1 flex min-h-0">
         <div

@@ -242,6 +242,7 @@ describe('useProjectAI behavior helpers', () => {
     });
 
     expect(merged).toEqual({
+      kind: 'ai-translate-file',
       jobId: 'job-new',
       fileId: -1,
       progress: 100,
@@ -252,6 +253,7 @@ describe('useProjectAI behavior helpers', () => {
 
   it('keeps terminal status when start arrives after completion', () => {
     const existing = {
+      kind: 'ai-translate-file' as const,
       jobId: 'job-race',
       fileId: -1,
       progress: 100,
@@ -261,6 +263,7 @@ describe('useProjectAI behavior helpers', () => {
 
     const merged = upsertTrackedJobOnStart('job-race', 42, existing);
     expect(merged).toEqual({
+      kind: 'ai-translate-file',
       jobId: 'job-race',
       fileId: 42,
       progress: 100,

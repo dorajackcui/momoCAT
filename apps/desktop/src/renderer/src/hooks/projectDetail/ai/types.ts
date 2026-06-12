@@ -5,8 +5,8 @@ import type {
   AIBatchTargetBaseline,
   AIBatchTargetScope,
   AIProviderSummary,
-  JobProgressEvent,
 } from '../../../../../shared/ipc';
+import type { AIFileJob, AIFileJobTracker } from '../../aiFileJobs';
 
 export interface ProjectAIFlagsInput {
   promptDraft: string;
@@ -34,9 +34,7 @@ export interface AITestMetaInput {
   ok: boolean;
 }
 
-export interface TrackedAIJob extends JobProgressEvent {
-  fileId: number;
-}
+export type TrackedAIJob = AIFileJob;
 
 export interface StartAITranslateFileOptions {
   mode?: AIBatchMode;
@@ -86,4 +84,5 @@ export interface UseProjectAIParams {
   setProject: Dispatch<SetStateAction<Project | null>>;
   loadData: () => Promise<void>;
   runMutation: <T>(fn: () => Promise<T>) => Promise<T>;
+  fileJobTracker: AIFileJobTracker;
 }

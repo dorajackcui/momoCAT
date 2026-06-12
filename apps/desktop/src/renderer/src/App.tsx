@@ -7,6 +7,7 @@ import { TMManager } from './components/TMManager';
 import { TBManager } from './components/TBManager';
 import { SettingsModal } from './components/SettingsModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { useAIFileJobTracker } from './hooks/aiFileJobs';
 import { useProjects } from './hooks/useProjects';
 import { FeedbackHost } from './services/FeedbackHost';
 
@@ -19,6 +20,7 @@ function App(): JSX.Element {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const { projects, loading, loadProjects, createProject, deleteProject } = useProjects();
+  const aiFileJobTracker = useAIFileJobTracker();
 
   const handleOpenProject = (id: number) => {
     setActiveProjectId(id);
@@ -64,7 +66,11 @@ function App(): JSX.Element {
   if (currentView === 'editor' && activeFileId !== null) {
     return withFeedbackHost(
       <ErrorBoundary>
-        <Editor fileId={activeFileId} onBack={handleBackToProject} />
+        <Editor
+          fileId={activeFileId}
+          onBack={handleBackToProject}
+          aiFileJobTracker={aiFileJobTracker}
+        />
       </ErrorBoundary>,
     );
   }
@@ -76,6 +82,7 @@ function App(): JSX.Element {
           projectId={activeProjectId}
           onBack={handleBackToDashboard}
           onOpenFile={handleOpenFile}
+          aiFileJobTracker={aiFileJobTracker}
         />
       </ErrorBoundary>,
     );

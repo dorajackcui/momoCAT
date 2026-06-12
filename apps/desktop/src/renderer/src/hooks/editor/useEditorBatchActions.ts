@@ -3,18 +3,21 @@ import { apiClient } from '../../services/apiClient';
 import { feedbackService } from '../../services/feedbackService';
 import type { ProjectAITranslateSubmit } from '../../components/project-detail/ProjectAITranslateModal';
 import { buildFileQaFeedback } from '../../components/project-detail/fileQaFeedback';
+import type { AIFileJob, AIFileJobTracker } from '../aiFileJobs';
 
 interface UseEditorBatchActionsParams {
   fileId: number;
   fileName: string | null;
   supportsBatchActions: boolean;
   reloadEditorData: () => Promise<void>;
+  aiFileJobTracker: AIFileJobTracker;
 }
 
 export interface EditorBatchActionsController {
   isBatchAIModalOpen: boolean;
   isBatchAITranslating: boolean;
   isBatchQARunning: boolean;
+  activeBatchAIJob: AIFileJob | null;
   openBatchAIModal: () => void;
   closeBatchAIModal: () => void;
   handleBatchAITranslate: (options: ProjectAITranslateSubmit) => Promise<void>;
@@ -27,42 +30,40 @@ export function useEditorBatchActions({
   fileName,
   supportsBatchActions,
   reloadEditorData,
+  aiFileJobTracker,
 }: UseEditorBatchActionsParams): EditorBatchActionsController {
   const [isBatchAIModalOpen, setIsBatchAIModalOpen] = useState(false);
   const [trackedBatchAIJobId, setTrackedBatchAIJobId] = useState<string | null>(null);
-  const [isBatchAITranslating, setIsBatchAITranslating] = useState(false);
   const [isBatchQARunning, setIsBatchQARunning] = useState(false);
+  const activeBatchAIJob = aiFileJobTracker.getFileJob(fileId);
+  const trackedBatchAIJob = trackedBatchAIJobId
+    ? aiFileJobTracker.getJob(trackedBatchAIJobId)
+    : null;
+  const isBatchAITranslating = activeBatchAIJob?.status === 'running';
 
   useEffect(() => {
     setIsBatchAIModalOpen(false);
     setTrackedBatchAIJobId(null);
-    setIsBatchAITranslating(false);
     setIsBatchQARunning(false);
   }, [fileId]);
 
   useEffect(() => {
-    if (!trackedBatchAIJobId) return;
+    if (!trackedBatchAIJob) return;
+    if (trackedBatchAIJob.status === 'running') return;
 
-    const unsubscribe = apiClient.onJobProgress((progress) => {
-      if (progress.jobId !== trackedBatchAIJobId) return;
-      if (progress.status === 'running') return;
+    setTrackedBatchAIJobId(null);
 
-      setIsBatchAITranslating(false);
-      setTrackedBatchAIJobId(null);
+    if (trackedBatchAIJob.status === 'failed') {
+      const errorMessage =
+        trackedBatchAIJob.error?.message || trackedBatchAIJob.message || 'Unknown error';
+      feedbackService.error(`AI batch translation failed: ${errorMessage}`);
+      return;
+    }
 
-      if (progress.status === 'failed') {
-        const errorMessage = progress.error?.message || progress.message || 'Unknown error';
-        feedbackService.error(`AI batch translation failed: ${errorMessage}`);
-        return;
-      }
-
-      if (progress.status === 'cancelled') {
-        feedbackService.info(progress.message || 'AI batch translation cancelled.');
-      }
-    });
-
-    return unsubscribe;
-  }, [trackedBatchAIJobId]);
+    if (trackedBatchAIJob.status === 'cancelled') {
+      feedbackService.info(trackedBatchAIJob.message || 'AI batch translation cancelled.');
+    }
+  }, [trackedBatchAIJob]);
 
   const handleExport = async () => {
     if (!fileName) return;
@@ -110,12 +111,11 @@ export function useEditorBatchActions({
       const jobId = await apiClient.aiTranslateFile(fileId, {
         targetBaseline: options.targetBaseline,
       });
+      aiFileJobTracker.trackFileJobStart(fileId, jobId);
       setTrackedBatchAIJobId(jobId);
-      setIsBatchAITranslating(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setTrackedBatchAIJobId(null);
-      setIsBatchAITranslating(false);
       feedbackService.error(`Failed to start AI translation: ${message}`);
     }
   };
@@ -144,6 +144,7 @@ export function useEditorBatchActions({
     isBatchAIModalOpen,
     isBatchAITranslating,
     isBatchQARunning,
+    activeBatchAIJob,
     openBatchAIModal: () => setIsBatchAIModalOpen(true),
     closeBatchAIModal: () => setIsBatchAIModalOpen(false),
     handleBatchAITranslate,

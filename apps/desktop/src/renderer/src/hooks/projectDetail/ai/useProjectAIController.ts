@@ -4,7 +4,6 @@ import type {
   AIBatchMode,
   AIBatchTargetBaseline,
   AIProviderSummary,
-  JobProgressEvent,
 } from '../../../../../shared/ipc';
 import { apiClient } from '../../../services/apiClient';
 import { AI_PROVIDERS_CHANGED_EVENT } from '../../../services/aiProviderEvents';
@@ -20,11 +19,9 @@ import {
   normalizeProjectAIProviderPersistenceValue,
   normalizeProjectAIProviderSelection,
 } from './aiSettingsHelpers';
-import { upsertTrackedJobFromProgress, upsertTrackedJobOnStart } from './aiJobTracker';
 import type {
   ProjectAIController,
   StartAITranslateFileOptions,
-  TrackedAIJob,
   UseProjectAIParams,
 } from './types';
 
@@ -89,6 +86,7 @@ export function useProjectAI({
   setProject,
   loadData,
   runMutation,
+  fileJobTracker,
 }: UseProjectAIParams): ProjectAIController {
   const [promptDraft, setPromptDraft] = useState('');
   const [savedPromptValue, setSavedPromptValue] = useState('');
@@ -106,8 +104,6 @@ export function useProjectAI({
   const [testError, setTestError] = useState<string | null>(null);
   const [testRawResponse, setTestRawResponse] = useState<string | null>(null);
   const [showTestDetails, setShowTestDetails] = useState(false);
-  const [aiJobs, setAiJobs] = useState<Record<string, TrackedAIJob>>({});
-  const [fileJobIndex, setFileJobIndex] = useState<Record<number, string>>({});
 
   const loadProviders = useCallback(async () => {
     try {
@@ -155,16 +151,7 @@ export function useProjectAI({
   }, [modelDraft, project?.aiModel, project?.id, providerOptions, savedModelValue]);
 
   useEffect(() => {
-    const unsubscribe = apiClient.onJobProgress((progress: JobProgressEvent) => {
-      setAiJobs((prev) => {
-        const existing = prev[progress.jobId];
-        const nextJob = upsertTrackedJobFromProgress(progress, existing);
-        return {
-          ...prev,
-          [progress.jobId]: nextJob,
-        };
-      });
-
+    const unsubscribe = apiClient.onJobProgress((progress) => {
       if (progress.status === 'completed' || progress.status === 'failed') {
         void loadData();
       }
@@ -315,29 +302,13 @@ export function useProjectAI({
           mode: config.effectiveMode,
           targetBaseline: config.effectiveTargetBaseline,
         });
-        setAiJobs((prev) => {
-          const existing = prev[jobId];
-          return {
-            ...prev,
-            [jobId]: upsertTrackedJobOnStart(jobId, fileId, existing),
-          };
-        });
-        setFileJobIndex((prev) => ({ ...prev, [fileId]: jobId }));
+        fileJobTracker.trackFileJobStart(fileId, jobId);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         feedbackService.error(`Failed to start AI ${config.actionLabel}: ${message}`);
       }
     },
-    [project?.projectType, providerActionBlockMessage],
-  );
-
-  const getFileJob = useCallback(
-    (fileId: number): TrackedAIJob | null => {
-      const jobId = fileJobIndex[fileId];
-      if (!jobId) return null;
-      return aiJobs[jobId] ?? null;
-    },
-    [aiJobs, fileJobIndex],
+    [fileJobTracker, project?.projectType, providerActionBlockMessage],
   );
 
   return useMemo(
@@ -370,10 +341,10 @@ export function useProjectAI({
       savePrompt,
       testPrompt,
       startAITranslateFile,
-      getFileJob,
+      getFileJob: fileJobTracker.getFileJob,
     }),
     [
-      getFileJob,
+      fileJobTracker,
       hasTestDetails,
       hasUnsavedPromptChanges,
       providerAvailability.providerSetupRequired,

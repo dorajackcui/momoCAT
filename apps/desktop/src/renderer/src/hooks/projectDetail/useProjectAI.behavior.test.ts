@@ -79,6 +79,7 @@ describe('useProjectAI controller behaviors', () => {
     const lateStart = upsertTrackedJobOnStart('job-race', 10, completed);
 
     expect(lateStart).toEqual({
+      kind: 'ai-translate-file',
       jobId: 'job-race',
       fileId: 10,
       progress: 100,
