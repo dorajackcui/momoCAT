@@ -197,6 +197,7 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
     },
 
     shouldDelayRemoteUpdate: (segmentId) =>
+      editingSegments.has(segmentId) ||
       pendingBySegment.has(segmentId) ||
       debounceTimerBySegment.has(segmentId) ||
       inFlightPromiseBySegment.has(segmentId),

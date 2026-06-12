@@ -12,7 +12,7 @@ interface EditorHeaderProps {
   onExport: () => void;
 }
 
-export const EditorHeader: React.FC<EditorHeaderProps> = ({
+const EditorHeaderComponent: React.FC<EditorHeaderProps> = ({
   fileName,
   projectName,
   srcLang,
@@ -77,3 +77,5 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({
     </header>
   );
 };
+
+export const EditorHeader = React.memo(EditorHeaderComponent);

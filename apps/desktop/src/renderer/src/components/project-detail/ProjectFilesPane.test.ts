@@ -78,6 +78,7 @@ function createAIControllerMock(overrides?: Partial<ProjectAIController>): {
     testPrompt: vi.fn().mockResolvedValue(undefined),
     startAITranslateFile,
     getFileJob: vi.fn().mockReturnValue(null),
+    subscribeFileJobs: vi.fn().mockReturnValue(() => {}),
     ...overrides,
   } as unknown as ProjectAIController;
 

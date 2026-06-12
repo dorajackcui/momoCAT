@@ -134,7 +134,7 @@ describe('createSegmentPersistor', () => {
     expect(persistor.isRemoteUpdateStale('seg-3', capturedRequestIds[1])).toBe(false);
   });
 
-  it('reports remote-update delay state for pending/in-flight segments only', async () => {
+  it('reports remote-update delay state for actively edited, pending, and in-flight segments', async () => {
     let resolveUpdate: (() => void) | undefined;
     const updateSegment = vi.fn(
       () =>
@@ -150,7 +150,7 @@ describe('createSegmentPersistor', () => {
     });
 
     persistor.setSegmentEditing('seg-4', true);
-    expect(persistor.shouldDelayRemoteUpdate('seg-4')).toBe(false);
+    expect(persistor.shouldDelayRemoteUpdate('seg-4')).toBe(true);
     persistor.setSegmentEditing('seg-4', false);
 
     persistor.queueSegmentUpdate({

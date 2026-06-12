@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_PROJECT_QA_SETTINGS, type SegmentQaRuleId } from '@cat/core/project';
 import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import { TagValidator } from '@cat/core/qa';
@@ -40,7 +40,18 @@ export function useEditor({ activeFileId }: UseEditorProps) {
     {},
   );
   const [loading, setLoading] = useState(false);
-  const tagValidator = new TagValidator();
+  const tagValidator = useMemo(() => new TagValidator(), []);
+
+  // Keep latest values readable from stable callbacks so per-row handlers
+  // (and therefore EditorRow memo bailouts) survive segment updates.
+  const segmentsRef = useRef(segments);
+  useEffect(() => {
+    segmentsRef.current = segments;
+  }, [segments]);
+  const aiTranslatingSegmentIdsRef = useRef(aiTranslatingSegmentIds);
+  useEffect(() => {
+    aiTranslatingSegmentIdsRef.current = aiTranslatingSegmentIds;
+  }, [aiTranslatingSegmentIds]);
 
   const isTokenLike = useCallback((value: unknown): value is Token => {
     if (!value || typeof value !== 'object') return false;
@@ -266,11 +277,11 @@ export function useEditor({ activeFileId }: UseEditorProps) {
 
   const translateSegmentWithAI = useCallback(
     async (segmentId: string) => {
-      if (aiTranslatingSegmentIds[segmentId]) {
+      if (aiTranslatingSegmentIdsRef.current[segmentId]) {
         return;
       }
 
-      const segment = segments.find((item) => item.segmentId === segmentId);
+      const segment = segmentsRef.current.find((item) => item.segmentId === segmentId);
       if (!segment) return;
 
       const sourceText = serializeTokensToDisplayText(segment.sourceTokens).trim();
@@ -302,16 +313,16 @@ export function useEditor({ activeFileId }: UseEditorProps) {
         });
       }
     },
-    [aiTranslatingSegmentIds, clearSegmentSaveError, segments, setSegmentSaveError],
+    [clearSegmentSaveError, setSegmentSaveError],
   );
 
   const refineSegmentWithAI = useCallback(
     async (segmentId: string, instruction: string) => {
-      if (aiTranslatingSegmentIds[segmentId]) {
+      if (aiTranslatingSegmentIdsRef.current[segmentId]) {
         return;
       }
 
-      const segment = segments.find((item) => item.segmentId === segmentId);
+      const segment = segmentsRef.current.find((item) => item.segmentId === segmentId);
       if (!segment) return;
 
       const sourceText = serializeTokensToDisplayText(segment.sourceTokens).trim();
@@ -349,7 +360,7 @@ export function useEditor({ activeFileId }: UseEditorProps) {
         });
       }
     },
-    [aiTranslatingSegmentIds, clearSegmentSaveError, segments, setSegmentSaveError],
+    [clearSegmentSaveError, setSegmentSaveError],
   );
 
   return {

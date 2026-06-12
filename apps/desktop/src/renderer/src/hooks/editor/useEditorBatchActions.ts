@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { apiClient } from '../../services/apiClient';
 import { feedbackService } from '../../services/feedbackService';
 import type { ProjectAITranslateSubmit } from '../../components/project-detail/ProjectAITranslateModal';
 import { buildFileQaFeedback } from '../../components/project-detail/fileQaFeedback';
+import { useAIFileJobForFile, useAIJob } from '../aiFileJobs';
 import type { AIFileJob, AIFileJobTracker } from '../aiFileJobs';
 
 interface UseEditorBatchActionsParams {
@@ -35,10 +36,8 @@ export function useEditorBatchActions({
   const [isBatchAIModalOpen, setIsBatchAIModalOpen] = useState(false);
   const [trackedBatchAIJobId, setTrackedBatchAIJobId] = useState<string | null>(null);
   const [isBatchQARunning, setIsBatchQARunning] = useState(false);
-  const activeBatchAIJob = aiFileJobTracker.getFileJob(fileId);
-  const trackedBatchAIJob = trackedBatchAIJobId
-    ? aiFileJobTracker.getJob(trackedBatchAIJobId)
-    : null;
+  const activeBatchAIJob = useAIFileJobForFile(aiFileJobTracker, fileId);
+  const trackedBatchAIJob = useAIJob(aiFileJobTracker, trackedBatchAIJobId);
   const isBatchAITranslating = activeBatchAIJob?.status === 'running';
 
   useEffect(() => {
@@ -65,7 +64,7 @@ export function useEditorBatchActions({
     }
   }, [trackedBatchAIJob]);
 
-  const handleExport = async () => {
+  const handleExport = useCallback(async () => {
     if (!fileName) return;
 
     const defaultPath = fileName.replace(/(\.xlsx|\.csv)$/i, '_translated$1');
@@ -101,26 +100,29 @@ export function useEditorBatchActions({
         );
       }
     }
-  };
+  }, [fileId, fileName]);
 
-  const handleBatchAITranslate = async (options: ProjectAITranslateSubmit) => {
-    if (!supportsBatchActions) return;
+  const handleBatchAITranslate = useCallback(
+    async (options: ProjectAITranslateSubmit) => {
+      if (!supportsBatchActions) return;
 
-    setIsBatchAIModalOpen(false);
-    try {
-      const jobId = await apiClient.aiTranslateFile(fileId, {
-        targetBaseline: options.targetBaseline,
-      });
-      aiFileJobTracker.trackFileJobStart(fileId, jobId);
-      setTrackedBatchAIJobId(jobId);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setTrackedBatchAIJobId(null);
-      feedbackService.error(`Failed to start AI translation: ${message}`);
-    }
-  };
+      setIsBatchAIModalOpen(false);
+      try {
+        const jobId = await apiClient.aiTranslateFile(fileId, {
+          targetBaseline: options.targetBaseline,
+        });
+        aiFileJobTracker.trackFileJobStart(fileId, jobId);
+        setTrackedBatchAIJobId(jobId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setTrackedBatchAIJobId(null);
+        feedbackService.error(`Failed to start AI translation: ${message}`);
+      }
+    },
+    [aiFileJobTracker, fileId, supportsBatchActions],
+  );
 
-  const handleBatchQA = async () => {
+  const handleBatchQA = useCallback(async () => {
     if (!fileName) return;
 
     setIsBatchQARunning(true);
@@ -138,15 +140,18 @@ export function useEditorBatchActions({
     } finally {
       setIsBatchQARunning(false);
     }
-  };
+  }, [fileId, fileName, reloadEditorData]);
+
+  const openBatchAIModal = useCallback(() => setIsBatchAIModalOpen(true), []);
+  const closeBatchAIModal = useCallback(() => setIsBatchAIModalOpen(false), []);
 
   return {
     isBatchAIModalOpen,
     isBatchAITranslating,
     isBatchQARunning,
     activeBatchAIJob,
-    openBatchAIModal: () => setIsBatchAIModalOpen(true),
-    closeBatchAIModal: () => setIsBatchAIModalOpen(false),
+    openBatchAIModal,
+    closeBatchAIModal,
     handleBatchAITranslate,
     handleBatchQA,
     handleExport,

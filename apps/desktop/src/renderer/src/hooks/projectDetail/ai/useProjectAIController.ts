@@ -342,6 +342,7 @@ export function useProjectAI({
       testPrompt,
       startAITranslateFile,
       getFileJob: fileJobTracker.getFileJob,
+      subscribeFileJobs: fileJobTracker.subscribe,
     }),
     [
       fileJobTracker,

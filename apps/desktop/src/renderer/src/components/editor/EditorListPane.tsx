@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { SearchableEditorSegment } from '../editorFilterUtils';
 import { EditorRow } from '../EditorRow';
@@ -28,7 +28,7 @@ interface EditorListPaneProps {
   showNonPrintingSymbols: boolean;
 }
 
-export const EditorListPane: React.FC<EditorListPaneProps> = ({
+const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
   scrollParentRef,
   virtualized,
   filteredSegments,
@@ -110,12 +110,25 @@ export const EditorListPane: React.FC<EditorListPaneProps> = ({
     overscan: 8,
   });
 
+  const lastScrolledTargetRef = useRef<{ segmentId: string; index: number } | null>(null);
+
   useEffect(() => {
     if (!virtualized || !activeSegmentId) return;
     const activeIndex = filteredSegments.findIndex(
       (item) => item.segment.segmentId === activeSegmentId,
     );
     if (activeIndex < 0) return;
+    // Segment edits replace array items without moving the active row; only
+    // scroll when the activation target or its list position actually changed.
+    const lastScrolled = lastScrolledTargetRef.current;
+    if (
+      lastScrolled &&
+      lastScrolled.segmentId === activeSegmentId &&
+      lastScrolled.index === activeIndex
+    ) {
+      return;
+    }
+    lastScrolledTargetRef.current = { segmentId: activeSegmentId, index: activeIndex };
     virtualizer.scrollToIndex(activeIndex, { align: 'auto' });
   }, [activeSegmentId, filteredSegments, virtualized, virtualizer]);
 
@@ -158,3 +171,5 @@ export const EditorListPane: React.FC<EditorListPaneProps> = ({
     </>
   );
 };
+
+export const EditorListPane = React.memo(EditorListPaneComponent);

@@ -19,7 +19,7 @@ interface EditorSidebarProps {
   concordanceSearchSignal: number;
 }
 
-export const EditorSidebar: React.FC<EditorSidebarProps> = ({
+const EditorSidebarComponent: React.FC<EditorSidebarProps> = ({
   sidebarWidth,
   activeTab,
   setActiveTab,
@@ -91,3 +91,5 @@ export const EditorSidebar: React.FC<EditorSidebarProps> = ({
     </div>
   );
 };
+
+export const EditorSidebar = React.memo(EditorSidebarComponent);

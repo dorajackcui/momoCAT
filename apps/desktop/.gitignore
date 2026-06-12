@@ -3,3 +3,6 @@ proxy.env
 .env.*
 !.env.example
 !.env.*.example
+
+# Test artifacts
+test-results/

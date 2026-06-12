@@ -1,4 +1,4 @@
-import { RefObject, useEffect, useRef, useState } from 'react';
+import { RefObject, useCallback, useEffect, useRef, useState } from 'react';
 
 const SIDEBAR_MIN_WIDTH = 220;
 
@@ -56,9 +56,11 @@ export function useEditorLayout(): EditorLayoutController {
     return () => window.removeEventListener('resize', clampSidebarByViewport);
   }, []);
 
+  const startSidebarResize = useCallback(() => setIsResizingSidebar(true), []);
+
   return {
     layoutRef,
     sidebarWidth,
-    startSidebarResize: () => setIsResizingSidebar(true),
+    startSidebarResize,
   };
 }

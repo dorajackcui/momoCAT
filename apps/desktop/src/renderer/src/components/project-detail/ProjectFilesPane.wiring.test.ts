@@ -91,6 +91,7 @@ function createAIControllerMock(): {
     testPrompt: vi.fn().mockResolvedValue(undefined),
     startAITranslateFile,
     getFileJob: vi.fn().mockReturnValue(null),
+    subscribeFileJobs: vi.fn().mockReturnValue(() => {}),
   } as unknown as ProjectAIController;
 
   return { ai, startAITranslateFile };

@@ -120,14 +120,49 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
     reloadEditorData,
     aiFileJobTracker,
   });
+  const {
+    handleExport: handleBatchExport,
+    handleBatchQA,
+    handleBatchAITranslate,
+  } = batchActions;
   const activeBatchAIJob = batchActions.activeBatchAIJob;
   const activeBatchAIProgress = activeBatchAIJob
     ? clampJobProgress(activeBatchAIJob.progress || 0)
     : 0;
 
   const totalSegments = segments.length;
-  const confirmedSegments = segments.filter((segment) => segment.status === 'confirmed').length;
+  const confirmedSegments = useMemo(
+    () => segments.filter((segment) => segment.status === 'confirmed').length,
+    [segments],
+  );
   const saveErrorCount = Object.keys(segmentSaveErrors).length;
+
+  const handleExport = useCallback(() => {
+    void handleBatchExport();
+  }, [handleBatchExport]);
+
+  const handleRunBatchQA = useCallback(() => {
+    void handleBatchQA();
+  }, [handleBatchQA]);
+
+  const handleConfirmBatchAITranslate = useCallback(
+    (options: Parameters<typeof handleBatchAITranslate>[0]) => {
+      void handleBatchAITranslate(options);
+    },
+    [handleBatchAITranslate],
+  );
+
+  const handleToggleNonPrintingSymbols = useCallback(() => {
+    setShowNonPrintingSymbols((prev) => !prev);
+  }, []);
+
+  const handleStartSidebarResize = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      startSidebarResize();
+    },
+    [startSidebarResize],
+  );
 
   const syncSearchInputFocus = useCallback(() => {
     const active = document.activeElement;
@@ -197,9 +232,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
           open={batchActions.isBatchAIModalOpen}
           fileName={file?.name || null}
           onClose={batchActions.closeBatchAIModal}
-          onConfirm={(options) => {
-            void batchActions.handleBatchAITranslate(options);
-          }}
+          onConfirm={handleConfirmBatchAITranslate}
         />
       )}
 
@@ -212,9 +245,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
         confirmedSegments={confirmedSegments}
         totalSegments={totalSegments}
         onBack={onBack}
-        onExport={() => {
-          void batchActions.handleExport();
-        }}
+        onExport={handleExport}
       />
 
       {activeBatchAIJob && (
@@ -251,10 +282,8 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
               isBatchQARunning={batchActions.isBatchQARunning}
               showNonPrintingSymbols={showNonPrintingSymbols}
               onOpenBatchAIModal={batchActions.openBatchAIModal}
-              onRunBatchQA={() => {
-                void batchActions.handleBatchQA();
-              }}
-              onToggleNonPrintingSymbols={() => setShowNonPrintingSymbols((prev) => !prev)}
+              onRunBatchQA={handleRunBatchQA}
+              onToggleNonPrintingSymbols={handleToggleNonPrintingSymbols}
               sortBy={sortBy}
               sortDirection={sortDirection}
               isSortMenuOpen={isSortMenuOpen}
@@ -315,10 +344,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
           sidebarWidth={sidebarWidth}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
-          onStartResize={(event) => {
-            event.preventDefault();
-            startSidebarResize();
-          }}
+          onStartResize={handleStartSidebarResize}
           activeMatches={activeMatches}
           activeTerms={activeTerms}
           onApplyMatch={handleApplyMatch}

@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useLayoutEffect, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { Segment, TBMatch } from '@cat/core/models';
 import type { SegmentQaRuleId } from '@cat/core/project';
@@ -30,8 +30,31 @@ export function useSegmentQaWorkflow({
   clearSegmentSaveError,
   tagValidator,
 }: UseSegmentQaWorkflowParams): { confirmSegment: (segmentId: string) => Promise<void> } {
+  // Read frequently-changing inputs through a ref so confirmSegment keeps a
+  // stable identity (it is forwarded to every EditorRow as onConfirm).
+  const workflowInputsRef = useRef({
+    segments,
+    projectId,
+    targetLocale,
+    enabledQaRuleIds,
+    instantQaOnConfirm,
+    tagValidator,
+  });
+  useLayoutEffect(() => {
+    workflowInputsRef.current = {
+      segments,
+      projectId,
+      targetLocale,
+      enabledQaRuleIds,
+      instantQaOnConfirm,
+      tagValidator,
+    };
+  }, [segments, projectId, targetLocale, enabledQaRuleIds, instantQaOnConfirm, tagValidator]);
+
   const confirmSegment = useCallback(
     async (segmentId: string) => {
+      const { segments, projectId, targetLocale, enabledQaRuleIds, instantQaOnConfirm, tagValidator } =
+        workflowInputsRef.current;
       const segment = segments.find((item) => item.segmentId === segmentId);
       if (!segment) return;
       const previousStatus = segment.status;
@@ -115,18 +138,7 @@ export function useSegmentQaWorkflow({
         setActiveSegmentId(segments[currentIndex + 1].segmentId);
       }
     },
-    [
-      enabledQaRuleIds,
-      instantQaOnConfirm,
-      projectId,
-      targetLocale,
-      segments,
-      clearSegmentSaveError,
-      setActiveSegmentId,
-      setSegmentSaveError,
-      setSegments,
-      tagValidator,
-    ],
+    [clearSegmentSaveError, setActiveSegmentId, setSegmentSaveError, setSegments],
   );
 
   return {

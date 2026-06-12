@@ -47,7 +47,7 @@ interface EditorFilterBarProps {
   sortMenuRef: React.RefObject<HTMLDivElement | null>;
 }
 
-export const EditorFilterBar: React.FC<EditorFilterBarProps> = ({
+const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
   supportsBatchActions,
   canRunActions,
   isBatchAITranslating,
@@ -323,3 +323,5 @@ export const EditorFilterBar: React.FC<EditorFilterBarProps> = ({
     </div>
   );
 };
+
+export const EditorFilterBar = React.memo(EditorFilterBarComponent);
