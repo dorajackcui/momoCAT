@@ -6,6 +6,35 @@ export interface TagIntegrityValidationOptions {
   expectedTagsSignature?: string;
 }
 
+function countTags(tags: string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  tags.forEach((tag) => {
+    counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  });
+  return counts;
+}
+
+function getCountDelta(base: Map<string, number>, comparison: Map<string, number>): string[] {
+  const delta: string[] = [];
+  base.forEach((count, tag) => {
+    const missingCount = count - (comparison.get(tag) ?? 0);
+    for (let index = 0; index < missingCount; index += 1) {
+      delta.push(tag);
+    }
+  });
+  return delta;
+}
+
+function formatTagForMessage(tag: string): string {
+  if (tag === '\r') return '\\r';
+  if (tag === '\n') return '\\n';
+  return tag;
+}
+
+function formatUniqueTags(tags: string[]): string {
+  return [...new Set(tags)].map(formatTagForMessage).join(', ');
+}
+
 export function validateTagIntegrityTokens(
   sourceTokens: Token[],
   targetTokens: Token[],
@@ -17,21 +46,24 @@ export function validateTagIntegrityTokens(
 
   if (options?.status === 'new' && targetTags.length === 0) return [];
 
-  const missing = sourceTags.filter((tag) => !targetTags.includes(tag));
+  const sourceTagCounts = countTags(sourceTags);
+  const targetTagCounts = countTags(targetTags);
+
+  const missing = getCountDelta(sourceTagCounts, targetTagCounts);
   if (missing.length > 0) {
     issues.push({
       ruleId: 'tag-missing',
       severity: 'error',
-      message: `Missing tags: ${[...new Set(missing)].join(', ')}`,
+      message: `Missing tags: ${formatUniqueTags(missing)}`,
     });
   }
 
-  const extra = targetTags.filter((tag) => !sourceTags.includes(tag));
+  const extra = getCountDelta(targetTagCounts, sourceTagCounts);
   if (extra.length > 0) {
     issues.push({
       ruleId: 'tag-extra',
       severity: 'error',
-      message: `Extra tags found: ${[...new Set(extra)].join(', ')}`,
+      message: `Extra tags found: ${formatUniqueTags(extra)}`,
     });
   }
 
