@@ -225,14 +225,14 @@ describe('MTModule', () => {
     }
   });
 
-  it('protects real newlines as markers in MT prompts and retries when one is dropped', async () => {
+  it('protects literal newline escape sequences as markers in MT prompts and retries when one is dropped', async () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('MT Newline Markers', 'en', 'fr');
       seedConfiguredAIProvider(db, projectId);
       const project = db.getProject(projectId);
       if (!project) throw new Error('Project not created');
-      const segment = createTransientSegment({ id: 'unit-1', source: 'Hello\nworld\nagain' }, 0);
+      const segment = createTransientSegment({ id: 'unit-1', source: 'Hello\\nworld\\nagain' }, 0);
       const transport = createTransport();
       transport.createResponse
         .mockResolvedValueOnce({
@@ -265,7 +265,7 @@ describe('MTModule', () => {
 
       expect(result.prompt.sourcePayload).toBe('Hello{1}world{2}again');
       expect(result.prompt.userPrompt).toContain('Hello{1}world{2}again');
-      expect(serializeTokensToDisplayText(result.targetTokens)).toBe('Bonjour\nmonde\nencore');
+      expect(serializeTokensToDisplayText(result.targetTokens)).toBe('Bonjour\\nmonde\\nencore');
       expect(transport.createResponse).toHaveBeenCalledTimes(2);
       expect(transport.createResponse.mock.calls[1]?.[0].userPrompt).toContain(
         'Previous translation was invalid.',

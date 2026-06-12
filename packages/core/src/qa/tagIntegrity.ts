@@ -26,8 +26,8 @@ function getCountDelta(base: Map<string, number>, comparison: Map<string, number
 }
 
 function formatTagForMessage(tag: string): string {
-  if (tag === '\r') return '\\r';
-  if (tag === '\n') return '\\n';
+  if (tag === '\r' || tag === '\\r') return '\\r';
+  if (tag === '\n' || tag === '\\n') return '\\n';
   return tag;
 }
 

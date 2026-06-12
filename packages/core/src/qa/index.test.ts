@@ -51,11 +51,11 @@ describe("Tag Integrity QA", () => {
     expect(issues[0].ruleId).toBe("tag-extra");
   });
 
-  it("treats a missing repeated protected newline tag as an error", () => {
-    const sourceTokens = parseDisplayTextToTokens("A\nB\nC");
+  it("treats a missing repeated protected literal newline escape tag as an error", () => {
+    const sourceTokens = parseDisplayTextToTokens("A\\nB\\nC");
     const targetTokens = parseEditorTextToTokens("X{1}Y", sourceTokens);
     const segment = {
-      ...buildSegment("A\nB\nC", ""),
+      ...buildSegment("A\\nB\\nC", ""),
       sourceTokens,
       targetTokens,
       tagsSignature: computeTagsSignature(sourceTokens),

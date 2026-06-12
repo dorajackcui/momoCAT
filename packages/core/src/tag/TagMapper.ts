@@ -1,7 +1,10 @@
 import type { Token } from '../models';
 
-const isOccurrenceScopedTagContent = (content: string): boolean =>
+const isActualLineBreakTagContent = (content: string): boolean =>
   content === '\r' || content === '\n';
+
+const isOccurrenceScopedTagContent = (content: string): boolean =>
+  content === '\\r' || content === '\\n';
 
 export const getUniqueTagContents = (sourceTokens: Token[]): string[] => {
   const seen = new Set<string>();
@@ -9,6 +12,7 @@ export const getUniqueTagContents = (sourceTokens: Token[]): string[] => {
 
   sourceTokens.forEach(token => {
     if (token.type !== 'tag') return;
+    if (isActualLineBreakTagContent(token.content)) return;
     if (isOccurrenceScopedTagContent(token.content)) {
       markerContents.push(token.content);
       return;

@@ -42,26 +42,40 @@ describe("CAT Core Tokenizer", () => {
     });
   });
 
-  it("parses real CR and LF as protected standalone tags under default policy", () => {
-    const tokens = parseDisplayTextToTokens("A\r\nB\nC\rD");
+  it("parses literal CR and LF escape sequences as protected standalone tags under default policy", () => {
+    const tokens = parseDisplayTextToTokens("A\\r\\nB\\nC\\rD");
 
     expect(tokens).toEqual([
       { type: "text", content: "A" },
-      { type: "tag", content: "\r", meta: { id: "\r" } },
-      { type: "tag", content: "\n", meta: { id: "\n" } },
+      { type: "tag", content: "\\r", meta: { id: "\\r" } },
+      { type: "tag", content: "\\n", meta: { id: "\\n" } },
       { type: "text", content: "B" },
-      { type: "tag", content: "\n", meta: { id: "\n" } },
+      { type: "tag", content: "\\n", meta: { id: "\\n" } },
       { type: "text", content: "C" },
-      { type: "tag", content: "\r", meta: { id: "\r" } },
+      { type: "tag", content: "\\r", meta: { id: "\\r" } },
       { type: "text", content: "D" },
     ]);
     expect(tokens.filter((token) => token.type === "tag").map((token) => token.content)).toEqual([
-      "\r",
-      "\n",
-      "\n",
-      "\r",
+      "\\r",
+      "\\n",
+      "\\n",
+      "\\r",
     ]);
-    expect(computeTagsSignature(tokens)).toBe(["\r", "\n", "\n", "\r"].join("|"));
+    expect(computeTagsSignature(tokens)).toBe(["\\r", "\\n", "\\n", "\\r"].join("|"));
+  });
+
+  it("keeps real CR and LF as plain text under default policy", () => {
+    const tokens = parseDisplayTextToTokens("A\r\nB\nC");
+
+    expect(tokens).toEqual([{ type: "text", content: "A\r\nB\nC" }]);
+    expect(computeTagsSignature(tokens)).toBe("");
+  });
+
+  it("keeps literal CR and LF escape sequences as plain text when tag policy is none", () => {
+    const tokens = parseDisplayTextToTokens("A\\r\\nB\\nC", { tagPolicy: "none" });
+
+    expect(tokens).toEqual([{ type: "text", content: "A\\r\\nB\\nC" }]);
+    expect(computeTagsSignature(tokens)).toBe("");
   });
 
   it("keeps real CR and LF as plain text when tag policy is none", () => {
@@ -156,8 +170,8 @@ describe("Editor Tag Marker Conversion", () => {
     );
   });
 
-  it("serializes real CR and LF tags as standalone markers and parses them back", () => {
-    const sourceWithLineBreaks = parseDisplayTextToTokens("A\r\nB\nC");
+  it("serializes literal CR and LF escape sequence tags as standalone markers and parses them back", () => {
+    const sourceWithLineBreaks = parseDisplayTextToTokens("A\\r\\nB\\nC");
 
     expect(serializeTokensToEditorText(sourceWithLineBreaks, sourceWithLineBreaks)).toBe(
       "A{1}{2}B{3}C",
@@ -165,20 +179,39 @@ describe("Editor Tag Marker Conversion", () => {
 
     const parsed = parseEditorTextToTokens("X{1}{2}Y{3}Z", sourceWithLineBreaks);
 
-    expect(serializeTokensToDisplayText(parsed)).toBe("X\r\nY\nZ");
+    expect(serializeTokensToDisplayText(parsed)).toBe("X\\r\\nY\\nZ");
     expect(parsed.filter((token) => token.type === "tag").map((token) => token.content)).toEqual([
-      "\r",
-      "\n",
-      "\n",
+      "\\r",
+      "\\n",
+      "\\n",
     ]);
   });
 
-  it("assigns separate marker numbers to repeated newline tags", () => {
-    const sourceWithRepeatedLineFeeds = parseDisplayTextToTokens("A\nB\nC");
+  it("assigns separate marker numbers to repeated literal newline escape tags", () => {
+    const sourceWithRepeatedLineFeeds = parseDisplayTextToTokens("A\\nB\\nC");
 
     expect(
       serializeTokensToEditorText(sourceWithRepeatedLineFeeds, sourceWithRepeatedLineFeeds),
     ).toBe("A{1}B{2}C");
+  });
+
+  it("does not serialize manually constructed real CR or LF tag tokens as markers", () => {
+    const sourceWithRealLineBreakTags = [
+      { type: "text", content: "A" },
+      { type: "tag", content: "\n" },
+      { type: "text", content: "B" },
+      { type: "tag", content: "\r" },
+      { type: "text", content: "C" },
+      { type: "tag", content: "<b>" },
+      { type: "text", content: "D" },
+    ] as const;
+
+    expect(
+      serializeTokensToEditorText(
+        [...sourceWithRealLineBreakTags],
+        [...sourceWithRealLineBreakTags],
+      ),
+    ).toBe("A\nB\rC{1>D");
   });
 
   it("serializes nameless closing tags as paired-end markers", () => {

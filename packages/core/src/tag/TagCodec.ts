@@ -49,18 +49,22 @@ const pushTagToken = (tokens: Token[], value: string): void => {
   });
 };
 
-const findNextProtectedLineBreak = (
+const findNextProtectedLineBreakEscape = (
   text: string,
   startIndex: number,
 ): { value: string; index: number } | null => {
-  for (let index = startIndex; index < text.length; index += 1) {
-    const value = text[index];
-    if (value === '\r' || value === '\n') {
-      return { value, index };
+  for (let index = startIndex; index < text.length - 1; index += 1) {
+    if (text[index] !== '\\') continue;
+    const escaped = text[index + 1];
+    if (escaped === 'r' || escaped === 'n') {
+      return { value: text.substring(index, index + 2), index };
     }
   }
   return null;
 };
+
+const isActualLineBreak = (content: string): boolean =>
+  content === '\r' || content === '\n';
 
 const detectTagType = (tagContent: string): TagType => {
   // Allow nameless closing tags like </> as paired-end markers.
@@ -82,12 +86,19 @@ const isBetterMatch = (
   }
 
   // If still tied, prefer longer match.
-  return candidate.match[0].length > current.match[0].length;
+  return getCandidateLength(candidate) > getCandidateLength(current);
 };
 
 type CandidateMatch =
   | { kind: 'marker'; marker: EditorMarkerPattern; match: RegExpExecArray; index: number }
-  | { kind: 'display'; match: RegExpExecArray; index: number };
+  | { kind: 'display'; match: RegExpExecArray; index: number }
+  | { kind: 'protected-escape'; value: string; index: number };
+
+const getCandidateLength = (candidate: CandidateMatch): number => (
+  candidate.kind === 'protected-escape'
+    ? candidate.value.length
+    : candidate.match[0].length
+);
 
 const findNextCandidate = (
   text: string,
@@ -95,7 +106,10 @@ const findNextCandidate = (
   markerPatterns: EditorMarkerPattern[],
   displayPatterns: RegExp[]
 ): CandidateMatch | null => {
-  let next: CandidateMatch | null = null;
+  const protectedEscape = findNextProtectedLineBreakEscape(text, startIndex);
+  let next: CandidateMatch | null = protectedEscape
+    ? { kind: 'protected-escape', ...protectedEscape }
+    : null;
 
   markerPatterns.forEach(marker => {
     marker.regex.lastIndex = startIndex;
@@ -141,6 +155,7 @@ export function serializeTokensToEditorText(tokens: Token[], sourceTokens: Token
   return tokens
     .map(token => {
       if (token.type !== 'tag') return token.content;
+      if (isActualLineBreak(token.content)) return token.content;
       const tagNumber = resolveTagNumber(token) ?? fallbackTagNumber++;
       return formatTagAsMemoQMarker(token.content, tagNumber);
     })
@@ -164,7 +179,7 @@ export function parseDisplayTextToTokens(
   // Fast path for common plain-text rows.
   const customPatterns = normalizedOptions.displayTagPatterns;
   const hasCustomPatterns = Array.isArray(customPatterns) && customPatterns.length > 0;
-  if (!hasCustomPatterns && !/[<{%\r\n]/.test(text)) {
+  if (!hasCustomPatterns && !/[<{%\\]/.test(text)) {
     return [{ type: 'text', content: text }];
   }
 
@@ -173,7 +188,7 @@ export function parseDisplayTextToTokens(
   let cursor = 0;
 
   while (cursor < text.length) {
-    let nextCandidate = findNextProtectedLineBreak(text, cursor);
+    let nextCandidate = findNextProtectedLineBreakEscape(text, cursor);
 
     for (const pattern of patterns) {
       pattern.lastIndex = cursor;
@@ -243,15 +258,21 @@ export function parseEditorTextToTokens(
       } else {
         pushTextToken(tokens, candidate.match[0]);
       }
-    } else {
+    } else if (candidate.kind === 'display') {
       tokens.push({
         type: 'tag',
         content: candidate.match[0],
         meta: { id: candidate.match[0] }
       });
+    } else {
+      tokens.push({
+        type: 'tag',
+        content: candidate.value,
+        meta: { id: candidate.value }
+      });
     }
 
-    cursor = candidate.index + candidate.match[0].length;
+    cursor = candidate.index + getCandidateLength(candidate);
   }
 
   return tokens.length > 0 ? tokens : [{ type: 'text', content: text }];

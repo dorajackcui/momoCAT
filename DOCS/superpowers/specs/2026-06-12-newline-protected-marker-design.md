@@ -4,10 +4,10 @@ Date: 2026-06-12
 
 ## Purpose
 
-Protect real carriage return and line feed characters in MT prompts by routing
-them through the existing protected-marker token flow. Raw `\r` and `\n` are
-too easy for providers to normalize, move, or render as actual line breaks, so
-prompt wording alone is not a reliable preservation mechanism.
+Protect literal backslash escape sequences (`\\r` and `\\n`) in MT prompts by
+routing them through the existing protected-marker token flow. These sequences
+are too easy for providers to normalize, move, or render as actual line breaks,
+so prompt wording alone is not a reliable preservation mechanism.
 
 ## Scope
 
@@ -22,8 +22,10 @@ In scope:
 
 Out of scope:
 
+- Real carriage return and line feed characters. Actual line breaks should stay
+  ordinary text.
 - `tagPolicy: none`, which must keep all text ordinary and should not protect
-  newline characters as CAT markers.
+  literal newline escape sequences as CAT markers.
 - CLI argument changes.
 - Prompt template redesign.
 - Desktop UI changes.
@@ -37,33 +39,34 @@ Headless localization creates transient segments with
 `parseEditorTextToTokens`. Tag validation then checks whether protected markers
 from the source are preserved in the target.
 
-Today, real newline characters remain inside ordinary text tokens. They can
-enter prompts as actual line breaks, where providers may normalize them despite
-instructions to preserve `\r` and `\n`.
+Today, literal `\\r` and `\\n` sequences remain inside ordinary text tokens.
+They can enter prompts looking like newline instructions or escaped line breaks,
+where providers may normalize them despite instructions to preserve them.
 
 ## Design
 
-Treat real `\r` and `\n` characters as standalone protected tag tokens under
-the default tag policy.
+Treat literal `\\r` and `\\n` sequences as standalone protected tag tokens under
+the default tag policy. Do not protect actual CR or LF characters.
 
 Example:
 
 ```text
-source display text: A\r\nB
-source tokens: text("A"), tag("\r"), tag("\n"), text("B")
+source display text: A\\r\\nB
+source tokens: text("A"), tag("\\r"), tag("\\n"), text("B")
 prompt payload: A{1}{2}B
 provider response: X{1}{2}Y
-target display text: X\r\nY
+target display text: X\\r\\nY
 ```
 
-CRLF is intentionally represented as two markers. This keeps exact source text
-shape and avoids introducing platform-specific newline normalization.
+The literal sequence `\\r\\n` is intentionally represented as two markers. This
+keeps exact source text shape and avoids provider normalization of escaped line
+break notation.
 
 ## Minimal Modification Points
 
 1. `packages/core/src/tag/TagCodec.ts`
-   - Split `\r` and `\n` out of text during `parseDisplayTextToTokens` when
-     `tagPolicy` is default.
+   - Split literal `\\r` and `\\n` sequences out of text during
+     `parseDisplayTextToTokens` when `tagPolicy` is default.
    - Leave `tagPolicy: none` behavior unchanged.
    - Reuse `serializeTokensToEditorText` so newline tokens become `{n}`
      standalone markers.
@@ -72,20 +75,20 @@ shape and avoids introducing platform-specific newline normalization.
 
 2. `packages/core/src/tag/TagMapper.ts`
    - Preserve marker identity by occurrence, not only by unique content, for
-     protected newline tokens. Repeated `\n` markers must not collapse into the
-     same marker number when count matters.
+     protected literal newline escape tokens. Repeated `\\n` markers must not
+     collapse into the same marker number when count matters.
 
 3. Tests
-   - Add core tokenizer/editor serialization coverage for `\r`, `\n`, and
-     `\r\n`.
+   - Add core tokenizer/editor serialization coverage for literal `\\r`,
+     `\\n`, and `\\r\\n`, plus actual CR/LF remaining plain text.
    - Add an MT module prompt/response test proving prompt payloads use `{n}`
-     markers and parsed target tokens display real newlines.
+     markers and parsed target tokens display literal newline escape sequences.
 
 ## Alternatives Considered
 
-1. Escape newline text as literal `\\r` and `\\n`.
-   - Rejected because these would not use the existing marker validation and
-     retry path.
+1. Protect actual CR/LF characters.
+   - Rejected after clarification because the problem input is escaped text such
+     as `\\n\\n`, not real line breaks.
 
 2. Add a new `ws` token validation path.
    - Rejected for this change because it would require new signature,
