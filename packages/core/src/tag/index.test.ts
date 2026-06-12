@@ -3,6 +3,7 @@ import type { TagMetadata, TagType, ValidationState } from "../models";
 import { serializeTokensToDisplayText } from "../text";
 import {
   computeTagsSignature,
+  extractTags,
   formatTagAsMemoQMarker,
   getTagDisplayInfo,
   parseDisplayTextToTokens,
@@ -127,6 +128,20 @@ describe("CAT Core Tokenizer", () => {
       { type: "tag", content: "{2}", meta: { id: "{2}" } },
     ]);
     expect(signature).toBe("{1}|{2}");
+  });
+
+  it("ignores manually constructed real CR and LF tag tokens in tag signatures", () => {
+    const tokens = [
+      { type: "text", content: "A" },
+      { type: "tag", content: "\n" },
+      { type: "tag", content: "\\n" },
+      { type: "tag", content: "\r" },
+      { type: "tag", content: "<b>" },
+      { type: "text", content: "B" },
+    ];
+
+    expect(extractTags(tokens)).toEqual(["\\n", "<b>"]);
+    expect(computeTagsSignature(tokens)).toBe("\\n|<b>");
   });
 });
 

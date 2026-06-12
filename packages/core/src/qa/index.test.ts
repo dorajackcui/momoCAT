@@ -68,6 +68,59 @@ describe("Tag Integrity QA", () => {
       severity: "error",
     });
   });
+
+  it("keeps ordinary duplicate tag content membership-scoped for missing checks", () => {
+    const sourceTokens = [
+      { type: "text", content: "A" },
+      { type: "tag", content: "<b>" },
+      { type: "text", content: "B" },
+      { type: "tag", content: "<b>" },
+      { type: "text", content: "C" },
+    ];
+    const targetTokens = [
+      { type: "text", content: "X" },
+      { type: "tag", content: "<b>" },
+      { type: "text", content: "Y" },
+    ];
+    const segment = {
+      ...buildSegment("A<b>B<b>C", ""),
+      sourceTokens,
+      targetTokens,
+      tagsSignature: computeTagsSignature(sourceTokens),
+    };
+
+    const issues = validateSegmentTags(segment);
+
+    expect(issues).toEqual([
+      {
+        ruleId: "tag-order",
+        severity: "warning",
+        message: "Tags are present but in a different order or count than source.",
+      },
+    ]);
+  });
+
+  it("ignores manually constructed real CR and LF tag tokens during QA", () => {
+    const sourceTokens = [
+      { type: "text", content: "A" },
+      { type: "tag", content: "\n" },
+      { type: "text", content: "B" },
+      { type: "tag", content: "\r" },
+      { type: "text", content: "C" },
+    ];
+    const targetTokens = [{ type: "text", content: "A\nB\rC" }];
+    const segment = {
+      ...buildSegment("A\nB\rC", ""),
+      sourceTokens,
+      targetTokens,
+      tagsSignature: computeTagsSignature(sourceTokens),
+    };
+
+    const issues = validateSegmentTags(segment);
+
+    expect(computeTagsSignature(sourceTokens)).toBe("");
+    expect(issues).toHaveLength(0);
+  });
 });
 
 describe("Terminology QA", () => {

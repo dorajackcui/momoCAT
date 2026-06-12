@@ -1,5 +1,5 @@
 import type { QaIssue, Segment, SegmentStatus, Token } from '../models';
-import { computeTagsSignature, extractTags } from '../tag/signature';
+import { computeTagsSignature, extractTags, isOccurrenceScopedTagContent } from '../tag/signature';
 
 export interface TagIntegrityValidationOptions {
   status?: SegmentStatus;
@@ -9,6 +9,7 @@ export interface TagIntegrityValidationOptions {
 function countTags(tags: string[]): Map<string, number> {
   const counts = new Map<string, number>();
   tags.forEach((tag) => {
+    if (!isOccurrenceScopedTagContent(tag) && counts.has(tag)) return;
     counts.set(tag, (counts.get(tag) ?? 0) + 1);
   });
   return counts;
