@@ -583,4 +583,11 @@ describe('TM Matching Profiles', () => {
       buildEnglishTMConcordancePhraseTerms('After Nikki enters, Drifting Power fills.').ftsPhrases,
     ).not.toEqual(expect.arrayContaining(['after nikki']));
   });
+
+  it('does not build English concordance phrases across punctuation boundaries', () => {
+    const terms = buildEnglishTMConcordancePhraseTerms('Blue Sky, Red Moon');
+
+    expect(terms.ftsPhrases).toEqual(expect.arrayContaining(['blue sky', 'red moon']));
+    expect(terms.ftsPhrases).not.toEqual(expect.arrayContaining(['sky red']));
+  });
 });

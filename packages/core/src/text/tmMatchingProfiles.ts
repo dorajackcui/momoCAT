@@ -4,6 +4,7 @@ const MAX_ENGLISH_TM_RECALL_TERMS = 32;
 const WORD_RE = /[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu;
 const SIMPLE_WORD_RE = /[\p{L}\p{N}]+/gu;
 const LETTER_RE = /\p{L}/u;
+const ENGLISH_TM_CONCORDANCE_SEGMENT_RE = /[,.!?:;|()[\]{}"“”、\r\n]+/u;
 const ENGLISH_STOPWORDS = new Set([
   'a',
   'an',
@@ -118,7 +119,7 @@ export function buildEnglishTMConcordancePhraseTerms(
   const ftsPhrases: string[] = [];
   const seenExact = new Set<string>();
   const seenFts = new Set<string>();
-  const segments = text.normalize('NFKC').split(/[.!?:;|\r\n]+/u);
+  const segments = text.normalize('NFKC').split(ENGLISH_TM_CONCORDANCE_SEGMENT_RE);
 
   for (const segment of segments) {
     const rawTokens = Array.from(segment.matchAll(WORD_RE)).map((match) => match[0]);
