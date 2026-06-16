@@ -358,6 +358,17 @@ export class CATDatabase {
     this.tmRepo.replaceTMFts(tmId, srcText, tgtText, tmEntryId);
   }
 
+  public replaceTMFtsBatch(
+    rows: Array<{
+      tmId: string;
+      srcText: string;
+      tgtText: string;
+      tmEntryId: string;
+    }>,
+  ) {
+    this.tmRepo.replaceTMFtsBatch(rows);
+  }
+
   public findTMEntryByHash(tmId: string, srcHash: string): TMEntry | undefined {
     return this.tmRepo.findTMEntryByHash(tmId, srcHash);
   }

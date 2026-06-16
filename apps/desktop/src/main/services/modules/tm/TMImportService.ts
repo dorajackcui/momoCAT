@@ -9,6 +9,7 @@ import { extractSheetRows } from '../../../filters/sheetRows';
 import type {
   ProgressEmitter,
   SpreadsheetPreviewData,
+  TMFtsReplacement,
   TMRepository,
   TransactionManager,
 } from '../../ports';
@@ -164,6 +165,8 @@ export class TMImportService {
       const end = Math.min(i + chunkSize, rows.length);
 
       this.tx.runInTransaction(() => {
+        const ftsReplacements: TMFtsReplacement[] = [];
+
         for (let j = i; j < end; j++) {
           const row = rows[j].cells;
 
@@ -202,7 +205,12 @@ export class TMImportService {
 
           if (options.overwrite) {
             const entryId = this.tmRepo.upsertTMEntryBySrcHash(entryBase);
-            this.tmRepo.replaceTMFts(tmId, sourceText, targetText, entryId);
+            ftsReplacements.push({
+              tmId,
+              srcText: sourceText,
+              tgtText: targetText,
+              tmEntryId: entryId,
+            });
             success++;
             continue;
           }
@@ -215,6 +223,10 @@ export class TMImportService {
 
           this.tmRepo.insertTMFts(tmId, sourceText, targetText, insertedId);
           success++;
+        }
+
+        if (ftsReplacements.length > 0) {
+          this.tmRepo.replaceTMFtsBatch(ftsReplacements);
         }
       });
 

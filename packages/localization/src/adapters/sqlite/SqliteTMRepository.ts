@@ -3,6 +3,7 @@ import type { TMEntry } from '@cat/core/models';
 import type {
   MountedTMRecord,
   TMConcordanceRecallOptions,
+  TMFtsReplacement,
   TMRecallOptions,
   TMRecord,
   TMRepository,
@@ -25,6 +26,10 @@ export class SqliteTMRepository implements TMRepository {
 
   replaceTMFts(tmId: string, srcText: string, tgtText: string, tmEntryId: string): void {
     this.db.replaceTMFts(tmId, srcText, tgtText, tmEntryId);
+  }
+
+  replaceTMFtsBatch(rows: TMFtsReplacement[]): void {
+    this.db.replaceTMFtsBatch(rows);
   }
 
   findTMEntryByHash(tmId: string, srcHash: string): TMEntry | undefined {

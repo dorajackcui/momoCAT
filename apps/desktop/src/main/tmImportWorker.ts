@@ -15,6 +15,13 @@ interface TMImportWorkerInput {
   options: TMImportOptions;
 }
 
+interface TMFtsReplacement {
+  tmId: string;
+  srcText: string;
+  tgtText: string;
+  tmEntryId: string;
+}
+
 const port = parentPort;
 if (!port) {
   throw new Error('TM import worker requires parentPort');
@@ -65,6 +72,8 @@ const run = async () => {
       const end = Math.min(i + chunkSize, rows.length);
 
       db.runInTransaction(() => {
+        const ftsReplacements: TMFtsReplacement[] = [];
+
         for (let j = i; j < end; j++) {
           const row = rows[j].cells;
 
@@ -107,7 +116,12 @@ const run = async () => {
 
           if (input.options.overwrite) {
             const entryId = db.upsertTMEntryBySrcHash(entryBase);
-            db.replaceTMFts(input.tmId, sourceText, targetText, entryId);
+            ftsReplacements.push({
+              tmId: input.tmId,
+              srcText: sourceText,
+              tgtText: targetText,
+              tmEntryId: entryId,
+            });
             success++;
             continue;
           }
@@ -120,6 +134,10 @@ const run = async () => {
 
           db.insertTMFts(input.tmId, sourceText, targetText, insertedId);
           success++;
+        }
+
+        if (ftsReplacements.length > 0) {
+          db.replaceTMFtsBatch(ftsReplacements);
         }
       });
 

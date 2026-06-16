@@ -54,6 +54,13 @@ interface TMConcordanceRecallStats {
   elapsedMs: number;
 }
 
+interface TMFtsReplacementRow {
+  tmId: string;
+  srcText: string;
+  tgtText: string;
+  tmEntryId: string;
+}
+
 const TM_RECALL_DEFAULT_LIMIT = 50;
 const TM_RECALL_MAX_LIMIT = 50;
 const TM_RECALL_DIVERSITY_POOL_MULTIPLIER = 3;
@@ -80,6 +87,7 @@ const TM_CONCORDANCE_RECALL_EXACT_SOURCE_LIMIT = 64;
 const TM_CONCORDANCE_RECALL_ENGLISH_EXACT_PHRASE_RAW_LIMIT = 8;
 const TM_RECALL_DIVERSITY_MAX_PER_BUCKET = 2;
 const TM_RECALL_DIVERSITY_MIN_CJK_BUCKET_LENGTH = 4;
+const TM_FTS_REPLACE_DELETE_BATCH_SIZE = 900;
 const ONLY_CJK_RE = /^[一-龥]+$/;
 const WEAK_SHORT_CJK_TERMS = new Set(['前往', '可选']);
 
@@ -202,6 +210,27 @@ export class TMRepo {
   public replaceTMFts(tmId: string, srcText: string, tgtText: string, tmEntryId: string) {
     this.stmtDeleteTMFtsByEntryId.run(tmEntryId);
     this.stmtInsertTMFts.run(tmId, srcText, tgtText, tmEntryId);
+  }
+
+  public replaceTMFtsBatch(rows: TMFtsReplacementRow[]) {
+    const replacements = this.dedupeTMFtsReplacementRows(rows);
+    if (replacements.length === 0) return;
+
+    for (
+      let index = 0;
+      index < replacements.length;
+      index += TM_FTS_REPLACE_DELETE_BATCH_SIZE
+    ) {
+      const batch = replacements.slice(index, index + TM_FTS_REPLACE_DELETE_BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      this.db
+        .prepare(`DELETE FROM tm_fts WHERE tmEntryId IN (${placeholders})`)
+        .run(...batch.map((row) => row.tmEntryId));
+    }
+
+    for (const row of replacements) {
+      this.stmtInsertTMFts.run(row.tmId, row.srcText, row.tgtText, row.tmEntryId);
+    }
   }
 
   public findTMEntryByHash(tmId: string, srcHash: string): TMEntry | undefined {
@@ -1326,6 +1355,14 @@ export class TMRepo {
       unique.push(normalized);
     }
     return unique;
+  }
+
+  private dedupeTMFtsReplacementRows(rows: TMFtsReplacementRow[]): TMFtsReplacementRow[] {
+    const byEntryId = new Map<string, TMFtsReplacementRow>();
+    for (const row of rows) {
+      byEntryId.set(row.tmEntryId, row);
+    }
+    return Array.from(byEntryId.values());
   }
 
   private selectSpreadFragments(fragments: string[], limit: number): string[] {

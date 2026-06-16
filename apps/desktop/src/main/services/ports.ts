@@ -34,6 +34,13 @@ export type TMEntryWithTmId = TMEntry & {
   tmId: string;
 };
 
+export interface TMFtsReplacement {
+  tmId: string;
+  srcText: string;
+  tgtText: string;
+  tmEntryId: string;
+}
+
 export type TMConcordanceRecord = TMEntryWithTmId & {
   tmName: string;
   tmType: TMType;
@@ -78,6 +85,7 @@ export interface TMRepository {
   insertTMEntryIfAbsentBySrcHash(entry: TMEntry & { tmId: string }): string | undefined;
   insertTMFts(tmId: string, srcText: string, tgtText: string, tmEntryId: string): void;
   replaceTMFts(tmId: string, srcText: string, tgtText: string, tmEntryId: string): void;
+  replaceTMFtsBatch(rows: TMFtsReplacement[]): void;
   findTMEntryByHash(tmId: string, srcHash: string): TMEntry | undefined;
   searchConcordance(projectId: number, query: string, tmIds?: string[]): TMEntryWithTmId[];
   searchTMRecallCandidates(
