@@ -1,9 +1,11 @@
 export type TMTextProfile = 'default' | 'english';
 
 const MAX_ENGLISH_TM_RECALL_TERMS = 32;
-const WORD_RE = /[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu;
+const WORD_RE = /[\p{L}\p{N}]+(?:[.'\u2019\-\u2010\u2011\u2012\u2013][\p{L}\p{N}]+)*/gu;
 const SIMPLE_WORD_RE = /[\p{L}\p{N}]+/gu;
 const LETTER_RE = /\p{L}/u;
+const ENGLISH_TM_CONCORDANCE_BOUNDARY_SEPARATOR_RE =
+  /[\r\n/,;:!?|'\u2018\u2019\-\u2010\u2011\u2012\u2013\u2014\u2015]/u;
 const ENGLISH_STOPWORDS = new Set([
   'a',
   'an',
@@ -58,8 +60,12 @@ export function normalizeTextForTMSimilarity(
 
 export function buildEnglishTMRecallTerms(text: string): string[] {
   const terms = new Set<string>();
-  const rawTokens = Array.from(text.normalize('NFKC').matchAll(WORD_RE)).map((match) => match[0]);
+  const rawTokenSegments = buildEnglishTMConcordanceTokenSegments(text);
+  const rawTokens = rawTokenSegments.flatMap((segment) => segment.tokens);
   const canonicalTokens = normalizeTextForTMSimilarity(text, 'english').split(/\s+/).filter(Boolean);
+  const canonicalTokenSegments = rawTokenSegments.map((segment) =>
+    normalizeTextForTMSimilarity(segment.text, 'english').split(/\s+/).filter(Boolean),
+  );
 
   for (const rawToken of rawTokens) {
     addRecallTerm(terms, undotAcronym(rawToken));
@@ -74,11 +80,13 @@ export function buildEnglishTMRecallTerms(text: string): string[] {
     }
   }
 
-  for (const phrase of buildSignificantEnglishPhrases(canonicalTokens)) {
-    addRecallTerm(terms, phrase);
-    addRecallTerm(terms, phrase.replace(/\s+/g, '-'));
-    addTrailingWordInflectionTerms(terms, phrase);
-    addTrailingWordInflectionTerms(terms, phrase.replace(/\s+/g, '-'));
+  for (const segmentTokens of canonicalTokenSegments) {
+    for (const phrase of buildSignificantEnglishPhrases(segmentTokens)) {
+      addRecallTerm(terms, phrase);
+      addRecallTerm(terms, phrase.replace(/\s+/g, '-'));
+      addTrailingWordInflectionTerms(terms, phrase);
+      addTrailingWordInflectionTerms(terms, phrase.replace(/\s+/g, '-'));
+    }
   }
 
   return Array.from(terms).slice(0, MAX_ENGLISH_TM_RECALL_TERMS);
@@ -110,6 +118,64 @@ function isSignificantEnglishToken(token: string): boolean {
 
 function containsCanonicalPhrase(text: string, phrase: string): boolean {
   return ` ${text} `.includes(` ${phrase} `);
+}
+
+function buildEnglishTMConcordanceTokenSegments(
+  text: string,
+): Array<{ text: string; tokens: string[] }> {
+  const normalizedText = text.normalize('NFKC');
+  const segments: Array<{ text: string; tokens: string[] }> = [];
+  let currentSegment: string[] = [];
+  let previousToken: string | null = null;
+  let segmentStart = 0;
+  let previousEnd = 0;
+
+  for (const match of normalizedText.matchAll(WORD_RE)) {
+    const token = match[0];
+    const start = match.index ?? 0;
+    const gap = normalizedText.slice(previousEnd, start);
+
+    if (currentSegment.length === 0) {
+      segmentStart = start;
+    }
+
+    if (
+      currentSegment.length > 0 &&
+      previousToken &&
+      isEnglishTMConcordanceBoundarySeparator(gap, previousToken)
+    ) {
+      segments.push({
+        text: normalizedText.slice(segmentStart, previousEnd),
+        tokens: currentSegment,
+      });
+      currentSegment = [];
+      segmentStart = start;
+    }
+
+    currentSegment.push(token);
+    previousToken = token;
+    previousEnd = start + token.length;
+  }
+
+  if (currentSegment.length > 0) {
+    segments.push({
+      text: normalizedText.slice(segmentStart, previousEnd),
+      tokens: currentSegment,
+    });
+  }
+
+  return segments;
+}
+
+function isEnglishTMConcordanceBoundarySeparator(gap: string, previousToken: string): boolean {
+  if (!gap) return false;
+
+  const continuesDottedAcronym =
+    /^\.\s*$/u.test(gap) && /^[A-Z](?:\.[A-Z]){1,4}$/u.test(previousToken);
+  if (!continuesDottedAcronym && gap.includes('.')) return true;
+
+  const separatorGap = continuesDottedAcronym ? gap.slice(1) : gap;
+  return ENGLISH_TM_CONCORDANCE_BOUNDARY_SEPARATOR_RE.test(separatorGap);
 }
 
 function hasNamedEnglishPhraseShape(text: string): boolean {
