@@ -15,10 +15,12 @@ export {
   findTermPositionsInTextForLocale,
 } from './termMatchingProfiles';
 export {
+  buildEnglishTMConcordancePhraseTerms,
   buildEnglishTMRecallTerms,
   hasEnglishTMConcordanceEvidence,
   normalizeTextForTMSimilarity,
   resolveTMTextProfile,
+  type EnglishTMConcordancePhraseTerms,
   type TMTextProfile,
 } from './tmMatchingProfiles';
 export {

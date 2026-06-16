@@ -810,6 +810,72 @@ describe('TM match flow trace', () => {
     }
   });
 
+  it('uses English phrase-first concordance recall for Heartbeat Zone in the active TM flow', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const { projectId, tmId } = seedEnglishTMFixture(db);
+      const longSource =
+        'Gravity is abnormal in the Heartbeat Zone. After Nikki enters, Drifting Power spills across the stage while Music Bubbles gather above the Bom-Bom Bubble Machine near the Rest Zone. Floating lights, heartstrings, shadow trails, and cheering crowds keep moving as Nikki sprints through the strange arena.';
+
+      for (let index = 0; index < 100; index += 1) {
+        db.upsertTMEntry(
+          createRuntimeTMEntry(tmId, {
+            projectId,
+            srcHash: `heartbeat-zone-noise-${index}`,
+            sourceText:
+              `Gravity abnormal Nikki enters Drifting Power Music Bubbles ` +
+              `Bom-Bom Bubble Machine Rest Zone floating lights heartstrings shadow crowd ${index}`,
+            targetText: `bruit actif ${index}`,
+            srcLang: 'en-US',
+            tgtLang: 'fr-FR',
+            usageCount: 500 + index,
+          }),
+        );
+      }
+
+      db.upsertTMEntry(
+        createRuntimeTMEntry(tmId, {
+          projectId,
+          srcHash: 'heartbeat-zone',
+          sourceText: 'Heartbeat Zone',
+          targetText: 'Zone des battements',
+          srcLang: 'en-US',
+          tgtLang: 'fr-FR',
+          usageCount: 50,
+        }),
+      );
+
+      const trace = await traceActiveTMMatchFlow({
+        db,
+        projectId,
+        source: longSource,
+        srcHash: 'nikki-source-hash',
+        targetHashes: ['heartbeat-zone'],
+        scenarioName: 'English Nikki phrase concordance recall',
+      });
+
+      expect(trace.step4ConcordanceRecall.targets['heartbeat-zone']).toHaveLength(1);
+
+      expect(
+        trace.step5CandidateScoring.find((candidate) => candidate.srcHash === 'heartbeat-zone'),
+      ).toMatchObject({
+        srcHash: 'heartbeat-zone',
+        accepted: true,
+        kind: 'concordance',
+        fromConcordance: true,
+      });
+
+      expect(
+        trace.step6FinalMatches.find((match) => match.srcHash === 'heartbeat-zone'),
+      ).toMatchObject({
+        srcHash: 'heartbeat-zone',
+        kind: 'concordance',
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   it('rejects English acronym punctuation concordance noise from final matches', async () => {
     const db = new CATDatabase(':memory:');
     try {

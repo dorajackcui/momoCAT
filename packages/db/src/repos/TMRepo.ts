@@ -1,6 +1,10 @@
 import Database from 'better-sqlite3';
 import type { TMEntry, Token } from '@cat/core/models';
-import { buildEnglishTMRecallTerms, hasEnglishTMConcordanceEvidence } from '@cat/core/text';
+import {
+  buildEnglishTMConcordancePhraseTerms,
+  buildEnglishTMRecallTerms,
+  hasEnglishTMConcordanceEvidence,
+} from '@cat/core/text';
 import { randomUUID } from 'crypto';
 import type {
   MountedTMRecord,
@@ -37,6 +41,8 @@ interface TMConcordanceRecallQueryPlan {
   longCjkFragments: string[];
   latinTerms: string[];
   shortCjkTerms: string[];
+  englishExactPhrases: string[];
+  englishFtsPhrases: string[];
   englishTerms: string[];
 }
 
@@ -71,6 +77,7 @@ const TM_CONCORDANCE_RECALL_SHORT_CJK_LIMIT = 16;
 const TM_CONCORDANCE_RECALL_RAW_LIMIT_MAX = 1000;
 const TM_CONCORDANCE_RECALL_BATCH_RAW_LIMIT = 64;
 const TM_CONCORDANCE_RECALL_EXACT_SOURCE_LIMIT = 64;
+const TM_CONCORDANCE_RECALL_ENGLISH_EXACT_PHRASE_RAW_LIMIT = 8;
 const TM_RECALL_DIVERSITY_MAX_PER_BUCKET = 2;
 const TM_RECALL_DIVERSITY_MIN_CJK_BUCKET_LENGTH = 4;
 const ONLY_CJK_RE = /^[一-龥]+$/;
@@ -403,6 +410,10 @@ export class TMRepo {
     const cjk5 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 5));
     const cjk6 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 6));
     const cjk2 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 2));
+    const englishPhraseTerms =
+      profile === 'english'
+        ? buildEnglishTMConcordancePhraseTerms(queryText)
+        : { exactPhrases: [], ftsPhrases: [] };
     const englishTerms =
       profile === 'english'
         ? this.selectSpreadFragments(buildEnglishTMRecallTerms(queryText), 32)
@@ -429,6 +440,8 @@ export class TMRepo {
         this.uniqueTerms(cjk2).filter((term) => !WEAK_SHORT_CJK_TERMS.has(term)),
         TM_CONCORDANCE_RECALL_SHORT_CJK_LIMIT,
       ),
+      englishExactPhrases: this.uniqueTerms(englishPhraseTerms.exactPhrases),
+      englishFtsPhrases: this.uniqueTerms(englishPhraseTerms.ftsPhrases),
       englishTerms,
     };
   }
@@ -451,11 +464,26 @@ export class TMRepo {
       params.plan.cjk3Fragments,
     ];
 
+    this.collectConcordanceEnglishExactSourcePhraseTier({
+      ...params,
+      accepted,
+      seenIds,
+    });
+
     this.collectConcordanceExactSourceTier({
       ...params,
       accepted,
       seenIds,
     });
+
+    if (accepted.length < params.maxResults && params.stats.rawRows < params.rawLimit) {
+      this.collectConcordanceFtsBatchTier({
+        ...params,
+        terms: params.plan.englishFtsPhrases,
+        accepted,
+        seenIds,
+      });
+    }
 
     for (let index = 0; index < tiers.length; index += 1) {
       if (accepted.length >= params.maxResults || params.stats.rawRows >= params.rawLimit) break;
@@ -498,16 +526,53 @@ export class TMRepo {
     accepted: TMRecallDbRow[];
     seenIds: Set<string>;
   }): void {
-    if (params.accepted.length >= params.maxResults || params.stats.rawRows >= params.rawLimit) {
-      return;
-    }
-
     const terms = this.uniqueTerms([
       ...params.plan.shortCjkTerms,
       ...params.plan.cjk3Fragments,
       ...params.plan.cjk4Fragments,
       ...params.plan.longCjkFragments,
     ]).filter((term) => term.length >= 2);
+    this.collectConcordanceExactSourceTermsTier({
+      ...params,
+      terms,
+    });
+  }
+
+  private collectConcordanceEnglishExactSourcePhraseTier(params: {
+    tmIds: string[];
+    queryText: string;
+    plan: TMConcordanceRecallQueryPlan;
+    profile?: 'english';
+    maxResults: number;
+    rawLimit: number;
+    stats: TMConcordanceRecallStats;
+    accepted: TMRecallDbRow[];
+    seenIds: Set<string>;
+  }): void {
+    this.collectConcordanceExactSourceTermsTier({
+      ...params,
+      terms: params.plan.englishExactPhrases,
+      rawLimitCap: this.getEnglishExactPhraseRawLimitCap(params.rawLimit, params.stats.rawRows),
+    });
+  }
+
+  private collectConcordanceExactSourceTermsTier(params: {
+    tmIds: string[];
+    queryText: string;
+    terms: string[];
+    profile?: 'english';
+    maxResults: number;
+    rawLimit: number;
+    stats: TMConcordanceRecallStats;
+    accepted: TMRecallDbRow[];
+    seenIds: Set<string>;
+    rawLimitCap?: number;
+  }): void {
+    if (params.accepted.length >= params.maxResults || params.stats.rawRows >= params.rawLimit) {
+      return;
+    }
+
+    const terms = this.uniqueTerms(params.terms).filter((term) => term.length >= 2);
     if (terms.length === 0) return;
 
     const placeholders = params.tmIds.map(() => '?').join(',');
@@ -515,6 +580,7 @@ export class TMRepo {
     const remainingRaw = Math.min(
       params.rawLimit - params.stats.rawRows,
       params.maxResults - params.accepted.length,
+      params.rawLimitCap ?? Number.POSITIVE_INFINITY,
       TM_CONCORDANCE_RECALL_EXACT_SOURCE_LIMIT,
     );
     if (remainingRaw <= 0) return;
@@ -540,6 +606,20 @@ export class TMRepo {
       stats: params.stats,
       profile: params.profile,
     });
+  }
+
+  private getEnglishExactPhraseRawLimitCap(rawLimit: number, rawRows: number): number {
+    const remainingRaw = rawLimit - rawRows;
+    if (remainingRaw <= 1) return remainingRaw;
+
+    return Math.max(
+      1,
+      Math.min(
+        TM_CONCORDANCE_RECALL_ENGLISH_EXACT_PHRASE_RAW_LIMIT,
+        Math.ceil(rawLimit / 2),
+        remainingRaw - 1,
+      ),
+    );
   }
 
   private collectConcordanceFtsBatchTier(params: {
