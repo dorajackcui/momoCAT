@@ -25,6 +25,28 @@ const ENGLISH_STOPWORDS = new Set([
   'to',
   'with',
 ]);
+const MAX_ENGLISH_TM_CONCORDANCE_EXACT_PHRASES = 24;
+const MAX_ENGLISH_TM_CONCORDANCE_FTS_PHRASES = 48;
+const ENGLISH_PHRASE_BOUNDARY_STOPWORDS = new Set([
+  ...ENGLISH_STOPWORDS,
+  'after',
+  'before',
+  'besides',
+  'during',
+  'if',
+  'inside',
+  'into',
+  'near',
+  'once',
+  'outside',
+  'over',
+  'then',
+  'through',
+  'under',
+  'when',
+  'while',
+  'within',
+]);
 const INVARIANT_S_WORDS = new Set(['does', 'news', 'series', 'species']);
 
 export function resolveTMTextProfile(locale?: string): TMTextProfile {
@@ -84,6 +106,71 @@ export function buildEnglishTMRecallTerms(text: string): string[] {
   return Array.from(terms).slice(0, MAX_ENGLISH_TM_RECALL_TERMS);
 }
 
+export interface EnglishTMConcordancePhraseTerms {
+  exactPhrases: string[];
+  ftsPhrases: string[];
+}
+
+export function buildEnglishTMConcordancePhraseTerms(
+  text: string,
+): EnglishTMConcordancePhraseTerms {
+  const exactPhrases: string[] = [];
+  const ftsPhrases: string[] = [];
+  const seenExact = new Set<string>();
+  const seenFts = new Set<string>();
+  const segments = text.normalize('NFKC').split(/[.!?:;|\r\n]+/u);
+
+  for (const segment of segments) {
+    const rawTokens = Array.from(segment.matchAll(WORD_RE)).map((match) => match[0]);
+
+    for (let windowSize = 2; windowSize <= 4; windowSize += 1) {
+      for (let index = 0; index <= rawTokens.length - windowSize; index += 1) {
+        const slice = rawTokens.slice(index, index + windowSize);
+        if (!slice.every(isCapitalizedWord)) continue;
+        if (!slice.every((token) => isSignificantEnglishToken(token.toLowerCase()))) continue;
+
+        const exactPhrase = slice.join(' ');
+        if (!hasNamedEnglishPhraseShape(exactPhrase)) continue;
+
+        const canonical = normalizeTextForTMSimilarity(exactPhrase, 'english');
+        const canonicalTokens = canonical.split(/\s+/).filter(Boolean);
+        if (canonicalTokens.length < 2 || canonicalTokens.length > 4) continue;
+
+        const first = canonicalTokens[0];
+        const last = canonicalTokens[canonicalTokens.length - 1];
+        if (
+          ENGLISH_PHRASE_BOUNDARY_STOPWORDS.has(first) ||
+          ENGLISH_PHRASE_BOUNDARY_STOPWORDS.has(last)
+        ) {
+          continue;
+        }
+
+        addBoundedCaseSensitiveTerm(
+          exactPhrases,
+          seenExact,
+          exactPhrase,
+          MAX_ENGLISH_TM_CONCORDANCE_EXACT_PHRASES,
+        );
+
+        addBoundedLowercaseTerm(
+          ftsPhrases,
+          seenFts,
+          exactPhrase,
+          MAX_ENGLISH_TM_CONCORDANCE_FTS_PHRASES,
+        );
+        addBoundedLowercaseTerm(
+          ftsPhrases,
+          seenFts,
+          canonical,
+          MAX_ENGLISH_TM_CONCORDANCE_FTS_PHRASES,
+        );
+      }
+    }
+  }
+
+  return { exactPhrases, ftsPhrases };
+}
+
 export function hasEnglishTMConcordanceEvidence(queryText: string, candidateText: string): boolean {
   if (!hasNamedEnglishPhraseShape(candidateText)) return false;
 
@@ -102,6 +189,30 @@ function addRecallTerm(target: Set<string>, value: string | null): void {
   if (!term || target.size >= MAX_ENGLISH_TM_RECALL_TERMS) return;
   if (term.length < 3 && !/^[a-z]{2,5}$/i.test(term)) return;
   target.add(term.toLowerCase());
+}
+
+function addBoundedCaseSensitiveTerm(
+  target: string[],
+  seen: Set<string>,
+  value: string,
+  limit: number,
+): void {
+  const term = value.trim();
+  if (!term || target.length >= limit || seen.has(term)) return;
+  seen.add(term);
+  target.push(term);
+}
+
+function addBoundedLowercaseTerm(
+  target: string[],
+  seen: Set<string>,
+  value: string,
+  limit: number,
+): void {
+  const term = value.trim().toLowerCase();
+  if (!term || target.length >= limit || seen.has(term)) return;
+  seen.add(term);
+  target.push(term);
 }
 
 function isSignificantEnglishToken(token: string): boolean {

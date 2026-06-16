@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Token } from '../models';
 import {
+  buildEnglishTMConcordancePhraseTerms,
   buildEnglishTMRecallTerms,
   buildTermSearchPlan,
   buildTermSearchPlanForLocale,
@@ -451,6 +452,9 @@ describe('Term Matching Helpers', () => {
 });
 
 describe('TM Matching Profiles', () => {
+  const HEARTBEAT_ZONE_LONG_SOURCE =
+    'Gravity is abnormal in the Heartbeat Zone. After Nikki enters, she will become weightless and float in the air, wrapped in a bubble. Moving while floating consumes Drifting Power. If Drifting Power runs out, the bubble will automatically pop. When Drifting Power is full, movement speed increases for a certain time, and moving during this period will not consume Drifting Power. After the acceleration ends, a certain amount of Drifting Power will be deducted.|Four different Music Bubbles float within the Heartbeat Zone: Heartstring Bubbles increase Drifting Power and Heartstrings; Speed Bubbles allow Nikki dash forward quickly for a short distance and grant a small amount of Drifting Power and Heartstrings; Fish Bubbles spit out many Heartstring Bubbles, which can be collected to gain extra Heartstrings; Spike Bubbles stop Nikki in place for a short time and reduce Drifting Power.|Heartstrings can also be obtained by playing with the Bom-Bom Bubble Machine in the Rest Zone or sitting in viewing chairs to enjoy the meteors. Besides the activities that grant Heartstrings, the stage lights can also be controlled to reveal dazzling changes of light and shadow.';
+
   it('resolves only English locales to the English TM profile', () => {
     expect(resolveTMTextProfile('en')).toBe('english');
     expect(resolveTMTextProfile('en-US')).toBe('english');
@@ -527,5 +531,56 @@ describe('TM Matching Profiles', () => {
     expect(hasEnglishTMConcordanceEvidence('The Value Changed', 'The Value Changed Now')).toBe(
       false,
     );
+  });
+
+  it('builds bounded English TM concordance phrase terms from named phrases', () => {
+    const terms = buildEnglishTMConcordancePhraseTerms(HEARTBEAT_ZONE_LONG_SOURCE);
+
+    expect(terms.exactPhrases).toEqual(
+      expect.arrayContaining([
+        'Heartbeat Zone',
+        'Drifting Power',
+        'Music Bubbles',
+        'Heartstring Bubbles',
+        'Speed Bubbles',
+        'Fish Bubbles',
+        'Spike Bubbles',
+        'Rest Zone',
+      ]),
+    );
+    expect(terms.ftsPhrases).toEqual(
+      expect.arrayContaining([
+        'heartbeat zone',
+        'drifting power',
+        'music bubbles',
+        'heartstring bubbles',
+        'speed bubbles',
+        'fish bubbles',
+        'spike bubbles',
+        'rest zone',
+      ]),
+    );
+    expect(terms.exactPhrases).not.toContain('Zone');
+    expect(terms.ftsPhrases).not.toContain('zone');
+    expect(terms.exactPhrases.length).toBeLessThanOrEqual(24);
+    expect(terms.ftsPhrases.length).toBeLessThanOrEqual(48);
+  });
+
+  it('keeps English concordance phrase extraction conservative', () => {
+    expect(buildEnglishTMConcordancePhraseTerms('menu settings are open')).toEqual({
+      exactPhrases: [],
+      ftsPhrases: [],
+    });
+
+    expect(
+      buildEnglishTMConcordancePhraseTerms('Open Menu Settings can be changed.').ftsPhrases,
+    ).toEqual(expect.arrayContaining(['open menu settings']));
+
+    expect(
+      buildEnglishTMConcordancePhraseTerms('After Nikki enters, Drifting Power fills.').ftsPhrases,
+    ).toEqual(expect.arrayContaining(['drifting power']));
+    expect(
+      buildEnglishTMConcordancePhraseTerms('After Nikki enters, Drifting Power fills.').ftsPhrases,
+    ).not.toEqual(expect.arrayContaining(['after nikki']));
   });
 });
