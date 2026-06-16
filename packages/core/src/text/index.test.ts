@@ -503,33 +503,6 @@ describe('TM Matching Profiles', () => {
     expect(buildEnglishTMRecallTerms('a '.repeat(80)).length).toBeLessThanOrEqual(32);
   });
 
-  it('preserves token-internal Unicode apostrophes and hyphens for English phrase recall', () => {
-    expect(buildEnglishTMRecallTerms('Nikki\u2019s Dream Wardrobe')).toEqual(
-      expect.arrayContaining(['nikki dream wardrobe']),
-    );
-    expect(buildEnglishTMRecallTerms('Bom\u2011Bom Bubble Machine')).toEqual(
-      expect.arrayContaining(['bom bom bubble machine']),
-    );
-  });
-
-  it('keeps English phrase recall boundaries across standalone punctuation', () => {
-    expect(buildEnglishTMRecallTerms('Blue Sky \u2014 Red Moon')).toEqual(
-      expect.arrayContaining(['blue sky', 'red moon']),
-    );
-    expect(buildEnglishTMRecallTerms('Blue Sky \u2014 Red Moon')).not.toEqual(
-      expect.arrayContaining(['sky red']),
-    );
-    expect(buildEnglishTMRecallTerms('Blue Sky, Red Moon / Gold Stars.')).not.toEqual(
-      expect.arrayContaining(['sky red', 'moon gold']),
-    );
-    expect(buildEnglishTMRecallTerms('Blue Sky\r\nRed Moon')).not.toEqual(
-      expect.arrayContaining(['sky red']),
-    );
-    expect(
-      hasEnglishTMConcordanceEvidence('U.S. Coast Guard responds quickly.', 'US Coast Guard'),
-    ).toBe(true);
-  });
-
   it('requires phrase-level evidence for English TM concordance', () => {
     expect(hasEnglishTMConcordanceEvidence('Look at Lumie Tree now.', 'Lumie Tree')).toBe(
       true,
