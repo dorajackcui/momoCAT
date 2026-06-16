@@ -4,7 +4,8 @@ const MAX_ENGLISH_TM_RECALL_TERMS = 32;
 const WORD_RE = /[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu;
 const SIMPLE_WORD_RE = /[\p{L}\p{N}]+/gu;
 const LETTER_RE = /\p{L}/u;
-const ENGLISH_TM_CONCORDANCE_SEGMENT_RE = /[,.!?:;|()[\]{}"“”、\r\n]+/u;
+const ENGLISH_TM_CONCORDANCE_BOUNDARY_SEPARATOR_RE =
+  /[,.!?:;|()[\]{}"'\/\\\u2018\u2019\u201c\u201d\u3001\u3002\u2010-\u2015-]/u;
 const ENGLISH_STOPWORDS = new Set([
   'a',
   'an',
@@ -119,16 +120,14 @@ export function buildEnglishTMConcordancePhraseTerms(
   const ftsPhrases: string[] = [];
   const seenExact = new Set<string>();
   const seenFts = new Set<string>();
-  const segments = text.normalize('NFKC').split(ENGLISH_TM_CONCORDANCE_SEGMENT_RE);
+  const tokenSegments = buildEnglishTMConcordanceTokenSegments(text);
 
-  for (const segment of segments) {
-    const rawTokens = Array.from(segment.matchAll(WORD_RE)).map((match) => match[0]);
-
+  for (const rawTokens of tokenSegments) {
     for (let windowSize = 2; windowSize <= 4; windowSize += 1) {
       for (let index = 0; index <= rawTokens.length - windowSize; index += 1) {
         const slice = rawTokens.slice(index, index + windowSize);
-        if (!slice.every(isCapitalizedWord)) continue;
-        if (!slice.every((token) => isSignificantEnglishToken(token.toLowerCase()))) continue;
+        if (!hasNamedEnglishPhraseTokenShape(slice)) continue;
+        if (countSignificantEnglishTokens(slice) < 2) continue;
 
         const exactPhrase = slice.join(' ');
         if (!hasNamedEnglishPhraseShape(exactPhrase)) continue;
@@ -214,6 +213,77 @@ function addBoundedLowercaseTerm(
   if (!term || target.length >= limit || seen.has(term)) return;
   seen.add(term);
   target.push(term);
+}
+
+function buildEnglishTMConcordanceTokenSegments(text: string): string[][] {
+  const segments: string[][] = [];
+  let currentSegment: string[] = [];
+  let previousTokenEnd = 0;
+  const normalizedText = text.normalize('NFKC');
+
+  for (const match of normalizedText.matchAll(WORD_RE)) {
+    const token = match[0];
+    const tokenStart = match.index ?? 0;
+    const separator = normalizedText.slice(previousTokenEnd, tokenStart);
+    const previousToken = currentSegment[currentSegment.length - 1];
+    const previousTokenHasFinalAcronymPeriod = hasDottedAcronymFinalPeriodSeparator(
+      separator,
+      previousToken,
+    );
+
+    if (previousTokenHasFinalAcronymPeriod) {
+      currentSegment[currentSegment.length - 1] = `${previousToken}.`;
+    }
+
+    if (
+      currentSegment.length > 0 &&
+      isEnglishTMConcordanceBoundarySeparator(separator, previousToken)
+    ) {
+      segments.push(currentSegment);
+      currentSegment = [];
+    }
+
+    currentSegment.push(token);
+    previousTokenEnd = tokenStart + token.length;
+  }
+
+  if (currentSegment.length > 0) segments.push(currentSegment);
+  return segments;
+}
+
+function isEnglishTMConcordanceBoundarySeparator(
+  separator: string,
+  previousToken: string | undefined,
+): boolean {
+  if (!separator.trim()) return false;
+
+  const boundaryText = hasDottedAcronymFinalPeriodSeparator(separator, previousToken)
+    ? separator.replace(/^\.\s*/u, ' ')
+    : separator;
+  return ENGLISH_TM_CONCORDANCE_BOUNDARY_SEPARATOR_RE.test(boundaryText);
+}
+
+function hasDottedAcronymFinalPeriodSeparator(
+  separator: string,
+  previousToken: string | undefined,
+): boolean {
+  return Boolean(previousToken && isDottedAcronymToken(previousToken) && /^\.\s*/u.test(separator));
+}
+
+function isDottedAcronymToken(token: string): boolean {
+  return /^[A-Z](?:\.[A-Z]){1,4}$/u.test(token.normalize('NFKC'));
+}
+
+function hasNamedEnglishPhraseTokenShape(tokens: string[]): boolean {
+  return tokens.every((token) => {
+    const normalized = token.toLowerCase();
+    if (isSignificantEnglishToken(normalized)) return isCapitalizedWord(token);
+    return ENGLISH_STOPWORDS.has(normalized);
+  });
+}
+
+function countSignificantEnglishTokens(tokens: string[]): number {
+  return tokens.filter((token) => isSignificantEnglishToken(token.toLowerCase())).length;
 }
 
 function isSignificantEnglishToken(token: string): boolean {

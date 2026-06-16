@@ -562,6 +562,8 @@ describe('TM Matching Profiles', () => {
     );
     expect(terms.exactPhrases).not.toContain('Zone');
     expect(terms.ftsPhrases).not.toContain('zone');
+    expect(new Set(terms.exactPhrases).size).toBe(terms.exactPhrases.length);
+    expect(new Set(terms.ftsPhrases).size).toBe(terms.ftsPhrases.length);
     expect(terms.exactPhrases.length).toBeLessThanOrEqual(24);
     expect(terms.ftsPhrases.length).toBeLessThanOrEqual(48);
   });
@@ -585,9 +587,36 @@ describe('TM Matching Profiles', () => {
   });
 
   it('does not build English concordance phrases across punctuation boundaries', () => {
-    const terms = buildEnglishTMConcordancePhraseTerms('Blue Sky, Red Moon');
+    for (const separator of [', ', ' - ', ' / ']) {
+      const terms = buildEnglishTMConcordancePhraseTerms(`Blue Sky${separator}Red Moon`);
 
-    expect(terms.ftsPhrases).toEqual(expect.arrayContaining(['blue sky', 'red moon']));
-    expect(terms.ftsPhrases).not.toEqual(expect.arrayContaining(['sky red']));
+      expect(terms.ftsPhrases).toEqual(expect.arrayContaining(['blue sky', 'red moon']));
+      expect(terms.ftsPhrases).not.toEqual(expect.arrayContaining(['sky red']));
+    }
+  });
+
+  it('preserves token-internal punctuation before segment boundary checks', () => {
+    expect(buildEnglishTMConcordancePhraseTerms('U.S. Coast Guard').ftsPhrases).toEqual(
+      expect.arrayContaining([normalizeTextForTMSimilarity('U.S. Coast Guard', 'english')]),
+    );
+    expect(
+      buildEnglishTMConcordancePhraseTerms('Bom-Bom Bubble Machine').ftsPhrases,
+    ).toEqual(expect.arrayContaining(['bom bom bubble machine']));
+    expect(
+      buildEnglishTMConcordancePhraseTerms("Nikki's Dream Wardrobe").ftsPhrases,
+    ).toEqual(expect.arrayContaining(['nikki dream wardrobe']));
+  });
+
+  it('allows internal stopwords in named English concordance phrases', () => {
+    const terms = buildEnglishTMConcordancePhraseTerms(
+      'Sea of Stars. Path of Exile. Legend of Zelda.',
+    );
+
+    expect(terms.ftsPhrases).toEqual(
+      expect.arrayContaining(['sea of stars', 'path of exile', 'legend of zelda']),
+    );
+    expect(
+      buildEnglishTMConcordancePhraseTerms('After Sea of Stars.').ftsPhrases,
+    ).not.toEqual(expect.arrayContaining(['after sea of stars']));
   });
 });
