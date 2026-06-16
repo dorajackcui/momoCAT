@@ -24,12 +24,51 @@ function createTransport(content = 'Bonjour le monde'): MockTransport {
       status: 200,
       endpoint: '/mock',
     }),
-    createResponse: vi.fn().mockResolvedValue({
-      content,
+    createResponse: vi.fn(async (request?: { userPrompt?: string }) => ({
+      content: rewriteBatchResponseIds(content, request?.userPrompt),
       status: 200,
       endpoint: '/mock',
-    }),
+    })),
   } as unknown as MockTransport;
+}
+
+function batchResponseForPrompt(request: { userPrompt: string }, texts: string[]) {
+  const ids = currentIdsFromPrompt(request.userPrompt);
+  return {
+    content: JSON.stringify({
+      translations: texts.map((text, index) => ({ id: ids[index], text })),
+    }),
+    status: 200,
+    endpoint: '/mock',
+  };
+}
+
+function currentIdsFromPrompt(prompt: string): string[] {
+  return [...prompt.matchAll(/^id: (.+)$/gm)].map((match) => match[1]);
+}
+
+function rewriteBatchResponseIds(content: string, userPrompt?: string): string {
+  if (!userPrompt) return content;
+  const ids = currentIdsFromPrompt(userPrompt);
+  if (ids.length === 0) return content;
+
+  try {
+    const parsed = JSON.parse(content) as {
+      translations?: Array<Record<string, unknown> & { id?: unknown }>;
+    };
+    if (!Array.isArray(parsed.translations) || parsed.translations.length !== ids.length) {
+      return content;
+    }
+    return JSON.stringify({
+      ...parsed,
+      translations: parsed.translations.map((translation, index) => ({
+        ...translation,
+        id: ids[index],
+      })),
+    });
+  } catch {
+    return content;
+  }
 }
 
 function seedConfiguredAIProvider(db: CATDatabase, projectId: number): void {
@@ -556,30 +595,14 @@ describe('LocalizationEngine.translateFile job mode', () => {
       XLSX.writeFile(workbook, inputPath);
       const transport = createTransport();
       transport.createResponse
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            translations: [
-              { id: 'window.xlsx#row-2', text: 'Un' },
-              { id: 'window.xlsx#row-3', text: 'Deux' },
-              { id: 'window.xlsx#row-4', text: 'Trois' },
-              { id: 'window.xlsx#row-5', text: 'Quatre' },
-              { id: 'window.xlsx#row-6', text: 'Cinq' },
-            ],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        })
+        .mockImplementationOnce(async (request: { userPrompt: string }) =>
+          batchResponseForPrompt(request, ['Un', 'Deux', 'Trois', 'Quatre', 'Cinq']),
+        )
         .mockImplementationOnce(async (request: { userPrompt: string }) => {
           expect(request.userPrompt).toContain('Previous 5 translated rows');
           expect(request.userPrompt).toContain('One -> Un');
           expect(request.userPrompt).toContain('Five -> Cinq');
-          return {
-            content: JSON.stringify({
-              translations: [{ id: 'window.xlsx#row-7', text: 'Six' }],
-            }),
-            status: 200,
-            endpoint: '/mock',
-          };
+          return batchResponseForPrompt(request, ['Six']);
         });
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',
@@ -598,10 +621,8 @@ describe('LocalizationEngine.translateFile job mode', () => {
       expect(transport.createResponse).toHaveBeenCalledTimes(2);
       const firstPrompt = transport.createResponse.mock.calls[0]?.[0].userPrompt;
       const secondPrompt = transport.createResponse.mock.calls[1]?.[0].userPrompt;
-      expect(firstPrompt).toContain(
-        'Current ids: window.xlsx#row-2, window.xlsx#row-3, window.xlsx#row-4, window.xlsx#row-5, window.xlsx#row-6',
-      );
-      expect(secondPrompt).toContain('Current ids: window.xlsx#row-7');
+      expect(firstPrompt).toContain('Current ids: r1, r2, r3, r4, r5');
+      expect(secondPrompt).toContain('Current ids: r1');
       const written = XLSX.read(await readFile(outputPath), { type: 'buffer' });
       const rows = XLSX.utils.sheet_to_json(written.Sheets.Sheet1, {
         header: 1,
@@ -647,26 +668,18 @@ describe('LocalizationEngine.translateFile job mode', () => {
       XLSX.writeFile(workbook, inputPath);
       const transport = createTransport();
       transport.createResponse
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            translations: [
-              { id: 'runtime-window.xlsx#row-2', text: 'Installer le paquet' },
-              { id: 'runtime-window.xlsx#row-3', text: 'Ouvrir les parametres' },
-              { id: 'runtime-window.xlsx#row-4', text: 'Choisir le dossier' },
-              { id: 'runtime-window.xlsx#row-5', text: 'Demarrer le telechargement' },
-              { id: 'runtime-window.xlsx#row-6', text: 'Terminer la configuration' },
-            ],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            translations: [{ id: 'runtime-window.xlsx#row-7', text: 'Installer le paquet' }],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        });
+        .mockImplementationOnce(async (request: { userPrompt: string }) =>
+          batchResponseForPrompt(request, [
+            'Installer le paquet',
+            'Ouvrir les parametres',
+            'Choisir le dossier',
+            'Demarrer le telechargement',
+            'Terminer la configuration',
+          ]),
+        )
+        .mockImplementationOnce(async (request: { userPrompt: string }) =>
+          batchResponseForPrompt(request, ['Installer le paquet']),
+        );
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',
         aiTransport: transport,
@@ -686,7 +699,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
       expect(secondPrompt).toEqual(expect.any(String));
       expectRuntimeTMPromptReference(
         secondPrompt as string,
-        'runtime-window.xlsx#row-7',
+        'r1',
         'Install package',
         'Installer le paquet',
       );
@@ -797,26 +810,18 @@ describe('LocalizationEngine.translateFile job mode', () => {
       XLSX.writeFile(workbook, inputPath);
       const transport = createTransport();
       transport.createResponse
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            translations: [
-              { id: 'runtime-policy.xlsx#row-2', text: 'Installer {1}' },
-              { id: 'runtime-policy.xlsx#row-3', text: 'Ouvrir les parametres' },
-              { id: 'runtime-policy.xlsx#row-4', text: 'Choisir le dossier' },
-              { id: 'runtime-policy.xlsx#row-5', text: 'Demarrer le telechargement' },
-              { id: 'runtime-policy.xlsx#row-6', text: 'Terminer la configuration' },
-            ],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            translations: [{ id: 'runtime-policy.xlsx#row-7', text: 'Installer {1}' }],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        });
+        .mockImplementationOnce(async (request: { userPrompt: string }) =>
+          batchResponseForPrompt(request, [
+            'Installer {1}',
+            'Ouvrir les parametres',
+            'Choisir le dossier',
+            'Demarrer le telechargement',
+            'Terminer la configuration',
+          ]),
+        )
+        .mockImplementationOnce(async (request: { userPrompt: string }) =>
+          batchResponseForPrompt(request, ['Installer {1}']),
+        );
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',
         aiTransport: transport,
@@ -834,7 +839,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
       expect(secondPrompt).toEqual(expect.any(String));
       expectRuntimeTMPromptReference(
         secondPrompt as string,
-        'runtime-policy.xlsx#row-7',
+        'r1',
         'Install {1}',
         'Installer {1}',
       );
@@ -869,9 +874,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
       XLSX.writeFile(workbook, inputPath);
       const transport = createTransport();
       transport.createResponse.mockImplementationOnce(async (request: { userPrompt: string }) => {
-        expect(request.userPrompt).toContain(
-          'Return target text for ids: partial.xlsx#row-2, partial.xlsx#row-4, partial.xlsx#row-6',
-        );
+        expect(request.userPrompt).toContain('Return target text for ids: r1, r2, r3');
         expect(request.userPrompt).toContain('Read-only context rows');
         expect(request.userPrompt).toContain('current-existing row 3');
         expect(request.userPrompt).toContain('Target:\nDeux');
@@ -880,17 +883,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
         expect(request.userPrompt).not.toMatch(/^id: partial\.xlsx#row-3$/m);
         expect(request.userPrompt).not.toMatch(/^id: partial\.xlsx#row-5$/m);
 
-        return {
-          content: JSON.stringify({
-            translations: [
-              { id: 'partial.xlsx#row-2', text: 'Un' },
-              { id: 'partial.xlsx#row-4', text: 'Trois' },
-              { id: 'partial.xlsx#row-6', text: 'Cinq' },
-            ],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        };
+        return batchResponseForPrompt(request, ['Un', 'Trois', 'Cinq']);
       });
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',
@@ -946,24 +939,16 @@ describe('LocalizationEngine.translateFile job mode', () => {
       XLSX.writeFile(workbook, inputPath);
       const transport = createTransport();
       transport.createResponse
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            translations: [
-              { id: 'runtime-partial.xlsx#row-2', text: 'Demarrer le jeu' },
-              { id: 'runtime-partial.xlsx#row-4', text: 'Ouvrir les options' },
-              { id: 'runtime-partial.xlsx#row-6', text: 'Sauvegarder la progression' },
-            ],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            translations: [{ id: 'runtime-partial.xlsx#row-7', text: 'Lancer le jeu' }],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        });
+        .mockImplementationOnce(async (request: { userPrompt: string }) =>
+          batchResponseForPrompt(request, [
+            'Demarrer le jeu',
+            'Ouvrir les options',
+            'Sauvegarder la progression',
+          ]),
+        )
+        .mockImplementationOnce(async (request: { userPrompt: string }) =>
+          batchResponseForPrompt(request, ['Lancer le jeu']),
+        );
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',
         aiTransport: transport,
@@ -991,9 +976,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
       const secondPrompt = transport.createResponse.mock.calls[1]?.[0].userPrompt;
       expect(firstPrompt).toEqual(expect.any(String));
       expect(secondPrompt).toEqual(expect.any(String));
-      expect(firstPrompt as string).toContain(
-        'Return target text for ids: runtime-partial.xlsx#row-2, runtime-partial.xlsx#row-4, runtime-partial.xlsx#row-6',
-      );
+      expect(firstPrompt as string).toContain('Return target text for ids: r1, r2, r3');
       expect(firstPrompt as string).toContain('Read-only context rows');
       expect(firstPrompt as string).toContain('current-existing row 3');
       expect(firstPrompt as string).toContain('Target:\nLancer le jeu');
@@ -1001,12 +984,10 @@ describe('LocalizationEngine.translateFile job mode', () => {
       expect(firstPrompt as string).toContain('Target:\nQuitter le jeu');
       expect(firstPrompt as string).not.toMatch(/^id: runtime-partial\.xlsx#row-3$/m);
       expect(firstPrompt as string).not.toMatch(/^id: runtime-partial\.xlsx#row-5$/m);
-      expect(secondPrompt as string).toContain(
-        'Return target text for ids: runtime-partial.xlsx#row-7',
-      );
+      expect(secondPrompt as string).toContain('Return target text for ids: r1');
       expectRuntimeTMPromptReference(
         secondPrompt as string,
-        'runtime-partial.xlsx#row-7',
+        'r1',
         'Launch game',
         'Lancer le jeu',
       );
@@ -1291,13 +1272,9 @@ describe('LocalizationEngine.translateFile job mode', () => {
           status: 200,
           endpoint: '/mock',
         }),
-        createResponse: vi.fn(async (request: { model: string }) => ({
-          content: JSON.stringify({
-            translations: [{ id: 'mt.xlsx#row-2', text: `${request.model} target` }],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        })),
+        createResponse: vi.fn(async (request: { model: string; userPrompt: string }) =>
+          batchResponseForPrompt(request, [`${request.model} target`]),
+        ),
       } as unknown as MockTransport;
       const firstEngine = new LocalizationEngine(db, {
         dbPath: ':memory:',
@@ -1398,13 +1375,9 @@ describe('LocalizationEngine.translateFile job mode', () => {
         serializeTokensToDisplayText(newEntry.targetTokens),
         newEntryId,
       );
-      transport.createResponse.mockResolvedValueOnce({
-        content: JSON.stringify({
-          translations: [{ id: 'mt.xlsx#row-2', text: 'Second target' }],
-        }),
-        status: 200,
-        endpoint: '/mock',
-      });
+      transport.createResponse.mockImplementationOnce(async (request: { userPrompt: string }) =>
+        batchResponseForPrompt(request, ['Second target']),
+      );
       const second = await engine.translateFile({
         projectId,
         inputPath,
@@ -1432,24 +1405,16 @@ describe('LocalizationEngine.translateProjectSegments', () => {
       mountEmptyMainTM(db, projectId);
       const transport = createTransport();
       transport.createResponse
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            translations: [
-              { id: 'doc-1#seg-1', text: 'Installer le paquet' },
-              { id: 'doc-1#seg-3', text: 'Ouvrir les options' },
-              { id: 'doc-1#seg-5', text: 'Sauvegarder la progression' },
-            ],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            translations: [{ id: 'doc-1#seg-6', text: 'Installer le paquet' }],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        });
+        .mockImplementationOnce(async (request: { userPrompt: string }) =>
+          batchResponseForPrompt(request, [
+            'Installer le paquet',
+            'Ouvrir les options',
+            'Sauvegarder la progression',
+          ]),
+        )
+        .mockImplementationOnce(async (request: { userPrompt: string }) =>
+          batchResponseForPrompt(request, ['Installer le paquet']),
+        );
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',
         aiTransport: transport,
@@ -1496,15 +1461,13 @@ describe('LocalizationEngine.translateProjectSegments', () => {
       const secondPrompt = transport.createResponse.mock.calls[1]?.[0].userPrompt;
       expect(firstPrompt).toEqual(expect.any(String));
       expect(secondPrompt).toEqual(expect.any(String));
-      expect(firstPrompt as string).toContain(
-        'Return target text for ids: doc-1#seg-1, doc-1#seg-3, doc-1#seg-5',
-      );
+      expect(firstPrompt as string).toContain('Return target text for ids: r1, r2, r3');
       expect(firstPrompt as string).toContain('Read-only context rows');
       expect(firstPrompt as string).not.toMatch(/^id: doc-1#seg-2$/m);
       expect(firstPrompt as string).not.toMatch(/^id: doc-1#seg-4$/m);
       expectRuntimeTMPromptReference(
         secondPrompt as string,
-        'doc-1#seg-6',
+        'r1',
         'Install package',
         'Installer le paquet',
       );
@@ -1563,7 +1526,7 @@ describe('LocalizationEngine.translateProjectSegments', () => {
       ]);
       expect(transport.createResponse).toHaveBeenCalledTimes(1);
       expect(transport.createResponse.mock.calls[0]?.[0].userPrompt).toContain(
-        'Return target text for ids: doc-1#seg-1',
+        'Return target text for ids: r1',
       );
     } finally {
       db.close();
@@ -1705,7 +1668,10 @@ describe('LocalizationEngine task executor', () => {
           unitId: 'task-1',
           batch: expect.objectContaining({
             mode: 'window',
-            currentIds: ['doc-1#unit-1'],
+            currentIds: ['r1'],
+            responseIdMap: [
+              { responseId: 'r1', documentId: 'doc-1', unitId: 'unit-1' },
+            ],
           }),
           model: expect.any(String),
           provider: expect.objectContaining({
@@ -1913,10 +1879,10 @@ describe('LocalizationEngine task executor', () => {
       expect(transport.createResponse).toHaveBeenCalledTimes(1);
       const prompt = transport.createResponse.mock.calls[0]?.[0].userPrompt;
       expect(prompt).toMatch(
-        /id: doc-1#unit-1[\s\S]*Save file[\s\S]*Enregistrer le fichier[\s\S]*Save -> Enregistrer/,
+        /id: r1[\s\S]*Save file[\s\S]*Enregistrer le fichier[\s\S]*Save -> Enregistrer/,
       );
       expect(prompt).toMatch(
-        /id: doc-1#unit-2[\s\S]*Close window[\s\S]*Fermer la fenetre[\s\S]*Close -> Fermer/,
+        /id: r2[\s\S]*Close window[\s\S]*Fermer la fenetre[\s\S]*Close -> Fermer/,
       );
     } finally {
       db.close();
@@ -2012,24 +1978,13 @@ describe('LocalizationEngine task executor', () => {
       seedConfiguredAIProvider(db, projectId);
       const transport = createTransport();
       transport.createResponse.mockImplementationOnce(async (request: { userPrompt: string }) => {
-        expect(request.userPrompt).toContain(
-          'Current ids: sheet.xlsx#row-2, sheet.xlsx#row-4',
-        );
+        expect(request.userPrompt).toContain('Current ids: r1, r2');
         expect(request.userPrompt).toContain('Previous 5 translated rows');
         expect(request.userPrompt).toContain('Middle -> Milieu');
         expect(request.userPrompt).not.toMatch(/^id: sheet\.xlsx#row-3$/m);
         expect(request.userPrompt).not.toMatch(/Next 5 source rows[\s\S]*Middle/);
 
-        return {
-          content: JSON.stringify({
-            translations: [
-              { id: 'sheet.xlsx#row-2', text: 'Debut' },
-              { id: 'sheet.xlsx#row-4', text: 'Fin' },
-            ],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        };
+        return batchResponseForPrompt(request, ['Debut', 'Fin']);
       });
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',

@@ -21,13 +21,13 @@ describe('WindowPartialSequentialBatchStrategy', () => {
       ]),
     );
     const translateBatch = vi.fn().mockResolvedValue({
-      results: [units[0], units[2], units[4]].map((unit) => ({
+      results: [units[0], units[2], units[4]].map((unit, index) => ({
         documentId: unit.documentId,
         unitId: unit.unitId,
-        responseId: `sheet.xlsx#${unit.unitId}`,
+        responseId: `r${index + 1}`,
         targetTokens: parseEditorTextToTokens(`translated ${unit.source}`, segments.get(unit.unitId)?.sourceTokens ?? []),
       })),
-      prompt: promptArtifact(['sheet.xlsx#row-1', 'sheet.xlsx#row-3', 'sheet.xlsx#row-5']),
+      prompt: promptArtifact(['r1', 'r2', 'r3']),
     });
     const tmInspect = vi.fn().mockImplementation((_projectId, segment) =>
       Promise.resolve(emptyTm(segment.segmentId, segment.unitId)),
@@ -68,9 +68,9 @@ describe('WindowPartialSequentialBatchStrategy', () => {
       expect.objectContaining({
         requestMode: 'window-partial',
         current: [
-          expect.objectContaining({ unitId: 'row-1' }),
-          expect.objectContaining({ unitId: 'row-3' }),
-          expect.objectContaining({ unitId: 'row-5' }),
+          expect.objectContaining({ responseId: 'r1', unitId: 'row-1' }),
+          expect.objectContaining({ responseId: 'r2', unitId: 'row-3' }),
+          expect.objectContaining({ responseId: 'r3', unitId: 'row-5' }),
         ],
         previousContext: [],
         nextContext: [],
@@ -131,16 +131,16 @@ describe('WindowPartialSequentialBatchStrategy', () => {
       .mockResolvedValueOnce(firstReferences)
       .mockResolvedValueOnce(secondReferences);
     const translateBatch = vi.fn().mockResolvedValue({
-      results: [units[0], units[2]].map((unit) => ({
+      results: [units[0], units[2]].map((unit, index) => ({
         documentId: unit.documentId,
         unitId: unit.unitId,
-        responseId: `sheet.xlsx#${unit.unitId}`,
+        responseId: `r${index + 1}`,
         targetTokens: parseEditorTextToTokens(
           `translated ${unit.source}`,
           segments.get(unit.unitId)?.sourceTokens ?? [],
         ),
       })),
-      prompt: promptArtifact(['sheet.xlsx#row-1', 'sheet.xlsx#row-3']),
+      prompt: promptArtifact(['r1', 'r2']),
     });
     const tmInspect = vi.fn();
     const tbInspect = vi.fn();
@@ -207,10 +207,10 @@ describe('WindowPartialSequentialBatchStrategy', () => {
       results: [{
         documentId: unit.documentId,
         unitId: unit.unitId,
-        responseId: 'sheet.xlsx#row-1',
+        responseId: 'r1',
         targetTokens: parseEditorTextToTokens('Un', segment.sourceTokens),
       }],
-      prompt: promptArtifact(['sheet.xlsx#row-1']),
+      prompt: promptArtifact(['r1']),
     });
     const strategy = new WindowPartialSequentialBatchStrategy({
       tmModule: { inspect: vi.fn() },

@@ -7,3 +7,7 @@ export function unitKey(unit: Pick<JobUnit | UnitResult, 'documentId' | 'unitId'
 export function batchResponseId(unit: Pick<JobUnit, 'documentId' | 'unitId'>): string {
   return `${encodeURIComponent(unit.documentId)}#${encodeURIComponent(unit.unitId)}`;
 }
+
+export function requestResponseId(index: number): string {
+  return `r${index + 1}`;
+}

@@ -21,7 +21,7 @@ import {
   resolveRequestModeReferences,
 } from '../shared/references';
 import { toArtifactRecord } from '../shared/results';
-import { batchResponseId } from '../shared/unitIdentity';
+import { requestResponseId } from '../shared/unitIdentity';
 
 export interface WindowModeSequentialBatchStrategyDependencies
   extends RequestModeReferenceModules {
@@ -67,8 +67,12 @@ export class WindowModeSequentialBatchStrategy {
         return { jobUnit, segment, references };
       }),
     );
-    const current = resolvedUnits.map(({ jobUnit, segment, references }) => ({
-      responseId: batchResponseId(jobUnit),
+    const resolvedBatchUnits = resolvedUnits.map((unit, index) => ({
+      ...unit,
+      responseId: requestResponseId(index),
+    }));
+    const current = resolvedBatchUnits.map(({ jobUnit, segment, references, responseId }) => ({
+      responseId,
       documentId: jobUnit.documentId,
       unitId: jobUnit.unitId,
       segment,
@@ -111,8 +115,8 @@ export class WindowModeSequentialBatchStrategy {
     const results: UnitResult[] = [];
     const artifacts: ArtifactRecord[] | undefined = input.captureArtifacts ? [] : undefined;
 
-    for (const { jobUnit, references } of resolvedUnits) {
-      const batchResult = batchResultsByResponseId.get(batchResponseId(jobUnit));
+    for (const { jobUnit, references, responseId } of resolvedBatchUnits) {
+      const batchResult = batchResultsByResponseId.get(responseId);
       if (!batchResult) {
         throw new Error(`MT batch did not return a result for unit: ${jobUnit.unitId}`);
       }

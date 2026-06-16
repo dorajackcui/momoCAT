@@ -377,7 +377,7 @@ describe('MTModule', () => {
         project,
         current: [
           {
-            responseId: 'row-2',
+            responseId: 'r1',
             documentId: 'doc.xlsx',
             unitId: 'unit-2',
             segment: row2,
@@ -385,7 +385,7 @@ describe('MTModule', () => {
             tb: createTBArtifact(row2),
           },
           {
-            responseId: 'row-3',
+            responseId: 'r2',
             documentId: 'doc.xlsx',
             unitId: 'unit-3',
             segment: row3,
@@ -400,12 +400,16 @@ describe('MTModule', () => {
       expect(artifact.batch).toEqual({
         mode: 'window',
         taskId: 'window-task-1',
-        currentIds: ['row-2', 'row-3'],
+        currentIds: ['r1', 'r2'],
+        responseIdMap: [
+          { responseId: 'r1', documentId: 'doc.xlsx', unitId: 'unit-2' },
+          { responseId: 'r2', documentId: 'doc.xlsx', unitId: 'unit-3' },
+        ],
         previousContextCount: 1,
         nextContextCount: 1,
       });
       expect(artifact.userPrompt).toContain('Current segments');
-      expect(artifact.userPrompt).toContain('id: row-2');
+      expect(artifact.userPrompt).toContain('id: r1');
       expect(artifact.userPrompt).toContain('Previous 5 translated rows');
       expect(artifact.userPrompt).toContain('Open -> Ouvrir');
       expect(artifact.userPrompt).toContain('Next 5 source rows');
@@ -485,7 +489,7 @@ describe('MTModule', () => {
         requestMode: 'window-partial',
         current: [
           {
-            responseId: 'row-2',
+            responseId: 'r1',
             documentId: 'doc.xlsx',
             unitId: 'unit-2',
             segment: row2,
@@ -505,14 +509,17 @@ describe('MTModule', () => {
       expect(artifact.batch).toEqual({
         mode: 'window-partial',
         taskId: 'window-task-1',
-        currentIds: ['row-2'],
+        currentIds: ['r1'],
+        responseIdMap: [
+          { responseId: 'r1', documentId: 'doc.xlsx', unitId: 'unit-2' },
+        ],
         previousContextCount: 0,
         nextContextCount: 0,
         scanWindowCount: 3,
         requestCount: 1,
         readOnlyContextCount: 2,
       });
-      expect(artifact.userPrompt).toContain('Return target text for ids: row-2');
+      expect(artifact.userPrompt).toContain('Return target text for ids: r1');
       expect(artifact.userPrompt).toContain(
         'Read-only context rows. Do not produce output or return ids for these rows.',
       );

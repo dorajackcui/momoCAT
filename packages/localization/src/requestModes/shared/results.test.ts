@@ -7,7 +7,7 @@ import {
   toArtifactRecord,
   toUnitResult,
 } from './results';
-import { batchResponseId, unitKey } from './unitIdentity';
+import { batchResponseId, requestResponseId, unitKey } from './unitIdentity';
 
 const jobUnit: JobUnit = {
   documentId: 'file name.xlsx',
@@ -24,6 +24,7 @@ describe('unit identity helpers', () => {
   it('builds stable internal keys and URL-safe Window Mode response ids', () => {
     expect(unitKey(jobUnit)).toBe('file name.xlsx\u0000row-2');
     expect(batchResponseId(jobUnit)).toBe('file%20name.xlsx#row-2');
+    expect([0, 1, 2].map(requestResponseId)).toEqual(['r1', 'r2', 'r3']);
   });
 });
 

@@ -232,6 +232,11 @@ export class MTModule {
         mode: input.requestMode === 'window-partial' ? 'window-partial' : 'window',
         taskId: input.taskId,
         currentIds: promptParams.currentSegments.map((segment) => segment.id),
+        responseIdMap: input.current.map((unit) => ({
+          responseId: unit.responseId,
+          documentId: unit.documentId,
+          unitId: unit.unitId,
+        })),
         previousContextCount: input.previousContext.length,
         nextContextCount: input.nextContext.length,
         ...(typeof input.scanWindowCount === 'number'

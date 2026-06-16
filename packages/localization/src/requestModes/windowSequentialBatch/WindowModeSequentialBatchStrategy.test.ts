@@ -36,17 +36,17 @@ describe('WindowModeSequentialBatchStrategy', () => {
         {
           documentId: 'window.xlsx',
           unitId: 'row-3',
-          responseId: 'window.xlsx#row-3',
+          responseId: 'r2',
           targetTokens: parseEditorTextToTokens('Fermer la fenetre', row3.sourceTokens),
         },
         {
           documentId: 'window.xlsx',
           unitId: 'row-2',
-          responseId: 'window.xlsx#row-2',
+          responseId: 'r1',
           targetTokens: parseEditorTextToTokens('Enregistrer le fichier', row2.sourceTokens),
         },
       ],
-      prompt: promptArtifact(['window.xlsx#row-2', 'window.xlsx#row-3']),
+      prompt: promptArtifact(['r1', 'r2']),
     });
     const strategy = new WindowModeSequentialBatchStrategy({
       tmModule: { inspect: vi.fn().mockResolvedValueOnce(firstReferences.tm).mockResolvedValueOnce(secondReferences.tm) },
@@ -75,7 +75,7 @@ describe('WindowModeSequentialBatchStrategy', () => {
         project: projectRecord,
         current: [
           expect.objectContaining({
-            responseId: 'window.xlsx#row-2',
+            responseId: 'r1',
             documentId: 'window.xlsx',
             unitId: 'row-2',
             segment: row2,
@@ -84,7 +84,7 @@ describe('WindowModeSequentialBatchStrategy', () => {
             context: 'button label',
           }),
           expect.objectContaining({
-            responseId: 'window.xlsx#row-3',
+            responseId: 'r2',
             documentId: 'window.xlsx',
             unitId: 'row-3',
             segment: row3,
@@ -132,7 +132,7 @@ describe('WindowModeSequentialBatchStrategy', () => {
       prompt: expect.objectContaining({
         batch: expect.objectContaining({
           mode: 'window',
-          currentIds: ['window.xlsx#row-2', 'window.xlsx#row-3'],
+          currentIds: ['r1', 'r2'],
         }),
       }),
       result: expect.objectContaining({ target: 'Enregistrer le fichier' }),
@@ -152,17 +152,17 @@ describe('WindowModeSequentialBatchStrategy', () => {
         {
           documentId: 'sheet.xlsx',
           unitId: 'row-2',
-          responseId: 'sheet.xlsx#row-2',
+          responseId: 'r1',
           targetTokens: parseEditorTextToTokens('Debut', row2.sourceTokens),
         },
         {
           documentId: 'sheet.xlsx',
           unitId: 'row-4',
-          responseId: 'sheet.xlsx#row-4',
+          responseId: 'r2',
           targetTokens: parseEditorTextToTokens('Fin', row4.sourceTokens),
         },
       ],
-      prompt: promptArtifact(['sheet.xlsx#row-2', 'sheet.xlsx#row-4']),
+      prompt: promptArtifact(['r1', 'r2']),
     });
     const strategy = new WindowModeSequentialBatchStrategy({
       tmModule: {
@@ -213,11 +213,11 @@ describe('WindowModeSequentialBatchStrategy', () => {
         {
           documentId: 'window.xlsx',
           unitId: 'row-2',
-          responseId: 'window.xlsx#row-2',
+          responseId: 'r1',
           targetTokens: parseEditorTextToTokens('Sauvegarder', segment.sourceTokens),
         },
       ],
-      prompt: promptArtifact(['window.xlsx#row-2']),
+      prompt: promptArtifact(['r1']),
     });
     const tmInspect = vi.fn();
     const tbInspect = vi.fn();
@@ -269,11 +269,11 @@ describe('WindowModeSequentialBatchStrategy', () => {
         {
           documentId: 'window.xlsx',
           unitId: 'row-2',
-          responseId: 'window.xlsx#row-2',
+          responseId: 'r1',
           targetTokens: parseEditorTextToTokens('Enregistrer', segment.sourceTokens),
         },
       ],
-      prompt: promptArtifact(['window.xlsx#row-2']),
+      prompt: promptArtifact(['r1']),
     });
     const strategy = new WindowModeSequentialBatchStrategy({
       tmModule: {
@@ -309,7 +309,7 @@ describe('WindowModeSequentialBatchStrategy', () => {
     const segment = createTransientSegment({ id: 'row-2', source: 'Save file' }, 0);
     const translateBatch = vi.fn().mockResolvedValue({
       results: [],
-      prompt: promptArtifact(['window.xlsx#row-2']),
+      prompt: promptArtifact(['r1']),
     });
     const strategy = new WindowModeSequentialBatchStrategy({
       tmModule: {

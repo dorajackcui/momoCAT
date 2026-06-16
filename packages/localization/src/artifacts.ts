@@ -112,6 +112,11 @@ export interface PromptBatchArtifact {
   mode: 'window' | 'window-partial';
   taskId: string;
   currentIds: string[];
+  responseIdMap?: Array<{
+    responseId: string;
+    documentId: string;
+    unitId: string;
+  }>;
   previousContextCount: number;
   nextContextCount: number;
   scanWindowCount?: number;
