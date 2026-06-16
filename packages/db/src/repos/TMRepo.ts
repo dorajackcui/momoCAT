@@ -77,6 +77,7 @@ const TM_CONCORDANCE_RECALL_SHORT_CJK_LIMIT = 16;
 const TM_CONCORDANCE_RECALL_RAW_LIMIT_MAX = 1000;
 const TM_CONCORDANCE_RECALL_BATCH_RAW_LIMIT = 64;
 const TM_CONCORDANCE_RECALL_EXACT_SOURCE_LIMIT = 64;
+const TM_CONCORDANCE_RECALL_ENGLISH_EXACT_PHRASE_RAW_LIMIT = 8;
 const TM_RECALL_DIVERSITY_MAX_PER_BUCKET = 2;
 const TM_RECALL_DIVERSITY_MIN_CJK_BUCKET_LENGTH = 4;
 const ONLY_CJK_RE = /^[一-龥]+$/;
@@ -551,6 +552,7 @@ export class TMRepo {
     this.collectConcordanceExactSourceTermsTier({
       ...params,
       terms: params.plan.englishExactPhrases,
+      rawLimitCap: this.getEnglishExactPhraseRawLimitCap(params.rawLimit, params.stats.rawRows),
     });
   }
 
@@ -564,6 +566,7 @@ export class TMRepo {
     stats: TMConcordanceRecallStats;
     accepted: TMRecallDbRow[];
     seenIds: Set<string>;
+    rawLimitCap?: number;
   }): void {
     if (params.accepted.length >= params.maxResults || params.stats.rawRows >= params.rawLimit) {
       return;
@@ -577,6 +580,7 @@ export class TMRepo {
     const remainingRaw = Math.min(
       params.rawLimit - params.stats.rawRows,
       params.maxResults - params.accepted.length,
+      params.rawLimitCap ?? Number.POSITIVE_INFINITY,
       TM_CONCORDANCE_RECALL_EXACT_SOURCE_LIMIT,
     );
     if (remainingRaw <= 0) return;
@@ -602,6 +606,20 @@ export class TMRepo {
       stats: params.stats,
       profile: params.profile,
     });
+  }
+
+  private getEnglishExactPhraseRawLimitCap(rawLimit: number, rawRows: number): number {
+    const remainingRaw = rawLimit - rawRows;
+    if (remainingRaw <= 1) return remainingRaw;
+
+    return Math.max(
+      1,
+      Math.min(
+        TM_CONCORDANCE_RECALL_ENGLISH_EXACT_PHRASE_RAW_LIMIT,
+        Math.ceil(rawLimit / 2),
+        remainingRaw - 1,
+      ),
+    );
   }
 
   private collectConcordanceFtsBatchTier(params: {

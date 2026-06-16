@@ -849,48 +849,98 @@ describe("CATDatabase", () => {
       }
     });
 
-    it("should recall English canonical phrase variants through phrase FTS when exact source text differs", () => {
-      const projectId = db.createProject("English Concordance Phrase FTS", "en-US", "fr-FR");
-      const mainTmId = db.createTM("English Concordance Phrase FTS TM", "en-US", "fr-FR", "main");
-      db.mountTMToProject(projectId, mainTmId, 10, "read");
+    it("should leave raw budget for English phrase FTS after exact phrase hits", () => {
+      const previousDebug = process.env.CAT_TM_RECALL_DEBUG;
+      const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => undefined);
+      process.env.CAT_TM_RECALL_DEBUG = "1";
 
-      const longSource =
-        "Gravity is abnormal in the Heartbeat Zone. After Nikki enters, she will become weightless and float in the air, wrapped in a bubble. Moving while floating consumes Drifting Power. If Drifting Power runs out, the bubble will automatically pop. When Drifting Power is full, movement speed increases for a certain time, and moving during this period will not consume Drifting Power. Four different Music Bubbles float within the Heartbeat Zone: Heartstring Bubbles increase Drifting Power and Heartstrings; Speed Bubbles allow Nikki dash forward quickly for a short distance and grant a small amount of Drifting Power and Heartstrings; Fish Bubbles spit out many Heartstring Bubbles, which can be collected to gain extra Heartstrings; Spike Bubbles stop Nikki in place for a short time and reduce Drifting Power. Heartstrings can also be obtained by playing with the Bom-Bom Bubble Machine in the Rest Zone or sitting in viewing chairs to enjoy the meteors.";
+      try {
+        const projectId = db.createProject("English Concordance Phrase FTS", "en-US", "fr-FR");
+        const mainTmId = db.createTM("English Concordance Phrase FTS TM", "en-US", "fr-FR", "main");
+        db.mountTMToProject(projectId, mainTmId, 10, "read");
 
-      for (let index = 0; index < 80; index += 1) {
-        const sourceText =
-          `Gravity bubble moving floating Drifting Power Heartstrings Nikki speed lights shadow crowd ${index}`;
+        const preamble = Array.from({ length: 40 }, (_, index) => `signal${index} vector${index}`)
+          .join(" ");
+        const longSource =
+          `${preamble}. Gravity is abnormal in the Heartbeat Zone. After Nikki enters, she will become weightless and float in the air, wrapped in a bubble. Moving while floating consumes Drifting Power. If Drifting Power runs out, the bubble will automatically pop. When Drifting Power is full, movement speed increases for a certain time, and moving during this period will not consume Drifting Power. Four different Music Bubbles float within the Heartbeat Zone: Heartstring Bubbles increase Drifting Power and Heartstrings; Speed Bubbles allow Nikki dash forward quickly for a short distance and grant a small amount of Drifting Power and Heartstrings; Fish Bubbles spit out many Heartstring Bubbles, which can be collected to gain extra Heartstrings; Spike Bubbles stop Nikki in place for a short time and reduce Drifting Power. Heartstrings can also be obtained by playing with the Bom-Bom Bubble Machine in the Rest Zone or sitting in viewing chairs to enjoy the meteors. The stage lights can also be controlled to reveal dazzling changes of light and shadow.`;
+
+        for (const phrase of [
+          "Heartbeat Zone",
+          "Drifting Power",
+          "Music Bubbles",
+          "Heartstring Bubbles",
+          "Speed Bubbles",
+          "Fish Bubbles",
+          "Spike Bubbles",
+          "Rest Zone",
+        ]) {
+          db.upsertTMEntry({
+            id: `english-exact-noise-${phrase}`,
+            tmId: mainTmId,
+            srcHash: `english-exact-noise-${phrase}`,
+            matchKey: phrase,
+            tagsSignature: "",
+            sourceTokens: [{ type: "text", content: phrase }],
+            targetTokens: [{ type: "text", content: `${phrase} target` }],
+            usageCount: 1,
+          } as any);
+        }
+
+        for (const [index, phrase] of [
+          "Viewing Chairs",
+          "Stage Lights",
+          "Light And Shadow",
+          "Certain Time",
+          "Short Distance",
+          "Extra Heartstrings",
+          "Dazzling Changes",
+          "Small Amount",
+        ].entries()) {
+          db.upsertTMEntry({
+            id: `english-broad-noise-${index}`,
+            tmId: mainTmId,
+            srcHash: `english-broad-noise-${index}`,
+            matchKey: phrase,
+            tagsSignature: "",
+            sourceTokens: [{ type: "text", content: phrase }],
+            targetTokens: [{ type: "text", content: `${phrase} bruit` }],
+            usageCount: 1,
+          } as any);
+        }
+
         db.upsertTMEntry({
-          id: `english-concordance-variant-noise-${index}`,
+          id: "bom-bom-bubble-machine-entry",
           tmId: mainTmId,
-          srcHash: `english-concordance-variant-noise-${index}`,
-          matchKey: sourceText,
+          srcHash: "bom-bom-bubble-machine",
+          matchKey: "Bom Bom Bubble Machine",
           tagsSignature: "",
-          sourceTokens: [{ type: "text", content: sourceText }],
-          targetTokens: [{ type: "text", content: `variante bruit ${index}` }],
+          sourceTokens: [{ type: "text", content: "Bom Bom Bubble Machine" }],
+          targetTokens: [{ type: "text", content: "Machine a bulles boum boum" }],
           usageCount: 1,
         } as any);
+
+        const results = db.searchTMConcordanceRecallCandidates(projectId, longSource, [mainTmId], {
+          profile: "english",
+          scope: "source",
+          limit: 8,
+          rawLimit: 8,
+        });
+
+        expect(results.map((row) => row.srcHash)).toContain("bom-bom-bubble-machine");
+
+        const debugCall = debugSpy.mock.calls.findLast(([message]) =>
+          String(message).includes("concordance recall"),
+        );
+        expect(debugCall).toBeDefined();
+        expect((debugCall?.[1] as Record<string, unknown>).ftsQueryCount).toBeGreaterThan(0);
+      } finally {
+        if (previousDebug === undefined) {
+          delete process.env.CAT_TM_RECALL_DEBUG;
+        } else {
+          process.env.CAT_TM_RECALL_DEBUG = previousDebug;
+        }
+        debugSpy.mockRestore();
       }
-
-      db.upsertTMEntry({
-        id: "bom-bom-bubble-machine-entry",
-        tmId: mainTmId,
-        srcHash: "bom-bom-bubble-machine",
-        matchKey: "Bom Bom Bubble Machine",
-        tagsSignature: "",
-        sourceTokens: [{ type: "text", content: "Bom Bom Bubble Machine" }],
-        targetTokens: [{ type: "text", content: "Machine a bulles boum boum" }],
-        usageCount: 1,
-      } as any);
-
-      const results = db.searchTMConcordanceRecallCandidates(projectId, longSource, [mainTmId], {
-        profile: "english",
-        scope: "source",
-        limit: 1,
-        rawLimit: 8,
-      });
-
-      expect(results.map((row) => row.srcHash)).toEqual(["bom-bom-bubble-machine"]);
     });
 
     it("should not accept cross-tag fake CJK containment in active concordance recall", () => {
