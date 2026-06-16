@@ -73,6 +73,10 @@ export class SqliteTMRepository implements TMRepository {
     >;
   }
 
+  listTMEntries(tmId: string, limit?: number, offset?: number): Array<TMEntry & { tmId: string }> {
+    return this.db.listTMEntries(tmId, limit, offset) as Array<TMEntry & { tmId: string }>;
+  }
+
   listTMs(type?: 'working' | 'main'): TMRecord[] {
     return this.db.listTMs(type);
   }

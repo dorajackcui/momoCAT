@@ -93,6 +93,7 @@ export interface TMRepository {
     tmIds?: string[],
     options?: TMConcordanceRecallOptions,
   ): TMEntryWithTmId[];
+  listTMEntries(tmId: string, limit?: number, offset?: number): TMEntryWithTmId[];
   listTMs(type?: TMType): TMRecord[];
   createTM(name: string, srcLang: string, tgtLang: string, type: TMType): string;
   deleteTM(id: string): void;

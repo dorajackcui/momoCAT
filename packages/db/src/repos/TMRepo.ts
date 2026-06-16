@@ -216,21 +216,30 @@ export class TMRepo {
     const replacements = this.dedupeTMFtsReplacementRows(rows);
     if (replacements.length === 0) return;
 
-    for (
-      let index = 0;
-      index < replacements.length;
-      index += TM_FTS_REPLACE_DELETE_BATCH_SIZE
-    ) {
-      const batch = replacements.slice(index, index + TM_FTS_REPLACE_DELETE_BATCH_SIZE);
-      const placeholders = batch.map(() => '?').join(',');
-      this.db
-        .prepare(`DELETE FROM tm_fts WHERE tmEntryId IN (${placeholders})`)
-        .run(...batch.map((row) => row.tmEntryId));
+    const replaceRows = () => {
+      for (
+        let index = 0;
+        index < replacements.length;
+        index += TM_FTS_REPLACE_DELETE_BATCH_SIZE
+      ) {
+        const batch = replacements.slice(index, index + TM_FTS_REPLACE_DELETE_BATCH_SIZE);
+        const placeholders = batch.map(() => '?').join(',');
+        this.db
+          .prepare(`DELETE FROM tm_fts WHERE tmEntryId IN (${placeholders})`)
+          .run(...batch.map((row) => row.tmEntryId));
+      }
+
+      for (const row of replacements) {
+        this.stmtInsertTMFts.run(row.tmId, row.srcText, row.tgtText, row.tmEntryId);
+      }
+    };
+
+    if (this.db.inTransaction) {
+      replaceRows();
+      return;
     }
 
-    for (const row of replacements) {
-      this.stmtInsertTMFts.run(row.tmId, row.srcText, row.tgtText, row.tmEntryId);
-    }
+    this.db.transaction(replaceRows)();
   }
 
   public findTMEntryByHash(tmId: string, srcHash: string): TMEntry | undefined {
@@ -1336,7 +1345,8 @@ export class TMRepo {
 
   private buildCjkWindows(text: string, size: number): string[] {
     const chars = Array.from(text);
-    if (chars.length < size) return chars.length === size ? [text] : [];
+    if (chars.length < size) return [];
+    if (chars.length === size) return [text];
 
     const windows: string[] = [];
     for (let index = 0; index <= chars.length - size; index += 1) {
@@ -1461,7 +1471,17 @@ export class TMRepo {
   }
 
   public deleteTM(id: string) {
-    this.db.prepare('DELETE FROM tms WHERE id = ?').run(id);
+    const deleteRows = () => {
+      this.db.prepare('DELETE FROM tm_fts WHERE tmId = ?').run(id);
+      this.db.prepare('DELETE FROM tms WHERE id = ?').run(id);
+    };
+
+    if (this.db.inTransaction) {
+      deleteRows();
+      return;
+    }
+
+    this.db.transaction(deleteRows)();
   }
 
   public mountTMToProject(projectId: number, tmId: string, priority: number = 10, permission: string = 'read') {

@@ -484,6 +484,9 @@ describe('TM Matching Profiles', () => {
     expect(normalizeTextForTMSimilarity('Series species analysis.', 'english')).toBe(
       'series species analysis',
     );
+    expect(normalizeTextForTMSimilarity('Buzzes Fizzes Jazzes Quizzes.', 'english')).toBe(
+      'buzz fizz jazz quiz',
+    );
   });
 
   it('builds bounded English TM recall terms without ordinary acronym overreach', () => {
@@ -499,6 +502,9 @@ describe('TM Matching Profiles', () => {
     );
     expect(buildEnglishTMRecallTerms('This does news updates.')).not.toEqual(
       expect.arrayContaining(['thi', 'doe', 'new']),
+    );
+    expect(buildEnglishTMRecallTerms('buzz fizz jazz quiz')).toEqual(
+      expect.arrayContaining(['buzzes', 'fizzes', 'jazzes', 'quizzes']),
     );
     expect(buildEnglishTMRecallTerms('a '.repeat(80)).length).toBeLessThanOrEqual(32);
   });

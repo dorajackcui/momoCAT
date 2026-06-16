@@ -68,4 +68,78 @@ describe('TMRepo FTS replacement', () => {
       { type: 'text', content: 'ModernQuartz' },
     ]);
   });
+
+  it('keeps existing FTS rows when batch replacement insert fails', () => {
+    const projectId = db.createProject('Atomic Batch FTS Project', 'en', 'fr');
+    const tmId = db.createTM('Main TM', 'en', 'fr', 'main');
+    db.mountTMToProject(projectId, tmId, 10, 'read');
+    const now = '2026-06-15T00:00:00.000Z';
+    const entryId = db.upsertTMEntryBySrcHash({
+      id: 'entry-atomic',
+      tmId,
+      projectId: 0,
+      srcLang: 'en',
+      tgtLang: 'fr',
+      srcHash: 'hash-atomic',
+      matchKey: 'atomic',
+      tagsSignature: '',
+      sourceTokens: [{ type: 'text', content: 'Atomic' }],
+      targetTokens: [{ type: 'text', content: 'OldNeedle' }],
+      createdAt: now,
+      updatedAt: now,
+      usageCount: 1,
+    });
+    db.replaceTMFts(tmId, 'Atomic', 'OldNeedle', entryId);
+
+    const repo = (db as unknown as {
+      tmRepo: { stmtInsertTMFts: { run(...args: unknown[]): unknown } };
+    }).tmRepo;
+    const originalRun = repo.stmtInsertTMFts.run.bind(repo.stmtInsertTMFts);
+    repo.stmtInsertTMFts.run = () => {
+      throw new Error('forced insert failure');
+    };
+
+    try {
+      expect(() =>
+        db.replaceTMFtsBatch([
+          { tmId, srcText: 'Atomic', tgtText: 'NewNeedle', tmEntryId: entryId },
+        ]),
+      ).toThrow('forced insert failure');
+    } finally {
+      repo.stmtInsertTMFts.run = originalRun;
+    }
+
+    expect(db.searchConcordance(projectId, 'OldNeedle', [tmId])).toHaveLength(1);
+    expect(db.searchConcordance(projectId, 'NewNeedle', [tmId])).toHaveLength(0);
+  });
+
+  it('deletes FTS rows when deleting a TM', () => {
+    const tmId = db.createTM('Delete TM', 'en', 'fr', 'main');
+    const now = '2026-06-15T00:00:00.000Z';
+    const entryId = db.upsertTMEntryBySrcHash({
+      id: 'entry-delete',
+      tmId,
+      projectId: 0,
+      srcLang: 'en',
+      tgtLang: 'fr',
+      srcHash: 'hash-delete',
+      matchKey: 'delete',
+      tagsSignature: '',
+      sourceTokens: [{ type: 'text', content: 'DeleteMe' }],
+      targetTokens: [{ type: 'text', content: 'DeleteMoi' }],
+      createdAt: now,
+      updatedAt: now,
+      usageCount: 1,
+    });
+    db.insertTMFts(tmId, 'DeleteMe', 'DeleteMoi', entryId);
+
+    db.deleteTM(tmId);
+
+    const row = (db as unknown as {
+      db: { prepare(sql: string): { get(...args: unknown[]): unknown } };
+    }).db
+      .prepare('SELECT COUNT(*) AS count FROM tm_fts WHERE tmId = ?')
+      .get(tmId) as { count: number };
+    expect(row.count).toBe(0);
+  });
 });
