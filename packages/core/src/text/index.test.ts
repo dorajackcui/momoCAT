@@ -587,12 +587,16 @@ describe('TM Matching Profiles', () => {
   });
 
   it('does not build English concordance phrases across punctuation boundaries', () => {
-    for (const separator of [', ', ' - ', ' / ']) {
+    for (const separator of [', ', ' - ', ' / ', '\n', '\r\n', ' \u2014 ', '. ']) {
       const terms = buildEnglishTMConcordancePhraseTerms(`Blue Sky${separator}Red Moon`);
 
       expect(terms.ftsPhrases).toEqual(expect.arrayContaining(['blue sky', 'red moon']));
       expect(terms.ftsPhrases).not.toEqual(expect.arrayContaining(['sky red']));
     }
+
+    expect(buildEnglishTMConcordancePhraseTerms('Blue Sky Red Moon').ftsPhrases).toEqual(
+      expect.arrayContaining(['sky red']),
+    );
   });
 
   it('preserves token-internal punctuation before segment boundary checks', () => {

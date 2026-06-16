@@ -5,7 +5,7 @@ const WORD_RE = /[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu;
 const SIMPLE_WORD_RE = /[\p{L}\p{N}]+/gu;
 const LETTER_RE = /\p{L}/u;
 const ENGLISH_TM_CONCORDANCE_BOUNDARY_SEPARATOR_RE =
-  /[,.!?:;|()[\]{}"'\/\\\u2018\u2019\u201c\u201d\u3001\u3002\u2010-\u2015-]/u;
+  /[\r\n,.!?:;|()[\]{}"'\/\\\u2018\u2019\u201c\u201d\u3001\u3002\u2010-\u2015-]/u;
 const ENGLISH_STOPWORDS = new Set([
   'a',
   'an',
@@ -255,10 +255,10 @@ function isEnglishTMConcordanceBoundarySeparator(
   separator: string,
   previousToken: string | undefined,
 ): boolean {
-  if (!separator.trim()) return false;
+  if (!separator) return false;
 
   const boundaryText = hasDottedAcronymFinalPeriodSeparator(separator, previousToken)
-    ? separator.replace(/^\.\s*/u, ' ')
+    ? separator.replace(/^\.[^\S\r\n]*/u, '')
     : separator;
   return ENGLISH_TM_CONCORDANCE_BOUNDARY_SEPARATOR_RE.test(boundaryText);
 }
@@ -267,7 +267,9 @@ function hasDottedAcronymFinalPeriodSeparator(
   separator: string,
   previousToken: string | undefined,
 ): boolean {
-  return Boolean(previousToken && isDottedAcronymToken(previousToken) && /^\.\s*/u.test(separator));
+  return Boolean(
+    previousToken && isDottedAcronymToken(previousToken) && /^\.[^\S\r\n]*/u.test(separator),
+  );
 }
 
 function isDottedAcronymToken(token: string): boolean {
