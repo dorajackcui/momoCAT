@@ -609,6 +609,18 @@ describe('TM Matching Profiles', () => {
     expect(
       buildEnglishTMConcordancePhraseTerms("Nikki's Dream Wardrobe").ftsPhrases,
     ).toEqual(expect.arrayContaining(['nikki dream wardrobe']));
+    expect(
+      buildEnglishTMConcordancePhraseTerms('Bom\u2011Bom Bubble Machine').ftsPhrases,
+    ).toEqual(expect.arrayContaining(['bom bom bubble machine']));
+    expect(
+      buildEnglishTMConcordancePhraseTerms('Nikki\u2019s Dream Wardrobe').ftsPhrases,
+    ).toEqual(expect.arrayContaining(['nikki dream wardrobe']));
+
+    for (const hyphen of ['\u2010', '\u2011', '\u2012', '\u2013']) {
+      expect(
+        buildEnglishTMConcordancePhraseTerms(`Bom${hyphen}Bom Bubble Machine`).ftsPhrases,
+      ).toEqual(expect.arrayContaining(['bom bom bubble machine']));
+    }
   });
 
   it('allows internal stopwords in named English concordance phrases', () => {

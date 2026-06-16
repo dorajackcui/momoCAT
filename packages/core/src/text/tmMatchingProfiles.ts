@@ -1,7 +1,7 @@
 export type TMTextProfile = 'default' | 'english';
 
 const MAX_ENGLISH_TM_RECALL_TERMS = 32;
-const WORD_RE = /[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu;
+const WORD_RE = /[\p{L}\p{N}]+(?:[.'\u2019\u2010-\u2013-][\p{L}\p{N}]+)*/gu;
 const SIMPLE_WORD_RE = /[\p{L}\p{N}]+/gu;
 const LETTER_RE = /\p{L}/u;
 const ENGLISH_TM_CONCORDANCE_BOUNDARY_SEPARATOR_RE =
