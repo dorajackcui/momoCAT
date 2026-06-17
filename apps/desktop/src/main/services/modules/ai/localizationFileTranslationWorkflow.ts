@@ -1,6 +1,6 @@
 import type { Segment } from '@cat/core/models';
 import type { Project } from '@cat/core/project';
-import { parseEditorTextToTokens } from '@cat/core/tag';
+import { parseDisplayTextToTokens } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type {
   LocalizationEngine,
@@ -127,7 +127,7 @@ async function applyLocalizationUnitResult(
 
   await segmentService.updateSegment(
     segment.segmentId,
-    parseEditorTextToTokens(unitResult.target, segment.sourceTokens),
+    parseDisplayTextToTokens(unitResult.target),
     'translated',
   );
 }

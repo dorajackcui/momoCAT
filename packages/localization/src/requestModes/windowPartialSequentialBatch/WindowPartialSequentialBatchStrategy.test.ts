@@ -200,6 +200,80 @@ describe('WindowPartialSequentialBatchStrategy', () => {
     );
   });
 
+  it('records per-result repair prompts on artifacts and falls back to the batch prompt', async () => {
+    const units = [
+      jobUnit('row-1', 'Save {1}', 'hash-1'),
+      jobUnit('row-2', 'Close', 'hash-2', { target: 'Fermer' }),
+      jobUnit('row-3', 'Open', 'hash-3'),
+    ];
+    const row1 = createTransientSegment({ id: 'row-1', source: 'Save {1}' }, 0);
+    const row3 = createTransientSegment({ id: 'row-3', source: 'Open' }, 1);
+    const batchPrompt = promptArtifact(['r1', 'r2']);
+    const repairPrompt: PromptArtifact = {
+      ...promptArtifact(['r1']),
+      unitId: 'row-1',
+      userPrompt: 'repair prompt',
+      batch: undefined,
+    };
+    const translateBatch = vi.fn().mockResolvedValue({
+      results: [
+        {
+          documentId: 'sheet.xlsx',
+          unitId: 'row-1',
+          responseId: 'r1',
+          targetTokens: parseEditorTextToTokens('Enregistrer {1}', row1.sourceTokens),
+          prompt: repairPrompt,
+        },
+        {
+          documentId: 'sheet.xlsx',
+          unitId: 'row-3',
+          responseId: 'r2',
+          targetTokens: parseEditorTextToTokens('Ouvrir', row3.sourceTokens),
+        },
+      ],
+      prompt: batchPrompt,
+    });
+    const strategy = new WindowPartialSequentialBatchStrategy({
+      tmModule: {
+        inspect: vi
+          .fn()
+          .mockResolvedValueOnce(emptyTm(row1.segmentId, 'row-1'))
+          .mockResolvedValueOnce(emptyTm(row3.segmentId, 'row-3')),
+      },
+      tbModule: {
+        inspect: vi
+          .fn()
+          .mockResolvedValueOnce(emptyTb(row1.segmentId, 'row-1'))
+          .mockResolvedValueOnce(emptyTb(row3.segmentId, 'row-3')),
+      },
+      mtModule: { translateBatch },
+    });
+
+    const result = await strategy.translate({
+      task: {
+        taskId: 'partial-task-1',
+        requestMode: 'window-partial',
+        units,
+        scanWindowUnits: units,
+        requestUnitKeys: [units[0], units[2]].map(key),
+      },
+      context: executionContext({ job: { units } }),
+      project: project(),
+      mtConfig: resolvedMTConfig(),
+      mtOptions: mtOptions(),
+      includeReferences: false,
+      captureArtifacts: true,
+      translatableUnits: [
+        { jobUnit: units[0], segment: row1 },
+        { jobUnit: units[2], segment: row3 },
+      ],
+      skippedResults: [unitResult(units[1], 'Fermer', 'skipped')],
+    });
+
+    expect(result.artifacts?.[0]?.prompt).toBe(repairPrompt);
+    expect(result.artifacts?.[1]?.prompt).toBe(batchPrompt);
+  });
+
   it('uses empty references for custom projects', async () => {
     const unit = jobUnit('row-1', 'One', 'hash-1');
     const segment = createTransientSegment({ id: 'row-1', source: 'One' }, 0);

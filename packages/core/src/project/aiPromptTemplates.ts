@@ -108,6 +108,38 @@ function joinPromptBlocks(parts: string[]): string {
   return parts.filter(Boolean).join("\n\n");
 }
 
+function buildCurrentTranslationBlock(params: UserPromptBuildParams): string {
+  if (typeof params.currentTranslationPayload !== "string") {
+    return "";
+  }
+
+  const currentTranslationText = params.currentTranslationPayload.trim();
+  const refinementInstructionText =
+    typeof params.refinementInstruction === "string"
+      ? params.refinementInstruction.trim()
+      : "";
+  if (!refinementInstructionText) {
+    return "";
+  }
+
+  const parts = currentTranslationText
+    ? [
+        TRANSLATION_PROMPTS.currentTranslationLabel,
+        currentTranslationText,
+        "",
+        TRANSLATION_PROMPTS.refinementInstructionLabel,
+        refinementInstructionText,
+      ]
+    : [
+        TRANSLATION_PROMPTS.currentTranslationLabel,
+        "",
+        TRANSLATION_PROMPTS.refinementInstructionLabel,
+        refinementInstructionText,
+      ];
+
+  return parts.join("\n");
+}
+
 function buildTranslationUserPromptParts(params: UserPromptBuildParams): {
   userPrompt: string;
   sections: TextPromptSections;
@@ -123,24 +155,7 @@ function buildTranslationUserPromptParts(params: UserPromptBuildParams): {
     ? renderTemplate(TRANSLATION_PROMPTS.contextLine, { context: contextText })
     : "";
 
-  const currentTranslationText =
-    typeof params.currentTranslationPayload === "string"
-      ? params.currentTranslationPayload.trim()
-      : "";
-  const refinementInstructionText =
-    typeof params.refinementInstruction === "string"
-      ? params.refinementInstruction.trim()
-      : "";
-  const currentTranslationBlock =
-    currentTranslationText && refinementInstructionText
-      ? [
-          TRANSLATION_PROMPTS.currentTranslationLabel,
-          currentTranslationText,
-          "",
-          TRANSLATION_PROMPTS.refinementInstructionLabel,
-          refinementInstructionText,
-        ].join("\n")
-      : "";
+  const currentTranslationBlock = buildCurrentTranslationBlock(params);
 
   const tmReferences = normalizeTMReferences(
     params.tmReferences,
@@ -268,27 +283,49 @@ function buildReviewSystemPrompt(params: SystemPromptBuildParams): string {
 }
 
 function buildReviewUserPrompt(params: UserPromptBuildParams): string {
-  const userParts = [
+  return buildReviewUserPromptParts(params).userPrompt;
+}
+
+function buildReviewUserPromptParts(params: UserPromptBuildParams): {
+  userPrompt: string;
+  sections: TextPromptSections;
+} {
+  const sourceBlock = [
     buildReviewSourceHeader(params.srcLang, params.hasProtectedMarkers),
     params.sourcePayload,
-  ];
+  ].join("\n");
 
   const contextText =
     typeof params.context === "string" ? params.context.trim() : "";
-  userParts.push(
-    "",
-    renderTemplate(REVIEW_PROMPTS.contextLine, { context: contextText }),
-  );
+  const contextBlock = renderTemplate(REVIEW_PROMPTS.contextLine, {
+    context: contextText,
+  });
+  const currentTranslationBlock = buildCurrentTranslationBlock(params);
 
-  if (params.validationFeedback) {
-    userParts.push(
-      "",
-      REVIEW_PROMPTS.validationFeedbackHeader,
-      params.validationFeedback,
-    );
-  }
+  const validationFeedbackBlock = params.validationFeedback
+    ? joinBlock([
+        REVIEW_PROMPTS.validationFeedbackHeader,
+        params.validationFeedback,
+      ])
+    : "";
 
-  return userParts.join("\n");
+  const sections = {
+    ...buildEmptyTextPromptSections(),
+    sourceBlock,
+    contextBlock,
+    currentTranslationBlock,
+    validationFeedbackBlock,
+  };
+
+  return {
+    userPrompt: joinPromptBlocks([
+      sourceBlock,
+      contextBlock,
+      currentTranslationBlock,
+      validationFeedbackBlock,
+    ]),
+    sections,
+  };
 }
 
 function buildCustomSystemPrompt(params: SystemPromptBuildParams): string {
@@ -536,6 +573,8 @@ export function buildAITextPromptBundle(
   const userPromptParts =
     normalizedType === "translation"
       ? buildTranslationUserPromptParts(userPromptParams)
+      : normalizedType === "review"
+        ? buildReviewUserPromptParts(userPromptParams)
       : {
           userPrompt: buildAIUserPrompt(normalizedType, userPromptParams),
           sections: buildEmptyTextPromptSections(),

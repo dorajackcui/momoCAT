@@ -600,6 +600,59 @@ describe("Project AI Prompt Templates", () => {
     );
   });
 
+  it("includes repair context in review text prompt bundles", () => {
+    const bundle = buildAITextPromptBundle("review", {
+      srcLang: "en",
+      tgtLang: "fr",
+      projectPrompt: "",
+      sourceText: "Save {1}",
+      currentTranslationPayload: "Enregistrer",
+      refinementInstruction: "Repair only the marker mismatch.",
+      validationFeedback: "Missing marker {1}",
+    });
+
+    expect(bundle.userPrompt).toContain("Current Translation:");
+    expect(bundle.userPrompt).toContain("Enregistrer");
+    expect(bundle.userPrompt).toContain("Refinement Instruction:");
+    expect(bundle.userPrompt).toContain("Repair only the marker mismatch.");
+    expect(bundle.userPrompt).toContain(
+      "Validation feedback from previous attempt:",
+    );
+    expect(bundle.userPrompt).toContain("Missing marker {1}");
+    expect(bundle.sections.currentTranslationBlock).toContain(
+      "Current Translation:",
+    );
+    expect(bundle.sections.currentTranslationBlock).toContain("Enregistrer");
+    expect(bundle.sections.currentTranslationBlock).toContain(
+      "Refinement Instruction:",
+    );
+    expect(bundle.sections.currentTranslationBlock).toContain(
+      "Repair only the marker mismatch.",
+    );
+  });
+
+  it("includes repair instruction for empty current translation in translation text prompt bundles", () => {
+    const bundle = buildAITextPromptBundle("translation", {
+      srcLang: "en",
+      tgtLang: "fr",
+      sourceText: "Save {1}",
+      currentTranslationPayload: "",
+      refinementInstruction: "Repair the missing marker.",
+      validationFeedback: "Missing marker {1}",
+    });
+
+    expect(bundle.userPrompt).toContain("Current Translation:");
+    expect(bundle.userPrompt).toContain("Refinement Instruction:");
+    expect(bundle.userPrompt).toContain("Repair the missing marker.");
+    expect(bundle.userPrompt).toContain(
+      "Validation feedback from previous attempt:",
+    );
+    expect(bundle.userPrompt).toContain("Missing marker {1}");
+    expect(bundle.userPrompt).toContain(
+      ["Current Translation:", "", "Refinement Instruction:"].join("\n"),
+    );
+  });
+
   it("preserves empty translation source payload line in text prompt bundles", () => {
     const bundle = buildAITextPromptBundle("translation", {
       srcLang: "en",

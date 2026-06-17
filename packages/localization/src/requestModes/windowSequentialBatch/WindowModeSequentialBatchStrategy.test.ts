@@ -261,6 +261,73 @@ describe('WindowModeSequentialBatchStrategy', () => {
     expect(result.results[0]?.references).toBe(injectedReferences.engineReferences);
   });
 
+  it('records per-result repair prompts on artifacts and falls back to the batch prompt', async () => {
+    const units = [
+      jobUnit('window.xlsx', 'row-1', 'Save {1}', 'hash-1'),
+      jobUnit('window.xlsx', 'row-2', 'Close', 'hash-2'),
+    ];
+    const row1 = createTransientSegment({ id: 'row-1', source: 'Save {1}' }, 0);
+    const row2 = createTransientSegment({ id: 'row-2', source: 'Close' }, 1);
+    const batchPrompt = promptArtifact(['r1', 'r2']);
+    const repairPrompt: PromptArtifact = {
+      ...promptArtifact(['r1']),
+      unitId: 'row-1',
+      userPrompt: 'repair prompt',
+      batch: undefined,
+    };
+    const translateBatch = vi.fn().mockResolvedValue({
+      results: [
+        {
+          documentId: 'window.xlsx',
+          unitId: 'row-1',
+          responseId: 'r1',
+          targetTokens: parseEditorTextToTokens('Enregistrer {1}', row1.sourceTokens),
+          prompt: repairPrompt,
+        },
+        {
+          documentId: 'window.xlsx',
+          unitId: 'row-2',
+          responseId: 'r2',
+          targetTokens: parseEditorTextToTokens('Fermer', row2.sourceTokens),
+        },
+      ],
+      prompt: batchPrompt,
+    });
+    const strategy = new WindowModeSequentialBatchStrategy({
+      tmModule: {
+        inspect: vi
+          .fn()
+          .mockResolvedValueOnce(references('row-1', row1.segmentId, 'Save {1}', 'Enregistrer {1}').tm)
+          .mockResolvedValueOnce(references('row-2', row2.segmentId, 'Close', 'Fermer').tm),
+      },
+      tbModule: {
+        inspect: vi
+          .fn()
+          .mockResolvedValueOnce(references('row-1', row1.segmentId, 'Save {1}', 'Enregistrer {1}').tb)
+          .mockResolvedValueOnce(references('row-2', row2.segmentId, 'Close', 'Fermer').tb),
+      },
+      mtModule: { translateBatch },
+    });
+
+    const result = await strategy.translate({
+      task: translationTask(units),
+      context: executionContext({ job: { units } }),
+      project: project(),
+      mtConfig: resolvedMTConfig(),
+      mtOptions: mtOptions(),
+      includeReferences: false,
+      captureArtifacts: true,
+      translatableUnits: [
+        { jobUnit: units[0], segment: row1 },
+        { jobUnit: units[1], segment: row2 },
+      ],
+      skippedResults: [],
+    });
+
+    expect(result.artifacts?.[0]?.prompt).toBe(repairPrompt);
+    expect(result.artifacts?.[1]?.prompt).toBe(batchPrompt);
+  });
+
   it('does not include the API key in results or artifacts JSON', async () => {
     const unit = jobUnit('window.xlsx', 'row-2', 'Save file', 'hash-2');
     const segment = createTransientSegment({ id: 'row-2', source: 'Save file' }, 0);

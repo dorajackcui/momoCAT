@@ -31,6 +31,10 @@ export interface ComposePromptInput {
   mtOptions?: LocalizationMTOptions;
   providerOverride?: string;
   projectPromptOverride?: string;
+  context?: string;
+  currentTranslationPayload?: string;
+  refinementInstruction?: string;
+  validationFeedback?: string;
 }
 
 export interface MTBatchCurrentUnitInput {
@@ -114,6 +118,7 @@ export interface MTBatchUnitResult {
   unitId: string;
   responseId: string;
   targetTokens: Segment['targetTokens'];
+  prompt?: PromptArtifact;
 }
 
 export interface MTBatchTranslateResult {

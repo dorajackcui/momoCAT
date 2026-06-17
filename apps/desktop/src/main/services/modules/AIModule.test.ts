@@ -1,5 +1,6 @@
 ﻿import { describe, expect, it, vi } from 'vitest';
-import type { Segment } from '@cat/core/models';
+import type { Segment, Token } from '@cat/core/models';
+import { parseDisplayTextToTokens } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { TranslateProjectSegmentsInput } from '@cat/localization';
 import { AIModule } from './AIModule';
@@ -13,16 +14,18 @@ function createSegment(params: {
   segmentId: string;
   sourceText: string;
   targetText?: string;
+  sourceTokens?: Token[];
+  targetTokens?: Token[];
   status?: Segment['status'];
   context?: string;
   orderIndex?: number;
 }): Segment {
-  const sourceTokens = params.sourceText
+  const sourceTokens = params.sourceTokens ?? (params.sourceText
     ? [{ type: 'text', content: params.sourceText as string }]
-    : [];
-  const targetTokens = params.targetText
+    : []);
+  const targetTokens = params.targetTokens ?? (params.targetText
     ? [{ type: 'text', content: params.targetText as string }]
-    : [];
+    : []);
   return {
     segmentId: params.segmentId,
     fileId: 1,
@@ -326,6 +329,83 @@ describe('AIModule.aiTranslateFile', () => {
       .calls[0][1];
     expect(serializeTokensToDisplayText(translatedTokens)).toBe('Bonjour <b>monde</b>');
     expect(transport.createResponse).not.toHaveBeenCalled();
+  });
+
+  it('writes localization display targets without reinterpreting placeholder-like tags as editor markers', async () => {
+    const sourceText =
+      '<Yellow_20>{1}</>邀请你进入<Yellow_20>喵舞训练营·灿烂烟花</>，是否接受？';
+    const targetText =
+      "<Yellow_20>{1}</> vous invite à entrer dans <Yellow_20>Camp de danse de Momo : feux d'artifice</>. Accepter ?";
+    const segments: Segment[] = [
+      createSegment({
+        segmentId: 'loc-display-tags-1',
+        sourceText,
+        sourceTokens: parseDisplayTextToTokens(sourceText),
+        orderIndex: 9,
+      }),
+    ];
+
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({ id: 1, projectId: 11, name: 'demo.xlsx' }),
+      getProject: vi.fn().mockReturnValue({
+        id: 11,
+        srcLang: 'zh-CN',
+        tgtLang: 'fr-FR',
+        projectType: 'translation',
+        aiPrompt: '',
+        aiTemperature: 0.2,
+        aiModel: TEST_PROVIDER_ID,
+      }),
+    } as unknown as ProjectRepository;
+    const segmentRepo = {
+      getSegmentsPage: vi.fn().mockReturnValue(segments),
+    } as unknown as SegmentRepository;
+    const segmentService = {
+      updateSegment: vi.fn().mockResolvedValue(undefined),
+    } as unknown as SegmentService;
+    const transport = {
+      testConnection: vi.fn().mockResolvedValue({ ok: true }),
+      createResponse: vi.fn(),
+    } as unknown as AITransport;
+    const localizationEngine = {
+      translateProjectSegments: vi.fn(async (input: TranslateProjectSegmentsInput) => {
+        await input.onResult?.({
+          id: 'loc-display-tags-1',
+          source: sourceText,
+          target: targetText,
+          status: 'translated',
+          metadata: { segmentId: 'loc-display-tags-1' },
+        });
+        return {
+          summary: { total: 1, translated: 1, reused: 0, skipped: 0, failed: 0 },
+          results: [],
+        };
+      }),
+    };
+
+    const module = new AIModule(
+      projectRepo,
+      segmentRepo,
+      createAISettingsRepository(),
+      segmentService,
+      transport,
+      undefined,
+      undefined,
+      undefined,
+      localizationEngine,
+    );
+
+    await module.aiTranslateFile(1);
+
+    expect(segmentService.updateSegment).toHaveBeenCalledTimes(1);
+    const translatedTokens = (segmentService.updateSegment as ReturnType<typeof vi.fn>).mock
+      .calls[0][1];
+    expect(serializeTokensToDisplayText(translatedTokens)).toBe(targetText);
+    expect(
+      translatedTokens
+        .filter((token: Token) => token.type === 'tag')
+        .map((token: Token) => token.content),
+    ).toEqual(['<Yellow_20>', '{1}', '</>', '<Yellow_20>', '</>']);
   });
 
   it('passes target baseline to localization so the engine can ignore current targets', async () => {

@@ -107,6 +107,43 @@ describe('MTModule', () => {
     }
   });
 
+  it('composes prompts with current translation repair context', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Repair Prompt', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const segment = createTransientSegment({ id: 'unit-1', source: 'Save {1}' }, 0, {
+        projectId,
+        sourceLanguage: 'en',
+        targetLanguage: 'fr',
+      });
+      const transport = createTransport();
+      const module = createModule(db, transport);
+
+      const artifact = await module.composePrompt({
+        unitId: 'unit-1',
+        project,
+        segment,
+        tm: createTMArtifact(segment),
+        tb: createTBArtifact(segment),
+        currentTranslationPayload: 'Broken translation',
+        refinementInstruction: 'Repair only the placeholder mismatch.',
+        validationFeedback: 'Missing marker: {1}',
+      });
+
+      expect(artifact.userPrompt).toContain('Current Translation:');
+      expect(artifact.userPrompt).toContain('Broken translation');
+      expect(artifact.userPrompt).toContain('Refinement Instruction:');
+      expect(artifact.userPrompt).toContain('Repair only the placeholder mismatch.');
+      expect(artifact.userPrompt).toContain('Validation feedback from previous attempt:');
+      expect(artifact.userPrompt).toContain('Missing marker: {1}');
+    } finally {
+      db.close();
+    }
+  });
+
   it('passes marker-like source text as ordinary payload when tag policy is none', async () => {
     const db = new CATDatabase(':memory:');
     try {
@@ -267,9 +304,9 @@ describe('MTModule', () => {
       expect(result.prompt.userPrompt).toContain('Hello{1}world{2}again');
       expect(serializeTokensToDisplayText(result.targetTokens)).toBe('Bonjour\\nmonde\\nencore');
       expect(transport.createResponse).toHaveBeenCalledTimes(2);
-      expect(transport.createResponse.mock.calls[1]?.[0].userPrompt).toContain(
-        'Previous translation was invalid.',
-      );
+      const secondRequest = transport.createResponse.mock.calls[1]?.[0];
+      expect(secondRequest.userPrompt).toContain('Previous translation was invalid.');
+      expect(result.prompt.userPrompt).toBe(secondRequest.userPrompt);
     } finally {
       db.close();
     }
@@ -702,35 +739,22 @@ describe('MTModule', () => {
     }
   });
 
-  it('returns the successful Window Mode retry prompt after batch tag validation feedback', async () => {
+  it('does not retry Window Mode tag validation for custom projects', async () => {
     const db = new CATDatabase(':memory:');
     try {
-      const projectId = db.createProject('MT Batch Retry', 'en', 'fr');
+      const projectId = db.createProject('MT Batch Custom No Tag Retry', 'en', 'fr', 'custom');
       seedConfiguredAIProvider(db, projectId);
       const project = db.getProject(projectId);
       if (!project) throw new Error('Project not created');
-      const row2 = createTransientSegment({ id: 'row-2', source: 'Save {1}' }, 1);
-      const transport = createTransport();
-      transport.createResponse
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            translations: [{ id: 'row-2', text: 'Enregistrer' }],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        })
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            translations: [{ id: 'row-2', text: 'Enregistrer {1}' }],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        });
-      const module = createModule(db, transport);
-      const config = await module.resolveConfig(project, {
-        model: 'test-model',
-        reasoningEffort: 'medium',
-      });
+      const row2 = createTransientSegment({ id: 'row-2', source: 'Save {1} <b>x</b>' }, 1);
+      const transport = createTransport(
+        JSON.stringify({
+          translations: [{ id: 'row-2', text: 'Enregistrer sans marqueur' }],
+        }),
+      );
+      const tagValidator = createFailingTagValidator();
+      const module = createModule(db, transport, 'medium', tagValidator);
+      const config = await module.resolveConfig(project);
 
       const result = await module.translateBatch({
         taskId: 'window-task-1',
@@ -756,16 +780,240 @@ describe('MTModule', () => {
         tgtLang: 'fr',
       });
 
+      expect(project.projectType).toBe('custom');
+      expect(serializeTokensToDisplayText(result.results[0].targetTokens)).toBe(
+        'Enregistrer sans marqueur',
+      );
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
+      expect(tagValidator.validate).not.toHaveBeenCalled();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('repairs only the invalid Window Mode unit with a single-segment prompt', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Batch Retry', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const row2 = createTransientSegment({ id: 'row-2', source: 'Save {1}' }, 1);
+      const row3 = createTransientSegment({ id: 'row-3', source: 'Close' }, 2);
+      const transport = createTransport();
+      transport.createResponse
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            translations: [
+              { id: 'r1', text: 'Enregistrer' },
+              { id: 'r2', text: 'Fermer' },
+            ],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        })
+        .mockResolvedValueOnce({
+          content: 'Enregistrer {1}',
+          status: 200,
+          endpoint: '/mock',
+        });
+      const module = createModule(db, transport);
+      const config = await module.resolveConfig(project, {
+        model: 'test-model',
+        reasoningEffort: 'medium',
+      });
+
+      const result = await module.translateBatch({
+        taskId: 'window-task-1',
+        project,
+        current: [
+          {
+            responseId: 'r1',
+            documentId: 'doc.xlsx',
+            unitId: 'unit-2',
+            segment: row2,
+            tm: createTMArtifact(row2),
+            tb: createTBArtifact(row2),
+          },
+          {
+            responseId: 'r2',
+            documentId: 'doc.xlsx',
+            unitId: 'unit-3',
+            segment: row3,
+            tm: createTMArtifact(row3),
+            tb: createTBArtifact(row3),
+          },
+        ],
+        previousContext: [],
+        nextContext: [],
+        apiKey: config.apiKey,
+        baseUrl: config.provider.baseUrl,
+        model: config.model,
+        reasoningEffort: config.reasoningEffort,
+        provider: config.provider,
+        srcLang: 'en',
+        tgtLang: 'fr',
+      });
+
       expect(transport.createResponse).toHaveBeenCalledTimes(2);
+      const firstRequest = transport.createResponse.mock.calls[0]?.[0];
       const secondRequest = transport.createResponse.mock.calls[1]?.[0];
+      expect(firstRequest.userPrompt).toContain('Current segments');
+      expect(firstRequest.userPrompt).toContain('id: r1');
+      expect(firstRequest.userPrompt).toContain('id: r2');
+      expect(secondRequest.userPrompt).not.toContain('Current segments');
+      expect(secondRequest.userPrompt).toContain('Current Translation:');
+      expect(secondRequest.userPrompt).toContain('Enregistrer');
+      expect(secondRequest.userPrompt).toContain('Refinement Instruction:');
       expect(secondRequest.userPrompt).toContain('Validation feedback');
-      expect(secondRequest.userPrompt).toContain('row-2');
+      expect(secondRequest.userPrompt).not.toContain('r2');
+      expect(secondRequest.userPrompt).not.toContain('Fermer');
+      expect(result.results.map((unit) => unit.unitId)).toEqual(['unit-2', 'unit-3']);
       expect(serializeTokensToDisplayText(result.results[0].targetTokens)).toBe(
         'Enregistrer {1}',
       );
-      expect(result.prompt.userPrompt).toBe(secondRequest.userPrompt);
-      expect(result.prompt.userPrompt).toContain('Validation feedback');
-      expect(result.prompt.userPrompt).toContain('row-2');
+      expect(serializeTokensToDisplayText(result.results[1].targetTokens)).toBe('Fermer');
+      expect(result.results[0]).toHaveProperty('prompt.userPrompt', secondRequest.userPrompt);
+      expect(result.results[1]).not.toHaveProperty('prompt');
+      expect(result.prompt.userPrompt).toBe(firstRequest.userPrompt);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('carries Window Mode unit context into a single-segment repair prompt', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Batch Repair Context', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const row2 = createTransientSegment({ id: 'row-2', source: 'Save {1}' }, 1);
+      const transport = createTransport();
+      transport.createResponse
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            translations: [{ id: 'r1', text: 'Enregistrer' }],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        })
+        .mockResolvedValueOnce({
+          content: 'Enregistrer {1}',
+          status: 200,
+          endpoint: '/mock',
+        });
+      const module = createModule(db, transport);
+      const config = await module.resolveConfig(project);
+
+      const result = await module.translateBatch({
+        taskId: 'window-task-1',
+        project,
+        current: [
+          {
+            responseId: 'r1',
+            documentId: 'doc.xlsx',
+            unitId: 'unit-2',
+            segment: row2,
+            tm: createTMArtifact(row2),
+            tb: createTBArtifact(row2),
+            context: 'Toolbar button label',
+          },
+        ],
+        previousContext: [],
+        nextContext: [],
+        apiKey: config.apiKey,
+        baseUrl: config.provider.baseUrl,
+        model: config.model,
+        reasoningEffort: config.reasoningEffort,
+        provider: config.provider,
+        srcLang: 'en',
+        tgtLang: 'fr',
+      });
+
+      expect(transport.createResponse).toHaveBeenCalledTimes(2);
+      const firstRequest = transport.createResponse.mock.calls[0]?.[0];
+      const repairRequest = transport.createResponse.mock.calls[1]?.[0];
+      expect(firstRequest.userPrompt).toContain('Toolbar button label');
+      expect(repairRequest.userPrompt).toContain('Context: Toolbar button label');
+      expect(result.results[0]).toHaveProperty('prompt.userPrompt', repairRequest.userPrompt);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('rejects when single-segment repair cannot fix an invalid Window Mode unit', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Batch Repair Failure', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const row2 = createTransientSegment({ id: 'row-2', source: 'Save {1}' }, 1);
+      const row3 = createTransientSegment({ id: 'row-3', source: 'Close' }, 2);
+      const transport = createTransport();
+      transport.createResponse
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            translations: [
+              { id: 'r1', text: 'Enregistrer' },
+              { id: 'r2', text: 'Fermer' },
+            ],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        })
+        .mockResolvedValue({
+          content: 'Enregistrer',
+          status: 200,
+          endpoint: '/mock',
+        });
+      const module = createModule(db, transport);
+      const config = await module.resolveConfig(project);
+
+      await expect(
+        module.translateBatch({
+          taskId: 'window-task-1',
+          project,
+          current: [
+            {
+              responseId: 'r1',
+              documentId: 'doc.xlsx',
+              unitId: 'unit-2',
+              segment: row2,
+              tm: createTMArtifact(row2),
+              tb: createTBArtifact(row2),
+            },
+            {
+              responseId: 'r2',
+              documentId: 'doc.xlsx',
+              unitId: 'unit-3',
+              segment: row3,
+              tm: createTMArtifact(row3),
+              tb: createTBArtifact(row3),
+            },
+          ],
+          previousContext: [],
+          nextContext: [],
+          apiKey: config.apiKey,
+          baseUrl: config.provider.baseUrl,
+          model: config.model,
+          reasoningEffort: config.reasoningEffort,
+          provider: config.provider,
+          srcLang: 'en',
+          tgtLang: 'fr',
+        }),
+      ).rejects.toThrow(/Tag validation failed after 3 attempts/);
+
+      expect(transport.createResponse).toHaveBeenCalledTimes(4);
+      const repairRequests = transport.createResponse.mock.calls.slice(1).map((call) => call[0]);
+      expect(repairRequests).toHaveLength(3);
+      for (const request of repairRequests) {
+        expect(request.userPrompt).toContain('Current Translation:');
+        expect(request.userPrompt).toContain('Enregistrer');
+        expect(request.userPrompt).not.toContain('r2');
+        expect(request.userPrompt).not.toContain('Fermer');
+      }
     } finally {
       db.close();
     }

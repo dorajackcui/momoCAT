@@ -20,7 +20,9 @@ import { resolveTagPolicy } from '../tagPolicy';
 import type {
   ComposeBatchPromptInput,
   ComposePromptInput,
+  MTBatchCurrentUnitInput,
   MTBatchTranslateResult,
+  MTBatchUnitResult,
   MTModuleDependencies,
   MTTranslateResult,
   PreparedBatchPromptInput,
@@ -157,6 +159,8 @@ export class MTModule {
       sourceText: promptParams.sourceText,
       sourceTagPreservedText: promptParams.sourceTagPreservedText,
       context: promptParams.context,
+      currentTranslationPayload: promptParams.currentTranslationPayload,
+      refinementInstruction: promptParams.refinementInstruction,
       validationFeedback: promptParams.validationFeedback,
       ...promptParams.references,
     });
@@ -284,14 +288,14 @@ export class MTModule {
         tagPolicy,
       });
       if (promptParams.projectType === 'custom' || tagPolicy === 'none') {
-        return { targetTokens, prompt };
+        return { targetTokens, prompt: attemptPrompt };
       }
 
       const validationResult = this.tagValidator.validate(input.segment.sourceTokens, targetTokens);
       const errors = validationResult.issues.filter((issue) => issue.severity === 'error');
 
       if (errors.length === 0) {
-        return { targetTokens, prompt };
+        return { targetTokens, prompt: attemptPrompt };
       }
 
       if (attempt === maxAttempts) {
@@ -315,78 +319,125 @@ export class MTModule {
     const promptParams = this.buildBatchPromptParams(input);
     const currentByResponseId = new Map(input.current.map((unit) => [unit.responseId, unit]));
     const tagPolicy = resolveTagPolicy(input.tagPolicy);
-    const maxAttempts = 3;
-    let validationFeedback: string | undefined;
+    const response = await this.aiTransport.createResponse({
+      apiKey: input.apiKey,
+      baseUrl: input.baseUrl,
+      model: input.model,
+      reasoningEffort: input.reasoningEffort ?? 'medium',
+      systemPrompt: prompt.systemPrompt,
+      userPrompt: prompt.userPrompt,
+    });
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const attemptPrompt =
-        attempt === 1
-          ? prompt
-          : this.composePreparedBatchPrompt({
-              ...input,
-              validationFeedback,
-            });
-      const response = await this.aiTransport.createResponse({
-        apiKey: input.apiKey,
-        baseUrl: input.baseUrl,
-        model: input.model,
-        reasoningEffort: input.reasoningEffort ?? 'medium',
-        systemPrompt: attemptPrompt.systemPrompt,
-        userPrompt: attemptPrompt.userPrompt,
-      });
-
-      const translations = this.parseBatchResponse(
-        response.content,
-        input.current.map((unit) => unit.responseId),
-      );
-      const results = translations.map((translation) => {
-        const unit = currentByResponseId.get(translation.id);
-        if (!unit) {
-          throw new Error(`Unknown translation id: ${translation.id}`);
-        }
-        return {
-          documentId: unit.documentId,
-          unitId: unit.unitId,
-          responseId: translation.id,
-          targetTokens: parseEditorTextToTokens(translation.text, unit.segment.sourceTokens, {
-            tagPolicy,
-          }),
-        };
-      });
-
-      if (promptParams.projectType === 'custom' || tagPolicy === 'none') {
-        return { results, prompt: attemptPrompt };
+    const translations = this.parseBatchResponse(
+      response.content,
+      input.current.map((unit) => unit.responseId),
+    );
+    const results = translations.map((translation) => {
+      const unit = currentByResponseId.get(translation.id);
+      if (!unit) {
+        throw new Error(`Unknown translation id: ${translation.id}`);
       }
+      return {
+        documentId: unit.documentId,
+        unitId: unit.unitId,
+        responseId: translation.id,
+        targetTokens: parseEditorTextToTokens(translation.text, unit.segment.sourceTokens, {
+          tagPolicy,
+        }),
+      };
+    });
 
-      const validationErrors = results.flatMap((result) => {
-        const unit = currentByResponseId.get(result.responseId);
-        if (!unit) {
-          return [`${result.responseId}: unknown current unit`];
-        }
-        return this.tagValidator
-          .validate(unit.segment.sourceTokens, result.targetTokens)
-          .issues.filter((issue) => issue.severity === 'error')
-          .map((issue) => `${result.responseId}: ${issue.message}`);
-      });
-
-      if (validationErrors.length === 0) {
-        return { results, prompt: attemptPrompt };
-      }
-
-      if (attempt === maxAttempts) {
-        throw new Error(
-          `Tag validation failed after ${maxAttempts} attempts: ${validationErrors.join('; ')}`,
-        );
-      }
-
-      validationFeedback = [
-        'Previous Window Mode batch translation was invalid.',
-        ...validationErrors.map((error) => `- ${error}`),
-        'Retry only the strict JSON response and preserve marker content and sequence exactly.',
-      ].join('\n');
+    if (promptParams.projectType === 'custom' || tagPolicy === 'none') {
+      return { results, prompt };
     }
 
-    throw new Error('Unexpected batch translation retry failure');
+    const invalidResults = results.flatMap((result) => {
+      const unit = currentByResponseId.get(result.responseId);
+      if (!unit) {
+        return [];
+      }
+      const errors = this.tagValidator
+        .validate(unit.segment.sourceTokens, result.targetTokens)
+        .issues.filter((issue) => issue.severity === 'error');
+
+      if (errors.length === 0) {
+        return [];
+      }
+
+      return [
+        {
+          unit,
+          parsedResult: result,
+          validationMessages: errors.map((issue) => issue.message),
+        },
+      ];
+    });
+
+    if (invalidResults.length === 0) {
+      return { results, prompt };
+    }
+
+    const repairedByResponseId = new Map<string, MTBatchUnitResult>();
+    for (const invalidResult of invalidResults) {
+      const validationFeedback = [
+        'Previous Window Mode batch result was invalid.',
+        ...invalidResult.validationMessages.map((message) => `- ${message}`),
+        'Retry by preserving marker content and sequence exactly.',
+      ].join('\n');
+      repairedByResponseId.set(
+        invalidResult.parsedResult.responseId,
+        await this.repairInvalidBatchResult(
+          input,
+          invalidResult.unit,
+          invalidResult.parsedResult,
+          validationFeedback,
+        ),
+      );
+    }
+
+    return {
+      results: results.map((result) => repairedByResponseId.get(result.responseId) ?? result),
+      prompt,
+    };
+  }
+
+  private async repairInvalidBatchResult(
+    input: TranslatePreparedBatchPromptInput,
+    unit: MTBatchCurrentUnitInput,
+    parsedResult: MTBatchUnitResult,
+    validationFeedback: string,
+  ): Promise<MTBatchUnitResult> {
+    const repaired = await this.translate({
+      project: input.project,
+      unitId: unit.unitId,
+      segment: unit.segment,
+      tm: unit.tm,
+      tb: unit.tb,
+      tagPolicy: input.tagPolicy,
+      mtOptions: input.mtOptions,
+      providerOverride: input.providerOverride,
+      projectPromptOverride: input.projectPromptOverride,
+      apiKey: input.apiKey,
+      baseUrl: input.baseUrl,
+      model: input.model,
+      reasoningEffort: input.reasoningEffort,
+      provider: input.provider,
+      srcLang: input.srcLang,
+      tgtLang: input.tgtLang,
+      context: unit.context,
+      validationFeedback,
+      currentTranslationPayload: serializeTokensToDisplayText(parsedResult.targetTokens),
+      refinementInstruction:
+        'Repair this translation only. Preserve the existing translation where possible, but fix the validation issues below.',
+    });
+
+    return {
+      documentId: unit.documentId,
+      unitId: unit.unitId,
+      responseId: parsedResult.responseId,
+      targetTokens: repaired.targetTokens,
+      prompt: repaired.prompt,
+    };
   }
 
   private buildPromptParams(input: ComposePromptInput & { validationFeedback?: string }): {
@@ -395,6 +446,8 @@ export class MTModule {
     sourceText: string;
     sourceTagPreservedText: string;
     context: string;
+    currentTranslationPayload?: string;
+    refinementInstruction?: string;
     validationFeedback?: string;
     references: {
       tmReference?: TMArtifact['selectedReferences']['tmReferences'][number];
@@ -408,7 +461,12 @@ export class MTModule {
       input.segment.sourceTokens,
       input.tagPolicy,
     );
-    const context = input.segment.meta?.context ? String(input.segment.meta.context).trim() : '';
+    const context =
+      input.context !== undefined
+        ? input.context.trim()
+        : input.segment.meta?.context
+          ? String(input.segment.meta.context).trim()
+          : '';
     const tmReferences = input.tm.selectedReferences.tmReferences;
     const concordanceReferences = input.tm.selectedReferences.concordanceReferences;
     const tbReferences = input.tb.selectedReferences;
@@ -423,6 +481,8 @@ export class MTModule {
       sourceText,
       sourceTagPreservedText,
       context,
+      currentTranslationPayload: input.currentTranslationPayload,
+      refinementInstruction: input.refinementInstruction,
       validationFeedback: input.validationFeedback,
       references: {
         tmReference: tmReferences[0],

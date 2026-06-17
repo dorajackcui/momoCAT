@@ -137,7 +137,7 @@ export class WindowModeSequentialBatchStrategy {
         toArtifactRecord(input.context.job.id, input.task.taskId, jobUnit, result, {
           tm: references.tm,
           tb: references.tb,
-          prompt: batch.prompt,
+          prompt: batchResult.prompt ?? batch.prompt,
         }),
       );
     }
