@@ -109,6 +109,52 @@ and progress surfaces. MT response repair is provider-response validation and
 prompt feedback for the current request. Do not use artifacts or progress
 events as resume truth.
 
+## Result Text Boundary
+
+`MTModule` is the only layer that should parse provider output as editor-marker
+text. It converts protected-marker responses such as `{1>...<2}` or `{3}` back
+into tag tokens with `parseEditorTextToTokens(...)`, then validates tag
+integrity before returning results to request-mode strategies.
+
+Request-mode `UnitResult.target` values are display text, not editor-marker
+text. Strategies currently build them from tokens with
+`serializeTokensToDisplayText(...)`. A consumer that persists results into a
+token-backed store must therefore parse that target with
+`parseDisplayTextToTokens(...)`, or preserve the tokens directly if the API is
+extended to carry them.
+
+Do not run a second `parseEditorTextToTokens(...)` pass on a `UnitResult.target`
+from localization. That can silently corrupt placeholder-like display tags.
+For example, if the source tag order is:
+
+```text
+<A> {1} </> text <A> name </>
+```
+
+the protected source payload can become:
+
+```text
+{1>{2}<3} text {1>name<3}
+```
+
+After MTModule parses and validates the response, the display target may
+correctly contain:
+
+```text
+<A>{1}</> translated <A>name</>
+```
+
+If a downstream desktop adapter treats that display target as editor-marker
+text, the literal `{1}` is reinterpreted as marker index 1 and maps back to
+`<A>`. The visible result becomes `<A><A></>...` even though the provider
+response and MT validation were correct. This failure is adapter-boundary
+corruption, not a provider retry problem.
+
+Regression coverage should include a source whose first tag is a paired tag and
+whose second tag is a standalone placeholder-like tag. The assertion must verify
+that the persisted display target still contains the standalone placeholder and
+that no extra paired tag is introduced.
+
 ## Inspect and Artifacts
 
 - Inspect composes prompt artifacts without provider requests.
