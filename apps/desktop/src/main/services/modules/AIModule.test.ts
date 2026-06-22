@@ -391,6 +391,80 @@ describe('AIModule.aiTranslateFile', () => {
     expect(calls).toEqual(['translate', 'flush']);
   });
 
+  it('keeps successful localization translation when translation audit flush rejects', async () => {
+    const segments: Segment[] = [
+      createSegment({ segmentId: 'loc-flush-reject-success-1', sourceText: 'Hello' }),
+    ];
+
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({ id: 1, projectId: 11, name: 'demo.xlsx' }),
+      getProject: vi.fn().mockReturnValue({
+        id: 11,
+        srcLang: 'en',
+        tgtLang: 'fr',
+        projectType: 'translation',
+        aiPrompt: '',
+        aiTemperature: 0.2,
+        aiModel: TEST_PROVIDER_ID,
+      }),
+    } as unknown as ProjectRepository;
+    const segmentRepo = {
+      getSegmentsPage: vi.fn().mockReturnValue(segments),
+    } as unknown as SegmentRepository;
+    const segmentService = {
+      updateSegment: vi.fn().mockResolvedValue(undefined),
+    } as unknown as SegmentService;
+    const transport = {
+      testConnection: vi.fn().mockResolvedValue({ ok: true }),
+      createResponse: vi.fn(),
+    } as unknown as AITransport;
+    const localizationEngine = {
+      translateProjectSegments: vi.fn(async (input: TranslateProjectSegmentsInput) => {
+        await input.onResult?.({
+          id: 'loc-flush-reject-success-1',
+          source: 'Hello',
+          target: 'Bonjour',
+          status: 'translated',
+          metadata: { segmentId: 'loc-flush-reject-success-1' },
+        });
+        return {
+          summary: { total: 1, translated: 1, reused: 0, skipped: 0, failed: 0 },
+          results: [],
+        };
+      }),
+    };
+    const translationAuditFlush = vi.fn(async () => {
+      throw new Error('audit flush failed');
+    });
+
+    const module = new AIModule(
+      projectRepo,
+      segmentRepo,
+      createAISettingsRepository(),
+      segmentService,
+      transport,
+      undefined,
+      undefined,
+      undefined,
+      localizationEngine,
+      translationAuditFlush,
+    );
+
+    await expect(module.aiTranslateFile(1)).resolves.toEqual({
+      translated: 1,
+      skipped: 0,
+      failed: 0,
+      total: 1,
+    });
+    expect(segmentService.updateSegment).toHaveBeenCalledTimes(1);
+    expect(segmentService.updateSegment).toHaveBeenCalledWith(
+      'loc-flush-reject-success-1',
+      expect.any(Array),
+      'translated',
+    );
+    expect(translationAuditFlush).toHaveBeenCalledTimes(1);
+  });
+
   it('flushes translation audit when localization file translation fails', async () => {
     const segments: Segment[] = [
       createSegment({ segmentId: 'loc-flush-failure-1', sourceText: 'Hello' }),

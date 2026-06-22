@@ -47,7 +47,6 @@ export async function runLocalizationFileTranslation(
   });
 
   let summary: Awaited<ReturnType<LocalizationEngine['translateProjectSegments']>>;
-  let translationFailed = false;
   try {
     summary = await params.localizationEngine.translateProjectSegments({
       projectId: params.project.id,
@@ -70,19 +69,8 @@ export async function runLocalizationFileTranslation(
         });
       },
     });
-  } catch (error) {
-    translationFailed = true;
-    throw error;
   } finally {
-    if (translationFailed) {
-      try {
-        await params.translationAuditFlush?.();
-      } catch {
-        // Preserve the original translation failure if audit flushing also fails.
-      }
-    } else {
-      await params.translationAuditFlush?.();
-    }
+    await flushTranslationAudit(params.translationAuditFlush);
   }
 
   const reused = summary.summary.reused ?? 0;
@@ -106,6 +94,16 @@ export async function runLocalizationFileTranslation(
   });
 
   return result;
+}
+
+async function flushTranslationAudit(
+  translationAuditFlush?: () => Promise<void> | void,
+): Promise<void> {
+  try {
+    await translationAuditFlush?.();
+  } catch {
+    // Audit flushing is observational and must not change translation results.
+  }
 }
 
 function mapSegmentToLocalizationUnit(
