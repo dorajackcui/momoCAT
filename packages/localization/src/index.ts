@@ -16,6 +16,18 @@ export { CheckpointIndex, CheckpointStore } from './job/CheckpointStore';
 export type { CheckpointDiagnostic, CheckpointLoadResult } from './job/CheckpointStore';
 export { EventSink } from './job/EventSink';
 export type { EventSinkOptions, StdoutWriter } from './job/EventSink';
+export {
+  JsonlTranslationAuditSink,
+  createMemoryTranslationAuditSink,
+  noopTranslationAuditSink,
+  summarizeAuditText,
+} from './audit/TranslationAudit';
+export type {
+  TranslationAuditContext,
+  TranslationAuditEvent,
+  TranslationAuditSink,
+  TranslationAuditUnitRef,
+} from './audit/TranslationAudit';
 export { computeSourceHash } from './job/sourceHash';
 export type { SourceHashInput } from './job/sourceHash';
 export { createLocalizationTaskExecutor } from './job/LocalizationTaskExecutor';
