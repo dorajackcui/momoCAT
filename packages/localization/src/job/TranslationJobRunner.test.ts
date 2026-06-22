@@ -2,6 +2,7 @@ import { mkdtemp } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { describe, expect, it, vi } from 'vitest';
+import { createMemoryTranslationAuditSink } from '../audit/TranslationAudit';
 import { ArtifactStore } from './ArtifactStore';
 import { CheckpointStore } from './CheckpointStore';
 import { EventSink } from './EventSink';
@@ -831,6 +832,61 @@ describe('TranslationJobRunner', () => {
     });
   });
 
+  it('passes audit sink to task executors and records persisted units plus runtime TM commits', async () => {
+    const harness = await makeHarness();
+    const auditSink = createMemoryTranslationAuditSink();
+    const commit = vi.fn();
+    const runner = harness.makeRunner(
+      async (task, context) => {
+        expect(context.auditSink).toBe(auditSink);
+
+        return {
+          results: [
+            makeResult({
+              unitId: task.units[0].unitId,
+              sourceHash: task.units[0].sourceHash,
+              source: task.units[0].source,
+              target: 'Bonjour',
+              attempts: context.attempt,
+            }),
+          ],
+        };
+      },
+      {
+        auditSink,
+        runtimeTm: {
+          seed: vi.fn(),
+          commit,
+        },
+      },
+    );
+
+    await runner.run(makeJob());
+
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(auditSink.events.map((event) => event.event)).toEqual([
+      'unit_persisted',
+      'runtime_tm_commit',
+    ]);
+    expect(auditSink.events[0]).toEqual({
+      event: 'unit_persisted',
+      job: 'job-1',
+      task: 'task-1',
+      doc: 'doc-1',
+      unit: 'unit-1',
+      status: 'translated',
+      attempts: 1,
+      targetChars: 7,
+      targetHash: expect.stringMatching(/^[0-9a-f]{12}$/),
+    });
+    expect(auditSink.events[1]).toEqual({
+      event: 'runtime_tm_commit',
+      job: 'job-1',
+      task: 'task-1',
+      units: ['unit-1'],
+    });
+  });
+
   it('applies host results before committing them to runtime TM', async () => {
     const harness = await makeHarness();
     const order: string[] = [];
@@ -967,6 +1023,7 @@ async function makeHarness(): Promise<{
       | 'runtimeTm'
       | 'checkpointStore'
       | 'applyResult'
+      | 'auditSink'
     > & { persistArtifacts?: boolean },
   ) => TranslationJobRunner;
   events: () => Promise<ProgressEventRecord[]>;
@@ -993,6 +1050,7 @@ async function makeHarness(): Promise<{
         writeFinal: options.writeFinal,
         applyResult: options.applyResult,
         runtimeTm: options.runtimeTm,
+        auditSink: options.auditSink,
       };
 
       if (options.persistArtifacts !== false) {

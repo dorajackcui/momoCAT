@@ -1,4 +1,5 @@
 import type { PromptArtifact, TBArtifact, TMArtifact } from '../artifacts';
+import type { TranslationAuditSink } from '../audit/TranslationAudit';
 import type {
   RuntimeTMSummary,
   TranslateUnitReferences,
@@ -112,6 +113,7 @@ export interface TaskExecutionContext {
   attempt: number;
   captureArtifacts?: boolean;
   completedResults?: ReadonlyMap<string, UnitResult>;
+  auditSink?: TranslationAuditSink;
 }
 
 export interface TaskExecutionResult {

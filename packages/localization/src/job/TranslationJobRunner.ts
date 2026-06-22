@@ -1,4 +1,5 @@
 import { runBounded } from '../RequestScheduler';
+import { summarizeAuditText, type TranslationAuditSink } from '../audit/TranslationAudit';
 import { unitKey as sharedUnitKey } from '../requestModes/shared/unitIdentity';
 import type { RuntimeTMSummary } from '../types';
 import { SnapshotThrottle } from './SnapshotThrottle';
@@ -70,6 +71,7 @@ export interface TranslationJobRunnerDependencies {
     context: TranslationJobRunnerCallbackContext & { task: TranslationTask },
   ) => Promise<void> | void;
   runtimeTm?: TranslationJobRuntimeTMHooks;
+  auditSink?: TranslationAuditSink;
 }
 
 export class TranslationJobRunner {
@@ -83,6 +85,7 @@ export class TranslationJobRunner {
   private readonly writeFinal?: TranslationJobRunnerDependencies['writeFinal'];
   private readonly applyResult?: TranslationJobRunnerDependencies['applyResult'];
   private readonly runtimeTm?: TranslationJobRunnerDependencies['runtimeTm'];
+  private readonly auditSink?: TranslationAuditSink;
 
   constructor(dependencies: TranslationJobRunnerDependencies) {
     this.checkpointStore = dependencies.checkpointStore;
@@ -95,6 +98,7 @@ export class TranslationJobRunner {
     this.writeFinal = dependencies.writeFinal;
     this.applyResult = dependencies.applyResult;
     this.runtimeTm = dependencies.runtimeTm;
+    this.auditSink = dependencies.auditSink;
   }
 
   async run(job: TranslationJob): Promise<TranslationJobRunResult> {
@@ -154,7 +158,15 @@ export class TranslationJobRunner {
         const taskResult = await this.executeTaskWithAttempts(job, task, maxAttempts, resultMap);
         await enqueuePersistence(async () => {
           await this.persistTaskResult(job, task, taskResult, resultMap, throttle);
-          await this.runtimeTm?.commit(taskResult.results, task, job);
+          if (this.runtimeTm) {
+            await this.runtimeTm.commit(taskResult.results, task, job);
+            this.auditSink?.record({
+              event: 'runtime_tm_commit',
+              job: job.id,
+              task: task.taskId,
+              units: taskResult.results.map((result) => result.unitId),
+            });
+          }
         });
       },
       { maxConcurrency: job.options?.maxConcurrency },
@@ -208,6 +220,7 @@ export class TranslationJobRunner {
           attempt,
           captureArtifacts: Boolean(this.artifactStore),
           completedResults,
+          auditSink: this.auditSink,
         });
 
         return {
@@ -253,6 +266,17 @@ export class TranslationJobRunner {
       if (checkpoint) {
         await this.applyResult?.(result, { job, resultMap, task });
         await this.checkpointStore.append(checkpoint);
+        const targetSummary = summarizeAuditText(result.target);
+        this.auditSink?.record({
+          event: 'unit_persisted',
+          job: job.id,
+          task: task.taskId,
+          doc: result.documentId,
+          unit: result.unitId,
+          status: result.status,
+          attempts: result.attempts ?? 1,
+          ...(targetSummary ?? {}),
+        });
       }
       resultMap.set(unitKeyFromParts(result.documentId, result.unitId), result);
 
