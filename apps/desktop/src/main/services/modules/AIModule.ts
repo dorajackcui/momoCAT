@@ -50,6 +50,7 @@ export class AIModule {
     aiRuntimeConfigProvider: AIRuntimeConfigProvider = new DefaultAIRuntimeConfigProvider(),
     promptReferenceResolvers: PromptReferenceResolvers = {},
     localizationEngine?: Pick<LocalizationEngine, 'translateProjectSegments'>,
+    translationAuditFlush?: () => Promise<void> | void,
   ) {
     this.projectRepo = projectRepo;
     const tagValidator = new TagValidator();
@@ -72,6 +73,7 @@ export class AIModule {
       segmentPagingIterator,
       promptReferenceResolvers,
       localizationEngine,
+      translationAuditFlush,
     );
   }
 

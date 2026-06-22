@@ -146,6 +146,7 @@ export class ProjectService {
           aiRuntimeConfigProvider,
           auditSink: deps.translationAuditSink,
         }),
+        deps.translationAuditSink?.flush?.bind(deps.translationAuditSink),
       );
 
     try {

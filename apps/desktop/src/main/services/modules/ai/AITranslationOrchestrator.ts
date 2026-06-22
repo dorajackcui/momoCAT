@@ -56,6 +56,7 @@ export class AITranslationOrchestrator {
     private readonly segmentPagingIterator: SegmentPagingIterator,
     private readonly promptReferenceResolvers: PromptReferenceResolvers = {},
     private readonly localizationEngine?: Pick<LocalizationEngine, 'translateProjectSegments'>,
+    private readonly translationAuditFlush?: () => Promise<void> | void,
   ) {}
 
   public async aiTranslateFile(
@@ -106,6 +107,7 @@ export class AITranslationOrchestrator {
         segmentPagingIterator: this.segmentPagingIterator,
         segmentService: this.segmentService,
         onProgress: options?.onProgress,
+        translationAuditFlush: this.translationAuditFlush,
       });
     }
 

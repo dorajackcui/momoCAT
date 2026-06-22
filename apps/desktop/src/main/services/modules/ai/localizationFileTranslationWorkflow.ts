@@ -23,6 +23,7 @@ export interface LocalizationFileTranslationParams {
   segmentPagingIterator: SegmentPagingIterator;
   segmentService: SegmentService;
   onProgress?: (data: { current: number; total: number; message?: string }) => void;
+  translationAuditFlush?: () => Promise<void> | void;
 }
 
 export async function runLocalizationFileTranslation(
@@ -45,27 +46,44 @@ export async function runLocalizationFileTranslation(
     providerId,
   });
 
-  const summary = await params.localizationEngine.translateProjectSegments({
-    projectId: params.project.id,
-    documentId: `file-${params.fileId}:${params.fileName}`,
-    units,
-    options: {
-      mode: 'standard',
-      requestMode: 'window-partial',
-      targetBaseline: params.targetBaseline,
-      ...(providerId ? { mt: { providerId } } : {}),
-    },
-    onResult: async (unitResult) => {
-      await applyLocalizationUnitResult(unitResult, segmentsById, params.segmentService);
-    },
-    onProgress: (progress) => {
-      params.onProgress?.({
-        current: progress.current,
-        total: progress.total,
-        message: `${getAIProgressVerb(params.project.projectType || 'translation')} segment ${progress.current} of ${progress.total}`,
-      });
-    },
-  });
+  let summary: Awaited<ReturnType<LocalizationEngine['translateProjectSegments']>>;
+  let translationFailed = false;
+  try {
+    summary = await params.localizationEngine.translateProjectSegments({
+      projectId: params.project.id,
+      documentId: `file-${params.fileId}:${params.fileName}`,
+      units,
+      options: {
+        mode: 'standard',
+        requestMode: 'window-partial',
+        targetBaseline: params.targetBaseline,
+        ...(providerId ? { mt: { providerId } } : {}),
+      },
+      onResult: async (unitResult) => {
+        await applyLocalizationUnitResult(unitResult, segmentsById, params.segmentService);
+      },
+      onProgress: (progress) => {
+        params.onProgress?.({
+          current: progress.current,
+          total: progress.total,
+          message: `${getAIProgressVerb(params.project.projectType || 'translation')} segment ${progress.current} of ${progress.total}`,
+        });
+      },
+    });
+  } catch (error) {
+    translationFailed = true;
+    throw error;
+  } finally {
+    if (translationFailed) {
+      try {
+        await params.translationAuditFlush?.();
+      } catch {
+        // Preserve the original translation failure if audit flushing also fails.
+      }
+    } else {
+      await params.translationAuditFlush?.();
+    }
+  }
 
   const reused = summary.summary.reused ?? 0;
   const result = {

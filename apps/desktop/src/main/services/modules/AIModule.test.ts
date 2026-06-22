@@ -331,6 +331,118 @@ describe('AIModule.aiTranslateFile', () => {
     expect(transport.createResponse).not.toHaveBeenCalled();
   });
 
+  it('flushes translation audit after successful localization file translation', async () => {
+    const segments: Segment[] = [
+      createSegment({ segmentId: 'loc-flush-success-1', sourceText: 'Hello' }),
+    ];
+    const calls: string[] = [];
+
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({ id: 1, projectId: 11, name: 'demo.xlsx' }),
+      getProject: vi.fn().mockReturnValue({
+        id: 11,
+        srcLang: 'en',
+        tgtLang: 'fr',
+        projectType: 'translation',
+        aiPrompt: '',
+        aiTemperature: 0.2,
+        aiModel: TEST_PROVIDER_ID,
+      }),
+    } as unknown as ProjectRepository;
+    const segmentRepo = {
+      getSegmentsPage: vi.fn().mockReturnValue(segments),
+    } as unknown as SegmentRepository;
+    const segmentService = {
+      updateSegment: vi.fn().mockResolvedValue(undefined),
+    } as unknown as SegmentService;
+    const transport = {
+      testConnection: vi.fn().mockResolvedValue({ ok: true }),
+      createResponse: vi.fn(),
+    } as unknown as AITransport;
+    const localizationEngine = {
+      translateProjectSegments: vi.fn(async () => {
+        calls.push('translate');
+        return {
+          summary: { total: 1, translated: 1, reused: 0, skipped: 0, failed: 0 },
+          results: [],
+        };
+      }),
+    };
+    const translationAuditFlush = vi.fn(async () => {
+      calls.push('flush');
+    });
+
+    const module = new AIModule(
+      projectRepo,
+      segmentRepo,
+      createAISettingsRepository(),
+      segmentService,
+      transport,
+      undefined,
+      undefined,
+      undefined,
+      localizationEngine,
+      translationAuditFlush,
+    );
+
+    await module.aiTranslateFile(1);
+
+    expect(translationAuditFlush).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual(['translate', 'flush']);
+  });
+
+  it('flushes translation audit when localization file translation fails', async () => {
+    const segments: Segment[] = [
+      createSegment({ segmentId: 'loc-flush-failure-1', sourceText: 'Hello' }),
+    ];
+    const translationError = new Error('translation failed');
+
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({ id: 1, projectId: 11, name: 'demo.xlsx' }),
+      getProject: vi.fn().mockReturnValue({
+        id: 11,
+        srcLang: 'en',
+        tgtLang: 'fr',
+        projectType: 'translation',
+        aiPrompt: '',
+        aiTemperature: 0.2,
+        aiModel: TEST_PROVIDER_ID,
+      }),
+    } as unknown as ProjectRepository;
+    const segmentRepo = {
+      getSegmentsPage: vi.fn().mockReturnValue(segments),
+    } as unknown as SegmentRepository;
+    const segmentService = {
+      updateSegment: vi.fn().mockResolvedValue(undefined),
+    } as unknown as SegmentService;
+    const transport = {
+      testConnection: vi.fn().mockResolvedValue({ ok: true }),
+      createResponse: vi.fn(),
+    } as unknown as AITransport;
+    const localizationEngine = {
+      translateProjectSegments: vi.fn(async () => {
+        throw translationError;
+      }),
+    };
+    const translationAuditFlush = vi.fn();
+
+    const module = new AIModule(
+      projectRepo,
+      segmentRepo,
+      createAISettingsRepository(),
+      segmentService,
+      transport,
+      undefined,
+      undefined,
+      undefined,
+      localizationEngine,
+      translationAuditFlush,
+    );
+
+    await expect(module.aiTranslateFile(1)).rejects.toBe(translationError);
+    expect(translationAuditFlush).toHaveBeenCalledTimes(1);
+  });
+
   it('writes localization display targets without reinterpreting placeholder-like tags as editor markers', async () => {
     const sourceText =
       '<Yellow_20>{1}</>邀请你进入<Yellow_20>喵舞训练营·灿烂烟花</>，是否接受？';
