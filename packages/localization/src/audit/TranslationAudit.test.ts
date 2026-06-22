@@ -82,6 +82,41 @@ describe('TranslationAudit', () => {
     });
   });
 
+  it('serializes only whitelisted batch request unit fields', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'translation-audit-'));
+    tempDirs.push(dir);
+    const sink = new JsonlTranslationAuditSink(join(dir, 'audit.jsonl'), {
+      now: () => new Date('2026-06-17T00:00:00.000Z'),
+    });
+
+    sink.record({
+      event: 'mt_batch_request',
+      job: 'job-1',
+      task: 'task-1',
+      mode: 'window',
+      units: [
+        {
+          doc: 'doc.xlsx',
+          unit: 'row-20',
+          rid: 'r4',
+          row: 20,
+          sourceText: 'do not write me',
+        } as never,
+      ],
+    });
+    await sink.flush();
+
+    const line = (await readFile(join(dir, 'audit.jsonl'), 'utf8')).trim();
+    expect(JSON.parse(line)).toEqual({
+      at: '2026-06-17T00:00:00.000Z',
+      event: 'mt_batch_request',
+      job: 'job-1',
+      task: 'task-1',
+      mode: 'window',
+      units: [{ doc: 'doc.xlsx', unit: 'row-20', rid: 'r4', row: 20 }],
+    });
+  });
+
   it('reports one error and disables queued JSONL writes after filesystem failure', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'translation-audit-'));
     tempDirs.push(dir);

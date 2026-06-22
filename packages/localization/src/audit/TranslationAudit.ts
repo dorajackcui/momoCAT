@@ -186,7 +186,7 @@ function toJsonlRecord(at: string, event: TranslationAuditEvent): object {
         job: event.job,
         task: event.task,
         mode: event.mode,
-        units: event.units,
+        units: event.units.map(toJsonlUnitRef),
       };
     case 'mt_batch_response':
       return {
@@ -274,6 +274,15 @@ function toJsonlRecord(at: string, event: TranslationAuditEvent): object {
 
   const unreachable: never = event;
   return unreachable;
+}
+
+function toJsonlUnitRef(unitRef: TranslationAuditUnitRef): TranslationAuditUnitRef {
+  return {
+    doc: unitRef.doc,
+    unit: unitRef.unit,
+    rid: unitRef.rid,
+    row: unitRef.row,
+  };
 }
 
 export function summarizeAuditText(
