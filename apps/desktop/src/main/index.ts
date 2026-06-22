@@ -18,6 +18,10 @@ import {
   AI_BATCH_DEBUG_FILE_ENV,
   isAIBatchDebugEnabled,
 } from './services/modules/ai/aiBatchDebug';
+import {
+  CAT_TRANSLATION_AUDIT_ENV,
+  createTranslationAuditDebugSink,
+} from './services/modules/ai/translationAuditDebug';
 import { registerProjectHandlers } from './ipc/projectHandlers';
 import { registerTMHandlers } from './ipc/tmHandlers';
 import { registerTBHandlers } from './ipc/tbHandlers';
@@ -149,6 +153,11 @@ app.whenReady().then(async () => {
     console.log(`[AIBatchDebug] Enabled via ${AI_BATCH_DEBUG_ENV} or ${AI_PROMPT_DEBUG_ENV}`);
     console.log(`[AIBatchDebug] UTF-8 batch log: ${process.env[AI_BATCH_DEBUG_FILE_ENV]}`);
   }
+  const translationAudit = createTranslationAuditDebugSink(userDataPath);
+  if (translationAudit) {
+    console.log(`[TranslationAudit] Enabled via ${CAT_TRANSLATION_AUDIT_ENV}`);
+    console.log(`[TranslationAudit] JSONL audit log: ${translationAudit.filePath}`);
+  }
   setupProxy();
 
   let db: CATDatabase;
@@ -176,6 +185,7 @@ app.whenReady().then(async () => {
 
   const projectService = new ProjectService(db, projectsDir, dbPath, {
     aiRuntimeConfigProvider: aiRuntimeConfigService,
+    translationAuditSink: translationAudit?.sink,
   });
   const jobManager = new JobManager();
 

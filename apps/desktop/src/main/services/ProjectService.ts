@@ -6,7 +6,7 @@ import type {
   ProjectType,
 } from '@cat/core/project';
 import { CATDatabase } from '@cat/db';
-import { LocalizationEngine } from '@cat/localization';
+import { LocalizationEngine, type TranslationAuditSink } from '@cat/localization';
 import { SpreadsheetFilter } from '../filters/SpreadsheetFilter';
 import { TMService } from './TMService';
 import { SegmentService } from './SegmentService';
@@ -55,6 +55,7 @@ interface ProjectServiceDependencies {
   segmentService?: SegmentService;
   aiTransport?: AITransport;
   aiRuntimeConfigProvider?: AIRuntimeConfigProvider;
+  translationAuditSink?: TranslationAuditSink;
   projectModule?: ProjectFileModule;
   tmModule?: TMModule;
   tbModule?: TBModule;
@@ -143,6 +144,7 @@ export class ProjectService {
           dbPath,
           aiTransport,
           aiRuntimeConfigProvider,
+          auditSink: deps.translationAuditSink,
         }),
       );
 

@@ -170,6 +170,10 @@ function assignOption(
     config.artifactsPath = io.resolvePath(optionValue);
     return;
   }
+  if (name === 'audit') {
+    config.auditPath = io.resolvePath(optionValue);
+    return;
+  }
   if (name === 'max-attempts') {
     config.maxAttempts = parsePositiveInteger(optionValue, '--max-attempts');
     return;
@@ -238,6 +242,7 @@ function isKnownOption(name: string): boolean {
     name === 'checkpoint' ||
     name === 'events' ||
     name === 'artifacts' ||
+    name === 'audit' ||
     name === 'resume' ||
     name === 'max-attempts' ||
     name === 'batch-size' ||
@@ -268,6 +273,7 @@ Options:
   --checkpoint <path>              Optional checkpoint sidecar path.
   --events <path>                  Optional events sidecar path.
   --artifacts <path>               Optional diagnostic artifact JSONL path.
+  --audit <path>                   Optional lightweight audit JSONL path.
   --resume                         Resume from checkpoint sidecars.
   --max-attempts <n>               Optional positive integer retry attempt limit.
   --batch-size <n>                 Optional batch size from 1 to 5.
