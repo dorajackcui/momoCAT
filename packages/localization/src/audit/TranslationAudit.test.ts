@@ -1,7 +1,7 @@
-import { mkdtemp, readFile, rm } from 'fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   JsonlTranslationAuditSink,
   createMemoryTranslationAuditSink,
@@ -63,6 +63,42 @@ describe('TranslationAudit', () => {
       at: '2026-06-17T00:00:00.000Z',
       ...repairRequestEvent,
     });
+  });
+
+  it('serializes only whitelisted JSONL event fields', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'translation-audit-'));
+    tempDirs.push(dir);
+    const sink = new JsonlTranslationAuditSink(join(dir, 'audit.jsonl'), {
+      now: () => new Date('2026-06-17T00:00:00.000Z'),
+    });
+
+    sink.record({ ...repairRequestEvent, targetText: 'do not write me' } as never);
+    await sink.flush();
+
+    const line = (await readFile(join(dir, 'audit.jsonl'), 'utf8')).trim();
+    expect(JSON.parse(line)).toEqual({
+      at: '2026-06-17T00:00:00.000Z',
+      ...repairRequestEvent,
+    });
+  });
+
+  it('reports one error and disables queued JSONL writes after filesystem failure', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'translation-audit-'));
+    tempDirs.push(dir);
+    await writeFile(join(dir, 'blocked'), 'not a directory', 'utf8');
+    const onError = vi.fn();
+    const sink = new JsonlTranslationAuditSink(join(dir, 'blocked', 'audit.jsonl'), { onError });
+
+    sink.record(repairRequestEvent);
+    sink.record(repairRequestEvent);
+    await sink.flush();
+
+    expect(onError).toHaveBeenCalledTimes(1);
+
+    sink.record(repairRequestEvent);
+    await sink.flush();
+
+    expect(onError).toHaveBeenCalledTimes(1);
   });
 
   it('summarizes target text with only a short hash and character count', () => {
