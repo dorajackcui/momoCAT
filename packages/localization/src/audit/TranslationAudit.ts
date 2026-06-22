@@ -88,7 +88,7 @@ export interface TranslationAuditRuntimeTmCommitEvent {
   event: 'runtime_tm_commit';
   job: string;
   task: string;
-  units: TranslationAuditUnitRef[];
+  units: string[];
 }
 
 export type TranslationAuditEvent =
