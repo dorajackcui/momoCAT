@@ -127,6 +127,7 @@ translation run when comparing prompt shape.
 momocat translate file --project-id <project-id> --input <input.xlsx> --output <translated.xlsx> --tag-policy none
 momocat translate file --project-id <project-id> --input <input.xlsx> --output <translated.xlsx> --request-mode window-partial --target-baseline ignore-current-targets --context-header context
 momocat translate file --db <local-db> --project-id <project-id> --input <input.xlsx> --output <translated.xlsx>
+momocat translate file --project-id <project-id> --input <input.xlsx> --output <translated.xlsx> --audit <audit.jsonl>
 ```
 
 Translate reads project settings, mounted TM/TB resources, and provider config
@@ -154,6 +155,54 @@ concurrent work queue. Window and Window Partial CLI runs use
 Tag policy defaults to current CAT marker detection. Use `--tag-policy none`
 when input text has already been filtered upstream, or when marker-like content
 such as `{1}`, `{1>`, `<2}`, `{3}`, `<xxx>`, or `%s` must remain ordinary text.
+
+## Translation Audit
+
+Translation audit is an opt-in lightweight JSONL report for checking whether a
+translation run sent batch requests, triggered single-segment tag repair,
+persisted repaired results, and committed them to runtime TM. It is intended for
+runtime flow inspection, not prompt debugging.
+
+For CLI runs, pass an explicit audit path:
+
+```bash
+momocat translate file --project-id <project-id> --input <input.xlsx> --output <translated.xlsx> --audit <audit.jsonl>
+```
+
+For desktop debugging, start the app with environment variables:
+
+```powershell
+$env:CAT_TRANSLATION_AUDIT = '1'
+$env:CAT_TRANSLATION_AUDIT_FILE = 'D:\path\to\translation-audit.jsonl'
+npm run dev
+```
+
+If `CAT_TRANSLATION_AUDIT_FILE` is not set, desktop writes
+`translation_audit_debug.jsonl` under the desktop user data directory. The main
+process logs the active audit path when the audit is enabled.
+
+Use a narrow event scan for tag-repair investigations:
+
+```powershell
+Select-String -Path '<audit.jsonl>' -Pattern '"mt_batch_request"','"mt_repair_request"','"mt_repair_success"','"mt_repair_failed"','"unit_persisted"','"runtime_tm_commit"'
+```
+
+Interpretation:
+
+- `mt_batch_request` without `mt_repair_request`: batch translation ran, but no
+  single-segment repair was triggered.
+- `mt_repair_request` followed by `mt_repair_success`: tag repair sent a
+  single-segment request and produced a valid result.
+- `mt_repair_failed`: the repair path ran, but validation or provider execution
+  failed.
+- `mt_repair_success` without `unit_persisted` for the same unit: repair
+  returned, but persistence/writeback did not complete.
+- `unit_persisted` followed by `runtime_tm_commit`: the translated or repaired
+  unit made it through persistence and runtime TM commit.
+
+Audit records intentionally do not include full prompts, provider responses,
+source text, or target text. Use prompt/TM/TB artifacts only when full request
+diagnostics are explicitly needed.
 
 ## Standard Smoke
 
@@ -184,6 +233,7 @@ its sidecars with the run prefix.
 | `<translated>.checkpoint.jsonl` | Direct translate resume truth per unit. |
 | `<translated>.events.jsonl` | Direct translate lightweight progress stream. |
 | `<translated>.snapshot.xlsx` | Direct translate throttled partial output. |
+| `<audit.jsonl>` | Opt-in translation audit from `--audit`; records request, repair, persistence, and runtime TM events without full prompts or source/target text. |
 | `<prefix>-translated.xlsx` | Standard smoke translated workbook. |
 | `<prefix>.checkpoint.jsonl` | Standard smoke resume truth per unit. |
 | `<prefix>.events.jsonl` | Standard smoke lightweight progress stream. |
@@ -194,6 +244,9 @@ its sidecars with the run prefix.
 
 Keep routine runs to final output plus default sidecars. Add artifacts only for
 diagnostic translate runs.
+
+Desktop audit output is controlled by `CAT_TRANSLATION_AUDIT` and
+`CAT_TRANSLATION_AUDIT_FILE`; it is not created as a `translate file` sidecar.
 
 ## Resume
 
