@@ -12,6 +12,7 @@ import type {
 } from '../providers/AIProviderCatalogService';
 import type { AIRuntimeConfigProvider, AITransport, ReasoningEffort } from '../ports';
 import type { PromptArtifact, TBArtifact, TMArtifact } from '../artifacts';
+import type { TranslationAuditContext } from '../audit/TranslationAudit';
 import type { MTModuleOptions as LocalizationMTOptions } from '../types';
 
 export interface MTModuleDependencies {
@@ -41,6 +42,7 @@ export interface MTBatchCurrentUnitInput {
   responseId: string;
   documentId: string;
   unitId: string;
+  rowNumber?: number;
   segment: Segment;
   tm: TMArtifact;
   tb: TBArtifact;
@@ -98,6 +100,7 @@ export interface PreparedBatchPromptInput extends ComposeBatchPromptInput {
   tgtLang: string;
   provider?: ResolvedAIProviderConfig['provider'];
   validationFeedback?: string;
+  audit?: TranslationAuditContext;
 }
 
 export interface TranslatePreparedPromptInput extends PreparedPromptInput {

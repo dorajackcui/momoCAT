@@ -8,6 +8,7 @@ import type { AIRuntimeConfigProvider, AITransport } from '../ports';
 import type { TagValidator } from '@cat/core/qa';
 import type { TMMatch } from '../internalServices';
 import type { TBArtifact, TMArtifact } from '../artifacts';
+import { createMemoryTranslationAuditSink } from '../audit/TranslationAudit';
 import { createTransientSegment } from '../transientSegment';
 import { MTModule } from './MTModule';
 
@@ -822,10 +823,12 @@ describe('MTModule', () => {
         model: 'test-model',
         reasoningEffort: 'medium',
       });
+      const auditSink = createMemoryTranslationAuditSink();
 
       const result = await module.translateBatch({
         taskId: 'window-task-1',
         project,
+        audit: { jobId: 'job-1', sink: auditSink },
         current: [
           {
             responseId: 'r1',
@@ -876,6 +879,42 @@ describe('MTModule', () => {
       expect(result.results[0]).toHaveProperty('prompt.userPrompt', secondRequest.userPrompt);
       expect(result.results[1]).not.toHaveProperty('prompt');
       expect(result.prompt.userPrompt).toBe(firstRequest.userPrompt);
+      expect(auditSink.events.map((event) => event.event)).toEqual([
+        'mt_batch_request',
+        'mt_batch_response',
+        'mt_tag_invalid',
+        'mt_repair_request',
+        'mt_repair_success',
+      ]);
+      expect(auditSink.events[0]).toMatchObject({
+        event: 'mt_batch_request',
+        job: 'job-1',
+        task: 'window-task-1',
+        mode: 'window',
+        units: [
+          { doc: 'doc.xlsx', unit: 'unit-2', rid: 'r1' },
+          { doc: 'doc.xlsx', unit: 'unit-3', rid: 'r2' },
+        ],
+      });
+      expect(auditSink.events[2]).toMatchObject({
+        event: 'mt_tag_invalid',
+        job: 'job-1',
+        task: 'window-task-1',
+        unit: 'unit-2',
+        rid: 'r1',
+        messages: expect.arrayContaining(['Missing tags: {1}']),
+        targetChars: 'Enregistrer'.length,
+      });
+      expect(auditSink.events[3]).toMatchObject({
+        event: 'mt_repair_request',
+        reason: 'tag_invalid',
+      });
+      expect(auditSink.events[4]).toMatchObject({
+        event: 'mt_repair_success',
+        unit: 'unit-2',
+        rid: 'r1',
+        targetChars: 'Enregistrer {1}'.length,
+      });
     } finally {
       db.close();
     }
@@ -970,11 +1009,13 @@ describe('MTModule', () => {
         });
       const module = createModule(db, transport);
       const config = await module.resolveConfig(project);
+      const auditSink = createMemoryTranslationAuditSink();
 
       await expect(
         module.translateBatch({
           taskId: 'window-task-1',
           project,
+          audit: { jobId: 'job-1', sink: auditSink },
           current: [
             {
               responseId: 'r1',
@@ -1014,6 +1055,19 @@ describe('MTModule', () => {
         expect(request.userPrompt).not.toContain('r2');
         expect(request.userPrompt).not.toContain('Fermer');
       }
+      expect(auditSink.events.map((event) => event.event)).toEqual([
+        'mt_batch_request',
+        'mt_batch_response',
+        'mt_tag_invalid',
+        'mt_repair_request',
+        'mt_repair_failed',
+      ]);
+      expect(auditSink.events[4]).toMatchObject({
+        event: 'mt_repair_failed',
+        unit: 'unit-2',
+        rid: 'r1',
+        message: expect.stringMatching(/Tag validation failed after 3 attempts/),
+      });
     } finally {
       db.close();
     }
@@ -1030,11 +1084,13 @@ describe('MTModule', () => {
       const transport = createTransport(JSON.stringify({ translations: [] }));
       const module = createModule(db, transport);
       const config = await module.resolveConfig(project);
+      const auditSink = createMemoryTranslationAuditSink();
 
       await expect(
         module.translateBatch({
           taskId: 'window-task-1',
           project,
+          audit: { jobId: 'job-1', sink: auditSink },
           current: [
             {
               responseId: 'row-2',
@@ -1056,6 +1112,16 @@ describe('MTModule', () => {
           tgtLang: 'fr',
         }),
       ).rejects.toThrow(/missing translation id: row-2/i);
+      expect(auditSink.events.map((event) => event.event)).toEqual([
+        'mt_batch_request',
+        'mt_batch_error',
+      ]);
+      expect(auditSink.events[1]).toMatchObject({
+        event: 'mt_batch_error',
+        job: 'job-1',
+        task: 'window-task-1',
+        message: expect.stringMatching(/missing translation id: row-2/i),
+      });
     } finally {
       db.close();
     }
