@@ -32,7 +32,7 @@ export function createTranslationAuditDebugSink(
     return undefined;
   }
 
-  const explicitPath = env[CAT_TRANSLATION_AUDIT_FILE_ENV]?.trim();
+  const explicitPath = env[CAT_TRANSLATION_AUDIT_FILE_ENV];
   const filePath = explicitPath || join(userDataPath, 'translation_audit_debug.jsonl');
   return {
     filePath,

@@ -37,10 +37,10 @@ describe('translationAuditDebug', () => {
   it('uses the explicit file path as-is when provided', () => {
     const audit = createTranslationAuditDebugSink('user-data', {
       [CAT_TRANSLATION_AUDIT_ENV]: 'yes',
-      [CAT_TRANSLATION_AUDIT_FILE_ENV]: 'D:/logs/audit.jsonl',
+      [CAT_TRANSLATION_AUDIT_FILE_ENV]: ' D:/logs/audit.jsonl ',
     });
 
-    expect(audit?.filePath).toBe('D:/logs/audit.jsonl');
+    expect(audit?.filePath).toBe(' D:/logs/audit.jsonl ');
     expect(audit?.sink).toBeDefined();
   });
 });
