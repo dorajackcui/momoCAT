@@ -920,6 +920,73 @@ describe('MTModule', () => {
     }
   });
 
+  it('keeps audit sink failures from breaking successful batch repair', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Batch Audit Failure', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const row2 = createTransientSegment({ id: 'row-2', source: 'Save {1}' }, 1);
+      const transport = createTransport();
+      transport.createResponse
+        .mockResolvedValueOnce({
+          content: JSON.stringify({
+            translations: [{ id: 'r1', text: 'Enregistrer' }],
+          }),
+          status: 200,
+          endpoint: '/mock',
+        })
+        .mockResolvedValueOnce({
+          content: 'Enregistrer {1}',
+          status: 200,
+          endpoint: '/mock',
+        });
+      const module = createModule(db, transport);
+      const config = await module.resolveConfig(project, {
+        model: 'test-model',
+        reasoningEffort: 'medium',
+      });
+      const auditSink = {
+        record: vi.fn(() => {
+          throw new Error('audit failed');
+        }),
+      };
+
+      const result = await module.translateBatch({
+        taskId: 'window-task-1',
+        project,
+        audit: { jobId: 'job-1', sink: auditSink },
+        current: [
+          {
+            responseId: 'r1',
+            documentId: 'doc.xlsx',
+            unitId: 'unit-2',
+            segment: row2,
+            tm: createTMArtifact(row2),
+            tb: createTBArtifact(row2),
+          },
+        ],
+        previousContext: [],
+        nextContext: [],
+        apiKey: config.apiKey,
+        baseUrl: config.provider.baseUrl,
+        model: config.model,
+        reasoningEffort: config.reasoningEffort,
+        provider: config.provider,
+        srcLang: 'en',
+        tgtLang: 'fr',
+      });
+
+      expect(serializeTokensToDisplayText(result.results[0].targetTokens)).toBe(
+        'Enregistrer {1}',
+      );
+      expect(transport.createResponse).toHaveBeenCalledTimes(2);
+    } finally {
+      db.close();
+    }
+  });
+
   it('carries Window Mode unit context into a single-segment repair prompt', async () => {
     const db = new CATDatabase(':memory:');
     try {

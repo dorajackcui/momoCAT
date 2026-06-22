@@ -79,7 +79,11 @@ export class MTModule {
     context: TranslationAuditContext | undefined,
     event: TranslationAuditEvent,
   ): void {
-    context?.sink.record(event);
+    try {
+      context?.sink.record(event);
+    } catch {
+      // Audit is observational and must not affect translation behavior.
+    }
   }
 
   async resolveConfig(
