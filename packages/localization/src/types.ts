@@ -1,4 +1,5 @@
 import type { TagPolicy } from '@cat/core/tag';
+import type { TranslationAuditSink } from './audit/TranslationAudit';
 import type { ReasoningEffort } from './ports';
 
 export type LocalizationTargetScope = 'blank-only' | 'overwrite-non-confirmed';
@@ -65,6 +66,7 @@ export interface LocalizationEngineOptions {
   defaultTargetScope?: LocalizationTargetScope;
   defaultMode?: LocalizationMode;
   mt?: MTModuleOptions;
+  auditSink?: TranslationAuditSink;
 }
 
 export interface EngineTMReference {

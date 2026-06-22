@@ -56,6 +56,7 @@ export interface TranslateProjectSegmentsJobOptions {
   taskExecutor: TranslationTaskExecutor;
   runnerFactory?: ProjectSegmentTranslationJobRunnerFactory;
   runtimeTm?: TranslationJobRunnerDependencies['runtimeTm'];
+  auditSink?: TranslationJobRunnerDependencies['auditSink'];
   applyResult?: TranslationJobRunnerDependencies['applyResult'];
   onProgress?: (data: { current: number; total: number; message?: string }) => void;
 }
@@ -120,6 +121,7 @@ export async function translateProjectSegmentsJob(
         : new WindowPartialTaskPlanner({ batchSize: prepared.job.translationOptions?.batchSize }),
     taskExecutor: options.taskExecutor,
     runtimeTm: options.runtimeTm,
+    auditSink: options.auditSink,
     applyResult: options.applyResult,
   });
 

@@ -8,6 +8,7 @@ import { serializeTokensToDisplayText } from '@cat/core/text';
 import { CATDatabase } from '../../db/src';
 import type { AITransport } from './ports';
 import { LocalizationEngine } from './LocalizationEngine';
+import { createMemoryTranslationAuditSink } from './audit/TranslationAudit';
 import { createLocalizationTaskExecutor } from './job/LocalizationTaskExecutor';
 import { createTransientSegment } from './transientSegment';
 import type { TranslateUnitsOptions } from './types';
@@ -1397,6 +1398,68 @@ describe('LocalizationEngine.translateFile job mode', () => {
 });
 
 describe('LocalizationEngine.translateProjectSegments', () => {
+  it('threads audit events through batch repair and Runtime TM commit', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Project Segment Audit', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const transport = createTransport();
+      transport.createResponse
+        .mockImplementationOnce(async (request: { userPrompt: string }) =>
+          batchResponseForPrompt(request, ['Enregistrer']),
+        )
+        .mockResolvedValueOnce({
+          content: 'Enregistrer {1}',
+          status: 200,
+          endpoint: '/mock',
+        });
+      const auditSink = createMemoryTranslationAuditSink();
+      const engine = new LocalizationEngine(db, {
+        dbPath: ':memory:',
+        aiTransport: transport,
+        auditSink,
+      });
+
+      const result = await engine.translateProjectSegments({
+        projectId,
+        documentId: 'doc-1',
+        units: [{ id: 'row-20', source: 'Save {1}', rowNumber: 20 }],
+        options: { requestMode: 'window-partial' },
+        job: { jobId: 'audit-job', maxAttempts: 1 },
+      });
+
+      expect(result.summary).toEqual({ total: 1, translated: 1, skipped: 0, failed: 0 });
+      expect(result.results[0]).toEqual(
+        expect.objectContaining({
+          id: 'row-20',
+          target: 'Enregistrer {1}',
+          status: 'translated',
+        }),
+      );
+      expect(auditSink.events.map((event) => event.event)).toEqual([
+        'mt_batch_request',
+        'mt_batch_response',
+        'mt_tag_invalid',
+        'mt_repair_request',
+        'mt_repair_success',
+        'unit_persisted',
+        'runtime_tm_commit',
+      ]);
+      expect(auditSink.events[0]).toMatchObject({
+        event: 'mt_batch_request',
+        job: 'audit-job',
+        units: [{ doc: 'doc-1', unit: 'row-20', rid: 'r1', row: 20 }],
+      });
+      expect(auditSink.events[3]).toMatchObject({
+        event: 'mt_repair_request',
+        unit: 'row-20',
+        rid: 'r1',
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   it('defaults project segment jobs to Window Partial Mode with Runtime TM and publishes translated results', async () => {
     const db = new CATDatabase(':memory:');
     try {

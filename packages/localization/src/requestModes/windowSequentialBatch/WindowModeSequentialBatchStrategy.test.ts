@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Project } from '@cat/core/project';
 import { parseEditorTextToTokens } from '@cat/core/tag';
 import { createTransientSegment } from '../../transientSegment';
+import { createMemoryTranslationAuditSink } from '../../audit/TranslationAudit';
 import type { PromptArtifact } from '../../artifacts';
 import type { JobUnit, TaskExecutionContext, TranslationTask, UnitResult } from '../../job/types';
 import type { ResolvedMTConfig } from '../../modules/MTModule';
@@ -13,14 +14,16 @@ describe('WindowModeSequentialBatchStrategy', () => {
   it('passes per-current-unit references and context windows to translateBatch, then maps results and artifacts', async () => {
     const units = [
       jobUnit('window.xlsx', 'row-1', 'Previous', 'hash-1'),
-      jobUnit('window.xlsx', 'row-2', 'Save file', 'hash-2', { context: 'button label' }),
+      jobUnit('window.xlsx', 'row-2', 'Save file', 'hash-2', { context: 'button label', rowNumber: 20 }),
       jobUnit('window.xlsx', 'row-3', 'Close window', 'hash-3'),
       jobUnit('window.xlsx', 'row-4', 'Next source', 'hash-4'),
     ];
     const task = translationTask(units.slice(1, 3));
+    const auditSink = createMemoryTranslationAuditSink();
     const context = executionContext({
       job: { units },
       completedResults: new Map([[unitKey(units[0]), unitResult(units[0], 'Precedent')]]),
+      auditSink,
     });
     const projectRecord = project();
     const row2 = createTransientSegment(
@@ -78,6 +81,7 @@ describe('WindowModeSequentialBatchStrategy', () => {
             responseId: 'r1',
             documentId: 'window.xlsx',
             unitId: 'row-2',
+            rowNumber: 20,
             segment: row2,
             tm: firstReferences.tm,
             tb: firstReferences.tb,
@@ -101,6 +105,7 @@ describe('WindowModeSequentialBatchStrategy', () => {
         provider: resolvedMTConfig().provider,
         srcLang: 'en-US',
         tgtLang: 'fr-FR',
+        audit: { jobId: 'job-1', sink: auditSink },
       }),
     );
     expect(result.results).toEqual([
@@ -431,6 +436,7 @@ function translationTask(units: JobUnit[], taskId = 'window-task-1'): Translatio
 function executionContext(params: {
   job?: Partial<TaskExecutionContext['job']>;
   completedResults?: ReadonlyMap<string, UnitResult>;
+  auditSink?: TaskExecutionContext['auditSink'];
 } = {}): TaskExecutionContext {
   return {
     attempt: 1,
@@ -441,6 +447,7 @@ function executionContext(params: {
       ...params.job,
     },
     completedResults: params.completedResults,
+    auditSink: params.auditSink,
   };
 }
 

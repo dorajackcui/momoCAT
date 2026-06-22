@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Project } from '@cat/core/project';
 import { parseEditorTextToTokens } from '@cat/core/tag';
 import { createTransientSegment } from '../../transientSegment';
+import { createMemoryTranslationAuditSink } from '../../audit/TranslationAudit';
 import type { PromptArtifact } from '../../artifacts';
 import type { JobUnit, TaskExecutionContext, TranslationTask, UnitResult } from '../../job/types';
 import type { ResolvedMTConfig } from '../../modules/MTModule';
@@ -40,6 +41,7 @@ describe('WindowPartialSequentialBatchStrategy', () => {
       tbModule: { inspect: tbInspect },
       mtModule: { translateBatch },
     });
+    const auditSink = createMemoryTranslationAuditSink();
 
     const result = await strategy.translate({
       task: {
@@ -49,7 +51,7 @@ describe('WindowPartialSequentialBatchStrategy', () => {
         scanWindowUnits: units,
         requestUnitKeys: [units[0], units[2], units[4]].map(key),
       },
-      context: executionContext({ job: { units } }),
+      context: executionContext({ job: { units }, auditSink }),
       project: project(),
       mtConfig: resolvedMTConfig(),
       mtOptions: mtOptions(),
@@ -68,9 +70,9 @@ describe('WindowPartialSequentialBatchStrategy', () => {
       expect.objectContaining({
         requestMode: 'window-partial',
         current: [
-          expect.objectContaining({ responseId: 'r1', unitId: 'row-1' }),
-          expect.objectContaining({ responseId: 'r2', unitId: 'row-3' }),
-          expect.objectContaining({ responseId: 'r3', unitId: 'row-5' }),
+          expect.objectContaining({ responseId: 'r1', unitId: 'row-1', rowNumber: 1 }),
+          expect.objectContaining({ responseId: 'r2', unitId: 'row-3', rowNumber: 3 }),
+          expect.objectContaining({ responseId: 'r3', unitId: 'row-5', rowNumber: 5 }),
         ],
         previousContext: [],
         nextContext: [],
@@ -79,6 +81,7 @@ describe('WindowPartialSequentialBatchStrategy', () => {
           { role: 'current-existing', source: '4', target: 'T4', rowNumber: 4 },
         ],
         scanWindowCount: 5,
+        audit: { jobId: 'job-1', sink: auditSink },
       }),
     );
     expect(result.results.map((unit) => unit.unitId)).toEqual(['row-1', 'row-3', 'row-5']);
@@ -324,10 +327,14 @@ function jobUnit(
   return { documentId: 'sheet.xlsx', unitId, source, sourceHash, ...extra };
 }
 
-function executionContext(params: { job?: Partial<TaskExecutionContext['job']> } = {}): TaskExecutionContext {
+function executionContext(params: {
+  job?: Partial<TaskExecutionContext['job']>;
+  auditSink?: TaskExecutionContext['auditSink'];
+} = {}): TaskExecutionContext {
   return {
     attempt: 1,
     job: { id: 'job-1', projectId: 1, units: [], ...params.job },
+    auditSink: params.auditSink,
   };
 }
 

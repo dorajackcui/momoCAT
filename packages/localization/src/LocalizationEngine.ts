@@ -412,6 +412,7 @@ export class LocalizationEngine {
                   summary: () => runtimeTm.summary(),
                 }
               : undefined,
+            auditSink: this.options.auditSink,
           },
         );
       } finally {
@@ -480,6 +481,7 @@ export class LocalizationEngine {
                 summary: () => runtimeTm.summary(),
               }
             : undefined,
+          auditSink: this.options.auditSink,
           applyResult: input.onResult
             ? (result) => input.onResult?.(unitResultToPublicResult(result))
             : undefined,

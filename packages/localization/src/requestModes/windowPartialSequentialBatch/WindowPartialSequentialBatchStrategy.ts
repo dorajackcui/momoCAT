@@ -83,6 +83,7 @@ export class WindowPartialSequentialBatchStrategy {
       responseId,
       documentId: jobUnit.documentId,
       unitId: jobUnit.unitId,
+      rowNumber: jobUnit.rowNumber,
       segment,
       tm: references.tm,
       tb: references.tb,
@@ -116,6 +117,9 @@ export class WindowPartialSequentialBatchStrategy {
       tagPolicy: input.tagPolicy,
       srcLang: meta?.sourceLanguage ? String(meta.sourceLanguage) : input.project.srcLang,
       tgtLang: meta?.targetLanguage ? String(meta.targetLanguage) : input.project.tgtLang,
+      ...(input.context.auditSink
+        ? { audit: { jobId: input.context.job.id, sink: input.context.auditSink } }
+        : {}),
     });
     const batchResultsByResponseId = new Map(
       batch.results.map((result) => [result.responseId, result]),

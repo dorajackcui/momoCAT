@@ -45,6 +45,7 @@ export interface TranslateSpreadsheetFileJobOptions {
   defaultMaxConcurrency?: number;
   runnerFactory?: FileTranslationJobRunnerFactory;
   runtimeTm?: TranslationJobRunnerDependencies['runtimeTm'];
+  auditSink?: TranslationJobRunnerDependencies['auditSink'];
 }
 
 export async function prepareFileTranslationJob(
@@ -133,6 +134,7 @@ export async function translateSpreadsheetFileJob(
       );
     },
     runtimeTm: options.runtimeTm,
+    auditSink: options.auditSink,
   };
 
   if (prepared.sidecarPaths.artifactsPath) {
