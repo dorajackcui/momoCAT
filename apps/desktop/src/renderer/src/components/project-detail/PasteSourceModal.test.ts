@@ -1,7 +1,11 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { PasteSourceModal, buildPasteSourceFileInput } from './PasteSourceModal';
+import {
+  PasteSourceModal,
+  buildPasteSourceFileInput,
+  createPasteSourceDrafts,
+} from './PasteSourceModal';
 
 describe('PasteSourceModal', () => {
   it('renders parsed source count, preview rows, and marker handling controls', () => {
@@ -55,14 +59,9 @@ describe('PasteSourceModal', () => {
     expect(html).toContain('Large paste');
   });
 
-  it('builds submitted sources from edited text instead of original clipboard content', () => {
+  it('builds submitted sources from edited source drafts', () => {
     const input = buildPasteSourceFileInput(
-      {
-        html: '<table><tr><td>Original HTML</td></tr></table>',
-        text: 'Original text',
-      },
-      true,
-      'Edited A\nEdited B',
+      ['Edited A', 'Edited B'],
       'default',
     );
 
@@ -72,11 +71,35 @@ describe('PasteSourceModal', () => {
     });
   });
 
+  it('keeps HTML-derived segment boundaries when a source with cell line breaks is edited', () => {
+    const clipboard = {
+      html: `
+        <table>
+          <tbody>
+            <tr>
+              <td><br>【主线新篇】黄金尘<br>伊赞之土主线终章现已开启</td>
+            </tr>
+          </tbody>
+        </table>
+      `,
+      text: '"\n【主线新篇】黄金尘\n伊赞之土主线终章现已开启"',
+    };
+
+    const drafts = createPasteSourceDrafts(clipboard);
+    const input = buildPasteSourceFileInput(
+      [`${drafts[0]}\n追加一句`],
+      'default',
+    );
+
+    expect(input).toEqual({
+      sources: ['【主线新篇】黄金尘\n伊赞之土主线终章现已开启\n追加一句'],
+      tagPolicy: 'default',
+    });
+  });
+
   it('builds plain marker-like text marker handling when selected', () => {
     const input = buildPasteSourceFileInput(
-      { html: '', text: 'A' },
-      false,
-      'ignored edit',
+      ['A'],
       'none',
     );
 
@@ -87,10 +110,9 @@ describe('PasteSourceModal', () => {
   });
 
   it('builds parsed clipboard sources for Create', () => {
+    const drafts = createPasteSourceDrafts({ html: '', text: 'A\n\nBB' });
     const input = buildPasteSourceFileInput(
-      { html: '', text: 'A\n\nBB' },
-      false,
-      'ignored edit',
+      drafts,
       'default',
     );
 

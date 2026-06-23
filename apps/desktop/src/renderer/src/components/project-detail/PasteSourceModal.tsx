@@ -14,14 +14,16 @@ interface PasteSourceModalProps {
 
 const LARGE_PASTE_WARNING_THRESHOLD = 5000;
 
+export function createPasteSourceDrafts(clipboard: ClipboardContent): string[] {
+  return parsePastedSources(clipboard);
+}
+
 export function buildPasteSourceFileInput(
-  clipboard: ClipboardContent,
-  isDirty: boolean,
-  text: string,
+  sourceDrafts: string[],
   tagPolicy: TagPolicy,
 ): PastedSourceFileInput {
   return {
-    sources: parsePastedSources(isDirty ? { text } : clipboard),
+    sources: sourceDrafts.map((source) => source.trim()).filter((source) => source.length > 0),
     tagPolicy,
   };
 }
@@ -33,27 +35,32 @@ export function PasteSourceModal({
   onClose,
   onCreate,
 }: PasteSourceModalProps) {
-  const [text, setText] = useState(clipboard.text);
+  const [sourceDrafts, setSourceDrafts] = useState<string[]>(() =>
+    createPasteSourceDrafts(clipboard),
+  );
   const [tagPolicy, setTagPolicy] = useState<TagPolicy>('default');
-  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setText(clipboard.text);
+    setSourceDrafts(createPasteSourceDrafts(clipboard));
     setTagPolicy('default');
-    setIsDirty(false);
   }, [clipboard, open]);
 
   const input = useMemo(
-    () => buildPasteSourceFileInput(clipboard, isDirty, text, tagPolicy),
-    [clipboard, isDirty, tagPolicy, text],
+    () => buildPasteSourceFileInput(sourceDrafts, tagPolicy),
+    [sourceDrafts, tagPolicy],
   );
   const { sources } = input;
-  const previewSources = sources.slice(0, 8);
   const hasSources = sources.length > 0;
   const rowLabel = `${sources.length.toLocaleString()} source ${
     sources.length === 1 ? 'row' : 'rows'
   }`;
+
+  const updateSourceDraft = (index: number, value: string) => {
+    setSourceDrafts((current) =>
+      current.map((source, currentIndex) => (currentIndex === index ? value : source)),
+    );
+  };
 
   return (
     <Modal
@@ -80,15 +87,24 @@ export function PasteSourceModal({
       }
     >
       <div className="space-y-5">
-        <Textarea
-          value={text}
-          onChange={(event) => {
-            setText(event.target.value);
-            setIsDirty(true);
-          }}
-          className="min-h-[220px] font-mono"
-          aria-label="Source text"
-        />
+        {sourceDrafts.length > 0 && (
+          <div className="max-h-[360px] overflow-auto space-y-3 pr-1">
+            {sourceDrafts.map((source, index) => (
+              <label
+                key={index}
+                className="grid grid-cols-[2.5rem_1fr] gap-3 text-sm text-text-muted"
+              >
+                <span className="pt-3 text-right font-semibold text-text-faint">{index + 1}.</span>
+                <Textarea
+                  value={source}
+                  onChange={(event) => updateSourceDraft(index, event.target.value)}
+                  className="min-h-[84px] font-mono"
+                  aria-label={`Source row ${index + 1}`}
+                />
+              </label>
+            ))}
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-4">
           <label className="flex items-center gap-3 text-sm font-medium text-text-muted">
@@ -117,21 +133,6 @@ export function PasteSourceModal({
           </Card>
         )}
 
-        {hasSources && (
-          <Card variant="surface" className="p-4">
-            <h3 className="text-xs font-bold text-text-faint uppercase tracking-wider mb-3">
-              Preview
-            </h3>
-            <ol className="space-y-2 text-sm text-text-muted">
-              {previewSources.map((source, index) => (
-                <li key={`${index}-${source}`} className="whitespace-pre-wrap">
-                  <span className="text-text-faint mr-2">{index + 1}.</span>
-                  {source}
-                </li>
-              ))}
-            </ol>
-          </Card>
-        )}
       </div>
     </Modal>
   );
