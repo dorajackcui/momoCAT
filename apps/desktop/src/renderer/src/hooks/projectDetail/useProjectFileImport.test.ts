@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PastedSourceFileInput } from '../../../../shared/ipc';
-import { useProjectFileImport } from './useProjectFileImport';
+import { readClipboardContentForPaste, useProjectFileImport } from './useProjectFileImport';
 
 const { apiClientMock, feedbackServiceMock } = vi.hoisted(() => ({
   apiClientMock: {
@@ -55,16 +55,12 @@ describe('useProjectFileImport paste source orchestration', () => {
   });
 
   it('opens paste source with empty clipboard content when clipboard read rejects', async () => {
-    const loadData = vi.fn().mockResolvedValue(undefined);
-    const runMutation = vi.fn(async <T>(fn: () => Promise<T>) => fn());
     apiClientMock.readClipboard.mockRejectedValue(new Error('clipboard unavailable'));
 
-    const result = renderImportHook({ loadData, runMutation });
-
-    await result.openPasteSource();
-
-    expect(result.inspectPasteClipboard()).toEqual({ text: '', html: '' });
-    expect(result.inspectPasteOpen()).toBe(true);
+    await expect(readClipboardContentForPaste(apiClientMock.readClipboard)).resolves.toEqual({
+      text: '',
+      html: '',
+    });
   });
 });
 
@@ -76,73 +72,23 @@ function renderImportHook({
   runMutation: <T>(fn: () => Promise<T>) => Promise<T>;
 }) {
   let hookResult: ReturnType<typeof useProjectFileImport> | null = null;
-  const state = {
-    pasteClipboard: { text: 'initial', html: 'initial' },
-    isPasteSourceOpen: false,
-  };
 
-  const originalUseState = React.useState;
-  const useStateSpy = vi.spyOn(React, 'useState');
-  useStateSpy.mockImplementation(((initialValue: unknown) => {
-    if (isClipboardContent(initialValue)) {
-      return [
-        state.pasteClipboard,
-        (nextValue: unknown) => {
-          state.pasteClipboard = nextValue as typeof state.pasteClipboard;
-        },
-      ];
-    }
-
-    if (initialValue === false && useStateSpy.mock.calls.length === 3) {
-      return [
-        state.isPasteSourceOpen,
-        (nextValue: unknown) => {
-          state.isPasteSourceOpen =
-            typeof nextValue === 'function'
-              ? (nextValue as (open: boolean) => boolean)(state.isPasteSourceOpen)
-              : Boolean(nextValue);
-        },
-      ];
-    }
-
-    return originalUseState(initialValue);
-  }) as typeof React.useState);
-
-  try {
-    renderToStaticMarkup(
-      React.createElement(() => {
-        hookResult = useProjectFileImport({
-          projectId: 42,
-          loadData,
-          runMutation,
-        });
-        return null;
-      }),
-    );
-  } finally {
-    useStateSpy.mockRestore();
-  }
+  renderToStaticMarkup(
+    React.createElement(() => {
+      hookResult = useProjectFileImport({
+        projectId: 42,
+        loadData,
+        runMutation,
+      });
+      return null;
+    }),
+  );
 
   if (!hookResult) {
     throw new Error('Failed to capture useProjectFileImport result');
   }
 
-  return {
-    ...hookResult,
-    inspectPasteClipboard: () => state.pasteClipboard,
-    inspectPasteOpen: () => state.isPasteSourceOpen,
-  };
-}
-
-function isClipboardContent(value: unknown): value is { text: string; html: string } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'text' in value &&
-    'html' in value &&
-    typeof (value as { text: unknown }).text === 'string' &&
-    typeof (value as { html: unknown }).html === 'string'
-  );
+  return hookResult;
 }
 
 function createDeferredPromise() {

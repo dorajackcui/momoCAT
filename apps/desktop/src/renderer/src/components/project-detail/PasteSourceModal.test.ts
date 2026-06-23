@@ -5,6 +5,7 @@ import {
   PasteSourceModal,
   buildPasteSourceFileInput,
   createPasteSourceDrafts,
+  shouldInitializePasteSourceDrafts,
 } from './PasteSourceModal';
 
 describe('PasteSourceModal', () => {
@@ -95,6 +96,13 @@ describe('PasteSourceModal', () => {
       sources: ['【主线新篇】黄金尘\n伊赞之土主线终章现已开启\n追加一句'],
       tagPolicy: 'default',
     });
+  });
+
+  it('initializes drafts only when the modal transitions from closed to open', () => {
+    expect(shouldInitializePasteSourceDrafts(false, true)).toBe(true);
+    expect(shouldInitializePasteSourceDrafts(true, true)).toBe(false);
+    expect(shouldInitializePasteSourceDrafts(true, false)).toBe(false);
+    expect(shouldInitializePasteSourceDrafts(false, false)).toBe(false);
   });
 
   it('builds plain marker-like text marker handling when selected', () => {

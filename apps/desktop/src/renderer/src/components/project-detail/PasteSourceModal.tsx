@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { TagPolicy } from '@cat/core/tag';
 import type { ClipboardContent, PastedSourceFileInput } from '../../../../shared/ipc';
 import { Button, Card, Modal, Select, Textarea } from '../ui';
@@ -16,6 +16,10 @@ const LARGE_PASTE_WARNING_THRESHOLD = 5000;
 
 export function createPasteSourceDrafts(clipboard: ClipboardContent): string[] {
   return parsePastedSources(clipboard);
+}
+
+export function shouldInitializePasteSourceDrafts(wasOpen: boolean, isOpen: boolean): boolean {
+  return !wasOpen && isOpen;
 }
 
 export function buildPasteSourceFileInput(
@@ -39,9 +43,13 @@ export function PasteSourceModal({
     createPasteSourceDrafts(clipboard),
   );
   const [tagPolicy, setTagPolicy] = useState<TagPolicy>('default');
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
+    const shouldInitialize = shouldInitializePasteSourceDrafts(wasOpenRef.current, open);
+    wasOpenRef.current = open;
+    if (!shouldInitialize) return;
+
     setSourceDrafts(createPasteSourceDrafts(clipboard));
     setTagPolicy('default');
   }, [clipboard, open]);

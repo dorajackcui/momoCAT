@@ -64,6 +64,15 @@ describe('parsePastedSources', () => {
     ).toEqual(['He said "hi"']);
   });
 
+  it('parses quoted CSV cells when delimiters are followed by spaces', () => {
+    expect(
+      parsePastedSources({
+        html: '',
+        text: '"A", B\n"CC", D',
+      }),
+    ).toEqual(['A', 'CC']);
+  });
+
   it('falls back to plain text for quoted prose followed by a comma', () => {
     expect(
       parsePastedSources({
@@ -80,5 +89,21 @@ describe('parsePastedSources', () => {
         text: 'Hello, world\n\nBB',
       }),
     ).toEqual(['Hello, world', 'BB']);
+  });
+
+  it('decodes decimal and hex HTML entities in table fallback parsing', () => {
+    const originalDOMParser = globalThis.DOMParser;
+    // Force the fallback parser used by non-browser tests and older runtimes.
+    (globalThis as { DOMParser?: typeof DOMParser }).DOMParser = undefined;
+    try {
+      expect(
+        parsePastedSources({
+          html: '<table><tr><td>&#x4E2D;&#25991;&#160;&#38;</td></tr></table>',
+          text: '',
+        }),
+      ).toEqual(['中文\u00A0&']);
+    } finally {
+      (globalThis as { DOMParser?: typeof DOMParser }).DOMParser = originalDOMParser;
+    }
   });
 });

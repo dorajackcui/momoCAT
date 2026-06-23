@@ -31,6 +31,21 @@ interface UseProjectFileImportResult {
   confirmPasteSource: (input: PastedSourceFileInput) => Promise<void>;
 }
 
+const EMPTY_CLIPBOARD: ClipboardContent = {
+  text: '',
+  html: '',
+};
+
+export async function readClipboardContentForPaste(
+  readClipboard: () => Promise<ClipboardContent>,
+): Promise<ClipboardContent> {
+  try {
+    return await readClipboard();
+  } catch {
+    return EMPTY_CLIPBOARD;
+  }
+}
+
 export function useProjectFileImport({
   projectId,
   loadData,
@@ -83,12 +98,7 @@ export function useProjectFileImport({
 
   const openPasteSource = async () => {
     setIsAddFileMenuOpen(false);
-    try {
-      const clipboard = await apiClient.readClipboard();
-      setPasteClipboard(clipboard);
-    } catch {
-      setPasteClipboard({ text: '', html: '' });
-    }
+    setPasteClipboard(await readClipboardContentForPaste(() => apiClient.readClipboard()));
     setIsPasteSourceOpen(true);
   };
 

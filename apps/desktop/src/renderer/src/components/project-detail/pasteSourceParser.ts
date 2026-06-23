@@ -63,7 +63,9 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"')
-    .replace(/&#39;/g, "'");
+    .replace(/&#39;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_match, value: string) => decodeCodePoint(value, 16))
+    .replace(/&#(\d+);/g, (_match, value: string) => decodeCodePoint(value, 10));
 }
 
 function parseStructuredTextSources(text: string): string[] {
@@ -111,7 +113,12 @@ function looksLikeQuotedCsv(text: string): boolean {
     index += 1;
   }
 
-  return text[index] === ',' && !/\s/.test(text[index + 1] || '');
+  if (text[index] !== ',') return false;
+
+  const rows = parseDelimitedRows(text, ',').filter((row) =>
+    row.some((cell) => cell.trim().length > 0),
+  );
+  return rows.length > 0 && rows.every((row) => row.length > 1);
 }
 
 function parseDelimitedRows(text: string, delimiter: '\t' | ','): string[][] {
@@ -172,4 +179,15 @@ function parseDelimitedRows(text: string, delimiter: '\t' | ','): string[][] {
 
 function normalizeSourceCells(cells: string[]): string[] {
   return cells.map((cell) => cell.trim()).filter((cell) => cell.length > 0);
+}
+
+function decodeCodePoint(value: string, radix: number): string {
+  const codePoint = Number.parseInt(value, radix);
+  if (!Number.isFinite(codePoint)) return '';
+
+  try {
+    return String.fromCodePoint(codePoint);
+  } catch {
+    return '';
+  }
 }
