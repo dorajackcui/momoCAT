@@ -1,6 +1,6 @@
 import { type Segment, type SegmentStatus, type Token } from '@cat/core/models';
 import type { Project, ProjectType } from '@cat/core/project';
-import { serializeTokensToEditorText } from '@cat/core/tag';
+import { serializeTokensToEditorText, type TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { AIBatchTargetScope } from '../../../../shared/ipc';
 import type { AiModelRuntimeConfig } from '../../ports';
@@ -23,6 +23,7 @@ export interface TranslateBatchSegmentParams {
   runtimeConfig: AiModelRuntimeConfig;
   srcLang: string;
   tgtLang: string;
+  tagPolicy: TagPolicy;
 }
 
 export interface StandardFileTranslationParams {
@@ -33,6 +34,7 @@ export interface StandardFileTranslationParams {
   baseUrl: string;
   model: string;
   runtimeConfig: AiModelRuntimeConfig;
+  tagPolicy: TagPolicy;
   targetScope: AIBatchTargetScope;
   segmentPagingIterator: SegmentPagingIterator;
   textTranslator: AITextTranslator;
@@ -57,10 +59,10 @@ export async function translateBatchSegment(
   },
 ): Promise<Token[]> {
   const sourceText = serializeTokensToDisplayText(params.segment.sourceTokens);
-  const sourceTagPreservedText = serializeTokensToEditorText(
-    params.segment.sourceTokens,
-    params.segment.sourceTokens,
-  );
+  const sourceTagPreservedText =
+    params.tagPolicy === 'none'
+      ? sourceText
+      : serializeTokensToEditorText(params.segment.sourceTokens, params.segment.sourceTokens);
   const context = params.segment.meta?.context ? String(params.segment.meta.context).trim() : '';
   const promptReferences =
     params.projectType === 'translation'
@@ -77,6 +79,7 @@ export async function translateBatchSegment(
     reasoningEffort: params.runtimeConfig.reasoningEffort,
     srcLang: params.srcLang,
     tgtLang: params.tgtLang,
+    tagPolicy: params.tagPolicy,
     sourceTokens: params.segment.sourceTokens,
     sourceText,
     sourceTagPreservedText,
@@ -146,6 +149,7 @@ export async function runStandardFileTranslation(
             runtimeConfig: params.runtimeConfig,
             srcLang: params.project.srcLang,
             tgtLang: params.project.tgtLang,
+            tagPolicy: params.tagPolicy,
           },
           {
             textTranslator: params.textTranslator,
@@ -243,6 +247,7 @@ export async function runStandardFileTranslation(
           runtimeConfig: params.runtimeConfig,
           srcLang: params.project.srcLang,
           tgtLang: params.project.tgtLang,
+          tagPolicy: params.tagPolicy,
         },
         {
           textTranslator: params.textTranslator,

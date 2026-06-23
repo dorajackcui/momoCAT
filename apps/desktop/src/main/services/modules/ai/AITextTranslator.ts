@@ -8,7 +8,7 @@ import {
 } from '@cat/core/project';
 import type { Token } from '@cat/core/models';
 import { TagValidator } from '@cat/core/qa';
-import { parseEditorTextToTokens } from '@cat/core/tag';
+import { parseEditorTextToTokens, type TagPolicy } from '@cat/core/tag';
 import type { AITransport, ReasoningEffort } from '../../ports';
 import { logAIPromptDebug } from './promptDebug';
 
@@ -33,6 +33,7 @@ export interface TranslateSegmentParams {
   reasoningEffort?: ReasoningEffort;
   srcLang: string;
   tgtLang: string;
+  tagPolicy?: TagPolicy;
   sourceTokens: Token[];
   sourceText: string;
   sourceTagPreservedText: string;
@@ -80,9 +81,10 @@ export class AITextTranslator {
   public async translateSegment(params: TranslateSegmentParams): Promise<Token[]> {
     const maxAttempts = 3;
     let validationFeedback: string | undefined;
+    const tagPolicy = params.tagPolicy ?? 'default';
+    const normalizedType = normalizeProjectType(params.projectType);
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const normalizedType = normalizeProjectType(params.projectType);
       const translatedText = await this.translateText({
         apiKey: params.apiKey,
         baseUrl: params.baseUrl,
@@ -108,8 +110,10 @@ export class AITextTranslator {
         promptDebugAttempt: attempt,
       });
 
-      const targetTokens = parseEditorTextToTokens(translatedText, params.sourceTokens);
-      if (normalizedType === 'custom') {
+      const targetTokens = parseEditorTextToTokens(translatedText, params.sourceTokens, {
+        tagPolicy,
+      });
+      if (normalizedType === 'custom' || tagPolicy === 'none') {
         return targetTokens;
       }
       const validationResult = this.tagValidator.validate(params.sourceTokens, targetTokens);

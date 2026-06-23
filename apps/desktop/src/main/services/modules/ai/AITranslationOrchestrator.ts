@@ -5,6 +5,7 @@ import type {
   AIBatchTargetBaseline,
   AIBatchTargetScope,
 } from '../../../../shared/ipc';
+import { resolveFileTagPolicy } from '../../../../shared/fileTagPolicy';
 import type {
   AIRuntimeConfigProvider,
   AITransport,
@@ -69,6 +70,7 @@ export class AITranslationOrchestrator {
     const project = this.projectRepo.getProject(file.projectId);
     if (!project) throw new Error('Project not found');
 
+    const tagPolicy = resolveFileTagPolicy(file);
     const { provider, apiKey } = this.providerCatalogService.resolveProviderConfig(
       options?.model ?? project.aiModel,
     );
@@ -83,6 +85,7 @@ export class AITranslationOrchestrator {
         baseUrl: provider.baseUrl,
         model: provider.model,
         runtimeConfig,
+        tagPolicy,
         targetScope,
         transport: this.transport,
         tagValidator: this.tagValidator,
@@ -102,6 +105,7 @@ export class AITranslationOrchestrator {
         fileName: file.name,
         project,
         targetBaseline: resolveTargetBaseline(options),
+        tagPolicy,
         providerId: options?.model ?? project.aiModel,
         localizationEngine: this.localizationEngine,
         segmentPagingIterator: this.segmentPagingIterator,
@@ -119,6 +123,7 @@ export class AITranslationOrchestrator {
       baseUrl: provider.baseUrl,
       model: provider.model,
       runtimeConfig,
+      tagPolicy,
       targetScope,
       segmentPagingIterator: this.segmentPagingIterator,
       textTranslator: this.textTranslator,

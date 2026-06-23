@@ -1,6 +1,7 @@
-import { type Segment, type SegmentStatus } from '@cat/core/models';
-import { serializeTokensToEditorText } from '@cat/core/tag';
+import { type Segment, type SegmentStatus, type Token } from '@cat/core/models';
+import { serializeTokensToEditorText, type TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
+import { resolveFileTagPolicy } from '../../../../shared/fileTagPolicy';
 import type { AIRuntimeConfigProvider, ProjectRepository, SegmentRepository } from '../../ports';
 import { SegmentService } from '../../SegmentService';
 import { AIProviderCatalogService } from './AIProviderCatalogService';
@@ -53,9 +54,11 @@ export async function runSegmentTranslation(
       throw new Error('Source segment is empty');
     }
 
-    const sourceTagPreservedText = serializeTokensToEditorText(
+    const tagPolicy = resolveFileTagPolicy(file);
+    const sourceTagPreservedText = buildPolicyPayload(
       segment.sourceTokens,
       segment.sourceTokens,
+      tagPolicy,
     );
     const context = segment.meta?.context ? String(segment.meta.context).trim() : '';
     const projectType = project.projectType || 'translation';
@@ -76,6 +79,7 @@ export async function runSegmentTranslation(
       reasoningEffort: runtimeConfig.reasoningEffort,
       srcLang: project.srcLang,
       tgtLang: project.tgtLang,
+      tagPolicy,
       sourceTokens: segment.sourceTokens,
       sourceText,
       sourceTagPreservedText,
@@ -138,13 +142,16 @@ export async function runSegmentRefinement(
       throw new Error('Target segment is empty');
     }
 
-    const sourceTagPreservedText = serializeTokensToEditorText(
+    const tagPolicy = resolveFileTagPolicy(file);
+    const sourceTagPreservedText = buildPolicyPayload(
       segment.sourceTokens,
       segment.sourceTokens,
+      tagPolicy,
     );
-    const currentTranslationTagPreservedText = serializeTokensToEditorText(
+    const currentTranslationTagPreservedText = buildPolicyPayload(
       segment.targetTokens,
       segment.sourceTokens,
+      tagPolicy,
     );
     const context = segment.meta?.context ? String(segment.meta.context).trim() : '';
     const projectType = project.projectType || 'translation';
@@ -165,6 +172,7 @@ export async function runSegmentRefinement(
       reasoningEffort: runtimeConfig.reasoningEffort,
       srcLang: project.srcLang,
       tgtLang: project.tgtLang,
+      tagPolicy,
       sourceTokens: segment.sourceTokens,
       sourceText,
       sourceTagPreservedText,
@@ -305,6 +313,12 @@ export function buildSegmentWorkflowDeps(params: {
     textTranslator: params.textTranslator,
     resolveTranslationPromptReferences: params.resolveTranslationPromptReferences,
   };
+}
+
+function buildPolicyPayload(tokens: Token[], sourceTokens: Token[], tagPolicy: TagPolicy): string {
+  return tagPolicy === 'none'
+    ? serializeTokensToDisplayText(tokens)
+    : serializeTokensToEditorText(tokens, sourceTokens);
 }
 
 export function createSegmentOperationLock(): {

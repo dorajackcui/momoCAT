@@ -1,6 +1,7 @@
 import type { Project } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
-import { serializeTokensToEditorText } from '@cat/core/tag';
+import { serializeTokensToEditorText, type TagPolicy } from '@cat/core/tag';
+import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { AIBatchTargetScope } from '../../../../shared/ipc';
 import type { AiModelRuntimeConfig, AITransport } from '../../ports';
 import { SegmentService } from '../../SegmentService';
@@ -23,6 +24,7 @@ export interface DialogueFileTranslationParams {
   baseUrl: string;
   model: string;
   runtimeConfig: AiModelRuntimeConfig;
+  tagPolicy: TagPolicy;
   targetScope: AIBatchTargetScope;
   transport: AITransport;
   tagValidator: TagValidator;
@@ -47,6 +49,7 @@ export async function runDialogueFileTranslation(
     isTranslatableSegment: (segment) => isTranslatableSegment(segment, params.targetScope),
     maxSegmentsPerUnit: DIALOGUE_MAX_SEGMENTS_PER_UNIT,
     maxCharsPerUnit: DIALOGUE_MAX_CHARS_PER_UNIT,
+    tagPolicy: params.tagPolicy,
   });
   const totalSegments = params.segmentPagingIterator.countFileSegments(params.fileId);
   const total = units.reduce((sum, unit) => sum + unit.segments.length, 0);
@@ -85,6 +88,7 @@ export async function runDialogueFileTranslation(
         previousGroup,
         transport: params.transport,
         tagValidator: params.tagValidator,
+        tagPolicy: params.tagPolicy,
         resolveTranslationPromptReferences: (projectId, segment) =>
           params.resolveTranslationPromptReferences(projectId, segment),
       });
@@ -137,6 +141,7 @@ export async function runDialogueFileTranslation(
               runtimeConfig: params.runtimeConfig,
               srcLang: params.project.srcLang,
               tgtLang: params.project.tgtLang,
+              tagPolicy: params.tagPolicy,
             },
             {
               textTranslator: params.textTranslator,
@@ -180,7 +185,11 @@ export async function runDialogueFileTranslation(
           previousGroup = {
             speaker: draft.speaker || 'Unknown',
             sourceText: draft.sourcePayload,
-            targetText: serializeTokensToEditorText(targetTokens, draft.segment.sourceTokens),
+            targetText: buildPolicyPayload(
+              targetTokens,
+              draft.segment.sourceTokens,
+              params.tagPolicy,
+            ),
           };
         } catch (fallbackError) {
           failed += 1;
@@ -232,6 +241,16 @@ export async function runDialogueFileTranslation(
   });
 
   return { translated, skipped, failed, total: totalSegments };
+}
+
+function buildPolicyPayload(
+  tokens: Parameters<typeof serializeTokensToEditorText>[0],
+  sourceTokens: Parameters<typeof serializeTokensToEditorText>[1],
+  tagPolicy: TagPolicy,
+): string {
+  return tagPolicy === 'none'
+    ? serializeTokensToDisplayText(tokens)
+    : serializeTokensToEditorText(tokens, sourceTokens);
 }
 
 function sleep(ms: number): Promise<void> {

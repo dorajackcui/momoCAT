@@ -1,6 +1,6 @@
 import type { Segment } from '@cat/core/models';
 import type { Project } from '@cat/core/project';
-import { parseDisplayTextToTokens } from '@cat/core/tag';
+import { parseDisplayTextToTokens, type TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type {
   LocalizationEngine,
@@ -18,6 +18,7 @@ export interface LocalizationFileTranslationParams {
   fileName: string;
   project: Project;
   targetBaseline: AIBatchTargetBaseline;
+  tagPolicy: TagPolicy;
   providerId?: string | null;
   localizationEngine: Pick<LocalizationEngine, 'translateProjectSegments'>;
   segmentPagingIterator: SegmentPagingIterator;
@@ -56,10 +57,16 @@ export async function runLocalizationFileTranslation(
         mode: 'standard',
         requestMode: 'window-partial',
         targetBaseline: params.targetBaseline,
+        tagPolicy: params.tagPolicy,
         ...(providerId ? { mt: { providerId } } : {}),
       },
       onResult: async (unitResult) => {
-        await applyLocalizationUnitResult(unitResult, segmentsById, params.segmentService);
+        await applyLocalizationUnitResult(
+          unitResult,
+          segmentsById,
+          params.segmentService,
+          params.tagPolicy,
+        );
       },
       onProgress: (progress) => {
         params.onProgress?.({
@@ -131,6 +138,7 @@ async function applyLocalizationUnitResult(
   unitResult: TranslateUnitResult,
   segmentsById: Map<string, Segment>,
   segmentService: SegmentService,
+  tagPolicy: TagPolicy,
 ): Promise<void> {
   if (unitResult.status !== 'translated' && unitResult.status !== 'reused') {
     return;
@@ -143,7 +151,7 @@ async function applyLocalizationUnitResult(
 
   await segmentService.updateSegment(
     segment.segmentId,
-    parseDisplayTextToTokens(unitResult.target),
+    parseDisplayTextToTokens(unitResult.target, { tagPolicy }),
     'translated',
   );
 }

@@ -5,7 +5,11 @@ import {
   type Project,
 } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
-import { parseEditorTextToTokens, serializeTokensToEditorText } from '@cat/core/tag';
+import {
+  parseEditorTextToTokens,
+  serializeTokensToEditorText,
+  type TagPolicy,
+} from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { AiModelRuntimeConfig, AITransport } from '../../ports';
 import type {
@@ -22,6 +26,7 @@ interface BuildDialogueUnitsParams {
   isTranslatableSegment: (segment: Segment) => boolean;
   maxSegmentsPerUnit: number;
   maxCharsPerUnit: number;
+  tagPolicy: TagPolicy;
 }
 
 interface TranslateDialogueUnitParams {
@@ -35,6 +40,7 @@ interface TranslateDialogueUnitParams {
   previousGroup?: DialoguePromptPreviousGroup;
   transport: AITransport;
   tagValidator: TagValidator;
+  tagPolicy: TagPolicy;
   resolveTranslationPromptReferences: (
     projectId: number,
     segment: Segment,
@@ -59,7 +65,10 @@ export function buildDialogueUnits(params: BuildDialogueUnitsParams): DialogueTr
     }
 
     const sourceText = serializeTokensToDisplayText(segment.sourceTokens);
-    const sourcePayload = serializeTokensToEditorText(segment.sourceTokens, segment.sourceTokens);
+    const sourcePayload =
+      params.tagPolicy === 'none'
+        ? sourceText
+        : serializeTokensToEditorText(segment.sourceTokens, segment.sourceTokens);
     const speaker = readDialogueSpeaker(segment);
     const speakerKey = speaker.toLocaleLowerCase();
     const draft: DialogueSegmentDraft = {
@@ -185,23 +194,27 @@ export async function translateDialogueUnit(
 
         let targetTokens: Token[];
         try {
-          targetTokens = parseEditorTextToTokens(translatedText, draft.segment.sourceTokens);
+          targetTokens = parseEditorTextToTokens(translatedText, draft.segment.sourceTokens, {
+            tagPolicy: params.tagPolicy,
+          });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           issues.push(`Segment ${draft.segment.segmentId}: token parsing failed (${message}).`);
           continue;
         }
 
-        const validationResult = params.tagValidator.validate(
-          draft.segment.sourceTokens,
-          targetTokens,
-        );
-        const errors = validationResult.issues.filter((issue) => issue.severity === 'error');
-        if (errors.length > 0) {
-          issues.push(
-            `Segment ${draft.segment.segmentId}: ${errors.map((errorItem) => errorItem.message).join('; ')}`,
+        if (params.tagPolicy !== 'none') {
+          const validationResult = params.tagValidator.validate(
+            draft.segment.sourceTokens,
+            targetTokens,
           );
-          continue;
+          const errors = validationResult.issues.filter((issue) => issue.severity === 'error');
+          if (errors.length > 0) {
+            issues.push(
+              `Segment ${draft.segment.segmentId}: ${errors.map((errorItem) => errorItem.message).join('; ')}`,
+            );
+            continue;
+          }
         }
 
         updates.push({
