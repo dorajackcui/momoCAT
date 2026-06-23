@@ -155,6 +155,19 @@ whose second tag is a standalone placeholder-like tag. The assertion must verify
 that the persisted display target still contains the standalone placeholder and
 that no extra paired tag is introduced.
 
+## Desktop File Tag Policy
+
+Desktop project files resolve CAT marker handling at import time. The selected
+file policy is stored with the file import options and must be reused for editor
+edits, desktop AI translation, QA, TM commit, and export.
+
+- `default`: marker-like text may become CAT tag tokens.
+- `none`: marker-like text remains ordinary text for that file.
+
+Use `none` only when strings such as `{1}`, `<xxx>`, or `%s` are business text,
+not CAT-managed tags. Already imported files keep their existing tokenization;
+re-import the file to change this interpretation.
+
 ## Inspect and Artifacts
 
 - Inspect composes prompt artifacts without provider requests.
