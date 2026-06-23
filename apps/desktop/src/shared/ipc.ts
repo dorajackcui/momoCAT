@@ -6,6 +6,7 @@ import type {
   ProjectQASettings,
   ProjectType as CoreProjectType,
 } from '@cat/core/project';
+import type { TagPolicy } from '@cat/core/tag';
 import type {
   MountedTBRecord as DbMountedTBRecord,
   MountedTMRecord as DbMountedTMRecord,
@@ -24,6 +25,7 @@ export interface ImportOptions {
   sourceCol: number;
   targetCol: number;
   contextCol?: number;
+  tagPolicy?: TagPolicy;
 }
 
 export interface TMImportOptions {
