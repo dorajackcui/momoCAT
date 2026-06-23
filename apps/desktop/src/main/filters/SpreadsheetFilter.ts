@@ -13,9 +13,15 @@ export class SpreadsheetFilter {
   private async readWorkbook(filePath: string) {
     const fileBuffer = await readFile(filePath);
     const extension = extname(filePath).toLowerCase();
+    if (extension === '.csv') {
+      return XLSX.read(fileBuffer.toString('utf8'), {
+        type: 'string',
+        raw: true,
+      });
+    }
+
     return XLSX.read(fileBuffer, {
       type: 'buffer',
-      ...(extension === '.csv' ? { raw: true } : {}),
     });
   }
 

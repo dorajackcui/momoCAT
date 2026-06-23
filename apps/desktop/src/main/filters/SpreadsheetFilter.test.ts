@@ -49,6 +49,20 @@ describe('SpreadsheetFilter.import', () => {
     ).toEqual(['00123', '2026-06-23', '=1+1', '1/2', 'B, C', 'Line 1\nLine 2']);
   });
 
+  it('preserves UTF-8 Chinese text when importing CSV sources', async () => {
+    const filePath = await createCsv('Source,Target\r\n【主线新篇】黄金尘,\r\n中文第二行,');
+
+    const segments = await new SpreadsheetFilter().import(filePath, 1, 2, {
+      hasHeader: true,
+      sourceCol: 0,
+      targetCol: 1,
+    });
+
+    expect(
+      segments.map((segment) => segment.sourceTokens.map((token) => token.content).join('')),
+    ).toEqual(['【主线新篇】黄金尘', '中文第二行']);
+  });
+
   it('protects marker-like text as tag tokens by default', async () => {
     const markerText = 'Save {1} <xxx> %s';
     const filePath = await createWorkbook([
