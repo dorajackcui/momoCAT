@@ -28,6 +28,16 @@ export interface ImportOptions {
   tagPolicy?: TagPolicy;
 }
 
+export interface ClipboardContent {
+  text: string;
+  html: string;
+}
+
+export interface PastedSourceFileInput {
+  sources: string[];
+  tagPolicy?: TagPolicy;
+}
+
 export interface TMImportOptions {
   sourceCol: number;
   targetCol: number;
@@ -318,6 +328,10 @@ export interface DesktopApi {
     filePath: string,
     options: ImportOptions,
   ) => Promise<ProjectFileRecord>;
+  createPastedSourceFile: (
+    projectId: number,
+    input: PastedSourceFileInput,
+  ) => Promise<ProjectFileRecord>;
 
   getSegments: (fileId: number, offset: number, limit: number) => Promise<Segment[]>;
   exportFile: (
@@ -385,6 +399,7 @@ export interface DesktopApi {
 
   openFileDialog: (filters: DialogFileFilter[]) => Promise<string | null>;
   saveFileDialog: (defaultPath: string, filters: DialogFileFilter[]) => Promise<string | null>;
+  readClipboard: () => Promise<ClipboardContent>;
 
   onSegmentsUpdated: (callback: (data: SegmentsUpdatedEvent) => void) => () => void;
   onProgress: (callback: (data: AppProgressEvent) => void) => () => void;

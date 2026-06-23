@@ -41,7 +41,12 @@ describe('createDesktopApi smoke', () => {
     await api.aiTranslateSegment('seg-1');
     await api.aiRefineSegment('seg-1', 'tone down');
     await api.openFileDialog([]);
+    await api.readClipboard();
     await api.runFileQA(1);
+    await api.createPastedSourceFile(12, {
+      sources: ['A', 'BB'],
+      tagPolicy: 'default',
+    });
 
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.project.list);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tm.list, undefined);
@@ -68,7 +73,12 @@ describe('createDesktopApi smoke', () => {
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.translateSegment, 'seg-1');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.refineSegment, 'seg-1', 'tone down');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.dialog.openFile, []);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.clipboard.read);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.runQA, 1);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.project.createPastedSourceFile, 12, {
+      sources: ['A', 'BB'],
+      tagPolicy: 'default',
+    });
   });
 
   it('subscribes and unsubscribes event channels correctly', () => {

@@ -15,6 +15,7 @@ type ProjectApiKeys =
   | 'getFilePreview'
   | 'deleteFile'
   | 'addFileToProject'
+  | 'createPastedSourceFile'
   | 'getSegments'
   | 'exportFile'
   | 'runFileQA'
@@ -73,6 +74,12 @@ export function createProjectApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<
       ipcRenderer.invoke(IPC_CHANNELS.project.addFile, projectId, filePath, options) as ReturnType<
         DesktopApi['addFileToProject']
       >,
+    createPastedSourceFile: (projectId, input) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.project.createPastedSourceFile,
+        projectId,
+        input,
+      ) as ReturnType<DesktopApi['createPastedSourceFile']>,
     getSegments: (fileId, offset, limit) =>
       ipcRenderer.invoke(IPC_CHANNELS.file.getSegments, fileId, offset, limit) as ReturnType<
         DesktopApi['getSegments']

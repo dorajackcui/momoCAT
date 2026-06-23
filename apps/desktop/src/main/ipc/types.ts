@@ -24,3 +24,13 @@ export interface DialogHandlerDeps {
   ipcMain: IpcMainLike;
   dialog: Pick<Dialog, 'showOpenDialog' | 'showSaveDialog'>;
 }
+
+export interface ClipboardLike {
+  readText: () => string;
+  readHTML: () => string;
+}
+
+export interface ClipboardHandlerDeps {
+  ipcMain: IpcMainLike;
+  clipboard: ClipboardLike;
+}

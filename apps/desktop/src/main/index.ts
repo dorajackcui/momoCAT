@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, shell, BrowserWindow, ipcMain, dialog, clipboard } from 'electron';
 import { join } from 'path';
 import { mkdir, readFile } from 'fs/promises';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
@@ -27,6 +27,7 @@ import { registerTMHandlers } from './ipc/tmHandlers';
 import { registerTBHandlers } from './ipc/tbHandlers';
 import { registerAIHandlers } from './ipc/aiHandlers';
 import { registerDialogHandlers } from './ipc/dialogHandlers';
+import { registerClipboardHandlers } from './ipc/clipboardHandlers';
 
 // Disable hardware acceleration to avoid crashes in some environments
 app.disableHardwareAcceleration();
@@ -194,6 +195,7 @@ app.whenReady().then(async () => {
   registerTBHandlers({ ipcMain, projectService, jobManager });
   registerAIHandlers({ ipcMain, projectService, jobManager });
   registerDialogHandlers({ ipcMain, dialog });
+  registerClipboardHandlers({ ipcMain, clipboard });
 
   // Listen for progress updates and broadcast to all windows
   projectService.onProgress((data) => {

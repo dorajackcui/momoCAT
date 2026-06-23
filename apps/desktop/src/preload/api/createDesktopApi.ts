@@ -1,5 +1,6 @@
 import type { DesktopApi } from '../../shared/ipc';
 import { createAIApi } from './aiApi';
+import { createClipboardApi } from './clipboardApi';
 import { createDialogApi } from './dialogApi';
 import { createEventApi } from './eventApi';
 import { createProjectApi } from './projectApi';
@@ -14,6 +15,7 @@ export function createDesktopApi(ipcRenderer: IpcRendererLike): DesktopApi {
     ...createTBApi(ipcRenderer),
     ...createAIApi(ipcRenderer),
     ...createDialogApi(ipcRenderer),
+    ...createClipboardApi(ipcRenderer),
     ...createEventApi(ipcRenderer),
   };
 }

@@ -9,6 +9,7 @@ export const IPC_CHANNELS = {
     remove: 'project-delete',
     getFiles: 'project-get-files',
     addFile: 'project-add-file',
+    createPastedSourceFile: 'project-create-pasted-source-file',
   },
   file: {
     get: 'file-get',
@@ -66,6 +67,9 @@ export const IPC_CHANNELS = {
   dialog: {
     openFile: 'dialog-open-file',
     saveFile: 'dialog-save-file',
+  },
+  clipboard: {
+    read: 'clipboard-read',
   },
   events: {
     segmentsUpdated: 'segments-updated',

@@ -1,6 +1,6 @@
 import type { ProjectQASettings, ProjectType } from '@cat/core/project';
 import type { SegmentStatus, Token } from '@cat/core/models';
-import type { ImportOptions } from '../../shared/ipc';
+import type { ImportOptions, PastedSourceFileInput } from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import type { MainHandlerDeps } from './types';
 
@@ -84,6 +84,21 @@ export function registerProjectHandlers({ ipcMain, projectService }: MainHandler
     const [projectId, filePath, options] = args as [number, string, ImportOptions];
     return projectService.addFileToProject(projectId, filePath, options);
   });
+
+  registerHandle(
+    { ipcMain, projectService },
+    IPC_CHANNELS.project.createPastedSourceFile,
+    (_event, ...args) => {
+      const [projectId, input] = args as [number, PastedSourceFileInput];
+      const service = projectService as typeof projectService & {
+        createPastedSourceFile: (
+          nextProjectId: number,
+          nextInput: PastedSourceFileInput,
+        ) => unknown;
+      };
+      return service.createPastedSourceFile(projectId, input);
+    },
+  );
 
   registerHandle({ ipcMain, projectService }, IPC_CHANNELS.file.getSegments, (_event, ...args) => {
     const [fileId, offset, limit] = args as [number, number, number];
