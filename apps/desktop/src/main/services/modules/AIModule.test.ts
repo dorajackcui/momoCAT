@@ -2508,6 +2508,67 @@ describe('AIModule.aiTranslateSegment', () => {
     );
     expect(transport.createResponse).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps marker-like display AI output plain under tagPolicy none', async () => {
+    const segment = createSegment({
+      segmentId: 'single-display-policy-none-1',
+      sourceText: 'Save <xxx>',
+      sourceTokens: [{ type: 'text', content: 'Save <xxx>' }],
+      targetText: '',
+      status: 'draft',
+    });
+
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({
+        id: 1,
+        projectId: 11,
+        name: 'demo.xlsx',
+        importOptionsJson: JSON.stringify({ tagPolicy: 'none' }),
+      }),
+      getProject: vi.fn().mockReturnValue({
+        id: 11,
+        srcLang: 'en',
+        tgtLang: 'es',
+        projectType: 'translation',
+        aiPrompt: '',
+        aiTemperature: 0.2,
+      }),
+    } as unknown as ProjectRepository;
+
+    const segmentRepo = {
+      getSegment: vi.fn().mockReturnValue(segment),
+    } as unknown as SegmentRepository;
+
+    const settingsRepo = createAISettingsRepository();
+
+    const segmentService = {
+      updateSegment: vi.fn().mockResolvedValue({
+        propagatedIds: [],
+        serverAppliedAt: '2026-06-12T00:00:03.000Z',
+      }),
+    } as unknown as SegmentService;
+
+    const transport = {
+      testConnection: vi.fn().mockResolvedValue({ ok: true }),
+      createResponse: vi.fn().mockResolvedValue({
+        content: 'Guardar <xxx>',
+        status: 200,
+        endpoint: '/v1/responses',
+      }),
+    } as unknown as AITransport;
+
+    const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
+    const result = await module.aiTranslateSegment('single-display-policy-none-1');
+
+    const expectedTokens = [{ type: 'text' as const, content: 'Guardar <xxx>' }];
+    expect(result.targetTokens).toEqual(expectedTokens);
+    expect(segmentService.updateSegment).toHaveBeenCalledWith(
+      'single-display-policy-none-1',
+      expectedTokens,
+      'translated',
+    );
+    expect(transport.createResponse).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('AIModule.aiRefineSegment', () => {
