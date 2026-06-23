@@ -1,4 +1,4 @@
-const INVALID_FILE_NAME_CHARS = /[<>:"/\\|?*\u0000-\u001F]/g;
+const INVALID_FILE_NAME_CHARS = new Set(['<', '>', ':', '"', '/', '\\', '|', '?', '*']);
 const MAX_SOURCE_SUMMARY_LENGTH = 40;
 
 export function normalizePastedSources(sources: string[]): string[] {
@@ -32,7 +32,9 @@ export function buildPastedSourceCsv(sources: string[]): string {
 
 function sanitizeFileSummary(source: string): string {
   return source
-    .replace(INVALID_FILE_NAME_CHARS, '')
+    .split('')
+    .filter((char) => char.charCodeAt(0) > 0x1f && !INVALID_FILE_NAME_CHARS.has(char))
+    .join('')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, MAX_SOURCE_SUMMARY_LENGTH)
