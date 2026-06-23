@@ -14,6 +14,18 @@ interface PasteSourceModalProps {
 
 const LARGE_PASTE_WARNING_THRESHOLD = 5000;
 
+export function buildPasteSourceFileInput(
+  clipboard: ClipboardContent,
+  isDirty: boolean,
+  text: string,
+  tagPolicy: TagPolicy,
+): PastedSourceFileInput {
+  return {
+    sources: parsePastedSources(isDirty ? { text } : clipboard),
+    tagPolicy,
+  };
+}
+
 export function PasteSourceModal({
   open,
   clipboard,
@@ -32,10 +44,11 @@ export function PasteSourceModal({
     setIsDirty(false);
   }, [clipboard, open]);
 
-  const sources = useMemo(
-    () => parsePastedSources(isDirty ? { text } : clipboard),
-    [clipboard, isDirty, text],
+  const input = useMemo(
+    () => buildPasteSourceFileInput(clipboard, isDirty, text, tagPolicy),
+    [clipboard, isDirty, tagPolicy, text],
   );
+  const { sources } = input;
   const previewSources = sources.slice(0, 8);
   const hasSources = sources.length > 0;
   const rowLabel = `${sources.length.toLocaleString()} source ${
@@ -55,7 +68,7 @@ export function PasteSourceModal({
             Cancel
           </Button>
           <Button
-            onClick={() => void onCreate({ sources, tagPolicy })}
+            onClick={() => void onCreate(input)}
             variant="primary"
             size="lg"
             loading={creating}

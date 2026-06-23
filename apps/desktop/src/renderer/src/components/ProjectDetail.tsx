@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { DEFAULT_PROJECT_QA_SETTINGS, type ProjectQASettings } from '@cat/core/project';
 import type { ProjectFileRecord } from '../../../shared/ipc';
 import { ColumnSelector } from './ColumnSelector';
@@ -41,6 +41,7 @@ export function ProjectDetail({
   const [qaSettingsDraft, setQaSettingsDraft] = useState<ProjectQASettings>(
     DEFAULT_PROJECT_QA_SETTINGS,
   );
+  const addFileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const {
     project,
@@ -88,6 +89,32 @@ export function ProjectDetail({
       void loadTBData();
     }
   }, [activeTab, loadTBData, loadTMData]);
+
+  useEffect(() => {
+    if (!fileImport.isAddFileMenuOpen) return;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        fileImport.closeAddFileMenu();
+      }
+    };
+
+    const closeOnOutsidePointer = (event: PointerEvent | MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Node && addFileMenuRef.current?.contains(target)) return;
+      fileImport.closeAddFileMenu();
+    };
+
+    document.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('mousedown', closeOnOutsidePointer);
+
+    return () => {
+      document.removeEventListener('keydown', closeOnEscape);
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('mousedown', closeOnOutsidePointer);
+    };
+  }, [fileImport]);
 
   const openCommitModal = async (file: ProjectFileRecord) => {
     const currentMountedTMs = await loadMountedTMs();
@@ -414,20 +441,26 @@ export function ProjectDetail({
                   QA Settings
                 </button>
               )}
-              <div className="relative">
+              <div className="relative" ref={addFileMenuRef}>
                 <button
                   onClick={fileImport.toggleAddFileMenu}
                   disabled={loading}
                   className="btn-primary"
+                  aria-haspopup="menu"
+                  aria-expanded={fileImport.isAddFileMenuOpen}
                 >
                   + Add File
                 </button>
                 {fileImport.isAddFileMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-40 surface-card p-1 shadow-float z-20">
+                  <div
+                    className="absolute right-0 mt-2 w-40 surface-card p-1 shadow-float z-20"
+                    role="menu"
+                  >
                     <button
                       type="button"
                       onClick={() => void fileImport.openFileImport()}
                       className="w-full text-left px-3 py-2 text-sm font-semibold text-text-muted hover:text-text hover:bg-muted rounded-control"
+                      role="menuitem"
                     >
                       Import
                     </button>
@@ -435,6 +468,7 @@ export function ProjectDetail({
                       type="button"
                       onClick={() => void fileImport.openPasteSource()}
                       className="w-full text-left px-3 py-2 text-sm font-semibold text-text-muted hover:text-text hover:bg-muted rounded-control"
+                      role="menuitem"
                     >
                       Paste
                     </button>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React from 'react';
 import type {
   ClipboardContent,
   ImportOptions,
@@ -36,13 +36,17 @@ export function useProjectFileImport({
   loadData,
   runMutation,
 }: UseProjectFileImportParams): UseProjectFileImportResult {
-  const [isSelectorOpen, setIsSelectorOpen] = useState(false);
-  const [isAddFileMenuOpen, setIsAddFileMenuOpen] = useState(false);
-  const [isPasteSourceOpen, setIsPasteSourceOpen] = useState(false);
-  const [pendingFilePath, setPendingFilePath] = useState<string | null>(null);
-  const [previewData, setPreviewData] = useState<SpreadsheetPreviewData>([]);
-  const [pasteClipboard, setPasteClipboard] = useState<ClipboardContent>({ text: '', html: '' });
-  const [pasteCreating, setPasteCreating] = useState(false);
+  const [isSelectorOpen, setIsSelectorOpen] = React.useState(false);
+  const [isAddFileMenuOpen, setIsAddFileMenuOpen] = React.useState(false);
+  const [isPasteSourceOpen, setIsPasteSourceOpen] = React.useState(false);
+  const [pendingFilePath, setPendingFilePath] = React.useState<string | null>(null);
+  const [previewData, setPreviewData] = React.useState<SpreadsheetPreviewData>([]);
+  const [pasteClipboard, setPasteClipboard] = React.useState<ClipboardContent>({
+    text: '',
+    html: '',
+  });
+  const [pasteCreating, setPasteCreating] = React.useState(false);
+  const pasteCreatingRef = React.useRef(false);
 
   const toggleAddFileMenu = () => {
     setIsAddFileMenuOpen((open) => !open);
@@ -89,7 +93,7 @@ export function useProjectFileImport({
   };
 
   const closePasteSource = () => {
-    if (pasteCreating) return;
+    if (pasteCreatingRef.current || pasteCreating) return;
     setIsPasteSourceOpen(false);
   };
 
@@ -110,6 +114,8 @@ export function useProjectFileImport({
   };
 
   const confirmPasteSource = async (input: PastedSourceFileInput) => {
+    if (pasteCreatingRef.current) return;
+    pasteCreatingRef.current = true;
     setPasteCreating(true);
     try {
       await runMutation(async () => {
@@ -123,6 +129,7 @@ export function useProjectFileImport({
         `Failed to create file: ${error instanceof Error ? error.message : String(error)}`,
       );
     } finally {
+      pasteCreatingRef.current = false;
       setPasteCreating(false);
     }
   };
