@@ -595,6 +595,87 @@ describe('AIModule.aiTranslateFile', () => {
     ).toEqual(['<Yellow_20>', '{1}', '</>', '<Yellow_20>', '</>']);
   });
 
+  it('keeps localization tagPolicy none targets as plain marker-like text', async () => {
+    const sourceText = 'Save <xxx>';
+    const targetText = 'Guardar <xxx>';
+    const segments: Segment[] = [
+      createSegment({
+        segmentId: 'loc-policy-none-1',
+        sourceText,
+        sourceTokens: [{ type: 'text', content: sourceText }],
+        orderIndex: 0,
+      }),
+    ];
+
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({
+        id: 1,
+        projectId: 11,
+        name: 'demo.xlsx',
+        importOptionsJson: JSON.stringify({ tagPolicy: 'none' }),
+      }),
+      getProject: vi.fn().mockReturnValue({
+        id: 11,
+        srcLang: 'en',
+        tgtLang: 'es',
+        projectType: 'translation',
+        aiPrompt: '',
+        aiTemperature: 0.2,
+        aiModel: TEST_PROVIDER_ID,
+      }),
+    } as unknown as ProjectRepository;
+    const segmentRepo = {
+      getSegmentsPage: vi.fn().mockReturnValue(segments),
+    } as unknown as SegmentRepository;
+    const segmentService = {
+      updateSegment: vi.fn().mockResolvedValue(undefined),
+    } as unknown as SegmentService;
+    const transport = {
+      testConnection: vi.fn().mockResolvedValue({ ok: true }),
+      createResponse: vi.fn(),
+    } as unknown as AITransport;
+    const localizationEngine = {
+      translateProjectSegments: vi.fn(async (input: TranslateProjectSegmentsInput) => {
+        await input.onResult?.({
+          id: 'loc-policy-none-1',
+          source: sourceText,
+          target: targetText,
+          status: 'translated',
+          metadata: { segmentId: 'loc-policy-none-1' },
+        });
+        return {
+          summary: { total: 1, translated: 1, reused: 0, skipped: 0, failed: 0 },
+          results: [],
+        };
+      }),
+    };
+
+    const module = new AIModule(
+      projectRepo,
+      segmentRepo,
+      createAISettingsRepository(),
+      segmentService,
+      transport,
+      undefined,
+      undefined,
+      undefined,
+      localizationEngine,
+    );
+
+    const result = await module.aiTranslateFile(1);
+
+    expect(result).toEqual({ translated: 1, skipped: 0, failed: 0, total: 1 });
+    const input = localizationEngine.translateProjectSegments.mock.calls[0][0];
+    expect(input.options?.tagPolicy).toBe('none');
+    const expectedTokens = [{ type: 'text' as const, content: targetText }];
+    expect(segmentService.updateSegment).toHaveBeenCalledWith(
+      'loc-policy-none-1',
+      expectedTokens,
+      'translated',
+    );
+    expect(transport.createResponse).not.toHaveBeenCalled();
+  });
+
   it('passes target baseline to localization so the engine can ignore current targets', async () => {
     const segments: Segment[] = [
       createSegment({
@@ -728,6 +809,69 @@ describe('AIModule.aiTranslateFile', () => {
     const translatedTokens = (segmentService.updateSegment as ReturnType<typeof vi.fn>).mock
       .calls[0][1];
     expect(serializeTokensToDisplayText(translatedTokens)).toBe('浣犲ソ涓栫晫');
+  });
+
+  it('keeps standard file tag policy none AI output as plain marker-like text', async () => {
+    const sourceText = 'Save <xxx>';
+    const targetText = 'Guardar <xxx>';
+    const segments: Segment[] = [
+      createSegment({
+        segmentId: 'standard-policy-none-1',
+        sourceText,
+        sourceTokens: [{ type: 'text', content: sourceText }],
+        targetText: '',
+        status: 'new',
+      }),
+    ];
+
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({
+        id: 1,
+        projectId: 11,
+        name: 'demo.xlsx',
+        importOptionsJson: JSON.stringify({ tagPolicy: 'none' }),
+      }),
+      getProject: vi.fn().mockReturnValue({
+        id: 11,
+        srcLang: 'en',
+        tgtLang: 'es',
+        aiPrompt: '',
+        aiTemperature: 0.2,
+        projectType: 'translation',
+      }),
+    } as unknown as ProjectRepository;
+
+    const segmentRepo = {
+      getSegmentsPage: vi.fn().mockReturnValue(segments),
+    } as unknown as SegmentRepository;
+
+    const settingsRepo = createAISettingsRepository();
+
+    const segmentService = {
+      updateSegment: vi.fn().mockResolvedValue(undefined),
+    } as unknown as SegmentService;
+
+    const transport = {
+      testConnection: vi.fn().mockResolvedValue({ ok: true }),
+      createResponse: vi.fn().mockResolvedValue({
+        content: targetText,
+        status: 200,
+        endpoint: '/v1/responses',
+      }),
+    } as unknown as AITransport;
+
+    const module = new AIModule(projectRepo, segmentRepo, settingsRepo, segmentService, transport);
+
+    const result = await module.aiTranslateFile(1);
+
+    expect(result).toEqual({ translated: 1, skipped: 0, failed: 0, total: 1 });
+    const expectedTokens = [{ type: 'text' as const, content: targetText }];
+    expect(segmentService.updateSegment).toHaveBeenCalledWith(
+      'standard-policy-none-1',
+      expectedTokens,
+      'translated',
+    );
+    expect(transport.createResponse).toHaveBeenCalledTimes(1);
   });
 
   it('keeps blank-only as default target scope', async () => {
