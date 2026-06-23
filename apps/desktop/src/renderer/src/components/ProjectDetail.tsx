@@ -14,6 +14,7 @@ import { ProjectFilesPane } from './project-detail/ProjectFilesPane';
 import { ProjectTMPane } from './project-detail/ProjectTMPane';
 import { ProjectTBPane } from './project-detail/ProjectTBPane';
 import { ProjectQASettingsModal } from './project-detail/ProjectQASettingsModal';
+import { PasteSourceModal } from './project-detail/PasteSourceModal';
 import { runFileQaWithRefresh } from './project-detail/runFileQaWithRefresh';
 import { buildFileQaFeedback } from './project-detail/fileQaFeedback';
 
@@ -280,6 +281,14 @@ export function ProjectDetail({
         projectType={project?.projectType || 'translation'}
       />
 
+      <PasteSourceModal
+        open={fileImport.isPasteSourceOpen}
+        clipboard={fileImport.pasteClipboard}
+        creating={fileImport.pasteCreating}
+        onClose={fileImport.closePasteSource}
+        onCreate={(input) => void fileImport.confirmPasteSource(input)}
+      />
+
       <ProjectCommitModal
         file={commitModalFile}
         mountedTMs={mountedTMs}
@@ -405,13 +414,33 @@ export function ProjectDetail({
                   QA Settings
                 </button>
               )}
-              <button
-                onClick={() => void fileImport.openFileImport()}
-                disabled={loading}
-                className="btn-primary"
-              >
-                + Add File
-              </button>
+              <div className="relative">
+                <button
+                  onClick={fileImport.toggleAddFileMenu}
+                  disabled={loading}
+                  className="btn-primary"
+                >
+                  + Add File
+                </button>
+                {fileImport.isAddFileMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-40 surface-card p-1 shadow-float z-20">
+                    <button
+                      type="button"
+                      onClick={() => void fileImport.openFileImport()}
+                      className="w-full text-left px-3 py-2 text-sm font-semibold text-text-muted hover:text-text hover:bg-muted rounded-control"
+                    >
+                      Import
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void fileImport.openPasteSource()}
+                      className="w-full text-left px-3 py-2 text-sm font-semibold text-text-muted hover:text-text hover:bg-muted rounded-control"
+                    >
+                      Paste
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

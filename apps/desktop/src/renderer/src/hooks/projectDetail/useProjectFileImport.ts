@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import type { ImportOptions, SpreadsheetPreviewData } from '../../../../shared/ipc';
+import type {
+  ClipboardContent,
+  ImportOptions,
+  PastedSourceFileInput,
+  SpreadsheetPreviewData,
+} from '../../../../shared/ipc';
 import { apiClient } from '../../services/apiClient';
 import { feedbackService } from '../../services/feedbackService';
 
@@ -11,10 +16,19 @@ interface UseProjectFileImportParams {
 
 interface UseProjectFileImportResult {
   isSelectorOpen: boolean;
+  isAddFileMenuOpen: boolean;
+  isPasteSourceOpen: boolean;
   previewData: SpreadsheetPreviewData;
+  pasteClipboard: ClipboardContent;
+  pasteCreating: boolean;
+  toggleAddFileMenu: () => void;
+  closeAddFileMenu: () => void;
   openFileImport: () => Promise<void>;
+  openPasteSource: () => Promise<void>;
   closeSelector: () => void;
+  closePasteSource: () => void;
   confirmImport: (options: ImportOptions) => Promise<void>;
+  confirmPasteSource: (input: PastedSourceFileInput) => Promise<void>;
 }
 
 export function useProjectFileImport({
@@ -23,10 +37,23 @@ export function useProjectFileImport({
   runMutation,
 }: UseProjectFileImportParams): UseProjectFileImportResult {
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
+  const [isAddFileMenuOpen, setIsAddFileMenuOpen] = useState(false);
+  const [isPasteSourceOpen, setIsPasteSourceOpen] = useState(false);
   const [pendingFilePath, setPendingFilePath] = useState<string | null>(null);
   const [previewData, setPreviewData] = useState<SpreadsheetPreviewData>([]);
+  const [pasteClipboard, setPasteClipboard] = useState<ClipboardContent>({ text: '', html: '' });
+  const [pasteCreating, setPasteCreating] = useState(false);
+
+  const toggleAddFileMenu = () => {
+    setIsAddFileMenuOpen((open) => !open);
+  };
+
+  const closeAddFileMenu = () => {
+    setIsAddFileMenuOpen(false);
+  };
 
   const openFileImport = async () => {
+    setIsAddFileMenuOpen(false);
     const filePath = await apiClient.openFileDialog([
       { name: 'Spreadsheets', extensions: ['xlsx', 'csv'] },
     ]);
@@ -50,6 +77,22 @@ export function useProjectFileImport({
     setIsSelectorOpen(false);
   };
 
+  const openPasteSource = async () => {
+    setIsAddFileMenuOpen(false);
+    try {
+      const clipboard = await apiClient.readClipboard();
+      setPasteClipboard(clipboard);
+    } catch {
+      setPasteClipboard({ text: '', html: '' });
+    }
+    setIsPasteSourceOpen(true);
+  };
+
+  const closePasteSource = () => {
+    if (pasteCreating) return;
+    setIsPasteSourceOpen(false);
+  };
+
   const confirmImport = async (options: ImportOptions) => {
     if (!pendingFilePath) return;
     try {
@@ -66,11 +109,38 @@ export function useProjectFileImport({
     }
   };
 
+  const confirmPasteSource = async (input: PastedSourceFileInput) => {
+    setPasteCreating(true);
+    try {
+      await runMutation(async () => {
+        await apiClient.createPastedSourceFile(projectId, input);
+        await loadData();
+      });
+      feedbackService.success('File created from pasted source');
+      setIsPasteSourceOpen(false);
+    } catch (error) {
+      feedbackService.error(
+        `Failed to create file: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setPasteCreating(false);
+    }
+  };
+
   return {
     isSelectorOpen,
+    isAddFileMenuOpen,
+    isPasteSourceOpen,
     previewData,
+    pasteClipboard,
+    pasteCreating,
+    toggleAddFileMenu,
+    closeAddFileMenu,
     openFileImport,
+    openPasteSource,
     closeSelector,
+    closePasteSource,
     confirmImport,
+    confirmPasteSource,
   };
 }
