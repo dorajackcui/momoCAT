@@ -31,6 +31,7 @@ describe('fileTagPolicy', () => {
     expect(parseFileImportOptions({ importOptionsJson: '' })).toBeUndefined();
     expect(parseFileImportOptions({ importOptionsJson: 'null' })).toBeUndefined();
     expect(parseFileImportOptions({ importOptionsJson: '[]' })).toBeUndefined();
+    expect(parseFileImportOptions({ importOptionsJson: '{}' })).toBeUndefined();
     expect(parseFileImportOptions({ importOptionsJson: '{bad json' })).toBeUndefined();
     expect(parseFileImportOptions()).toBeUndefined();
   });

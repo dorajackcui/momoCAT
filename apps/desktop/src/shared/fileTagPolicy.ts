@@ -22,7 +22,12 @@ export function parseFileImportOptions(
 
   try {
     const parsed: unknown = JSON.parse(file.importOptionsJson);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      Array.isArray(parsed) ||
+      Object.keys(parsed).length === 0
+    ) {
       return undefined;
     }
 
