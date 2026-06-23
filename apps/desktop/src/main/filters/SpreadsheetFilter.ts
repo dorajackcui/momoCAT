@@ -7,6 +7,7 @@ import { computeMatchKey, computeSrcHash } from '@cat/core/text';
 import { randomUUID } from 'crypto';
 import { extractSheetRows, SheetCellValue } from './sheetRows';
 import type { ImportOptions } from '../../shared/ipc';
+import { resolveImportOptionsTagPolicy } from '../../shared/fileTagPolicy';
 
 export class SpreadsheetFilter {
   private async readWorkbook(filePath: string) {
@@ -32,6 +33,7 @@ export class SpreadsheetFilter {
   ): Promise<Segment[]> {
     void projectId;
     console.log(`[SpreadsheetFilter] Reading file: ${filePath}`);
+    const tagPolicy = resolveImportOptionsTagPolicy(options);
     const workbook = await this.readWorkbook(filePath);
     const firstSheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[firstSheetName];
@@ -65,8 +67,8 @@ export class SpreadsheetFilter {
           ? this.toCellText(row.cells[options.contextCol])
           : undefined;
 
-      const sourceTokens = parseDisplayTextToTokens(sourceText);
-      const targetTokens = targetText ? parseDisplayTextToTokens(targetText) : [];
+      const sourceTokens = parseDisplayTextToTokens(sourceText, { tagPolicy });
+      const targetTokens = targetText ? parseDisplayTextToTokens(targetText, { tagPolicy }) : [];
 
       const tagsSignature = computeTagsSignature(sourceTokens);
       const matchKey = computeMatchKey(sourceTokens);

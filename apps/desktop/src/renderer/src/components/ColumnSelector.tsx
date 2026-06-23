@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { ProjectType } from '@cat/core/project';
+import type { TagPolicy } from '@cat/core/tag';
 import type { ImportOptions, SpreadsheetPreviewData } from '../../../shared/ipc';
 import { resolveDefaultContextColumn } from '../../../shared/importColumnDefaults';
 import { Button, Card, IconButton, Select } from './ui';
@@ -23,6 +24,7 @@ export function ColumnSelector({
   const [sourceCol, setSourceCol] = useState(0);
   const [targetCol, setTargetCol] = useState(1);
   const [contextCol, setContextCol] = useState<number | undefined>(undefined);
+  const [tagPolicy, setTagPolicy] = useState<TagPolicy>('default');
 
   const isReviewProject = projectType === 'review';
   const isCustomProject = projectType === 'custom';
@@ -165,20 +167,33 @@ export function ColumnSelector({
 
           <Card
             variant="subtle"
-            className="mb-6 p-4 flex items-center gap-3 border-brand/20 bg-brand-soft/50"
+            className="mb-6 p-4 flex flex-wrap items-center justify-between gap-4 border-brand/20 bg-brand-soft/50"
           >
-            <input
-              type="checkbox"
-              id="hasHeader"
-              checked={hasHeader}
-              onChange={(e) => setHasHeader(e.target.checked)}
-              className="w-4 h-4 accent-brand"
-            />
-            <label
-              htmlFor="hasHeader"
-              className="text-sm font-medium text-text-muted cursor-pointer select-none"
-            >
-              First row is a header (Skip it)
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="hasHeader"
+                checked={hasHeader}
+                onChange={(e) => setHasHeader(e.target.checked)}
+                className="w-4 h-4 accent-brand"
+              />
+              <label
+                htmlFor="hasHeader"
+                className="text-sm font-medium text-text-muted cursor-pointer select-none"
+              >
+                First row is a header (Skip it)
+              </label>
+            </div>
+            <label className="flex items-center gap-3 text-sm font-medium text-text-muted">
+              <span>Marker Handling</span>
+              <Select
+                value={tagPolicy}
+                onChange={(e) => setTagPolicy(e.target.value as TagPolicy)}
+                className="!w-auto min-w-[180px] !p-2"
+              >
+                <option value="default">Protect CAT markers</option>
+                <option value="none">Plain marker-like text</option>
+              </Select>
             </label>
           </Card>
 
@@ -258,6 +273,7 @@ export function ColumnSelector({
                 sourceCol,
                 targetCol,
                 contextCol: isReviewProject ? (contextCol ?? 0) : contextCol,
+                tagPolicy,
               })
             }
             variant="primary"
