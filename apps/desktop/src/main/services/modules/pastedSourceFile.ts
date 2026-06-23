@@ -1,5 +1,5 @@
 const INVALID_FILE_NAME_CHARS = /[<>:"/\\|?*\u0000-\u001F]/g;
-const MAX_SOURCE_SUMMARY_LENGTH = 45;
+const MAX_SOURCE_SUMMARY_LENGTH = 40;
 
 export function normalizePastedSources(sources: string[]): string[] {
   return sources.map((source) => source.trim()).filter((source) => source.length > 0);

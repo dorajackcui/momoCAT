@@ -20,7 +20,7 @@ describe('pasted source file helpers', () => {
 
   it('truncates long source summaries and resolves duplicate file names', () => {
     const now = new Date('2026-06-23T08:30:00.000Z');
-    const existing = ['This is a very long source title that should-2026-06-23-08-30.csv'];
+    const existing = ['This is a very long source title that sh-2026-06-23-08-30.csv'];
 
     expect(
       buildPastedSourceFileName(
@@ -28,7 +28,7 @@ describe('pasted source file helpers', () => {
         now,
         existing,
       ),
-    ).toBe('This is a very long source title that should-2026-06-23-08-30-2.csv');
+    ).toBe('This is a very long source title that sh-2026-06-23-08-30-2.csv');
   });
 
   it('falls back when the first source cannot produce a name', () => {
