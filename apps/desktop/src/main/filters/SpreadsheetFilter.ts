@@ -12,7 +12,11 @@ import { resolveImportOptionsTagPolicy } from '../../shared/fileTagPolicy';
 export class SpreadsheetFilter {
   private async readWorkbook(filePath: string) {
     const fileBuffer = await readFile(filePath);
-    return XLSX.read(fileBuffer, { type: 'buffer' });
+    const extension = extname(filePath).toLowerCase();
+    return XLSX.read(fileBuffer, {
+      type: 'buffer',
+      ...(extension === '.csv' ? { raw: true } : {}),
+    });
   }
 
   private detectBookType(filePath: string): XLSX.BookType {
