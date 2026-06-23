@@ -3,9 +3,20 @@ import type { ProjectService } from '../services/ProjectService';
 import type { JobManager } from '../JobManager';
 
 export interface IpcMainLike {
-  handle: (channel: string, listener: (event: unknown, ...args: unknown[]) => unknown) => void;
+  handle: (channel: string, listener: IpcMainListener) => void;
   removeHandler?: (channel: string) => void;
 }
+
+export interface IpcMainInvokeEventLike {
+  senderFrame?: {
+    url: string;
+  } | null;
+}
+
+export type IpcMainListener = (
+  event: IpcMainInvokeEventLike,
+  ...args: unknown[]
+) => unknown;
 
 export interface MainHandlerDeps {
   ipcMain: IpcMainLike;

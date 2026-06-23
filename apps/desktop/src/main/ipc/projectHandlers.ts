@@ -2,16 +2,8 @@ import type { ProjectQASettings, ProjectType } from '@cat/core/project';
 import type { SegmentStatus, Token } from '@cat/core/models';
 import type { ImportOptions, PastedSourceFileInput } from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
+import { registerHandle } from './registerHandle';
 import type { MainHandlerDeps } from './types';
-
-function registerHandle(
-  deps: MainHandlerDeps,
-  channel: string,
-  listener: (event: unknown, ...args: unknown[]) => unknown,
-) {
-  deps.ipcMain.removeHandler?.(channel);
-  deps.ipcMain.handle(channel, listener);
-}
 
 export function registerProjectHandlers({ ipcMain, projectService }: MainHandlerDeps): void {
   registerHandle({ ipcMain, projectService }, IPC_CHANNELS.project.list, () =>

@@ -1,16 +1,8 @@
 import { randomUUID } from 'crypto';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import type { AITranslateFileOptions } from '../../shared/ipc';
+import { registerHandle } from './registerHandle';
 import type { AIHandlerDeps } from './types';
-
-function registerHandle(
-  deps: AIHandlerDeps,
-  channel: string,
-  listener: (event: unknown, ...args: unknown[]) => unknown,
-) {
-  deps.ipcMain.removeHandler?.(channel);
-  deps.ipcMain.handle(channel, listener);
-}
 
 export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHandlerDeps): void {
   registerHandle({ ipcMain, projectService, jobManager }, IPC_CHANNELS.ai.getSettings, () =>

@@ -2,16 +2,8 @@ import { randomUUID } from 'crypto';
 import type { Segment } from '@cat/core/models';
 import type { StructuredJobError, TMImportOptions, TMType } from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
+import { registerHandle } from './registerHandle';
 import type { JobBackedHandlerDeps } from './types';
-
-function registerHandle(
-  deps: JobBackedHandlerDeps,
-  channel: string,
-  listener: (event: unknown, ...args: unknown[]) => unknown,
-) {
-  deps.ipcMain.removeHandler?.(channel);
-  deps.ipcMain.handle(channel, listener);
-}
 
 export function registerTMHandlers({
   ipcMain,

@@ -67,9 +67,9 @@ export function useProjectFileImport({
     setIsAddFileMenuOpen((open) => !open);
   };
 
-  const closeAddFileMenu = () => {
+  const closeAddFileMenu = React.useCallback(() => {
     setIsAddFileMenuOpen(false);
-  };
+  }, []);
 
   const openFileImport = async () => {
     setIsAddFileMenuOpen(false);

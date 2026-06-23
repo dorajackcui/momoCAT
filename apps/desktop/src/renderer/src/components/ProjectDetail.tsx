@@ -70,6 +70,7 @@ export function ProjectDetail({
     loadData,
     runMutation,
   });
+  const { closeAddFileMenu, isAddFileMenuOpen } = fileImport;
 
   const ai = useProjectAI({
     project,
@@ -91,18 +92,18 @@ export function ProjectDetail({
   }, [activeTab, loadTBData, loadTMData]);
 
   useEffect(() => {
-    if (!fileImport.isAddFileMenuOpen) return;
+    if (!isAddFileMenuOpen) return;
 
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        fileImport.closeAddFileMenu();
+        closeAddFileMenu();
       }
     };
 
     const closeOnOutsidePointer = (event: PointerEvent | MouseEvent) => {
       const target = event.target;
       if (target instanceof Node && addFileMenuRef.current?.contains(target)) return;
-      fileImport.closeAddFileMenu();
+      closeAddFileMenu();
     };
 
     document.addEventListener('keydown', closeOnEscape);
@@ -114,7 +115,7 @@ export function ProjectDetail({
       document.removeEventListener('pointerdown', closeOnOutsidePointer);
       document.removeEventListener('mousedown', closeOnOutsidePointer);
     };
-  }, [fileImport]);
+  }, [closeAddFileMenu, isAddFileMenuOpen]);
 
   const openCommitModal = async (file: ProjectFileRecord) => {
     const currentMountedTMs = await loadMountedTMs();

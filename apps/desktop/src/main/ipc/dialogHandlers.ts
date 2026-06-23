@@ -1,15 +1,7 @@
 import type { DialogFileFilter } from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
+import { registerHandle } from './registerHandle';
 import type { DialogHandlerDeps } from './types';
-
-function registerHandle(
-  deps: DialogHandlerDeps,
-  channel: string,
-  listener: (event: unknown, ...args: unknown[]) => unknown,
-) {
-  deps.ipcMain.removeHandler?.(channel);
-  deps.ipcMain.handle(channel, listener);
-}
 
 export function registerDialogHandlers({ ipcMain, dialog }: DialogHandlerDeps): void {
   registerHandle({ ipcMain, dialog }, IPC_CHANNELS.dialog.openFile, async (_event, ...args) => {
