@@ -217,7 +217,7 @@ describe('ProjectFileModule.createPastedSourceFile', () => {
     const file = await module.createPastedSourceFile(
       1,
       { sources: ['A', 'B, C'], tagPolicy: 'none' },
-      new Date('2026-06-23T08:30:00.000Z'),
+      new Date(2026, 5, 23, 8, 30),
     );
 
     expect(file.id).toBe(createdFileId);
