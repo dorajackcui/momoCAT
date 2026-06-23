@@ -2,10 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_PROJECT_QA_SETTINGS, type SegmentQaRuleId } from '@cat/core/project';
 import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import { TagValidator } from '@cat/core/qa';
-import { parseEditorTextToTokens, serializeTokensToEditorText } from '@cat/core/tag';
+import { serializeTokensToEditorText, type TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { AISegmentTranslateResult } from '../../../shared/ipc';
 import { useActiveSegmentMatches } from './editor/useActiveSegmentMatches';
+import {
+  appendTermToTargetTokens,
+  normalizeEditorInputText,
+  parseTargetEditorText,
+} from './editor/editorTokenPolicy';
 import { createSegmentPersistor, useSegmentPersistence } from './editor/useSegmentPersistence';
 import { useEditorDataLoader } from './editor/useEditorDataLoader';
 import { useSegmentQaWorkflow } from './editor/useSegmentQaWorkflow';
@@ -68,6 +73,7 @@ export function useEditor({ activeFileId }: UseEditorProps) {
   const [enabledQaRuleIds, setEnabledQaRuleIds] = useState<SegmentQaRuleId[]>(
     DEFAULT_PROJECT_QA_SETTINGS.enabledRuleIds,
   );
+  const [fileTagPolicy, setFileTagPolicy] = useState<TagPolicy>('default');
   const [instantQaOnConfirm, setInstantQaOnConfirm] = useState<boolean>(
     DEFAULT_PROJECT_QA_SETTINGS.instantQaOnConfirm,
   );
@@ -162,6 +168,7 @@ export function useEditor({ activeFileId }: UseEditorProps) {
     setProjectTgtLang,
     setEnabledQaRuleIds,
     setInstantQaOnConfirm,
+    setFileTagPolicy,
     setSegmentSaveErrors,
     setAiTranslatingSegmentIds,
     setActiveSegmentId,
@@ -221,8 +228,8 @@ export function useEditor({ activeFileId }: UseEditorProps) {
     (segmentId: string, text: string) => {
       try {
         applyOptimisticSegmentUpdate(segmentId, (segment) => {
-          const normalizedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-          const tokens = parseEditorTextToTokens(normalizedText, segment.sourceTokens);
+          const normalizedText = normalizeEditorInputText(text);
+          const tokens = parseTargetEditorText(normalizedText, segment.sourceTokens, fileTagPolicy);
           const nextStatus: SegmentStatus = normalizedText.trim() ? 'draft' : 'new';
           return {
             ...segment,
@@ -238,7 +245,7 @@ export function useEditor({ activeFileId }: UseEditorProps) {
         console.error('Text:', text);
       }
     },
-    [applyOptimisticSegmentUpdate],
+    [applyOptimisticSegmentUpdate, fileTagPolicy],
   );
 
   const handleSegmentEditStateChange = useCallback(
@@ -278,24 +285,15 @@ export function useEditor({ activeFileId }: UseEditorProps) {
     [activeSegmentId, applyOptimisticSegmentUpdate],
   );
 
-  const shouldInsertSpace = useCallback((current: string, term: string): boolean => {
-    const left = current.slice(-1);
-    const right = term.slice(0, 1);
-    if (!left || !right) return false;
-    return /[A-Za-z0-9]$/.test(left) && /^[A-Za-z0-9]/.test(right);
-  }, []);
-
   const handleApplyTerm = useCallback(
     (term: string) => {
       if (!activeSegmentId) return;
 
       applyOptimisticSegmentUpdate(activeSegmentId, (segment) => {
-        const currentText = serializeTokensToEditorText(segment.targetTokens, segment.sourceTokens)
-          .replace(/\r\n/g, '\n')
-          .replace(/\r/g, '\n');
-        const spacer = shouldInsertSpace(currentText, term) ? ' ' : '';
-        const nextText = `${currentText}${spacer}${term}`;
-        const nextTokens = parseEditorTextToTokens(nextText, segment.sourceTokens);
+        const nextTokens = appendTermToTargetTokens(segment, term, fileTagPolicy);
+        const nextText = normalizeEditorInputText(
+          serializeTokensToEditorText(nextTokens, segment.sourceTokens),
+        );
         const nextStatus: SegmentStatus = nextText.trim() ? 'draft' : 'new';
 
         return {
@@ -307,7 +305,7 @@ export function useEditor({ activeFileId }: UseEditorProps) {
         };
       });
     },
-    [activeSegmentId, applyOptimisticSegmentUpdate, shouldInsertSpace],
+    [activeSegmentId, applyOptimisticSegmentUpdate, fileTagPolicy],
   );
 
   const getActiveSegment = () => segments.find((segment) => segment.segmentId === activeSegmentId);

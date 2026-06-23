@@ -3,7 +3,9 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import type { SegmentQaRuleId } from '@cat/core/project';
 import { DEFAULT_PROJECT_QA_SETTINGS } from '@cat/core/project';
+import type { TagPolicy } from '@cat/core/tag';
 import type { SegmentsUpdatedEvent } from '../../../../shared/ipc';
+import { resolveFileTagPolicy } from '../../../../shared/fileTagPolicy';
 import { apiClient } from '../../services/apiClient';
 
 const SEGMENT_PAGE_SIZE = 1000;
@@ -17,6 +19,7 @@ interface UseEditorDataLoaderParams {
   setProjectTgtLang: Dispatch<SetStateAction<string | null>>;
   setEnabledQaRuleIds: Dispatch<SetStateAction<SegmentQaRuleId[]>>;
   setInstantQaOnConfirm: Dispatch<SetStateAction<boolean>>;
+  setFileTagPolicy: Dispatch<SetStateAction<TagPolicy>>;
   setSegmentSaveErrors: Dispatch<SetStateAction<Record<string, string>>>;
   setAiTranslatingSegmentIds: Dispatch<SetStateAction<Record<string, boolean>>>;
   setActiveSegmentId: Dispatch<SetStateAction<string | null>>;
@@ -86,6 +89,7 @@ export function useEditorDataLoader({
   setProjectTgtLang,
   setEnabledQaRuleIds,
   setInstantQaOnConfirm,
+  setFileTagPolicy,
   setSegmentSaveErrors,
   setAiTranslatingSegmentIds,
   setActiveSegmentId,
@@ -165,6 +169,7 @@ export function useEditorDataLoader({
       setProjectTgtLang(null);
       setEnabledQaRuleIds(DEFAULT_PROJECT_QA_SETTINGS.enabledRuleIds);
       setInstantQaOnConfirm(DEFAULT_PROJECT_QA_SETTINGS.instantQaOnConfirm);
+      setFileTagPolicy('default');
       setSegmentSaveErrors({});
       setAiTranslatingSegmentIds({});
       clearPersistQueue();
@@ -175,6 +180,7 @@ export function useEditorDataLoader({
     setLoading(true);
     try {
       const file = await apiClient.getFile(activeFileId);
+      setFileTagPolicy(file ? resolveFileTagPolicy(file) : 'default');
       if (file) {
         setProjectId(file.projectId);
         const project = await apiClient.getProject(file.projectId);
@@ -244,6 +250,7 @@ export function useEditorDataLoader({
     setActiveSegmentId,
     setAiTranslatingSegmentIds,
     setEnabledQaRuleIds,
+    setFileTagPolicy,
     setInstantQaOnConfirm,
     setLoading,
     setProjectId,
