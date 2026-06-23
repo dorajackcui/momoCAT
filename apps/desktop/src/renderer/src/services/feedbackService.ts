@@ -19,8 +19,11 @@ export interface ConfirmOptions {
 
 export type ConfirmRequestInput = string | ConfirmOptions;
 
+export type NotifyTone = 'info' | 'success' | 'error';
+
 interface FeedbackHandlers {
   confirm?: (request: ConfirmOptions) => Promise<boolean>;
+  notify?: (message: string, tone: NotifyTone) => void;
 }
 
 let feedbackHandlers: FeedbackHandlers = {};
@@ -52,7 +55,12 @@ export function isConfirmRequirementMet(
   return !request.requiredText || typedValue === request.requiredText;
 }
 
-const showAlert = (message: string): void => {
+const showNotification = (message: string, tone: NotifyTone): void => {
+  if (feedbackHandlers.notify) {
+    feedbackHandlers.notify(message, tone);
+    return;
+  }
+
   if (typeof window !== 'undefined' && typeof window.alert === 'function') {
     window.alert(message);
     return;
@@ -78,8 +86,8 @@ const showConfirm = async (request: ConfirmRequestInput): Promise<boolean> => {
 
 // Minimal unified boundary. Can be swapped with toast/modal implementation later.
 export const feedbackService: FeedbackService = {
-  info: showAlert,
-  success: showAlert,
-  error: showAlert,
+  info: (message) => showNotification(message, 'info'),
+  success: (message) => showNotification(message, 'success'),
+  error: (message) => showNotification(message, 'error'),
   confirm: showConfirm,
 };

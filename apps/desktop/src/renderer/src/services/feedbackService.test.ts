@@ -38,6 +38,38 @@ describe('feedbackService', () => {
     expect(nativeConfirm).toHaveBeenCalledWith('Fallback?');
   });
 
+  it('routes notifications through an installed handler instead of window.alert', () => {
+    const nativeAlert = vi.fn();
+    vi.stubGlobal('window', { alert: nativeAlert });
+    const notify = vi.fn();
+
+    installFeedbackHandlers({ notify });
+
+    feedbackService.success('File created');
+    expect(notify).toHaveBeenCalledWith('File created', 'success');
+
+    feedbackService.error('Something failed');
+    expect(notify).toHaveBeenCalledWith('Something failed', 'error');
+
+    feedbackService.info('Heads up');
+    expect(notify).toHaveBeenCalledWith('Heads up', 'info');
+
+    expect(nativeAlert).not.toHaveBeenCalled();
+  });
+
+  it('falls back to window.alert after the notify handler is removed', () => {
+    const nativeAlert = vi.fn();
+    vi.stubGlobal('window', { alert: nativeAlert });
+    const uninstall = installFeedbackHandlers({
+      notify: vi.fn(),
+    });
+
+    uninstall();
+    feedbackService.success('Fallback toast');
+
+    expect(nativeAlert).toHaveBeenCalledWith('Fallback toast');
+  });
+
   it('requires exact typed confirmation text when a destructive action asks for it', () => {
     expect(isConfirmRequirementMet({ requiredText: 'My Project' }, '')).toBe(false);
     expect(isConfirmRequirementMet({ requiredText: 'My Project' }, 'my project')).toBe(false);
