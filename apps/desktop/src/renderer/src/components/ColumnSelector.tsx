@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { ProjectType } from '@cat/core/project';
 import type { TagPolicy } from '@cat/core/tag';
 import type { ImportOptions, SpreadsheetPreviewData } from '../../../shared/ipc';
@@ -25,6 +25,7 @@ export function ColumnSelector({
   const [targetCol, setTargetCol] = useState(1);
   const [contextCol, setContextCol] = useState<number | undefined>(undefined);
   const [tagPolicy, setTagPolicy] = useState<TagPolicy>('default');
+  const wasOpenRef = useRef(isOpen);
 
   const isReviewProject = projectType === 'review';
   const isCustomProject = projectType === 'custom';
@@ -49,6 +50,13 @@ export function ColumnSelector({
 
   const maxCols = previewData.length > 0 ? previewData[0].length : 0;
   const colIndexes = Array.from({ length: maxCols }, (_, i) => i);
+
+  useEffect(() => {
+    if (isOpen && !wasOpenRef.current) {
+      setTagPolicy('default');
+    }
+    wasOpenRef.current = isOpen;
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen || contextCol !== undefined || colIndexes.length === 0) return;
