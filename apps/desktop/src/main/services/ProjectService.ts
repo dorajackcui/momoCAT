@@ -35,6 +35,7 @@ import type {
   AIBatchTargetBaseline,
   AIBatchTargetScope,
   ImportOptions,
+  PastedSourceFileInput,
   ProxySettings,
   ProxySettingsInput,
   TBImportOptions,
@@ -168,6 +169,10 @@ export class ProjectService {
 
   public async addFileToProject(projectId: number, filePath: string, options: ImportOptions) {
     return this.projectModule.addFileToProject(projectId, filePath, options);
+  }
+
+  public async createPastedSourceFile(projectId: number, input: PastedSourceFileInput) {
+    return this.projectModule.createPastedSourceFile(projectId, input);
   }
 
   public listProjects() {

@@ -90,13 +90,7 @@ export function registerProjectHandlers({ ipcMain, projectService }: MainHandler
     IPC_CHANNELS.project.createPastedSourceFile,
     (_event, ...args) => {
       const [projectId, input] = args as [number, PastedSourceFileInput];
-      const service = projectService as typeof projectService & {
-        createPastedSourceFile: (
-          nextProjectId: number,
-          nextInput: PastedSourceFileInput,
-        ) => unknown;
-      };
-      return service.createPastedSourceFile(projectId, input);
+      return projectService.createPastedSourceFile(projectId, input);
     },
   );
 

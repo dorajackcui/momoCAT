@@ -1,5 +1,5 @@
 import { basename, join } from 'path';
-import { copyFile, mkdir, rm, unlink } from 'fs/promises';
+import { copyFile, mkdir, rm, unlink, writeFile } from 'fs/promises';
 import { type Segment, type TBMatch } from '@cat/core/models';
 import {
   DEFAULT_PROJECT_QA_SETTINGS,
@@ -16,6 +16,12 @@ import {
   SpreadsheetGateway,
   SpreadsheetPreviewData,
 } from '../ports';
+import type { PastedSourceFileInput } from '../../../shared/ipc';
+import {
+  buildPastedSourceCsv,
+  buildPastedSourceFileName,
+  normalizePastedSources,
+} from './pastedSourceFile';
 
 export class ProjectFileModule {
   private static readonly SEGMENT_PAGE_SIZE = 2000;
@@ -157,6 +163,97 @@ export class ProjectFileModule {
         throw new AggregateError(
           [originalError, ...cleanupErrors],
           `[ProjectFileModule] Import failed and cleanup encountered ${cleanupErrors.length} error(s)`,
+        );
+      }
+
+      throw originalError;
+    }
+  }
+
+  public async createPastedSourceFile(
+    projectId: number,
+    input: PastedSourceFileInput,
+    now: Date = new Date(),
+  ) {
+    const project = this.projectRepo.getProject(projectId);
+    if (!project) throw new Error('Project not found');
+
+    const sources = normalizePastedSources(input.sources);
+    if (sources.length === 0) {
+      throw new Error('No valid pasted source rows found.');
+    }
+
+    const options: ImportOptions = {
+      hasHeader: true,
+      sourceCol: 0,
+      targetCol: 1,
+      tagPolicy: input.tagPolicy || 'default',
+    };
+
+    const projectDir = join(this.projectsDir, projectId.toString());
+    await this.ensureDirectory(this.projectsDir);
+    await this.ensureDirectory(projectDir);
+
+    const existingNames = this.projectRepo.listFiles(projectId).map((file) => file.name);
+    const fileName = buildPastedSourceFileName(sources[0], now, existingNames);
+
+    let fileId: number | undefined;
+    let storedPath: string | undefined;
+
+    try {
+      fileId = this.projectRepo.createFile(projectId, fileName, JSON.stringify(options));
+      storedPath = join(projectDir, `${fileId}_${fileName}`);
+      await writeFile(storedPath, buildPastedSourceCsv(sources), 'utf8');
+
+      const segments = await this.filter.import(storedPath, projectId, fileId, options);
+      if (segments.length === 0) {
+        throw new Error('No valid segments found in the pasted source content.');
+      }
+
+      this.segmentRepo.bulkInsertSegments(segments);
+
+      const file = this.projectRepo.getFile(fileId);
+      if (!file) throw new Error('Failed to retrieve created file');
+
+      return file;
+    } catch (error) {
+      const originalError = error instanceof Error ? error : new Error(String(error));
+      const cleanupErrors: Error[] = [];
+
+      if (fileId !== undefined) {
+        try {
+          this.projectRepo.deleteFile(fileId);
+        } catch (cleanupError) {
+          console.warn(
+            '[ProjectFileModule] Failed to cleanup pasted file record after import failure:',
+            cleanupError,
+          );
+          cleanupErrors.push(
+            cleanupError instanceof Error ? cleanupError : new Error(String(cleanupError)),
+          );
+        }
+      }
+
+      if (storedPath) {
+        try {
+          await unlink(storedPath);
+        } catch (cleanupError) {
+          if (!this.isFileNotFoundError(cleanupError)) {
+            console.warn(
+              '[ProjectFileModule] Failed to cleanup pasted source file after import failure:',
+              cleanupError,
+            );
+            cleanupErrors.push(
+              cleanupError instanceof Error ? cleanupError : new Error(String(cleanupError)),
+            );
+          }
+        }
+      }
+
+      if (cleanupErrors.length > 0) {
+        throw new AggregateError(
+          [originalError, ...cleanupErrors],
+          `[ProjectFileModule] Pasted source import failed and cleanup encountered ${cleanupErrors.length} error(s)`,
         );
       }
 

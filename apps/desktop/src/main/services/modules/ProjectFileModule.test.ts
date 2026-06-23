@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { Segment } from '@cat/core/models';
@@ -162,6 +162,163 @@ describe('ProjectFileModule.addFileToProject cleanup', () => {
     } finally {
       rmSync(rootDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('ProjectFileModule.createPastedSourceFile', () => {
+  it('writes an internal CSV and imports it through the spreadsheet gateway', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-paste-'));
+    const createdFileId = 77;
+    const optionsJson: string[] = [];
+    let importedPath = '';
+
+    const projectRepo = {
+      getProject: vi.fn().mockReturnValue({ id: 1 }),
+      listFiles: vi.fn().mockReturnValue([]),
+      createFile: vi.fn().mockImplementation((_projectId, _name, importOptionsJson) => {
+        optionsJson.push(importOptionsJson);
+        return createdFileId;
+      }),
+      deleteFile: vi.fn(),
+      getFile: vi.fn().mockReturnValue({
+        id: createdFileId,
+        projectId: 1,
+        name: 'A-2026-06-23-08-30.csv',
+      }),
+    } as unknown as ProjectRepository;
+
+    const segmentRepo = {
+      bulkInsertSegments: vi.fn(),
+    } as unknown as SegmentRepository;
+
+    const filter = {
+      import: vi.fn().mockImplementation(async (filePath: string) => {
+        importedPath = filePath;
+        return [
+          {
+            segmentId: 'seg-1',
+            fileId: createdFileId,
+            orderIndex: 1,
+            sourceTokens: [{ type: 'text', content: 'A' }],
+            targetTokens: [],
+            status: 'new',
+            tagsSignature: '',
+            matchKey: 'a',
+            srcHash: 'hash-a',
+            meta: { rowRef: 2, updatedAt: new Date().toISOString() },
+          },
+        ] satisfies Segment[];
+      }),
+      export: vi.fn(),
+      getPreview: vi.fn(),
+    } as unknown as SpreadsheetGateway;
+
+    const module = new ProjectFileModule(projectRepo, segmentRepo, filter, rootDir);
+    const file = await module.createPastedSourceFile(
+      1,
+      { sources: ['A', 'B, C'], tagPolicy: 'none' },
+      new Date('2026-06-23T08:30:00.000Z'),
+    );
+
+    expect(file.id).toBe(createdFileId);
+    expect(projectRepo.createFile).toHaveBeenCalledWith(
+      1,
+      'A-2026-06-23-08-30.csv',
+      JSON.stringify({
+        hasHeader: true,
+        sourceCol: 0,
+        targetCol: 1,
+        tagPolicy: 'none',
+      }),
+    );
+    expect(readFileSync(importedPath, 'utf8')).toBe('Source,Target\r\nA,\r\n"B, C",');
+    expect(filter.import).toHaveBeenCalledWith(
+      importedPath,
+      1,
+      createdFileId,
+      JSON.parse(optionsJson[0]),
+    );
+    expect(segmentRepo.bulkInsertSegments).toHaveBeenCalledTimes(1);
+
+    rmSync(rootDir, { recursive: true, force: true });
+  });
+
+  it('rejects empty pasted sources before creating a file record', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-paste-'));
+    const projectRepo = {
+      getProject: vi.fn().mockReturnValue({ id: 1 }),
+      listFiles: vi.fn().mockReturnValue([]),
+      createFile: vi.fn(),
+    } as unknown as ProjectRepository;
+    const segmentRepo = {
+      bulkInsertSegments: vi.fn(),
+    } as unknown as SegmentRepository;
+    const filter = {
+      import: vi.fn(),
+      export: vi.fn(),
+      getPreview: vi.fn(),
+    } as unknown as SpreadsheetGateway;
+
+    const module = new ProjectFileModule(projectRepo, segmentRepo, filter, rootDir);
+
+    await expect(module.createPastedSourceFile(1, { sources: [' ', ''] })).rejects.toThrow(
+      'No valid pasted source rows found.',
+    );
+    expect(projectRepo.createFile).not.toHaveBeenCalled();
+
+    rmSync(rootDir, { recursive: true, force: true });
+  });
+
+  it('cleans up the file record and generated CSV when segment persistence fails', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-paste-'));
+    const createdFileId = 78;
+    let generatedPath = '';
+
+    const projectRepo = {
+      getProject: vi.fn().mockReturnValue({ id: 1 }),
+      listFiles: vi.fn().mockReturnValue([]),
+      createFile: vi.fn().mockReturnValue(createdFileId),
+      deleteFile: vi.fn(),
+      getFile: vi.fn(),
+    } as unknown as ProjectRepository;
+
+    const segmentRepo = {
+      bulkInsertSegments: vi.fn().mockImplementation(() => {
+        throw new Error('Insert failed');
+      }),
+    } as unknown as SegmentRepository;
+
+    const filter = {
+      import: vi.fn().mockImplementation(async (filePath: string) => {
+        generatedPath = filePath;
+        return [
+          {
+            segmentId: 'seg-1',
+            fileId: createdFileId,
+            orderIndex: 1,
+            sourceTokens: [{ type: 'text', content: 'A' }],
+            targetTokens: [],
+            status: 'new',
+            tagsSignature: '',
+            matchKey: 'a',
+            srcHash: 'hash-a',
+            meta: { rowRef: 2, updatedAt: new Date().toISOString() },
+          },
+        ] satisfies Segment[];
+      }),
+      export: vi.fn(),
+      getPreview: vi.fn(),
+    } as unknown as SpreadsheetGateway;
+
+    const module = new ProjectFileModule(projectRepo, segmentRepo, filter, rootDir);
+
+    await expect(module.createPastedSourceFile(1, { sources: ['A'] })).rejects.toThrow(
+      'Insert failed',
+    );
+    expect(projectRepo.deleteFile).toHaveBeenCalledWith(createdFileId);
+    expect(existsSync(generatedPath)).toBe(false);
+
+    rmSync(rootDir, { recursive: true, force: true });
   });
 });
 
