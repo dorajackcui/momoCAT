@@ -11,7 +11,7 @@ describe('pasted source file helpers', () => {
   });
 
   it('creates recognizable sanitized file names from the first source and timestamp', () => {
-    const now = new Date('2026-06-23T08:30:00.000Z');
+    const now = new Date(2026, 5, 23, 8, 30);
 
     expect(buildPastedSourceFileName('Login: failed / retry?', now, [])).toBe(
       'Login failed retry-2026-06-23-08-30.csv',
@@ -19,7 +19,7 @@ describe('pasted source file helpers', () => {
   });
 
   it('truncates long source summaries and resolves duplicate file names', () => {
-    const now = new Date('2026-06-23T08:30:00.000Z');
+    const now = new Date(2026, 5, 23, 8, 30);
     const existing = ['This is a very long source title that sh-2026-06-23-08-30.csv'];
 
     expect(
@@ -32,7 +32,7 @@ describe('pasted source file helpers', () => {
   });
 
   it('falls back when the first source cannot produce a name', () => {
-    const now = new Date('2026-06-23T08:30:00.000Z');
+    const now = new Date(2026, 5, 23, 8, 30);
 
     expect(buildPastedSourceFileName('////', now, [])).toBe(
       'Pasted Source-2026-06-23-08-30.csv',
