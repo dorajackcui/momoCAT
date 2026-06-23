@@ -1,0 +1,57 @@
+import { describe, expect, it } from 'vitest';
+import { parsePastedSources } from './pasteSourceParser';
+
+describe('parsePastedSources', () => {
+  it('reads the first column from HTML tables and preserves cell line breaks', () => {
+    const html = `
+      <table>
+        <tbody>
+          <tr><td>A<br>line 2</td><td>ignored target</td></tr>
+          <tr><td> BB </td><td>ignored</td></tr>
+          <tr><td></td><td>ignored empty source</td></tr>
+        </tbody>
+      </table>
+    `;
+
+    expect(parsePastedSources({ html, text: 'flattened text that should not win' })).toEqual([
+      'A\nline 2',
+      'BB',
+    ]);
+  });
+
+  it('uses the first tab-separated column and skips blank first cells', () => {
+    expect(
+      parsePastedSources({
+        html: '',
+        text: 'A\ttranslated A\n\tblank source\nBB\ttranslated BB',
+      }),
+    ).toEqual(['A', 'BB']);
+  });
+
+  it('parses quoted TSV cells with embedded newlines', () => {
+    expect(
+      parsePastedSources({
+        html: '',
+        text: '"A\nline 2"\tignored\n"BB"\tignored',
+      }),
+    ).toEqual(['A\nline 2', 'BB']);
+  });
+
+  it('parses quoted CSV cells with embedded newlines only when quotes indicate CSV', () => {
+    expect(
+      parsePastedSources({
+        html: '',
+        text: '"A\nline 2",ignored\n"BB",ignored',
+      }),
+    ).toEqual(['A\nline 2', 'BB']);
+  });
+
+  it('falls back to plain text lines and keeps comma text intact', () => {
+    expect(
+      parsePastedSources({
+        html: '',
+        text: 'Hello, world\n\nBB',
+      }),
+    ).toEqual(['Hello, world', 'BB']);
+  });
+});
