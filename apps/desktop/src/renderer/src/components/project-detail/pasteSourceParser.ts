@@ -81,7 +81,37 @@ function parseStructuredTextSources(text: string): string[] {
 }
 
 function looksLikeQuotedCsv(text: string): boolean {
-  return /(^|[\r\n])\s*"/.test(text) && text.includes(',');
+  let index = 0;
+
+  while (/\s/.test(text[index] || '')) {
+    index += 1;
+  }
+
+  if (text[index] !== '"') return false;
+  index += 1;
+
+  while (index < text.length) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (char === '"' && next === '"') {
+      index += 2;
+      continue;
+    }
+
+    if (char === '"') {
+      index += 1;
+      break;
+    }
+
+    index += 1;
+  }
+
+  while (/[ \t]/.test(text[index] || '')) {
+    index += 1;
+  }
+
+  return text[index] === ',' && !/\s/.test(text[index + 1] || '');
 }
 
 function parseDelimitedRows(text: string, delimiter: '\t' | ','): string[][] {
@@ -100,7 +130,18 @@ function parseDelimitedRows(text: string, delimiter: '\t' | ','): string[][] {
         index += 1;
         continue;
       }
-      inQuotes = !inQuotes;
+
+      if (inQuotes) {
+        inQuotes = false;
+        continue;
+      }
+
+      if (cell.length === 0) {
+        inQuotes = true;
+        continue;
+      }
+
+      cell += char;
       continue;
     }
 

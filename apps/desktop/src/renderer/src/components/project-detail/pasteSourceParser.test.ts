@@ -37,6 +37,15 @@ describe('parsePastedSources', () => {
     ).toEqual(['A\nline 2', 'BB']);
   });
 
+  it('preserves literal quotes inside unquoted TSV source cells', () => {
+    expect(
+      parsePastedSources({
+        html: '',
+        text: 'He said "hi"\ttarget',
+      }),
+    ).toEqual(['He said "hi"']);
+  });
+
   it('parses quoted CSV cells with embedded newlines only when quotes indicate CSV', () => {
     expect(
       parsePastedSources({
@@ -44,6 +53,24 @@ describe('parsePastedSources', () => {
         text: '"A\nline 2",ignored\n"BB",ignored',
       }),
     ).toEqual(['A\nline 2', 'BB']);
+  });
+
+  it('parses escaped quotes inside quoted CSV source cells', () => {
+    expect(
+      parsePastedSources({
+        html: '',
+        text: '"He said ""hi""",target',
+      }),
+    ).toEqual(['He said "hi"']);
+  });
+
+  it('falls back to plain text for quoted prose followed by a comma', () => {
+    expect(
+      parsePastedSources({
+        html: '',
+        text: '"Hello", she said\nAnother line',
+      }),
+    ).toEqual(['"Hello", she said', 'Another line']);
   });
 
   it('falls back to plain text lines and keeps comma text intact', () => {
