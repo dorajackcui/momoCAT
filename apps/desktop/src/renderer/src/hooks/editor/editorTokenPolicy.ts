@@ -33,7 +33,7 @@ export function appendTermToTargetTokens(
     serializeTokensToEditorText(segment.targetTokens, segment.sourceTokens),
   );
   const insertsPlainTagLikeText =
-    tagPolicy === 'none' && currentText.trim().length > 0 && /^<[^>]+>/.test(term);
+    tagPolicy === 'none' && /[A-Za-z0-9]$/.test(currentText) && /^<[^>]+>/.test(term);
   const spacer = shouldInsertTermSpacer(currentText, term) || insertsPlainTagLikeText ? ' ' : '';
   return parseTargetEditorText(`${currentText}${spacer}${term}`, segment.sourceTokens, tagPolicy);
 }
