@@ -1,11 +1,14 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, clipboard } from 'electron';
+import { app, shell, BrowserWindow, ipcMain, dialog, clipboard, Menu } from 'electron';
+import type { MenuItemConstructorOptions } from 'electron';
 import { join } from 'path';
 import { mkdir, readFile } from 'fs/promises';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
+import electronUpdater from 'electron-updater';
 import { CATDatabase, UnsupportedDatabaseSchemaError } from '@cat/db';
 import { ProjectService } from './services/ProjectService';
 import { JobManager } from './JobManager';
+import { createAppUpdateService, type AppUpdateService } from './services/AppUpdateService';
 import { IPC_CHANNELS } from '../shared/ipcChannels';
 import { AIRuntimeConfigService } from './services/modules/ai/AIRuntimeConfigService';
 import {
@@ -28,6 +31,8 @@ import { registerTBHandlers } from './ipc/tbHandlers';
 import { registerAIHandlers } from './ipc/aiHandlers';
 import { registerDialogHandlers } from './ipc/dialogHandlers';
 import { registerClipboardHandlers } from './ipc/clipboardHandlers';
+
+const { autoUpdater } = electronUpdater;
 
 // Disable hardware acceleration to avoid crashes in some environments
 app.disableHardwareAcceleration();
@@ -115,6 +120,90 @@ function createWindow(): void {
   }
 }
 
+function createEditMenu(): MenuItemConstructorOptions {
+  return {
+    label: 'Edit',
+    submenu: [
+      { role: 'undo' },
+      { role: 'redo' },
+      { type: 'separator' },
+      { role: 'cut' },
+      { role: 'copy' },
+      { role: 'paste' },
+      { role: 'selectAll' },
+    ],
+  };
+}
+
+function createViewMenu(): MenuItemConstructorOptions {
+  return {
+    label: 'View',
+    submenu: [
+      { role: 'reload' },
+      { role: 'forceReload' },
+      { role: 'toggleDevTools' },
+      { type: 'separator' },
+      { role: 'resetZoom' },
+      { role: 'zoomIn' },
+      { role: 'zoomOut' },
+      { type: 'separator' },
+      { role: 'togglefullscreen' },
+    ],
+  };
+}
+
+function createCheckForUpdatesMenuItem(
+  updateService: AppUpdateService,
+): MenuItemConstructorOptions {
+  return {
+    label: 'Check for Updates',
+    enabled: updateService.enabled,
+    click: () => {
+      void updateService.checkForUpdates({ notifyNoUpdate: true });
+    },
+  };
+}
+
+function configureApplicationMenu(updateService: AppUpdateService) {
+  const checkForUpdatesItem = createCheckForUpdatesMenuItem(updateService);
+  const template: MenuItemConstructorOptions[] =
+    process.platform === 'darwin'
+      ? [
+          {
+            label: 'momoCAT',
+            submenu: [
+              { role: 'about' },
+              { type: 'separator' },
+              checkForUpdatesItem,
+              { type: 'separator' },
+              { role: 'services' },
+              { type: 'separator' },
+              { role: 'hide' },
+              { role: 'hideOthers' },
+              { role: 'unhide' },
+              { type: 'separator' },
+              { role: 'quit' },
+            ],
+          },
+          createEditMenu(),
+          createViewMenu(),
+          {
+            label: 'Window',
+            submenu: [{ role: 'minimize' }, { role: 'zoom' }],
+          },
+        ]
+      : [
+          {
+            label: 'File',
+            submenu: [checkForUpdatesItem, { type: 'separator' }, { role: 'quit' }],
+          },
+          createEditMenu(),
+          createViewMenu(),
+        ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.cat.tool');
 
@@ -197,6 +286,16 @@ app.whenReady().then(async () => {
   registerDialogHandlers({ ipcMain, dialog });
   registerClipboardHandlers({ ipcMain, clipboard });
 
+  const appUpdateService = createAppUpdateService({
+    appName: 'momoCAT',
+    app,
+    dialog,
+    isDev: is.dev,
+    logger: console,
+    updater: autoUpdater,
+  });
+  configureApplicationMenu(appUpdateService);
+
   // Listen for progress updates and broadcast to all windows
   projectService.onProgress((data) => {
     BrowserWindow.getAllWindows().forEach((win) => {
@@ -219,6 +318,7 @@ app.whenReady().then(async () => {
   });
 
   createWindow();
+  void appUpdateService.checkForUpdates();
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -52,6 +52,8 @@ Packaging boundary:
 2. `npm run pack:mac` must run on macOS only.
 3. Do not rely on cross-platform packaging for release signoff.
 4. Use the repo packaging entrypoints instead of calling `electron-builder` directly so native rebuild + renderer build happen before packaging.
+5. Windows GitHub Releases publishing uses `npm run release:win` with `GH_TOKEN` available in the environment.
+6. Bump the desktop app version before release; auto-update compares the installed version with the published GitHub Release metadata.
 
 Desktop validation commands:
 

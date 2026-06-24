@@ -11,6 +11,7 @@
     "build": "npm run rebuild:electron && npm run build --workspace=apps/desktop",
     "pack": "npm run rebuild:electron && npm run pack --workspace=apps/desktop",
     "pack:win": "node scripts/pack-platform.mjs --platform=win",
+    "release:win": "node scripts/pack-platform.mjs --platform=win -- --publish always",
     "pack:mac": "node scripts/pack-platform.mjs --platform=mac",
     "worktree:deps:link": "node scripts/worktree-link-deps.mjs",
     "worktree:deps:link:force": "node scripts/worktree-link-deps.mjs --force",
