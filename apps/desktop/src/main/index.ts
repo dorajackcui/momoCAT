@@ -9,6 +9,7 @@ import { CATDatabase, UnsupportedDatabaseSchemaError } from '@cat/db';
 import { ProjectService } from './services/ProjectService';
 import { JobManager } from './JobManager';
 import { createAppUpdateService, type AppUpdateService } from './services/AppUpdateService';
+import type { AppUpdateStatusEvent } from '../shared/ipc';
 import { IPC_CHANNELS } from '../shared/ipcChannels';
 import { AIRuntimeConfigService } from './services/modules/ai/AIRuntimeConfigService';
 import {
@@ -204,6 +205,12 @@ function configureApplicationMenu(updateService: AppUpdateService) {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+function broadcastAppUpdateStatus(status: AppUpdateStatusEvent) {
+  BrowserWindow.getAllWindows().forEach((win) => {
+    win.webContents.send(IPC_CHANNELS.events.appUpdateStatus, status);
+  });
+}
+
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.cat.tool');
 
@@ -292,9 +299,13 @@ app.whenReady().then(async () => {
     dialog,
     isDev: is.dev,
     logger: console,
+    notifyStatus: broadcastAppUpdateStatus,
     updater: autoUpdater,
   });
   configureApplicationMenu(appUpdateService);
+  ipcMain.handle(IPC_CHANNELS.app.checkForUpdates, async () => {
+    await appUpdateService.checkForUpdates();
+  });
 
   // Listen for progress updates and broadcast to all windows
   projectService.onProgress((data) => {

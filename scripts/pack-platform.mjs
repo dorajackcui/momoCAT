@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
+import path from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function spawnCommandSync(command, args, options = {}) {
   return spawnSync(command, args, {
@@ -10,10 +14,14 @@ function spawnCommandSync(command, args, options = {}) {
   });
 }
 
+function formatCommand(command, args) {
+  return [command, ...args].join(' ');
+}
+
 function usage() {
   console.log(`Usage:
-  node scripts/pack-platform.mjs --platform <win|mac> [--dry-run]
-  node scripts/pack-platform.mjs --platform=<win|mac> [--dry-run]`);
+  node scripts/pack-platform.mjs --platform <win|mac> [--dry-run] [-- <electron-builder args>]
+  node scripts/pack-platform.mjs --platform=<win|mac> [--dry-run] [-- <electron-builder args>]`);
 }
 
 function parseArgs(argv) {
@@ -73,24 +81,36 @@ function main() {
   }
 
   const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const npmArgs = ['run', 'pack'];
+  const commands = [
+    { command: npmCmd, args: ['run', 'rebuild:electron'] },
+    { command: npmCmd, args: ['run', 'pack', '--workspace=apps/desktop'] }
+  ];
+
   if (passThroughArgs.length > 0) {
-    npmArgs.push('--', ...passThroughArgs);
+    commands[1].args.push('--', ...passThroughArgs);
   }
 
   if (dryRun) {
-    console.log(`[dry-run] ${npmCmd} ${npmArgs.join(' ')}`);
+    for (const step of commands) {
+      console.log(`[dry-run] ${formatCommand(step.command, step.args)}`);
+    }
     return;
   }
 
-  const result = spawnCommandSync(npmCmd, npmArgs, {
-    stdio: 'inherit'
-  });
+  for (const step of commands) {
+    const result = spawnCommandSync(step.command, step.args, {
+      cwd: repoRoot,
+      stdio: 'inherit'
+    });
 
-  if (result.error) {
-    throw new Error(`Failed to start ${npmCmd}: ${result.error.message}`);
+    if (result.error) {
+      throw new Error(`Failed to start ${step.command}: ${result.error.message}`);
+    }
+
+    if (result.status !== 0) {
+      process.exit(result.status ?? 1);
+    }
   }
-  process.exit(result.status ?? 1);
 }
 
 try {

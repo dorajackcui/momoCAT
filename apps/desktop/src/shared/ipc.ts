@@ -297,12 +297,29 @@ export interface JobProgressEvent {
   error?: StructuredJobError;
 }
 
+export type AppUpdatePhase =
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'not-available'
+  | 'error';
+
+export interface AppUpdateStatusEvent {
+  phase: AppUpdatePhase;
+  message: string;
+  version?: string;
+  percent?: number;
+}
+
 export interface DialogFileFilter {
   name: string;
   extensions: string[];
 }
 
 export interface DesktopApi {
+  checkForUpdates: () => Promise<void>;
+
   listProjects: () => Promise<ProjectWithStats[]>;
   createProject: (
     name: string,
@@ -404,4 +421,5 @@ export interface DesktopApi {
   onSegmentsUpdated: (callback: (data: SegmentsUpdatedEvent) => void) => () => void;
   onProgress: (callback: (data: AppProgressEvent) => void) => () => void;
   onJobProgress: (callback: (progress: JobProgressEvent) => void) => () => void;
+  onAppUpdateStatus: (callback: (status: AppUpdateStatusEvent) => void) => () => void;
 }

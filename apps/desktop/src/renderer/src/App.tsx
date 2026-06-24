@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { ProjectType } from '@cat/core/project';
 import { Dashboard } from './components/Dashboard';
 import { ProjectDetail } from './components/ProjectDetail';
@@ -10,6 +10,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { useAIFileJobTracker } from './hooks/aiFileJobs';
 import { useProjects } from './hooks/useProjects';
 import { FeedbackHost } from './services/FeedbackHost';
+import { feedbackService } from './services/feedbackService';
 
 type View = 'dashboard' | 'projectDetail' | 'editor' | 'tms' | 'tbs';
 
@@ -18,9 +19,64 @@ function App(): JSX.Element {
   const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
   const [activeFileId, setActiveFileId] = useState<number | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [updateStatusMessage, setUpdateStatusMessage] = useState('Check for updates');
+  const [isUpdateBusy, setIsUpdateBusy] = useState(false);
+  const manualUpdateCheckRef = useRef(false);
+  const progressToastBucketRef = useRef<number | null>(null);
 
   const { projects, loading, loadProjects, createProject, deleteProject } = useProjects();
   const aiFileJobTracker = useAIFileJobTracker();
+
+  useEffect(() => {
+    const unsubscribe = window.api.onAppUpdateStatus((status) => {
+      setUpdateStatusMessage(status.message);
+      setIsUpdateBusy(
+        status.phase === 'checking' ||
+          status.phase === 'available' ||
+          status.phase === 'downloading',
+      );
+
+      const shouldToast = manualUpdateCheckRef.current;
+      if (status.phase === 'checking') {
+        progressToastBucketRef.current = null;
+        if (shouldToast) feedbackService.info(status.message);
+        return;
+      }
+
+      if (status.phase === 'available') {
+        if (shouldToast) feedbackService.info(status.message);
+        return;
+      }
+
+      if (status.phase === 'downloading') {
+        const percent = status.percent;
+        if (shouldToast && percent !== undefined) {
+          const bucket = Math.floor(percent / 25);
+          if (progressToastBucketRef.current !== bucket) {
+            progressToastBucketRef.current = bucket;
+            feedbackService.info(status.message);
+          }
+        }
+        return;
+      }
+
+      progressToastBucketRef.current = null;
+      manualUpdateCheckRef.current = false;
+      if (status.phase === 'downloaded') {
+        feedbackService.success(status.message);
+        return;
+      }
+      if (status.phase === 'error') {
+        feedbackService.error(status.message);
+        return;
+      }
+      if (shouldToast) {
+        feedbackService.info(status.message);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
 
   const handleOpenProject = (id: number) => {
     setActiveProjectId(id);
@@ -42,6 +98,23 @@ function App(): JSX.Element {
   const handleBackToProject = () => {
     setCurrentView('projectDetail');
     setActiveFileId(null);
+  };
+
+  const handleCheckForUpdates = async () => {
+    manualUpdateCheckRef.current = true;
+    progressToastBucketRef.current = null;
+    setIsUpdateBusy(true);
+    setUpdateStatusMessage('Checking for updates...');
+
+    try {
+      await window.api.checkForUpdates();
+    } catch (error) {
+      manualUpdateCheckRef.current = false;
+      setIsUpdateBusy(false);
+      setUpdateStatusMessage('Check for updates');
+      feedbackService.error('Failed to start update check.');
+      console.error('[Updates] Failed to start update check:', error);
+    }
   };
 
   const handleCreateProject = async (
@@ -97,7 +170,7 @@ function App(): JSX.Element {
             C
           </div>
           <h1 className="text-xl font-bold tracking-tight text-text">
-            MomoCAT<span className="text-xs font-medium text-brand ml-1">v0.2</span>
+            MomoCAT<span className="text-xs font-medium text-brand ml-1">v1.0.2</span>
           </h1>
         </div>
         <nav className="flex gap-2 items-center">
@@ -148,7 +221,15 @@ function App(): JSX.Element {
 
       <footer className="app-footer">
         <span>Ready</span>
-        <span>Offline Mode • Spreadsheet-first v0.1</span>
+        <button
+          type="button"
+          onClick={handleCheckForUpdates}
+          disabled={isUpdateBusy}
+          className="text-text-muted hover:text-brand disabled:cursor-default disabled:opacity-80"
+          title="Check for momoCAT updates"
+        >
+          {updateStatusMessage}
+        </button>
       </footer>
     </div>,
   );

@@ -3,6 +3,7 @@ import { createAppUpdateService } from './AppUpdateService';
 
 function createFixture(options: { isDev?: boolean; isPackaged?: boolean } = {}) {
   const listeners = new Map<string, (...args: unknown[]) => void>();
+  const updateStatus = vi.fn();
   const showMessageBox = vi.fn(async () => ({ response: 0 }));
   const updater = {
     autoDownload: false,
@@ -28,10 +29,11 @@ function createFixture(options: { isDev?: boolean; isPackaged?: boolean } = {}) 
     dialog: { showMessageBox },
     isDev: options.isDev ?? false,
     logger,
+    notifyStatus: updateStatus,
     updater,
   });
 
-  return { listeners, logger, service, showMessageBox, updater };
+  return { listeners, logger, service, showMessageBox, updateStatus, updater };
 }
 
 describe('createAppUpdateService', () => {
@@ -99,6 +101,44 @@ describe('createAppUpdateService', () => {
     expect(showMessageBox).toHaveBeenCalledWith(
       expect.objectContaining({
         message: 'momoCAT is up to date.',
+      }),
+    );
+  });
+
+  it('emits lightweight status events for update checks and downloads', async () => {
+    const { listeners, service, updateStatus } = createFixture();
+
+    await service.checkForUpdates();
+    listeners.get('checking-for-update')?.();
+    listeners.get('update-available')?.({ version: '1.0.1' });
+    listeners.get('download-progress')?.({ percent: 42.4 });
+    await listeners.get('update-downloaded')?.({ version: '1.0.1' });
+
+    expect(updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'checking',
+        message: 'Checking for updates...',
+      }),
+    );
+    expect(updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'available',
+        version: '1.0.1',
+        message: 'Update 1.0.1 found. Downloading...',
+      }),
+    );
+    expect(updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'downloading',
+        percent: 42,
+        message: 'Downloading update 42%...',
+      }),
+    );
+    expect(updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'downloaded',
+        version: '1.0.1',
+        message: 'Update 1.0.1 downloaded. Restart to install.',
       }),
     );
   });

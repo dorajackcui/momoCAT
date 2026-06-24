@@ -1,4 +1,7 @@
 export const IPC_CHANNELS = {
+  app: {
+    checkForUpdates: 'app-check-for-updates',
+  },
   project: {
     list: 'project-list',
     create: 'project-create',
@@ -75,6 +78,7 @@ export const IPC_CHANNELS = {
     segmentsUpdated: 'segments-updated',
     appProgress: 'app-progress',
     jobProgress: 'job-progress',
+    appUpdateStatus: 'app-update-status',
   },
 } as const;
 

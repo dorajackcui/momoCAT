@@ -31,6 +31,10 @@ type UpdaterLike = {
   on(event: string, listener: (...args: unknown[]) => void | Promise<void>): unknown;
 };
 
+type DownloadProgressInfo = {
+  percent?: unknown;
+};
+
 export type CheckForUpdatesOptions = {
   notifyNoUpdate?: boolean;
 };
@@ -46,6 +50,12 @@ export type AppUpdateServiceOptions = {
   dialog: DialogLike;
   isDev: boolean;
   logger: LoggerLike;
+  notifyStatus?: (status: {
+    phase: 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error';
+    message: string;
+    version?: string;
+    percent?: number;
+  }) => void;
   updater: UpdaterLike;
 };
 
@@ -59,12 +69,31 @@ function updateVersionLabel(info: unknown): string {
 }
 
 export function createAppUpdateService(options: AppUpdateServiceOptions): AppUpdateService {
-  const { app, appName, dialog, isDev, logger, updater } = options;
+  const { app, appName, dialog, isDev, logger, notifyStatus, updater } = options;
   const enabled = !isDev && app.isPackaged;
   let manualCheckPending = false;
 
+  function emitStatus(status: Parameters<NonNullable<typeof notifyStatus>>[0]) {
+    notifyStatus?.(status);
+  }
+
+  function downloadPercent(info: unknown): number | undefined {
+    if (typeof info !== 'object' || info === null || !('percent' in info)) {
+      return undefined;
+    }
+
+    const { percent } = info as DownloadProgressInfo;
+    return typeof percent === 'number' && Number.isFinite(percent)
+      ? Math.max(0, Math.min(100, Math.round(percent)))
+      : undefined;
+  }
+
   async function showManualCheckFailed(error: unknown) {
     logger.error('[Updates] Failed to check for updates:', error);
+    emitStatus({
+      phase: 'error',
+      message: 'Update check failed.',
+    });
     await dialog.showMessageBox({
       type: 'error',
       buttons: ['OK'],
@@ -81,13 +110,38 @@ export function createAppUpdateService(options: AppUpdateServiceOptions): AppUpd
 
     updater.on('checking-for-update', () => {
       logger.info(`[Updates] Checking for ${appName} updates from version ${app.getVersion()}.`);
+      emitStatus({
+        phase: 'checking',
+        message: 'Checking for updates...',
+      });
     });
 
     updater.on('update-available', (info) => {
-      logger.info(`[Updates] Update available: ${updateVersionLabel(info)}.`);
+      const version = updateVersionLabel(info);
+      logger.info(`[Updates] Update available: ${version}.`);
+      emitStatus({
+        phase: 'available',
+        message: `Update ${version} found. Downloading...`,
+        version,
+      });
+    });
+
+    updater.on('download-progress', (info) => {
+      const percent = downloadPercent(info);
+      const suffix = percent === undefined ? '' : ` ${percent}%`;
+      emitStatus({
+        phase: 'downloading',
+        message: `Downloading update${suffix}...`,
+        percent,
+      });
     });
 
     updater.on('update-not-available', async () => {
+      emitStatus({
+        phase: 'not-available',
+        message: `${appName} is up to date.`,
+      });
+
       if (!manualCheckPending) return;
       manualCheckPending = false;
 
@@ -104,6 +158,11 @@ export function createAppUpdateService(options: AppUpdateServiceOptions): AppUpd
     updater.on('update-downloaded', async (info) => {
       manualCheckPending = false;
       const version = updateVersionLabel(info);
+      emitStatus({
+        phase: 'downloaded',
+        message: `Update ${version} downloaded. Restart to install.`,
+        version,
+      });
       const result = await dialog.showMessageBox({
         type: 'info',
         buttons: ['Restart now', 'Later'],
@@ -129,6 +188,10 @@ export function createAppUpdateService(options: AppUpdateServiceOptions): AppUpd
         return;
       }
 
+      emitStatus({
+        phase: 'error',
+        message: 'Background update check failed.',
+      });
       logger.error('[Updates] Background update check failed:', error);
     });
   }
@@ -140,6 +203,10 @@ export function createAppUpdateService(options: AppUpdateServiceOptions): AppUpd
         if (checkOptions.notifyNoUpdate) {
           logger.warn('[Updates] Skipping update check outside a packaged production build.');
         }
+        emitStatus({
+          phase: 'not-available',
+          message: 'Update checks are available in installed builds.',
+        });
         return;
       }
 
@@ -156,6 +223,10 @@ export function createAppUpdateService(options: AppUpdateServiceOptions): AppUpd
           return;
         }
 
+        emitStatus({
+          phase: 'error',
+          message: 'Background update check failed.',
+        });
         logger.error('[Updates] Background update check failed:', error);
       }
     },

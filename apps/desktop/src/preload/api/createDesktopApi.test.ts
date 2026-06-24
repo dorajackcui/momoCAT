@@ -43,6 +43,7 @@ describe('createDesktopApi smoke', () => {
     await api.openFileDialog([]);
     await api.readClipboard();
     await api.runFileQA(1);
+    await api.checkForUpdates();
     await api.createPastedSourceFile(12, {
       sources: ['A', 'BB'],
       tagPolicy: 'default',
@@ -75,6 +76,7 @@ describe('createDesktopApi smoke', () => {
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.dialog.openFile, []);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.clipboard.read);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.runQA, 1);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.app.checkForUpdates);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.project.createPastedSourceFile, 12, {
       sources: ['A', 'BB'],
       tagPolicy: 'default',
@@ -110,13 +112,21 @@ describe('createDesktopApi smoke', () => {
 
     const callback = vi.fn();
     const unsubscribe = api.onProgress(callback);
+    const unsubscribeAppUpdate = api.onAppUpdateStatus(callback);
     const listeners = listenerStore.get(IPC_CHANNELS.events.appProgress) ?? [];
+    const appUpdateListeners = listenerStore.get(IPC_CHANNELS.events.appUpdateStatus) ?? [];
     expect(listeners).toHaveLength(1);
+    expect(appUpdateListeners).toHaveLength(1);
 
     listeners[0]({} as IpcRendererEvent, { type: 'x', current: 1, total: 1 });
-    expect(callback).toHaveBeenCalledTimes(1);
+    appUpdateListeners[0]({} as IpcRendererEvent, {
+      phase: 'checking',
+      message: 'Checking for updates...',
+    });
+    expect(callback).toHaveBeenCalledTimes(2);
 
     unsubscribe();
-    expect(removeListener).toHaveBeenCalledTimes(1);
+    unsubscribeAppUpdate();
+    expect(removeListener).toHaveBeenCalledTimes(2);
   });
 });
