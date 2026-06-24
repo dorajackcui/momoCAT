@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from 'react';
 import { DEFAULT_PROJECT_QA_SETTINGS, type SegmentQaRuleId } from '@cat/core/project';
 import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import { TagValidator } from '@cat/core/qa';
@@ -11,7 +11,11 @@ import {
   normalizeEditorInputText,
   parseTargetEditorText,
 } from './editor/editorTokenPolicy';
-import { createSegmentPersistor, useSegmentPersistence } from './editor/useSegmentPersistence';
+import {
+  createSegmentPersistor,
+  resolveSegmentStateUpdate,
+  useSegmentPersistence,
+} from './editor/useSegmentPersistence';
 import { useEditorDataLoader } from './editor/useEditorDataLoader';
 import { useSegmentQaWorkflow } from './editor/useSegmentQaWorkflow';
 import { apiClient } from '../services/apiClient';
@@ -67,7 +71,7 @@ export function applyAISegmentTranslateResultToSegments(
 }
 
 export function useEditor({ activeFileId }: UseEditorProps) {
-  const [segments, setSegments] = useState<Segment[]>([]);
+  const [segments, setSegmentsState] = useState<Segment[]>([]);
   const [projectId, setProjectId] = useState<number | null>(null);
   const [projectTgtLang, setProjectTgtLang] = useState<string | null>(null);
   const [enabledQaRuleIds, setEnabledQaRuleIds] = useState<SegmentQaRuleId[]>(
@@ -88,9 +92,11 @@ export function useEditor({ activeFileId }: UseEditorProps) {
   // Keep latest values readable from stable callbacks so per-row handlers
   // (and therefore EditorRow memo bailouts) survive segment updates.
   const segmentsRef = useRef(segments);
-  useEffect(() => {
-    segmentsRef.current = segments;
-  }, [segments]);
+  const setSegments = useCallback((update: SetStateAction<Segment[]>) => {
+    const nextSegments = resolveSegmentStateUpdate(segmentsRef.current, update);
+    segmentsRef.current = nextSegments;
+    setSegmentsState(nextSegments);
+  }, []);
   const aiTranslatingSegmentIdsRef = useRef(aiTranslatingSegmentIds);
   useEffect(() => {
     aiTranslatingSegmentIdsRef.current = aiTranslatingSegmentIds;
@@ -207,14 +213,14 @@ export function useEditor({ activeFileId }: UseEditorProps) {
 
   useEffect(
     () => () => {
-      void flushAllSegmentUpdates();
+      void flushAllSegmentUpdates().catch(() => {});
     },
     [flushAllSegmentUpdates],
   );
 
   useEffect(() => {
     const flushPendingChanges = () => {
-      void flushAllSegmentUpdates();
+      void flushAllSegmentUpdates().catch(() => {});
     };
     window.addEventListener('beforeunload', flushPendingChanges);
     window.addEventListener('pagehide', flushPendingChanges);
@@ -264,7 +270,11 @@ export function useEditor({ activeFileId }: UseEditorProps) {
 
   const confirmSegment = useCallback(
     async (segmentId: string) => {
-      await flushSegmentDraft(segmentId);
+      try {
+        await flushSegmentDraft(segmentId);
+      } catch {
+        return;
+      }
       await confirmSegmentWithQa(segmentId);
     },
     [confirmSegmentWithQa, flushSegmentDraft],
@@ -413,6 +423,7 @@ export function useEditor({ activeFileId }: UseEditorProps) {
     handleTranslationChange,
     handleSegmentEditStateChange,
     flushSegmentDraft,
+    flushPendingSegmentUpdates: flushAllSegmentUpdates,
     translateSegmentWithAI,
     refineSegmentWithAI,
     confirmSegment,

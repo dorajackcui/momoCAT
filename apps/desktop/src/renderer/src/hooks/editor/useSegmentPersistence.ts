@@ -99,6 +99,8 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
     trackRequest(segmentId, clientRequestId, requestSeq);
     deps.clearSegmentSaveError(segmentId);
 
+    let persistError: unknown;
+
     const requestTask = (async () => {
       try {
         await deps.updateSegment(
@@ -111,6 +113,7 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
           deps.clearSegmentSaveError(segmentId);
         }
       } catch (error) {
+        persistError = error;
         if ((latestRequestSeqBySegment.get(segmentId) ?? 0) === requestSeq) {
           const message = error instanceof Error ? error.message : String(error);
           deps.setSegmentSaveError(segmentId, `保存失败：${message}`);
@@ -128,6 +131,10 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
     inFlightRequestIdBySegment.set(segmentId, clientRequestId);
     notifyStateChange();
     await requestTask;
+
+    if (persistError) {
+      throw persistError;
+    }
   };
 
   return {
@@ -141,9 +148,13 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
         debounceTimerBySegment.delete(input.segmentId);
         notifyStateChange();
         void (async () => {
-          await runSinglePersist(input.segmentId);
-          if (pendingBySegment.has(input.segmentId)) {
+          try {
             await runSinglePersist(input.segmentId);
+            if (pendingBySegment.has(input.segmentId)) {
+              await runSinglePersist(input.segmentId);
+            }
+          } catch {
+            // Error already recorded via setSegmentSaveError
           }
         })();
       }, persistDebounceMs);
@@ -168,7 +179,7 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
         ...pendingBySegment.keys(),
         ...inFlightPromiseBySegment.keys(),
       ]);
-      await Promise.all(
+      const results = await Promise.allSettled(
         [...targetSegmentIds].map(async (segmentId) => {
           clearDebounceTimer(segmentId);
           const inFlight = inFlightPromiseBySegment.get(segmentId);
@@ -180,6 +191,12 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
           }
         }),
       );
+      const failures = results.filter(
+        (r): r is PromiseRejectedResult => r.status === 'rejected',
+      );
+      if (failures.length > 0) {
+        throw new Error(`${failures.length} segment(s) failed to save`);
+      }
     },
 
     setSegmentEditing: (segmentId, editing) => {
@@ -233,6 +250,37 @@ interface UseSegmentPersistenceParams {
   clearSegmentSaveError: (segmentId: string) => void;
 }
 
+export function buildOptimisticSegmentUpdate(
+  segments: Segment[],
+  segmentId: string,
+  updater: (segment: Segment) => Segment,
+): { segments: Segment[]; updatedSegment?: Segment } {
+  let updatedSegment: Segment | undefined;
+  let found = false;
+
+  const nextSegments = segments.map((segment): Segment => {
+    if (segment.segmentId !== segmentId) return segment;
+    found = true;
+    updatedSegment = updater(segment);
+    return updatedSegment;
+  });
+
+  if (!found) {
+    return { segments };
+  }
+
+  return { segments: nextSegments, updatedSegment };
+}
+
+export function resolveSegmentStateUpdate(
+  current: Segment[],
+  update: SetStateAction<Segment[]>,
+): Segment[] {
+  return typeof update === 'function'
+    ? (update as (previous: Segment[]) => Segment[])(current)
+    : update;
+}
+
 export function useSegmentPersistence({
   setSegments,
   setSegmentSaveError,
@@ -257,24 +305,22 @@ export function useSegmentPersistence({
 
   const applyOptimisticSegmentUpdate = useCallback(
     (segmentId: string, updater: (segment: Segment) => Segment) => {
-      let nextSegment: Segment | undefined;
+      let updatedSegment: Segment | undefined;
 
-      setSegments((prev) =>
-        prev.map((segment): Segment => {
-          if (segment.segmentId !== segmentId) return segment;
-          nextSegment = updater(segment);
-          return nextSegment;
-        }),
-      );
+      setSegments((prev) => {
+        const result = buildOptimisticSegmentUpdate(prev, segmentId, updater);
+        updatedSegment = result.updatedSegment;
+        return result.updatedSegment ? result.segments : prev;
+      });
 
-      if (!nextSegment) {
+      if (!updatedSegment) {
         return;
       }
 
       persistor.queueSegmentUpdate({
         segmentId,
-        targetTokens: nextSegment.targetTokens,
-        status: nextSegment.status,
+        targetTokens: updatedSegment.targetTokens,
+        status: updatedSegment.status,
       });
     },
     [persistor, setSegments],

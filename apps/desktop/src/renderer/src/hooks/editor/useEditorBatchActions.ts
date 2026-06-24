@@ -11,6 +11,7 @@ interface UseEditorBatchActionsParams {
   fileName: string | null;
   supportsBatchActions: boolean;
   reloadEditorData: () => Promise<void>;
+  flushPendingSegmentUpdates: () => Promise<void>;
   aiFileJobTracker: AIFileJobTracker;
 }
 
@@ -26,11 +27,105 @@ export interface EditorBatchActionsController {
   handleExport: () => Promise<void>;
 }
 
+interface EditorFileExportApi {
+  saveFileDialog: typeof apiClient.saveFileDialog;
+  exportFile: typeof apiClient.exportFile;
+}
+
+interface EditorFileExportFeedback {
+  success: typeof feedbackService.success;
+  error: typeof feedbackService.error;
+  confirm: typeof feedbackService.confirm;
+}
+
+interface PendingSegmentFlushFeedback {
+  error: typeof feedbackService.error;
+}
+
+interface ExportEditorFileParams {
+  fileId: number;
+  fileName: string | null;
+  flushPendingSegmentUpdates: () => Promise<void>;
+  api?: EditorFileExportApi;
+  feedback?: EditorFileExportFeedback;
+}
+
+export async function exportEditorFile({
+  fileId,
+  fileName,
+  flushPendingSegmentUpdates,
+  api = apiClient,
+  feedback = feedbackService,
+}: ExportEditorFileParams): Promise<void> {
+  if (!fileName) return;
+
+  const saved = await flushPendingSegmentUpdatesForAction({
+    actionLabel: 'export',
+    flushPendingSegmentUpdates,
+    feedback,
+  });
+  if (!saved) return;
+
+  const defaultPath = fileName.replace(/(\.xlsx|\.csv)$/i, '_translated$1');
+  const outputPath = await api.saveFileDialog(defaultPath, [
+    { name: 'Spreadsheets', extensions: ['xlsx', 'csv'] },
+  ]);
+
+  if (!outputPath) return;
+
+  try {
+    await api.exportFile(fileId, outputPath);
+    feedback.success('Export successful');
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    if (!errorMessage.includes('Export blocked by QA errors')) {
+      feedback.error(`Export failed: ${errorMessage}`);
+      return;
+    }
+
+    const forceExport = await feedback.confirm(
+      `${errorMessage}\n\nDo you want to force export despite these errors?`,
+    );
+
+    if (!forceExport) return;
+
+    try {
+      await api.exportFile(fileId, outputPath, undefined, true);
+      feedback.success('Export successful (forced despite QA errors)');
+    } catch (forceError) {
+      feedback.error(
+        `Export failed: ${forceError instanceof Error ? forceError.message : String(forceError)}`,
+      );
+    }
+  }
+}
+
+export async function flushPendingSegmentUpdatesForAction({
+  actionLabel,
+  flushPendingSegmentUpdates,
+  feedback = feedbackService,
+}: {
+  actionLabel: string;
+  flushPendingSegmentUpdates: () => Promise<void>;
+  feedback?: PendingSegmentFlushFeedback;
+}): Promise<boolean> {
+  try {
+    await flushPendingSegmentUpdates();
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    feedback.error(`Failed to save pending segment edits before ${actionLabel}: ${message}`);
+    return false;
+  }
+}
+
 export function useEditorBatchActions({
   fileId,
   fileName,
   supportsBatchActions,
   reloadEditorData,
+  flushPendingSegmentUpdates,
   aiFileJobTracker,
 }: UseEditorBatchActionsParams): EditorBatchActionsController {
   const [isBatchAIModalOpen, setIsBatchAIModalOpen] = useState(false);
@@ -65,48 +160,24 @@ export function useEditorBatchActions({
   }, [trackedBatchAIJob]);
 
   const handleExport = useCallback(async () => {
-    if (!fileName) return;
-
-    const defaultPath = fileName.replace(/(\.xlsx|\.csv)$/i, '_translated$1');
-    const outputPath = await apiClient.saveFileDialog(defaultPath, [
-      { name: 'Spreadsheets', extensions: ['xlsx', 'csv'] },
-    ]);
-
-    if (!outputPath) return;
-
-    try {
-      await apiClient.exportFile(fileId, outputPath);
-      feedbackService.success('Export successful');
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
-      if (!errorMessage.includes('Export blocked by QA errors')) {
-        feedbackService.error(`Export failed: ${errorMessage}`);
-        return;
-      }
-
-      const forceExport = await feedbackService.confirm(
-        `${errorMessage}\n\nDo you want to force export despite these errors?`,
-      );
-
-      if (!forceExport) return;
-
-      try {
-        await apiClient.exportFile(fileId, outputPath, undefined, true);
-        feedbackService.success('Export successful (forced despite QA errors)');
-      } catch (forceError) {
-        feedbackService.error(
-          `Export failed: ${forceError instanceof Error ? forceError.message : String(forceError)}`,
-        );
-      }
-    }
-  }, [fileId, fileName]);
+    await exportEditorFile({
+      fileId,
+      fileName,
+      flushPendingSegmentUpdates,
+    });
+  }, [fileId, fileName, flushPendingSegmentUpdates]);
 
   const handleBatchAITranslate = useCallback(
     async (options: ProjectAITranslateSubmit) => {
       if (!supportsBatchActions) return;
 
       setIsBatchAIModalOpen(false);
+      const saved = await flushPendingSegmentUpdatesForAction({
+        actionLabel: 'AI translation',
+        flushPendingSegmentUpdates,
+      });
+      if (!saved) return;
+
       try {
         const jobId = await apiClient.aiTranslateFile(fileId, {
           targetBaseline: options.targetBaseline,
@@ -119,7 +190,7 @@ export function useEditorBatchActions({
         feedbackService.error(`Failed to start AI translation: ${message}`);
       }
     },
-    [aiFileJobTracker, fileId, supportsBatchActions],
+    [aiFileJobTracker, fileId, flushPendingSegmentUpdates, supportsBatchActions],
   );
 
   const handleBatchQA = useCallback(async () => {
@@ -127,6 +198,12 @@ export function useEditorBatchActions({
 
     setIsBatchQARunning(true);
     try {
+      const saved = await flushPendingSegmentUpdatesForAction({
+        actionLabel: 'QA',
+        flushPendingSegmentUpdates,
+      });
+      if (!saved) return;
+
       const report = await apiClient.runFileQA(fileId);
       await reloadEditorData();
       const feedback = buildFileQaFeedback(fileName, report);
@@ -140,7 +217,7 @@ export function useEditorBatchActions({
     } finally {
       setIsBatchQARunning(false);
     }
-  }, [fileId, fileName, reloadEditorData]);
+  }, [fileId, fileName, flushPendingSegmentUpdates, reloadEditorData]);
 
   const openBatchAIModal = useCallback(() => setIsBatchAIModalOpen(true), []);
   const closeBatchAIModal = useCallback(() => setIsBatchAIModalOpen(false), []);

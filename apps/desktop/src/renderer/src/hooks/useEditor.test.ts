@@ -10,6 +10,10 @@ import {
   createSegmentPersistor,
   useEditor,
 } from './useEditor';
+import {
+  buildOptimisticSegmentUpdate,
+  resolveSegmentStateUpdate,
+} from './editor/useSegmentPersistence';
 
 function createSegment(segmentId: string, targetText: string): Segment {
   return {
@@ -187,11 +191,91 @@ describe('createSegmentPersistor', () => {
       targetTokens: [{ type: 'text', content: 'text' }],
       status: 'draft',
     });
-    await persistor.flushSegment('seg-5');
+    await expect(persistor.flushSegment('seg-5')).rejects.toThrow('network down');
 
     expect(setSegmentSaveError).toHaveBeenCalledWith(
       'seg-5',
       expect.stringContaining('network down'),
+    );
+  });
+
+  it('flushSegment rejects when updateSegment fails', async () => {
+    const updateSegment = vi.fn().mockRejectedValue(new Error('network down'));
+    const setSegmentSaveError = vi.fn();
+    const clearSegmentSaveError = vi.fn();
+    const persistor = createSegmentPersistor({
+      updateSegment,
+      setSegmentSaveError,
+      clearSegmentSaveError,
+      debounceMs: 0,
+    });
+
+    persistor.queueSegmentUpdate({
+      segmentId: 'seg-flush-err',
+      targetTokens: [{ type: 'text', content: 'text' }],
+      status: 'draft',
+    });
+
+    await expect(persistor.flushSegment('seg-flush-err')).rejects.toThrow('network down');
+    expect(setSegmentSaveError).toHaveBeenCalledWith(
+      'seg-flush-err',
+      expect.stringContaining('network down'),
+    );
+  });
+
+  it('flushAll rejects when any segment update fails and still attempts all segments', async () => {
+    const updateSegment = vi.fn().mockImplementation((segmentId: string) => {
+      if (segmentId === 'seg-fail') return Promise.reject(new Error('save failed'));
+      return Promise.resolve();
+    });
+    const setSegmentSaveError = vi.fn();
+    const clearSegmentSaveError = vi.fn();
+    const persistor = createSegmentPersistor({
+      updateSegment,
+      setSegmentSaveError,
+      clearSegmentSaveError,
+      debounceMs: 0,
+    });
+
+    persistor.queueSegmentUpdate({
+      segmentId: 'seg-fail',
+      targetTokens: [{ type: 'text', content: 'fail' }],
+      status: 'draft',
+    });
+    persistor.queueSegmentUpdate({
+      segmentId: 'seg-ok',
+      targetTokens: [{ type: 'text', content: 'ok' }],
+      status: 'draft',
+    });
+
+    await expect(persistor.flushAll()).rejects.toThrow();
+    expect(updateSegment).toHaveBeenCalledWith('seg-fail', expect.anything(), 'draft', expect.any(String));
+    expect(updateSegment).toHaveBeenCalledWith('seg-ok', expect.anything(), 'draft', expect.any(String));
+  });
+
+  it('debounce-triggered persist records error without unhandled rejection', async () => {
+    vi.useFakeTimers();
+    const updateSegment = vi.fn().mockRejectedValue(new Error('timeout'));
+    const setSegmentSaveError = vi.fn();
+    const clearSegmentSaveError = vi.fn();
+    const persistor = createSegmentPersistor({
+      updateSegment,
+      setSegmentSaveError,
+      clearSegmentSaveError,
+      debounceMs: 100,
+    });
+
+    persistor.queueSegmentUpdate({
+      segmentId: 'seg-debounce-err',
+      targetTokens: [{ type: 'text', content: 'text' }],
+      status: 'draft',
+    });
+
+    await vi.advanceTimersByTimeAsync(150);
+
+    expect(setSegmentSaveError).toHaveBeenCalledWith(
+      'seg-debounce-err',
+      expect.stringContaining('timeout'),
     );
   });
 
@@ -246,5 +330,68 @@ describe('createSegmentPersistor', () => {
   it('keeps helper segment builder valid', () => {
     const segment = createSegment('seg-helper', 'value');
     expect(segment.segmentId).toBe('seg-helper');
+  });
+});
+
+describe('buildOptimisticSegmentUpdate', () => {
+  it('returns updated segments and a save payload synchronously', () => {
+    const original = createSegment('seg-optimistic', '');
+
+    const result = buildOptimisticSegmentUpdate([original], 'seg-optimistic', (segment) => ({
+      ...segment,
+      targetTokens: [{ type: 'text', content: 'Matched target' }],
+      status: 'draft',
+    }));
+
+    expect(result.updatedSegment).toMatchObject({
+      segmentId: 'seg-optimistic',
+      targetTokens: [{ type: 'text', content: 'Matched target' }],
+      status: 'draft',
+    });
+    expect(result.segments[0]).toBe(result.updatedSegment);
+  });
+
+  it('leaves state unchanged when the segment is missing', () => {
+    const original = [createSegment('seg-existing', '')];
+
+    const result = buildOptimisticSegmentUpdate(original, 'seg-missing', (segment) => ({
+      ...segment,
+      targetTokens: [{ type: 'text', content: 'Should not apply' }],
+    }));
+
+    expect(result.segments).toBe(original);
+    expect(result.updatedSegment).toBeUndefined();
+  });
+});
+
+describe('resolveSegmentStateUpdate', () => {
+  it('composes queued functional updates before building the next optimistic edit', () => {
+    const first = createSegment('seg-first', '');
+    const aiTarget = createSegment('seg-ai', '');
+    const current = [first, aiTarget];
+
+    const afterAI = resolveSegmentStateUpdate(current, (prev) =>
+      applyAISegmentTranslateResultToSegments(prev, {
+        segmentId: 'seg-ai',
+        targetTokens: [{ type: 'text', content: 'AI target' }],
+        status: 'translated',
+        propagatedIds: [],
+        serverAppliedAt: '2026-06-24T00:00:00.000Z',
+      }),
+    );
+    const afterEdit = buildOptimisticSegmentUpdate(afterAI, 'seg-first', (segment) => ({
+      ...segment,
+      targetTokens: [{ type: 'text', content: 'Manual edit' }],
+      status: 'draft',
+    }));
+
+    expect(afterEdit.segments.find((segment) => segment.segmentId === 'seg-first')).toMatchObject({
+      targetTokens: [{ type: 'text', content: 'Manual edit' }],
+      status: 'draft',
+    });
+    expect(afterEdit.segments.find((segment) => segment.segmentId === 'seg-ai')).toMatchObject({
+      targetTokens: [{ type: 'text', content: 'AI target' }],
+      status: 'translated',
+    });
   });
 });

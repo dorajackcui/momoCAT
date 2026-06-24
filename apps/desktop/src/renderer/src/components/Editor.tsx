@@ -11,8 +11,12 @@ import { EditorSidebar } from './editor/EditorSidebar';
 import { isVirtualizedEditorListEnabled } from './editor/editorVirtualizationFlag';
 import { useEditorLayout } from '../hooks/editor/useEditorLayout';
 import { useConcordanceShortcut } from '../hooks/editor/useConcordanceShortcut';
-import { useEditorBatchActions } from '../hooks/editor/useEditorBatchActions';
+import {
+  flushPendingSegmentUpdatesForAction,
+  useEditorBatchActions,
+} from '../hooks/editor/useEditorBatchActions';
 import type { AIFileJobTracker } from '../hooks/aiFileJobs';
+import { feedbackService } from '../services/feedbackService';
 
 interface EditorProps {
   fileId: number;
@@ -58,6 +62,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
     handleTranslationChange,
     handleSegmentEditStateChange,
     flushSegmentDraft,
+    flushPendingSegmentUpdates,
     translateSegmentWithAI,
     refineSegmentWithAI,
     confirmSegment,
@@ -118,6 +123,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
     fileName: file?.name || null,
     supportsBatchActions,
     reloadEditorData,
+    flushPendingSegmentUpdates,
     aiFileJobTracker,
   });
   const {
@@ -140,6 +146,18 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
   const handleExport = useCallback(() => {
     void handleBatchExport();
   }, [handleBatchExport]);
+
+  const handleBack = useCallback(() => {
+    void (async () => {
+      const saved = await flushPendingSegmentUpdatesForAction({
+        actionLabel: 'leaving the editor',
+        flushPendingSegmentUpdates,
+        feedback: feedbackService,
+      });
+      if (!saved) return;
+      onBack();
+    })();
+  }, [flushPendingSegmentUpdates, onBack]);
 
   const handleRunBatchQA = useCallback(() => {
     void handleBatchQA();
@@ -244,7 +262,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
         saveErrorCount={saveErrorCount}
         confirmedSegments={confirmedSegments}
         totalSegments={totalSegments}
-        onBack={onBack}
+        onBack={handleBack}
         onExport={handleExport}
       />
 
