@@ -154,7 +154,7 @@ describe('useProjectDetailData behavior helpers', () => {
     const count = await actions.commitToMainTM('tm-main', 101);
 
     expect(count).toBe(23);
-    expect(api.commitToMainTM).toHaveBeenCalledWith('tm-main', 101);
+    expect(api.commitToMainTM).toHaveBeenCalledWith('tm-main', 101, undefined);
     expect(loadData).toHaveBeenCalledTimes(1);
   });
 

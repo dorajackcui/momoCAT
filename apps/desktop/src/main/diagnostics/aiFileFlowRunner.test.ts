@@ -139,7 +139,7 @@ describe('runAIFileFlowTrace', () => {
           endpoint: '/mock',
         }),
         createResponse: vi.fn().mockResolvedValue({
-          content: windowPartialResponse('file-1:demo.xlsx', 'seg-1', '你好世界'),
+          content: windowPartialResponse('r1', '你好世界'),
           status: 200,
           endpoint: '/mock',
         }),
@@ -242,7 +242,7 @@ describe('runAIFileFlowTrace', () => {
           endpoint: '/mock',
         }),
         createResponse: vi.fn().mockResolvedValue({
-          content: windowPartialResponse('file-1:mt.xlsx', 'seg-imported', 'Texte de test'),
+          content: windowPartialResponse('r1', 'Texte de test'),
           status: 200,
           endpoint: '/mock',
         }),
@@ -340,11 +340,11 @@ function configureAIProvider(db: CATDatabase, projectId: number): void {
   db.updateProjectAISettings(projectId, null, providerId);
 }
 
-function windowPartialResponse(documentId: string, unitId: string, text: string): string {
+function windowPartialResponse(responseId: string, text: string): string {
   return JSON.stringify({
     translations: [
       {
-        id: `${encodeURIComponent(documentId)}#${encodeURIComponent(unitId)}`,
+        id: responseId,
         text,
       },
     ],
