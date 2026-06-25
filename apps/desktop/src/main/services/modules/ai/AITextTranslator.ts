@@ -66,7 +66,6 @@ interface TranslateTextParams {
   tbReferences?: PromptTBReference[];
   validationFeedback?: string;
   debug?: TranslateDebugMeta;
-  allowUnchanged?: boolean;
   promptDebugFlow?: 'segment' | 'refine' | 'test';
   promptDebugAttempt?: number;
   promptDebugSegmentId?: string;
@@ -104,7 +103,6 @@ export class AITextTranslator {
         concordanceReferences: params.concordanceReferences,
         tbReferences: params.tbReferences,
         validationFeedback,
-        allowUnchanged: normalizedType === 'review' || normalizedType === 'custom',
         promptDebugFlow: params.refinementInstruction ? 'refine' : 'segment',
         promptDebugSegmentId: params.segmentId,
         promptDebugAttempt: attempt,
@@ -193,18 +191,6 @@ export class AITextTranslator {
     const trimmed = response.content.trim();
     if (!trimmed) {
       throw new Error('AI provider response was empty');
-    }
-
-    const unchangedAgainstSource = trimmed === params.sourceText.trim();
-    const unchangedAgainstPayload = trimmed === promptBundle.sourcePayload.trim();
-    const allowUnchanged =
-      Boolean(params.allowUnchanged) || normalizedType === 'review' || normalizedType === 'custom';
-    if (
-      !allowUnchanged &&
-      (unchangedAgainstSource || unchangedAgainstPayload) &&
-      params.srcLang !== params.tgtLang
-    ) {
-      throw new Error(`Model returned source unchanged: ${trimmed}`);
     }
 
     return trimmed;

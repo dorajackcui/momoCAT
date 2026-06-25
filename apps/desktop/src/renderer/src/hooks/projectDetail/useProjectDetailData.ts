@@ -7,6 +7,7 @@ import type {
   ProjectFileRecord,
   TBWithStats,
   TMBatchMatchResult,
+  TMCommitOptions,
   TMWithStats,
 } from '../../../../shared/ipc';
 import { apiClient } from '../../services/apiClient';
@@ -29,7 +30,7 @@ export interface UseProjectDetailDataResult {
   unmountTM: (tmId: string) => Promise<void>;
   mountTB: (tbId: string) => Promise<void>;
   unmountTB: (tbId: string) => Promise<void>;
-  commitToMainTM: (tmId: string, fileId: number) => Promise<number>;
+  commitToMainTM: (tmId: string, fileId: number, options?: TMCommitOptions) => Promise<number>;
   matchFileWithTM: (fileId: number, tmId: string) => Promise<TMBatchMatchResult>;
 }
 
@@ -161,9 +162,9 @@ export function createProjectDetailActions({
         await (loadTBData ?? loadData)();
       });
     },
-    commitToMainTM: async (tmId: string, fileId: number) => {
+    commitToMainTM: async (tmId: string, fileId: number, options?: TMCommitOptions) => {
       return runMutation(async () => {
-        const count = await api.commitToMainTM(tmId, fileId);
+        const count = await api.commitToMainTM(tmId, fileId, options);
         await loadData();
         if (loadTMData) {
           await loadTMData();

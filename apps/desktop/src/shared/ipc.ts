@@ -152,6 +152,12 @@ export interface TMBatchMatchResult {
   skipped: number;
 }
 
+export type TMCommitScope = 'confirmed-only' | 'all';
+
+export interface TMCommitOptions {
+  scope?: TMCommitScope;
+}
+
 export interface ImportExecutionResult {
   success: number;
   skipped: number;
@@ -381,7 +387,7 @@ export interface DesktopApi {
     permission?: string,
   ) => Promise<void>;
   unmountTMFromProject: (projectId: number, tmId: string) => Promise<void>;
-  commitToMainTM: (tmId: string, fileId: number) => Promise<number>;
+  commitToMainTM: (tmId: string, fileId: number, options?: TMCommitOptions) => Promise<number>;
   matchFileWithTM: (fileId: number, tmId: string) => Promise<TMBatchMatchResult>;
   getTMImportPreview: (filePath: string) => Promise<SpreadsheetPreviewData>;
   importTMEntries: (tmId: string, filePath: string, options: TMImportOptions) => Promise<string>;

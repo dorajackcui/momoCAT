@@ -252,19 +252,11 @@ export async function runTestTranslation(
       sourceText: source,
       context,
       debug,
-      allowUnchanged: true,
       promptDebugFlow: 'test',
     });
 
-    const unchanged =
-      translatedText.trim() === source &&
-      project.srcLang !== project.tgtLang &&
-      project.projectType !== 'review' &&
-      project.projectType !== 'custom';
-
     return {
-      ok: !unchanged,
-      error: unchanged ? `Model returned source unchanged: ${translatedText}` : undefined,
+      ok: true,
       systemPrompt: debug.systemPrompt ?? '',
       userPrompt: debug.userPrompt ?? '',
       translatedText,

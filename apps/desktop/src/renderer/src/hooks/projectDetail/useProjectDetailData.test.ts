@@ -158,6 +158,25 @@ describe('useProjectDetailData behavior helpers', () => {
     expect(loadData).toHaveBeenCalledTimes(1);
   });
 
+  it('commitToMainTM passes commit options to the API', async () => {
+    const { runMutation, loadData } = createMutationHarness();
+    const api = {
+      mountTMToProject: vi.fn(async () => {}),
+      unmountTMFromProject: vi.fn(async () => {}),
+      mountTBToProject: vi.fn(async () => {}),
+      unmountTBFromProject: vi.fn(async () => {}),
+      commitToMainTM: vi.fn(async () => 5),
+      matchFileWithTM: vi.fn(async () => ({ total: 0, matched: 0, applied: 0, skipped: 0 })),
+    };
+    const actions = createProjectDetailActions({ projectId: 11, api, loadData, runMutation });
+
+    const count = await actions.commitToMainTM('tm-main', 101, { scope: 'all' });
+
+    expect(count).toBe(5);
+    expect(api.commitToMainTM).toHaveBeenCalledWith('tm-main', 101, { scope: 'all' });
+    expect(loadData).toHaveBeenCalledTimes(1);
+  });
+
   it('matchFileWithTM returns batch result and refreshes', async () => {
     const { runMutation, loadData } = createMutationHarness();
     const expected: TMBatchMatchResult = { total: 100, matched: 80, applied: 70, skipped: 10 };

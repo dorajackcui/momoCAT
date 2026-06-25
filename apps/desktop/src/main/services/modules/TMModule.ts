@@ -10,7 +10,7 @@ import type {
 } from '../ports';
 import { TMService } from '../TMService';
 import { SegmentService } from '../SegmentService';
-import type { TMImportOptions } from '../../../shared/ipc';
+import type { TMCommitOptions, TMImportOptions } from '../../../shared/ipc';
 import { TMImportService } from './tm/TMImportService';
 import { TMBatchOpsService } from './tm/TMBatchOpsService';
 import { TMQueryService } from './tm/TMQueryService';
@@ -97,8 +97,8 @@ export class TMModule {
     return this.importService.importTMEntries(tmId, filePath, options, onProgress);
   }
 
-  public async commitToMainTM(tmId: string, fileId: number) {
-    return this.batchOpsService.commitToMainTM(tmId, fileId);
+  public async commitToMainTM(tmId: string, fileId: number, options?: TMCommitOptions) {
+    return this.batchOpsService.commitToMainTM(tmId, fileId, options);
   }
 
   public async batchMatchFileWithTM(

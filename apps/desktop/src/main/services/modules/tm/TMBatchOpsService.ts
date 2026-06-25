@@ -3,6 +3,7 @@ import type { Segment } from '@cat/core/models';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { ProjectRepository, SegmentRepository, TMRepository } from '../../ports';
 import { SegmentService } from '../../SegmentService';
+import type { TMCommitOptions, TMCommitScope } from '../../../../shared/ipc';
 
 export class TMBatchOpsService {
   private static readonly SEGMENT_PAGE_SIZE = 2000;
@@ -14,15 +15,19 @@ export class TMBatchOpsService {
     private readonly segmentService: SegmentService,
   ) {}
 
-  public async commitToMainTM(tmId: string, fileId: number) {
+  public async commitToMainTM(tmId: string, fileId: number, options?: TMCommitOptions) {
     const tm = this.tmRepo.getTM(tmId);
     if (!tm) throw new Error('Target TM not found');
 
-    let confirmedCount = 0;
+    const scope = this.normalizeCommitScope(options);
+    let committedCount = 0;
 
     this.forEachFileSegment(fileId, (segment) => {
-      if (segment.status !== 'confirmed') return;
-      confirmedCount += 1;
+      const sourceText = serializeTokensToDisplayText(segment.sourceTokens);
+      const targetText = serializeTokensToDisplayText(segment.targetTokens);
+      if (!this.shouldCommitSegment(segment, scope, sourceText, targetText)) return;
+
+      committedCount += 1;
 
       const entryId = this.tmRepo.upsertTMEntryBySrcHash({
         id: randomUUID(),
@@ -43,13 +48,13 @@ export class TMBatchOpsService {
 
       this.tmRepo.replaceTMFts(
         tmId,
-        serializeTokensToDisplayText(segment.sourceTokens),
-        serializeTokensToDisplayText(segment.targetTokens),
+        sourceText,
+        targetText,
         entryId,
       );
     });
 
-    return confirmedCount;
+    return committedCount;
   }
 
   public async batchMatchFileWithTM(
@@ -123,5 +128,22 @@ export class TMBatchOpsService {
       hasMore = page.length === TMBatchOpsService.SEGMENT_PAGE_SIZE;
       offset += TMBatchOpsService.SEGMENT_PAGE_SIZE;
     }
+  }
+
+  private normalizeCommitScope(options?: TMCommitOptions): TMCommitScope {
+    return options?.scope === 'all' ? 'all' : 'confirmed-only';
+  }
+
+  private shouldCommitSegment(
+    segment: Segment,
+    scope: TMCommitScope,
+    sourceText: string,
+    targetText: string,
+  ): boolean {
+    if (scope === 'confirmed-only') {
+      return segment.status === 'confirmed';
+    }
+
+    return sourceText.trim().length > 0 && targetText.trim().length > 0;
   }
 }

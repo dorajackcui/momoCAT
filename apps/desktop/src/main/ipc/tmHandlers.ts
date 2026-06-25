@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import type { Segment } from '@cat/core/models';
-import type { StructuredJobError, TMImportOptions, TMType } from '../../shared/ipc';
+import type { StructuredJobError, TMCommitOptions, TMImportOptions, TMType } from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import { registerHandle } from './registerHandle';
 import type { JobBackedHandlerDeps } from './types';
@@ -100,8 +100,8 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.commitFile,
     (_event, ...args) => {
-      const [tmId, fileId] = args as [string, number];
-      return projectService.commitToMainTM(tmId, fileId);
+      const [tmId, fileId, options] = args as [string, number, TMCommitOptions | undefined];
+      return projectService.commitToMainTM(tmId, fileId, options);
     },
   );
 

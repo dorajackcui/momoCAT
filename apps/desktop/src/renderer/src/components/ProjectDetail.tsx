@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { DEFAULT_PROJECT_QA_SETTINGS, type ProjectQASettings } from '@cat/core/project';
-import type { ProjectFileRecord } from '../../../shared/ipc';
+import type { ProjectFileRecord, TMCommitScope } from '../../../shared/ipc';
 import { ColumnSelector } from './ColumnSelector';
 import { apiClient } from '../services/apiClient';
 import { feedbackService } from '../services/feedbackService';
@@ -34,6 +34,7 @@ export function ProjectDetail({
   const [activeTab, setActiveTab] = useState<'files' | 'tm' | 'tb'>('files');
   const [commitModalFile, setCommitModalFile] = useState<ProjectFileRecord | null>(null);
   const [commitTmId, setCommitTmId] = useState('');
+  const [commitScope, setCommitScope] = useState<TMCommitScope>('confirmed-only');
   const [matchModalFile, setMatchModalFile] = useState<ProjectFileRecord | null>(null);
   const [matchTmId, setMatchTmId] = useState('');
   const [qaSettingsOpen, setQaSettingsOpen] = useState(false);
@@ -126,18 +127,21 @@ export function ProjectDetail({
     }
     setCommitModalFile(file);
     setCommitTmId(mountedMainTMs[0].id);
+    setCommitScope('confirmed-only');
   };
 
   const confirmCommitModal = async () => {
     if (!commitModalFile || !commitTmId) return;
     try {
-      const count = await commitToMainTM(commitTmId, commitModalFile.id);
-      feedbackService.success(`Successfully committed ${count} confirmed segments to Main TM.`);
+      const count = await commitToMainTM(commitTmId, commitModalFile.id, { scope: commitScope });
+      const committedLabel = commitScope === 'all' ? 'eligible segments' : 'confirmed segments';
+      feedbackService.success(`Successfully committed ${count} ${committedLabel} to Main TM.`);
     } catch {
       feedbackService.error('Failed to commit segments');
     } finally {
       setCommitModalFile(null);
       setCommitTmId('');
+      setCommitScope('confirmed-only');
     }
   };
 
@@ -321,10 +325,13 @@ export function ProjectDetail({
         file={commitModalFile}
         mountedTMs={mountedTMs}
         selectedTmId={commitTmId}
+        commitScope={commitScope}
         onSelectedTmIdChange={setCommitTmId}
+        onCommitScopeChange={setCommitScope}
         onCancel={() => {
           setCommitModalFile(null);
           setCommitTmId('');
+          setCommitScope('confirmed-only');
         }}
         onConfirm={() => void confirmCommitModal()}
       />

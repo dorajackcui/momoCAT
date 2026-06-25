@@ -39,6 +39,7 @@ import type {
   ProxySettings,
   ProxySettingsInput,
   TBImportOptions,
+  TMCommitOptions,
   TMImportOptions,
 } from '../../shared/ipc';
 import type {
@@ -354,8 +355,8 @@ export class ProjectService {
     return this.tbModule.importTBEntries(tbId, filePath, options, onProgress);
   }
 
-  public async commitToMainTM(tmId: string, fileId: number) {
-    return this.tmModule.commitToMainTM(tmId, fileId);
+  public async commitToMainTM(tmId: string, fileId: number, options?: TMCommitOptions) {
+    return this.tmModule.commitToMainTM(tmId, fileId, options);
   }
 
   public async batchMatchFileWithTM(

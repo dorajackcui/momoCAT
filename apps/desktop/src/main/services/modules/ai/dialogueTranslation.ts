@@ -179,18 +179,6 @@ export async function translateDialogueUnit(
 
       for (const draft of params.unit.segments) {
         const translatedText = translations.get(draft.segment.segmentId) ?? '';
-        if (
-          isUnchangedOutput(
-            translatedText,
-            draft.sourceText,
-            draft.sourcePayload,
-            params.project.srcLang,
-            params.project.tgtLang,
-          )
-        ) {
-          issues.push(`Segment ${draft.segment.segmentId}: model returned source unchanged.`);
-          continue;
-        }
 
         let targetTokens: Token[];
         try {
@@ -325,18 +313,4 @@ function extractJsonPayload(raw: string): string {
 
 function readDialogueSpeaker(segment: Segment): string {
   return segment.meta?.context ? String(segment.meta.context).trim() : '';
-}
-
-function isUnchangedOutput(
-  translatedText: string,
-  sourceText: string,
-  sourcePayload: string,
-  srcLang: string,
-  tgtLang: string,
-): boolean {
-  if (srcLang === tgtLang) {
-    return false;
-  }
-  const trimmed = translatedText.trim();
-  return trimmed === sourceText.trim() || trimmed === sourcePayload.trim();
 }

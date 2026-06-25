@@ -55,8 +55,8 @@ export function createTMApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<TMApi
       ipcRenderer.invoke(IPC_CHANNELS.tm.unmount, projectId, tmId) as ReturnType<
         DesktopApi['unmountTMFromProject']
       >,
-    commitToMainTM: (tmId, fileId) =>
-      ipcRenderer.invoke(IPC_CHANNELS.tm.commitFile, tmId, fileId) as ReturnType<
+    commitToMainTM: (tmId, fileId, options) =>
+      ipcRenderer.invoke(IPC_CHANNELS.tm.commitFile, tmId, fileId, options) as ReturnType<
         DesktopApi['commitToMainTM']
       >,
     matchFileWithTM: (fileId, tmId) =>

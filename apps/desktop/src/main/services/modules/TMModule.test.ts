@@ -10,13 +10,18 @@ import { SqliteSegmentRepository } from '../adapters/SqliteSegmentRepository';
 import { SqliteTMRepository } from '../adapters/SqliteTMRepository';
 import { SqliteTransactionManager } from '../adapters/SqliteTransactionManager';
 
-function createSegment(segmentId: string, srcHash: string, status: Segment['status']): Segment {
+function createSegment(
+  segmentId: string,
+  srcHash: string,
+  status: Segment['status'],
+  targetText = '',
+): Segment {
   return {
     segmentId,
     fileId: 1,
     orderIndex: 0,
     sourceTokens: [{ type: 'text', content: 'Hello' }],
-    targetTokens: [],
+    targetTokens: targetText ? [{ type: 'text', content: targetText }] : [],
     status,
     tagsSignature: '',
     matchKey: 'hello',
@@ -64,6 +69,115 @@ class FailingSegmentRepository implements SegmentRepository {
     this.delegate.updateSegmentTarget(segmentId, targetTokens, status);
   }
 }
+
+function createCommitHarness(segments: Segment[]) {
+  const projectRepo = {} as ProjectRepository;
+  const segmentRepo = {
+    getSegmentsPage: vi.fn((fileId: number, offset: number) => {
+      if (fileId !== 1 || offset > 0) return [];
+      return segments;
+    }),
+  } as unknown as SegmentRepository;
+  const tmRepo = {
+    getTM: vi.fn().mockReturnValue({ id: 'tm-main', srcLang: 'en', tgtLang: 'zh' }),
+    upsertTMEntryBySrcHash: vi.fn((entry: { srcHash: string }) => `entry-${entry.srcHash}`),
+    replaceTMFts: vi.fn(),
+  } as unknown as TMRepository & {
+    upsertTMEntryBySrcHash: ReturnType<typeof vi.fn>;
+    replaceTMFts: ReturnType<typeof vi.fn>;
+  };
+  const tx = {
+    runInTransaction: <T>(fn: () => T) => fn(),
+  } as TransactionManager;
+  const segmentService = {} as SegmentService;
+  const module = new TMModule(
+    projectRepo,
+    segmentRepo,
+    tmRepo,
+    tx,
+    {} as TMService,
+    segmentService,
+    ':memory:',
+    vi.fn(),
+  );
+
+  return { module, tmRepo };
+}
+
+describe('TMModule.commitToMainTM', () => {
+  it('keeps the default scope limited to confirmed segments', async () => {
+    const { module, tmRepo } = createCommitHarness([
+      {
+        ...createSegment('seg-confirmed', 'hash-confirmed', 'confirmed', 'confirmed target'),
+        orderIndex: 0,
+        sourceTokens: [{ type: 'text', content: 'Confirmed source' }],
+        matchKey: 'confirmed source',
+      },
+      {
+        ...createSegment('seg-translated', 'hash-translated', 'translated', 'translated target'),
+        orderIndex: 1,
+        sourceTokens: [{ type: 'text', content: 'Translated source' }],
+        matchKey: 'translated source',
+      },
+    ]);
+
+    const count = await module.commitToMainTM('tm-main', 1);
+
+    expect(count).toBe(1);
+    expect(tmRepo.upsertTMEntryBySrcHash).toHaveBeenCalledTimes(1);
+    expect(tmRepo.upsertTMEntryBySrcHash).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tmId: 'tm-main',
+        srcHash: 'hash-confirmed',
+        targetTokens: [{ type: 'text', content: 'confirmed target' }],
+      }),
+    );
+  });
+
+  it('can commit all statuses that have source and target text', async () => {
+    const rows: Segment[] = [
+      createSegment('seg-new', 'hash-new', 'new', 'new target'),
+      createSegment('seg-draft', 'hash-draft', 'draft', 'draft target'),
+      createSegment('seg-translated', 'hash-translated', 'translated', 'translated target'),
+      createSegment('seg-reviewed', 'hash-reviewed', 'reviewed', 'reviewed target'),
+      createSegment('seg-confirmed', 'hash-confirmed', 'confirmed', 'confirmed target'),
+      createSegment('seg-empty-target', 'hash-empty-target', 'translated'),
+      {
+        ...createSegment('seg-empty-source', 'hash-empty-source', 'translated', 'target only'),
+        sourceTokens: [],
+        matchKey: '',
+      },
+    ].map((segment, index) => ({
+      ...segment,
+      fileId: 1,
+      orderIndex: index,
+      sourceTokens:
+        segment.segmentId === 'seg-empty-source'
+          ? []
+          : [{ type: 'text', content: `${segment.segmentId} source` }],
+      matchKey: segment.segmentId === 'seg-empty-source' ? '' : `${segment.segmentId} source`,
+    }));
+
+    const { module, tmRepo } = createCommitHarness(rows);
+
+    const count = await module.commitToMainTM('tm-main', 1, { scope: 'all' });
+
+    expect(count).toBe(5);
+    const committedHashes = tmRepo.upsertTMEntryBySrcHash.mock.calls.map(
+      ([entry]) => entry.srcHash,
+    );
+    expect(committedHashes).toEqual([
+      'hash-new',
+      'hash-draft',
+      'hash-translated',
+      'hash-reviewed',
+      'hash-confirmed',
+    ]);
+    expect(committedHashes).not.toContain('hash-empty-target');
+    expect(committedHashes).not.toContain('hash-empty-source');
+    expect(tmRepo.replaceTMFts).toHaveBeenCalledTimes(5);
+  });
+});
 
 describe('TMModule.batchMatchFileWithTM', () => {
   let db: CATDatabase | undefined;
