@@ -34,6 +34,7 @@ import type {
   AIBatchMode,
   AIBatchTargetBaseline,
   AIBatchTargetScope,
+  FileInspectResult,
   ImportOptions,
   PastedSourceFileInput,
   ProxySettings,
@@ -381,7 +382,7 @@ export class ProjectService {
     );
   }
 
-  public async inspectFile(fileId: number, outputPath: string) {
+  public async inspectFile(fileId: number, outputPath: string): Promise<FileInspectResult> {
     return this.projectModule.inspectFile(fileId, outputPath);
   }
 

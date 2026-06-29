@@ -9,7 +9,6 @@ import {
   type ProjectType,
 } from '@cat/core/project';
 import { evaluateSegmentQa, validateSegmentTags } from '@cat/core/qa';
-import type { InspectFileResult } from '@cat/localization';
 import {
   ImportOptions,
   ProjectRepository,
@@ -17,7 +16,7 @@ import {
   SpreadsheetGateway,
   SpreadsheetPreviewData,
 } from '../ports';
-import type { PastedSourceFileInput } from '../../../shared/ipc';
+import type { FileInspectResult, PastedSourceFileInput } from '../../../shared/ipc';
 import {
   buildPastedSourceCsv,
   buildPastedSourceFileName,
@@ -338,7 +337,7 @@ export class ProjectFileModule {
     await this.filter.export(storedPath, segments, finalOptions, outputPath);
   }
 
-  public async inspectFile(_fileId: number, _outputPath: string): Promise<InspectFileResult> {
+  public async inspectFile(_fileId: number, _outputPath: string): Promise<FileInspectResult> {
     throw new Error('File inspect is not configured.');
   }
 

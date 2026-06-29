@@ -155,13 +155,13 @@ Modify `apps/desktop/src/main/services/modules/ProjectFileModule.ts`.
 Add this import:
 
 ```ts
-import type { InspectFileResult } from '@cat/localization';
+import type { FileInspectResult } from '../../../shared/ipc';
 ```
 
 Add this method before `runFileQA`:
 
 ```ts
-public async inspectFile(_fileId: number, _outputPath: string): Promise<InspectFileResult> {
+public async inspectFile(_fileId: number, _outputPath: string): Promise<FileInspectResult> {
   throw new Error('File inspect is not configured.');
 }
 ```
@@ -171,7 +171,7 @@ Modify `apps/desktop/src/main/services/ProjectService.ts`.
 Add this method after `runFileQA`:
 
 ```ts
-public async inspectFile(fileId: number, outputPath: string) {
+public async inspectFile(fileId: number, outputPath: string): Promise<FileInspectResult> {
   return this.projectModule.inspectFile(fileId, outputPath);
 }
 ```
@@ -227,6 +227,7 @@ Add this import:
 
 ```ts
 import type { InspectFileInput, InspectFileResult } from '@cat/localization';
+import type { FileInspectResult } from '../../../shared/ipc';
 ```
 
 Add this describe block after the existing `ProjectFileModule.createPastedSourceFile` tests:
@@ -306,6 +307,12 @@ describe('ProjectFileModule.inspectFile', () => {
 
     const result = await module.inspectFile(12, outputPath);
 
+    expect(result).toEqual({
+      outputPath,
+      jsonOutputPath: outputPath.replace(/\.xlsx$/i, '.json'),
+      summary: { total: 2, ready: 2, error: 0 },
+    } satisfies FileInspectResult);
+    expect('artifact' in result).toBe(false);
     expect(result.summary).toEqual({ total: 2, ready: 2, error: 0 });
     expect(inspectFileRunner).toHaveBeenCalledTimes(1);
     expect(calls[0]).toEqual({
@@ -379,6 +386,7 @@ import type { InspectFileInput, InspectFileResult } from '@cat/localization';
 Add this import:
 
 ```ts
+import type { FileInspectResult } from '../../../shared/ipc';
 import {
   parseFileImportOptions,
   resolveImportOptionsTagPolicy,
@@ -406,7 +414,7 @@ constructor(
 Replace the temporary `inspectFile` method with:
 
 ```ts
-public async inspectFile(fileId: number, outputPath: string): Promise<InspectFileResult> {
+public async inspectFile(fileId: number, outputPath: string): Promise<FileInspectResult> {
   if (!this.inspectFileRunner) {
     throw new Error('File inspect is not configured.');
   }
@@ -436,7 +444,7 @@ public async inspectFile(fileId: number, outputPath: string): Promise<InspectFil
     columns.contextCol = importOptions.contextCol;
   }
 
-  return this.inspectFileRunner({
+  const result = await this.inspectFileRunner({
     projectId: project.id,
     inputPath,
     outputPath,
@@ -447,6 +455,12 @@ public async inspectFile(fileId: number, outputPath: string): Promise<InspectFil
       tagPolicy: resolveImportOptionsTagPolicy(importOptions),
     },
   });
+
+  return {
+    outputPath: result.outputPath,
+    jsonOutputPath: result.jsonOutputPath,
+    summary: result.summary,
+  };
 }
 ```
 
@@ -534,6 +548,15 @@ Update the ProjectFileModule import:
 
 ```ts
 import { ProjectFileModule, type InspectFileRunner } from './modules/ProjectFileModule';
+```
+
+Ensure `FileInspectResult` remains imported from `../../shared/ipc`, and keep the
+desktop service method renderer-safe:
+
+```ts
+public async inspectFile(fileId: number, outputPath: string): Promise<FileInspectResult> {
+  return this.projectModule.inspectFile(fileId, outputPath);
+}
 ```
 
 Add this dependency field to `ProjectServiceDependencies`:
@@ -954,6 +977,7 @@ git commit -m "feat: add desktop file inspect action"
   - No unspecified tasks, deferred implementation notes, or open requirements remain in the plan.
 - Type consistency:
   - `FileInspectResult` is the renderer/preload-safe subset of `InspectFileResult`.
-  - `InspectFileRunner` accepts `InspectFileInput` and returns `InspectFileResult`.
+  - `InspectFileRunner` accepts `InspectFileInput` and returns localization `InspectFileResult`.
+  - `ProjectFileModule.inspectFile`, `ProjectService.inspectFile`, and `DesktopApi.inspectFile` return desktop `FileInspectResult`; the main-process module maps `{ outputPath, jsonOutputPath, summary }` from the full runner result.
   - `ProjectService.inspectFile`, `ProjectFileModule.inspectFile`, and `DesktopApi.inspectFile` all use `(fileId: number, outputPath: string)`.
   - Renderer code passes the full `ProjectFileRecord` only inside the renderer helper; IPC only receives `fileId` and `outputPath`.

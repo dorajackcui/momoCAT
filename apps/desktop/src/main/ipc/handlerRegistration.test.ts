@@ -8,6 +8,7 @@ import { registerTBHandlers } from './tbHandlers';
 import { registerAIHandlers } from './aiHandlers';
 import { registerDialogHandlers } from './dialogHandlers';
 import { registerClipboardHandlers } from './clipboardHandlers';
+import type { IpcMainListener } from './types';
 
 describe('IPC handler registration smoke', () => {
   it('registers all domain channels via modular handlers', () => {
@@ -50,5 +51,27 @@ describe('IPC handler registration smoke', () => {
     expectedChannels.forEach((channel) => {
       expect(registeredChannels.has(channel)).toBe(true);
     });
+  });
+
+  it('delegates file inspect requests to the project service with the selected output path', async () => {
+    const handlers = new Map<string, IpcMainListener>();
+    const handle = vi.fn((channel: string, listener: IpcMainListener) => {
+      handlers.set(channel, listener);
+    });
+    const inspectResult = {
+      outputPath: 'inspect.xlsx',
+      jsonOutputPath: 'inspect.json',
+      summary: { total: 3, ready: 2, error: 1 },
+    };
+    const inspectFile = vi.fn().mockResolvedValue(inspectResult);
+    const projectService = { inspectFile } as unknown as ProjectService;
+
+    registerProjectHandlers({ ipcMain: { handle }, projectService });
+
+    const handler = handlers.get(IPC_CHANNELS.file.inspect);
+    expect(handler).toBeDefined();
+
+    await expect(handler?.({}, 7, 'inspect.xlsx')).resolves.toBe(inspectResult);
+    expect(inspectFile).toHaveBeenCalledWith(7, 'inspect.xlsx');
   });
 });
