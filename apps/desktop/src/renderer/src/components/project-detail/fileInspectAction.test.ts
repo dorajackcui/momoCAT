@@ -39,7 +39,7 @@ describe('buildInspectDefaultPath', () => {
 });
 
 describe('runFileInspectAction', () => {
-  it('exports file inspect output inside mutation and reports success', async () => {
+  it('exports file inspect output inside mutation and reports partial issues as info', async () => {
     const order: string[] = [];
     const result: FileInspectResult = {
       outputPath: 'D:/out/demo_inspect.xlsx',
@@ -58,6 +58,7 @@ describe('runFileInspectAction', () => {
       return mutationResult;
     });
     const success = vi.fn();
+    const info = vi.fn();
     const error = vi.fn();
 
     const actual = await runFileInspectAction(createFile(), {
@@ -65,6 +66,7 @@ describe('runFileInspectAction', () => {
       inspectFile,
       runMutation,
       success,
+      info,
       error,
     });
 
@@ -76,7 +78,38 @@ describe('runFileInspectAction', () => {
       'inspect:7:D:/out/demo_inspect.xlsx',
       'mutation:end',
     ]);
-    expect(success).toHaveBeenCalledWith('Inspect exported: 2/3 source rows ready.');
+    expect(info).toHaveBeenCalledWith(
+      'Inspect exported with issues: 2/3 source rows ready, 1 failed.',
+    );
+    expect(success).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    expect(actual).toBe(result);
+  });
+
+  it('reports pure inspect exports as success', async () => {
+    const result: FileInspectResult = {
+      outputPath: 'D:/out/demo_inspect.xlsx',
+      jsonOutputPath: 'D:/out/demo_inspect.json',
+      summary: { total: 3, ready: 3, error: 0 },
+    };
+    const saveFileDialog = vi.fn(async () => 'D:/out/demo_inspect.xlsx');
+    const inspectFile = vi.fn(async () => result);
+    const runMutation = vi.fn(async <T>(fn: () => Promise<T>) => fn());
+    const success = vi.fn();
+    const info = vi.fn();
+    const error = vi.fn();
+
+    const actual = await runFileInspectAction(createFile(), {
+      saveFileDialog,
+      inspectFile,
+      runMutation,
+      success,
+      info,
+      error,
+    });
+
+    expect(success).toHaveBeenCalledWith('Inspect exported: 3/3 source rows ready.');
+    expect(info).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
     expect(actual).toBe(result);
   });
@@ -91,12 +124,40 @@ describe('runFileInspectAction', () => {
       inspectFile,
       runMutation,
       success: vi.fn(),
+      info: vi.fn(),
       error: vi.fn(),
     });
 
     expect(saveFileDialog).toHaveBeenCalledWith('demo_inspect.xlsx', INSPECT_OUTPUT_FILTERS);
     expect(inspectFile).not.toHaveBeenCalled();
     expect(runMutation).not.toHaveBeenCalled();
+    expect(actual).toBeNull();
+  });
+
+  it('reports save dialog failures with the thrown error message', async () => {
+    const saveFileDialog = vi.fn(async () => {
+      throw new Error('dialog blew up');
+    });
+    const inspectFile = vi.fn();
+    const runMutation = vi.fn(async <T>(fn: () => Promise<T>) => fn());
+    const success = vi.fn();
+    const info = vi.fn();
+    const error = vi.fn();
+
+    const actual = await runFileInspectAction(createFile(), {
+      saveFileDialog,
+      inspectFile,
+      runMutation,
+      success,
+      info,
+      error,
+    });
+
+    expect(inspectFile).not.toHaveBeenCalled();
+    expect(runMutation).not.toHaveBeenCalled();
+    expect(success).not.toHaveBeenCalled();
+    expect(info).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith('Inspect failed: dialog blew up');
     expect(actual).toBeNull();
   });
 
@@ -107,6 +168,7 @@ describe('runFileInspectAction', () => {
     });
     const runMutation = vi.fn(async <T>(fn: () => Promise<T>) => fn());
     const success = vi.fn();
+    const info = vi.fn();
     const error = vi.fn();
 
     const actual = await runFileInspectAction(createFile(), {
@@ -114,11 +176,13 @@ describe('runFileInspectAction', () => {
       inspectFile,
       runMutation,
       success,
+      info,
       error,
     });
 
     expect(inspectFile).toHaveBeenCalledWith(7, 'D:/out/demo_inspect.xlsx');
     expect(success).not.toHaveBeenCalled();
+    expect(info).not.toHaveBeenCalled();
     expect(error).toHaveBeenCalledWith('Inspect failed: inspect blew up');
     expect(actual).toBeNull();
   });

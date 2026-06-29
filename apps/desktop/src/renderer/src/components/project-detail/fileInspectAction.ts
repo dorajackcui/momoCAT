@@ -19,6 +19,7 @@ export interface RunFileInspectActionDeps {
   inspectFile: DesktopApi['inspectFile'];
   runMutation: <T>(fn: () => Promise<T>) => Promise<T>;
   success: (message: string) => void;
+  info: (message: string) => void;
   error: (message: string) => void;
 }
 
@@ -26,17 +27,23 @@ export async function runFileInspectAction(
   file: ProjectFileRecord,
   deps: RunFileInspectActionDeps,
 ): Promise<FileInspectResult | null> {
-  const outputPath = await deps.saveFileDialog(
-    buildInspectDefaultPath(file.name),
-    INSPECT_OUTPUT_FILTERS,
-  );
-  if (!outputPath) return null;
-
   try {
-    const result = await deps.runMutation(() => deps.inspectFile(file.id, outputPath));
-    deps.success(
-      `Inspect exported: ${result.summary.ready}/${result.summary.total} source rows ready.`,
+    const outputPath = await deps.saveFileDialog(
+      buildInspectDefaultPath(file.name),
+      INSPECT_OUTPUT_FILTERS,
     );
+    if (!outputPath) return null;
+
+    const result = await deps.runMutation(() => deps.inspectFile(file.id, outputPath));
+    const { ready, total } = result.summary;
+    const errorCount = result.summary.error;
+    if (errorCount > 0) {
+      deps.info(
+        `Inspect exported with issues: ${ready}/${total} source rows ready, ${errorCount} failed.`,
+      );
+    } else {
+      deps.success(`Inspect exported: ${ready}/${total} source rows ready.`);
+    }
     return result;
   } catch (caught) {
     deps.error(`Inspect failed: ${caught instanceof Error ? caught.message : String(caught)}`);

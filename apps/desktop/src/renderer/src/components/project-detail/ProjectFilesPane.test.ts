@@ -113,6 +113,16 @@ describe('ProjectFilesPane', () => {
     expect(html).not.toContain('AI Translate Options');
   });
 
+  it('keeps file actions wrappable and visible on keyboard focus', () => {
+    const { ai } = createAIControllerMock();
+    const html = renderPane(ai, 'translation');
+
+    expect(html).toContain('max-w-[34rem]');
+    expect(html).toContain('flex-wrap');
+    expect(html).toContain('justify-end');
+    expect(html).toContain('group-focus-within:opacity-100');
+  });
+
   it('renders target baseline options without legacy translation scope controls', () => {
     const html = renderToStaticMarkup(
       React.createElement(ProjectAITranslateModal, {
@@ -155,5 +165,13 @@ describe('ProjectFilesPane', () => {
     expect(html).toContain('AI Review');
     expect(html).not.toContain('Inspect');
     expect(html).not.toContain('AI Translate Options');
+  });
+
+  it('does not show Inspect for custom projects', () => {
+    const { ai } = createAIControllerMock();
+    const html = renderPane(ai, 'custom');
+
+    expect(html).toContain('AI Process');
+    expect(html).not.toContain('Inspect');
   });
 });

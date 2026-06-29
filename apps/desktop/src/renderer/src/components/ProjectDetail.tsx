@@ -263,6 +263,7 @@ export function ProjectDetail({
       inspectFile: apiClient.inspectFile,
       runMutation,
       success: (message) => feedbackService.success(message),
+      info: (message) => feedbackService.info(message),
       error: (message) => feedbackService.error(message),
     });
   };
