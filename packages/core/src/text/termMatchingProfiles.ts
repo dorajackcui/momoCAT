@@ -14,6 +14,28 @@ const WORD_RE = /[\p{L}\p{N}]+(?:[.'-][\p{L}\p{N}]+)*/gu;
 const LATIN_LETTER_RE = /[a-z]/i;
 const LETTER_OR_NUMBER_RE = /[\p{L}\p{N}]/u;
 const MAX_ALIAS_TERMS = 24;
+const MAX_ENGLISH_SEARCH_EXACT_TERMS = 128;
+const ENGLISH_STOPWORDS = new Set([
+  'a',
+  'an',
+  'and',
+  'are',
+  'as',
+  'at',
+  'be',
+  'by',
+  'for',
+  'from',
+  'in',
+  'is',
+  'it',
+  'of',
+  'on',
+  'or',
+  'the',
+  'to',
+  'with',
+]);
 
 function isEnglishLocale(locale?: string): boolean {
   return locale?.toLowerCase() === 'en' || locale?.toLowerCase().startsWith('en-') || false;
@@ -23,9 +45,9 @@ function hasCjkLikeScript(value: string): boolean {
   return CJK_LIKE_RE.test(value);
 }
 
-function addAlias(target: Set<string>, value: string): void {
+function addAlias(target: Set<string>, value: string, maxAliases = MAX_ALIAS_TERMS): void {
   const alias = value.trim();
-  if (alias.length < 2 || target.size >= MAX_ALIAS_TERMS) return;
+  if (alias.length < 2 || target.size >= maxAliases) return;
   target.add(alias);
 }
 
@@ -73,84 +95,72 @@ function dottedAcronym(value: string, rawValue: string): string | null {
 
 function undotAcronym(value: string, rawValue: string): string | null {
   const letters = dottedAcronymLettersFromRaw(rawValue);
-  if (!letters || letters !== value.replace(/\./g, '')) return null;
+  if (!letters || letters !== value.replace(/\./g, '').toLowerCase()) return null;
   return letters;
 }
 
 function addEnglishAliases(
   target: Set<string>,
   value: string,
-  options?: { includePossessive?: boolean; includeUndottedAcronym?: boolean },
+  options?: {
+    includePossessive?: boolean;
+    includeUndottedAcronym?: boolean;
+    maxAliases?: number;
+  },
 ): void {
   const normalized = normalizeTermForLookup(value, { locale: 'en-US' });
   if (!LATIN_LETTER_RE.test(normalized)) return;
+  const maxAliases = options?.maxAliases ?? MAX_ALIAS_TERMS;
 
-  addAlias(target, normalized);
+  addAlias(target, normalized, maxAliases);
 
   const delimiterVariants: string[] = [];
   if (normalized.includes('-')) delimiterVariants.push(normalized.replace(/-/g, ' '));
   if (normalized.includes(' ')) delimiterVariants.push(normalized.replace(/\s+/g, '-'));
   for (const variant of delimiterVariants) {
-    addAlias(target, variant);
+    addAlias(target, variant, maxAliases);
   }
 
-  addTrailingWordInflectionAliases(target, normalized);
+  addTrailingWordInflectionAliases(target, normalized, maxAliases);
   for (const variant of delimiterVariants) {
-    addTrailingWordInflectionAliases(target, variant);
+    addTrailingWordInflectionAliases(target, variant, maxAliases);
   }
 
   const undotted =
     options?.includeUndottedAcronym === false ? null : undotAcronym(normalized, value);
-  if (undotted) addAlias(target, undotted);
+  if (undotted) addAlias(target, undotted, maxAliases);
 
   const dotted = dottedAcronym(normalized, value);
-  if (dotted) addAlias(target, dotted);
+  if (dotted) addAlias(target, dotted, maxAliases);
 
   const singular = singularizeRegularWord(normalized);
-  if (singular) addAlias(target, singular);
+  if (singular) addAlias(target, singular, maxAliases);
 
   const plural = singular ? null : pluralizeRegularWord(normalized);
-  if (plural) addAlias(target, plural);
+  if (plural) addAlias(target, plural, maxAliases);
 
-  if (options?.includePossessive ?? true) {
-    if (!normalized.endsWith("'s")) addAlias(target, `${normalized}'s`);
-    if (!normalized.endsWith("s'")) addAlias(target, `${normalized}s'`);
+  if ((options?.includePossessive ?? true) && !normalized.includes("'")) {
+    addAlias(target, normalized.endsWith('s') ? `${normalized}'` : `${normalized}'s`, maxAliases);
   }
 }
 
-function addTrailingWordInflectionAliases(target: Set<string>, value: string): void {
+function addTrailingWordInflectionAliases(
+  target: Set<string>,
+  value: string,
+  maxAliases = MAX_ALIAS_TERMS,
+): void {
   const match = /^(.*[\s-])([a-z]+)$/iu.exec(value);
   if (!match) return;
 
   const [, prefix, word] = match;
   const singular = singularizeRegularWord(word);
   if (singular) {
-    addAlias(target, `${prefix}${singular}`);
+    addAlias(target, `${prefix}${singular}`, maxAliases);
     return;
   }
 
   const plural = pluralizeRegularWord(word);
-  if (plural) addAlias(target, `${prefix}${plural}`);
-}
-
-function buildEnglishAliases(
-  value: string,
-  options?: {
-    includeWholeValue?: boolean;
-    includePossessive?: boolean;
-    includeUndottedAcronym?: boolean;
-  },
-): string[] {
-  const aliases = new Set<string>();
-  if (options?.includeWholeValue ?? true) {
-    addEnglishAliases(aliases, value, options);
-  }
-
-  for (const match of value.normalize('NFKC').matchAll(WORD_RE)) {
-    addEnglishAliases(aliases, match[0], options);
-  }
-
-  return Array.from(aliases);
+  if (plural) addAlias(target, `${prefix}${plural}`, maxAliases);
 }
 
 function buildEnglishWholeTermAliases(
@@ -162,22 +172,137 @@ function buildEnglishWholeTermAliases(
   return Array.from(aliases);
 }
 
-function mergeWithBoundedAdditions(
-  primary: string[],
-  additions: string[],
-  maxAdditions: number,
-): string[] {
-  const merged = new Set(primary);
-  let added = 0;
+function isEnglishStopword(value: string): boolean {
+  return ENGLISH_STOPWORDS.has(value.toLowerCase());
+}
 
-  for (const value of additions) {
-    if (merged.has(value)) continue;
-    if (added >= maxAdditions) break;
-    merged.add(value);
-    added += 1;
+function stripEnglishPossessive(value: string): string {
+  return value.replace(/(?:'s|s')$/iu, '');
+}
+
+function compactEnglishLetters(value: string): string {
+  return value.replace(/[^a-z0-9]+/giu, '').toLowerCase();
+}
+
+function isEnglishAcronymLikeRaw(value: string): boolean {
+  return Boolean(undottedAcronymLettersFromRaw(value) || dottedAcronymLettersFromRaw(value));
+}
+
+function isSignificantEnglishLookupTerm(value: string, rawValue?: string): boolean {
+  const compact = compactEnglishLetters(stripEnglishPossessive(value));
+  if (!compact || isEnglishStopword(compact)) return false;
+  if (compact.length >= 3) return true;
+  return rawValue ? isEnglishAcronymLikeRaw(rawValue) : false;
+}
+
+function addSearchAlias(target: Set<string>, value: string): void {
+  addAlias(target, value, MAX_ENGLISH_SEARCH_EXACT_TERMS);
+}
+
+function addEnglishSearchTokenAliases(target: Set<string>, rawValue: string): void {
+  const normalized = normalizeTermForLookup(rawValue, { locale: 'en-US' });
+  const base = stripEnglishPossessive(normalized);
+  const values = normalized === base ? [base] : [base, normalized];
+  const undotted = undotAcronym(normalized, rawValue);
+  const dotted = dottedAcronym(normalized, rawValue);
+
+  if (undotted) addSearchAlias(target, undotted);
+  if (dotted) addSearchAlias(target, dotted);
+
+  for (const value of values) {
+    if (!isSignificantEnglishLookupTerm(value, rawValue)) continue;
+    addEnglishAliases(target, value, {
+      includePossessive: true,
+      maxAliases: MAX_ENGLISH_SEARCH_EXACT_TERMS,
+    });
+  }
+}
+
+function tokenizeEnglishPhraseWords(value: string): string[] {
+  const words: string[] = [];
+
+  for (const match of value.normalize('NFKC').matchAll(WORD_RE)) {
+    const normalized = stripEnglishPossessive(
+      normalizeTermForLookup(match[0], { locale: 'en-US' }),
+    );
+    for (const word of normalized.split(/[.\s-]+/u)) {
+      if (word.length > 0) words.push(word);
+    }
   }
 
-  return Array.from(merged);
+  return words;
+}
+
+function countSignificantEnglishWords(words: string[]): number {
+  return words.filter((word) => isSignificantEnglishLookupTerm(word)).length;
+}
+
+function buildDelimiterPhraseVariants(words: string[]): string[] {
+  const variants = new Set<string>([words.join(' ')]);
+
+  for (let index = 0; index < words.length - 1; index += 1) {
+    const parts: string[] = [];
+    for (let wordIndex = 0; wordIndex < words.length; wordIndex += 1) {
+      parts.push(words[wordIndex]);
+      if (wordIndex < words.length - 1) {
+        parts.push(wordIndex === index ? '-' : ' ');
+      }
+    }
+    variants.add(parts.join(''));
+  }
+
+  if (words.length > 2) {
+    variants.add(words.join('-'));
+  }
+
+  return Array.from(variants);
+}
+
+function addEnglishSearchPhraseAliases(target: Set<string>, value: string): void {
+  const words = tokenizeEnglishPhraseWords(value);
+
+  for (let size = 2; size <= 4; size += 1) {
+    for (let start = 0; start <= words.length - size; start += 1) {
+      const slice = words.slice(start, start + size);
+      const first = slice[0];
+      const last = slice[slice.length - 1];
+      if (isEnglishStopword(first) || isEnglishStopword(last)) continue;
+      if (countSignificantEnglishWords(slice) < 2) continue;
+
+      for (const phrase of buildDelimiterPhraseVariants(slice)) {
+        addSearchAlias(target, phrase);
+        addTrailingWordInflectionAliases(target, phrase, MAX_ENGLISH_SEARCH_EXACT_TERMS);
+      }
+    }
+  }
+}
+
+function buildEnglishSearchExactLookupTerms(value: string, strictPlan: TermSearchPlan): string[] {
+  const terms = new Set<string>();
+
+  for (const term of strictPlan.exactLookupTerms) {
+    if (isEnglishStopword(compactEnglishLetters(term))) continue;
+    if (term.trim().length >= 2) terms.add(term.trim());
+  }
+
+  for (const match of value.normalize('NFKC').matchAll(WORD_RE)) {
+    addEnglishSearchTokenAliases(terms, match[0]);
+  }
+
+  addEnglishSearchPhraseAliases(terms, value);
+
+  return Array.from(terms);
+}
+
+function shouldKeepEnglishFtsFragment(fragment: string): boolean {
+  const words = fragment.split(/\s+/u).filter(Boolean);
+  if (words.length < 2) return false;
+  if (isEnglishStopword(words[0]) || isEnglishStopword(words[words.length - 1])) return false;
+  return countSignificantEnglishWords(words) >= 2;
+}
+
+function filterEnglishFtsFragments(fragments: string[]): string[] {
+  return fragments.filter(shouldKeepEnglishFtsFragment);
 }
 
 export function buildTermSearchPlanForLocale(
@@ -188,12 +313,8 @@ export function buildTermSearchPlanForLocale(
   if (!isEnglishLocale(options?.locale)) return strictPlan;
 
   return {
-    ftsFragments: strictPlan.ftsFragments,
-    exactLookupTerms: mergeWithBoundedAdditions(
-      strictPlan.exactLookupTerms,
-      buildEnglishAliases(value, { includeWholeValue: false, includePossessive: false }),
-      MAX_ALIAS_TERMS,
-    ),
+    ftsFragments: filterEnglishFtsFragments(strictPlan.ftsFragments),
+    exactLookupTerms: buildEnglishSearchExactLookupTerms(value, strictPlan),
   };
 }
 

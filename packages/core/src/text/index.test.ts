@@ -430,6 +430,32 @@ describe('Term Matching Helpers', () => {
     );
   });
 
+  it('builds English TB recall plans from significant terms rather than broad trigram singles', () => {
+    const plan = buildTermSearchPlanForLocale(
+      'The intersecting streets offer plenty of room for the passing Mechadolls and the occasional frolicking Shroomseras.',
+      {
+        locale: 'en-US',
+        maxFragments: 36,
+      },
+    );
+
+    expect(plan.exactLookupTerms).toEqual(expect.arrayContaining(['shroomseras']));
+    expect(plan.ftsFragments).not.toEqual(
+      expect.arrayContaining(['the', 'and', 'for', 'of', 'room']),
+    );
+  });
+
+  it('adds English phrase aliases to exact TB recall plans', () => {
+    const plan = buildTermSearchPlanForLocale('real time update', {
+      locale: 'en-US',
+      maxFragments: 12,
+    });
+
+    expect(plan.exactLookupTerms).toEqual(
+      expect.arrayContaining(['real time update', 'real-time update', 'real time updates']),
+    );
+  });
+
   it('suppresses only fully nested shorter matches and keeps partial overlaps', () => {
     const matches = suppressNestedTermMatches([
       {

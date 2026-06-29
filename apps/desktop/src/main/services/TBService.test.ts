@@ -410,7 +410,7 @@ describe('TBService', () => {
     expect(matches[0].tgtTerm).toBe('clé API');
   });
 
-  it('falls back to full mounted term scan when FTS candidate search returns no rows', async () => {
+  it('falls back to full mounted term scan for non-English projects when candidate search returns no rows', async () => {
     const entries = [
       {
         id: 'tb-fallback',
@@ -426,11 +426,46 @@ describe('TBService', () => {
         priority: 1,
       },
     ];
-    const service = createServiceWithEntries(entries, { searchEntries: [], srcLang: 'en-US' });
+    const service = createServiceWithEntries(entries, { searchEntries: [], srcLang: 'zh-CN' });
 
     const matches = await service.findMatches(1, buildSegment('Open Settings now.'));
     expect(matches).toHaveLength(1);
     expect(matches[0].tbName).toBe('Fallback TB');
+  });
+
+  it('does not use full mounted term scan for English projects when candidate search returns no rows', async () => {
+    const entries = [
+      {
+        id: 'tb-english-fallback',
+        tbId: 'tb-english-fallback-base',
+        srcTerm: 'Settings',
+        tgtTerm: 'settings',
+        srcNorm: 'settings',
+        note: null,
+        createdAt: '',
+        updatedAt: '',
+        usageCount: 1,
+        tbName: 'English Fallback TB',
+        priority: 1,
+      },
+    ];
+    const projectRepoMock = {
+      getProject: () => ({
+        id: 1,
+        srcLang: 'en-US',
+        tgtLang: 'fr-FR',
+      }),
+    } satisfies Pick<ProjectRepository, 'getProject'>;
+    const dbMock = {
+      listProjectTermEntries: vi.fn().mockReturnValue(entries),
+      searchProjectTermEntries: vi.fn().mockReturnValue([]),
+    } satisfies Pick<TBRepository, 'listProjectTermEntries' | 'searchProjectTermEntries'>;
+    const service = new TBService(projectRepoMock as ProjectRepository, dbMock as TBRepository);
+
+    const matches = await service.findMatches(1, buildSegment('Open Settings now.'));
+
+    expect(matches).toEqual([]);
+    expect(dbMock.listProjectTermEntries).not.toHaveBeenCalled();
   });
 
   it('passes project source locale into candidate search and final term matching', async () => {

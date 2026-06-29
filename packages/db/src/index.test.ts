@@ -1742,9 +1742,9 @@ describe("CATDatabase", () => {
       const exactTerms = Array.from({ length: 201 }, (_, index) => {
         const first = String.fromCharCode(97 + Math.floor(index / 26));
         const second = String.fromCharCode(97 + (index % 26));
-        return `${first}${second}`;
+        return `x${first}${second}`;
       });
-      const longFtsOnlyTerm = "aa ab noisy fts candidate";
+      const longFtsOnlyTerm = `${exactTerms[0]} ${exactTerms[1]} noisy fts candidate`;
 
       for (const [index, term] of exactTerms.entries()) {
         db.insertTBEntryIfAbsentBySrcTerm({
@@ -1770,6 +1770,41 @@ describe("CATDatabase", () => {
 
       expect(results).toHaveLength(200);
       expect(results.map((row) => row.srcTerm)).not.toContain(longFtsOnlyTerm);
+    });
+
+    it("should recall an English exact term when broad trigram FTS noise exceeds the candidate limit", () => {
+      const projectId = db.createProject("TB Search English Trigram Noise", "en-US", "fr-FR");
+      const tbId = db.createTermBase("English Trigram Noise TB", "en-US", "fr-FR");
+      db.mountTermBaseToProject(projectId, tbId, 1);
+
+      for (let index = 0; index < 230; index += 1) {
+        db.insertTBEntryIfAbsentBySrcTerm({
+          id: `tb-english-shroomsera-noise-${index}`,
+          tbId,
+          srcLang: "en-US",
+          srcTerm: `Sketch: Tumbler Doll: Variant ${index} Shroomsera`,
+          tgtTerm: `noise-${index}`,
+        });
+      }
+
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-english-shroomseras",
+        tbId,
+        srcLang: "en-US",
+        srcTerm: "Shroomseras",
+        tgtTerm: "Champicetes",
+      });
+
+      const results = db.searchProjectTermEntries(
+        projectId,
+        "The intersecting streets offer plenty of room for the passing Mechadolls and the occasional frolicking Shroomseras.",
+        {
+          srcLang: "en-US",
+          limit: 200,
+        },
+      );
+
+      expect(results.map((row) => row.srcTerm)).toContain("Shroomseras");
     });
 
     it("should reapply the requested limit after merging exact lookup candidates", () => {

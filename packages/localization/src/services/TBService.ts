@@ -11,6 +11,11 @@ type ProjectTBEntry = TBEntry & {
   priority: number;
 };
 
+function isEnglishSourceLocale(locale?: string): boolean {
+  const normalized = locale?.toLowerCase();
+  return normalized === 'en' || normalized?.startsWith('en-') || false;
+}
+
 export class TBService {
   private static readonly TB_CANDIDATE_LIMIT = 200;
 
@@ -36,7 +41,9 @@ export class TBService {
     const entries =
       searchEntries.length > 0
         ? searchEntries
-        : (this.db.listProjectTermEntries(projectId) as ProjectTBEntry[]);
+        : isEnglishSourceLocale(project.srcLang)
+          ? []
+          : (this.db.listProjectTermEntries(projectId) as ProjectTBEntry[]);
     if (entries.length === 0) return [];
 
     const matches: TBMatch[] = [];
