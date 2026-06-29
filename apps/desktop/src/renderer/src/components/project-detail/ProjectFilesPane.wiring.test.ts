@@ -109,6 +109,7 @@ describe('ProjectFilesPane wiring', () => {
         onOpenFile: vi.fn(),
         onOpenCommitModal: vi.fn(),
         onOpenMatchModal: vi.fn(),
+        onInspectFile: vi.fn().mockResolvedValue(undefined),
         onDeleteFile: vi.fn().mockResolvedValue(undefined),
         onExportFile: vi.fn().mockResolvedValue(undefined),
         onRunFileQA: vi.fn().mockResolvedValue(undefined),

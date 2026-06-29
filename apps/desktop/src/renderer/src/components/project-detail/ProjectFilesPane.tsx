@@ -13,6 +13,7 @@ interface ProjectFilesPaneProps {
   onOpenFile: (fileId: number) => void;
   onOpenCommitModal: (file: ProjectFileRecord) => void | Promise<void>;
   onOpenMatchModal: (file: ProjectFileRecord) => void | Promise<void>;
+  onInspectFile: (file: ProjectFileRecord) => void | Promise<void>;
   onDeleteFile: (fileId: number, fileName: string) => Promise<void>;
   onExportFile: (fileId: number, fileName: string) => Promise<void>;
   onRunFileQA: (fileId: number, fileName: string) => Promise<void>;
@@ -40,6 +41,7 @@ interface ProjectFileCardProps {
   onOpenFile: (fileId: number) => void;
   onOpenCommitModal: (file: ProjectFileRecord) => void | Promise<void>;
   onOpenMatchModal: (file: ProjectFileRecord) => void | Promise<void>;
+  onInspectFile: (file: ProjectFileRecord) => void | Promise<void>;
   onDeleteFile: (fileId: number, fileName: string) => Promise<void>;
   onExportFile: (fileId: number, fileName: string) => Promise<void>;
   onRunFileQA: (fileId: number, fileName: string) => Promise<void>;
@@ -55,6 +57,7 @@ function ProjectFileCard({
   onOpenFile,
   onOpenCommitModal,
   onOpenMatchModal,
+  onInspectFile,
   onDeleteFile,
   onExportFile,
   onRunFileQA,
@@ -119,6 +122,16 @@ function ProjectFileCard({
             className="!bg-info-soft !text-info"
           >
             TM Match
+          </Button>
+        )}
+        {supportsTMWorkflow && (
+          <Button
+            onClick={() => void onInspectFile(file)}
+            variant="soft"
+            size="sm"
+            className="!bg-info-soft !text-info"
+          >
+            Inspect
           </Button>
         )}
         {supportsTMWorkflow ? (
@@ -199,6 +212,7 @@ export function ProjectFilesPane({
   onOpenFile,
   onOpenCommitModal,
   onOpenMatchModal,
+  onInspectFile,
   onDeleteFile,
   onExportFile,
   onRunFileQA,
@@ -250,6 +264,7 @@ export function ProjectFilesPane({
               onOpenFile={onOpenFile}
               onOpenCommitModal={onOpenCommitModal}
               onOpenMatchModal={onOpenMatchModal}
+              onInspectFile={onInspectFile}
               onDeleteFile={onDeleteFile}
               onExportFile={onExportFile}
               onRunFileQA={onRunFileQA}

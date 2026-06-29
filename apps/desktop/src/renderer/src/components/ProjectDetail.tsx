@@ -17,6 +17,7 @@ import { ProjectQASettingsModal } from './project-detail/ProjectQASettingsModal'
 import { PasteSourceModal } from './project-detail/PasteSourceModal';
 import { runFileQaWithRefresh } from './project-detail/runFileQaWithRefresh';
 import { buildFileQaFeedback } from './project-detail/fileQaFeedback';
+import { runFileInspectAction } from './project-detail/fileInspectAction';
 
 interface ProjectDetailProps {
   projectId: number;
@@ -254,6 +255,16 @@ export function ProjectDetail({
         );
       }
     }
+  };
+
+  const handleInspectFile = async (file: ProjectFileRecord) => {
+    await runFileInspectAction(file, {
+      saveFileDialog: apiClient.saveFileDialog,
+      inspectFile: apiClient.inspectFile,
+      runMutation,
+      success: (message) => feedbackService.success(message),
+      error: (message) => feedbackService.error(message),
+    });
   };
 
   const openQaSettings = () => {
@@ -510,6 +521,7 @@ export function ProjectDetail({
             onOpenFile={onOpenFile}
             onOpenCommitModal={openCommitModal}
             onOpenMatchModal={openMatchModal}
+            onInspectFile={handleInspectFile}
             onDeleteFile={handleDeleteFile}
             onExportFile={handleExportFile}
             onRunFileQA={handleRunFileQA}
