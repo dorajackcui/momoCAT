@@ -3,8 +3,48 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { Segment } from '@cat/core/models';
+import type { InspectFileInput, InspectFileResult } from '@cat/localization';
+import type { FileInspectResult } from '../../../shared/ipc';
 import { ProjectFileModule } from './ProjectFileModule';
 import { ProjectRepository, SegmentRepository, SpreadsheetGateway } from '../ports';
+
+function createInspectResult(outputPath: string): InspectFileResult {
+  return {
+    outputPath,
+    jsonOutputPath: join(outputPath, '..', 'inspect.json'),
+    summary: { total: 3, ready: 2, error: 1 },
+    artifact: {
+      version: 1,
+      generatedAt: '2026-06-29T00:00:00.000Z',
+      project: {
+        id: 9,
+        name: 'Demo project',
+        srcLang: 'en',
+        tgtLang: 'fr',
+        projectType: 'translation',
+        promptChars: 0,
+      },
+      inputFile: {
+        inputPath: 'demo.xlsx',
+        sheetName: 'Sheet1',
+        columns: {
+          hasHeader: true,
+          sourceCol: 2,
+          targetCol: 4,
+          contextCol: 5,
+        },
+        rows: [],
+      },
+      systemPrompt: {
+        value: '',
+        promptChars: 0,
+        xlsxValue: '',
+        truncated: false,
+      },
+      units: [],
+    },
+  };
+}
 
 describe('ProjectFileModule.addFileToProject cleanup', () => {
   it('removes db file record and copied file when import fails', async () => {
@@ -319,6 +359,103 @@ describe('ProjectFileModule.createPastedSourceFile', () => {
     expect(existsSync(generatedPath)).toBe(false);
 
     rmSync(rootDir, { recursive: true, force: true });
+  });
+});
+
+describe('ProjectFileModule.inspectFile', () => {
+  it('maps stored import options to the shared inspector input and strips artifacts', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-inspect-'));
+    const outputPath = join(rootDir, 'inspect.xlsx');
+    const inspectResult = createInspectResult(outputPath);
+    const summary = inspectResult.summary;
+    const inspectFileRunner = vi.fn<[InspectFileInput], Promise<InspectFileResult>>(
+      async () => inspectResult,
+    );
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({
+        id: 12,
+        projectId: 9,
+        name: 'demo.xlsx',
+        importOptionsJson: JSON.stringify({
+          hasHeader: true,
+          sourceCol: 2,
+          targetCol: 4,
+          contextCol: 5,
+          tagPolicy: 'none',
+        }),
+      }),
+      getProject: vi.fn().mockReturnValue({ id: 9 }),
+    } as unknown as ProjectRepository;
+    const segmentRepo = {} as unknown as SegmentRepository;
+    const filter = {} as unknown as SpreadsheetGateway;
+
+    const module = new ProjectFileModule(
+      projectRepo,
+      segmentRepo,
+      filter,
+      rootDir,
+      inspectFileRunner,
+    );
+
+    try {
+      const result = await module.inspectFile(12, outputPath);
+
+      expect(inspectFileRunner).toHaveBeenCalledTimes(1);
+      expect(inspectFileRunner).toHaveBeenCalledWith({
+        projectId: 9,
+        inputPath: join(rootDir, '9', '12_demo.xlsx'),
+        outputPath,
+        columns: { hasHeader: true, sourceCol: 2, targetCol: 4, contextCol: 5 },
+        options: {
+          requestMode: 'window-partial',
+          targetBaseline: 'ignore-current-targets',
+          tagPolicy: 'none',
+        },
+      });
+
+      expect(result).toEqual({
+        outputPath,
+        jsonOutputPath: inspectResult.jsonOutputPath,
+        summary,
+      } satisfies FileInspectResult);
+      expect(result).not.toHaveProperty('artifact');
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects missing inspect import options before calling the runner', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-inspect-'));
+    const outputPath = join(rootDir, 'inspect.xlsx');
+    const inspectFileRunner = vi.fn<[InspectFileInput], Promise<InspectFileResult>>();
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({
+        id: 12,
+        projectId: 9,
+        name: 'demo.xlsx',
+        importOptionsJson: '{"hasHeader":true}',
+      }),
+      getProject: vi.fn().mockReturnValue({ id: 9 }),
+    } as unknown as ProjectRepository;
+    const segmentRepo = {} as unknown as SegmentRepository;
+    const filter = {} as unknown as SpreadsheetGateway;
+
+    const module = new ProjectFileModule(
+      projectRepo,
+      segmentRepo,
+      filter,
+      rootDir,
+      inspectFileRunner,
+    );
+
+    try {
+      await expect(module.inspectFile(12, outputPath)).rejects.toThrow(
+        'Inspect options not found for this file. Please re-import the file.',
+      );
+      expect(inspectFileRunner).not.toHaveBeenCalled();
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
+    }
   });
 });
 

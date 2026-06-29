@@ -1,6 +1,7 @@
 import { basename, join } from 'path';
 import { copyFile, mkdir, rm, unlink, writeFile } from 'fs/promises';
 import { type Segment, type TBMatch } from '@cat/core/models';
+import type { InspectFileInput, InspectFileResult } from '@cat/localization';
 import {
   DEFAULT_PROJECT_QA_SETTINGS,
   type FileQaReport,
@@ -18,10 +19,16 @@ import {
 } from '../ports';
 import type { FileInspectResult, PastedSourceFileInput } from '../../../shared/ipc';
 import {
+  parseFileImportOptions,
+  resolveImportOptionsTagPolicy,
+} from '../../../shared/fileTagPolicy';
+import {
   buildPastedSourceCsv,
   buildPastedSourceFileName,
   normalizePastedSources,
 } from './pastedSourceFile';
+
+export type InspectFileRunner = (input: InspectFileInput) => Promise<InspectFileResult>;
 
 export class ProjectFileModule {
   private static readonly SEGMENT_PAGE_SIZE = 2000;
@@ -31,6 +38,7 @@ export class ProjectFileModule {
     private readonly segmentRepo: SegmentRepository,
     private readonly filter: SpreadsheetGateway,
     private readonly projectsDir: string,
+    private readonly inspectFileRunner?: InspectFileRunner,
   ) {}
 
   private async ensureDirectory(path: string) {
@@ -337,8 +345,45 @@ export class ProjectFileModule {
     await this.filter.export(storedPath, segments, finalOptions, outputPath);
   }
 
-  public async inspectFile(_fileId: number, _outputPath: string): Promise<FileInspectResult> {
-    throw new Error('File inspect is not configured.');
+  public async inspectFile(fileId: number, outputPath: string): Promise<FileInspectResult> {
+    if (!this.inspectFileRunner) throw new Error('File inspect is not configured.');
+
+    const file = this.projectRepo.getFile(fileId);
+    if (!file) throw new Error('File not found');
+
+    const project = this.projectRepo.getProject(file.projectId);
+    if (!project) throw new Error('Project not found');
+
+    const importOptions = parseFileImportOptions(file);
+    if (!isInspectImportOptions(importOptions)) {
+      throw new Error('Inspect options not found for this file. Please re-import the file.');
+    }
+
+    const inputPath = join(this.projectsDir, file.projectId.toString(), `${file.id}_${file.name}`);
+    const columns: InspectFileInput['columns'] = {
+      hasHeader: importOptions.hasHeader,
+      sourceCol: importOptions.sourceCol,
+      targetCol: importOptions.targetCol,
+    };
+    if (typeof importOptions.contextCol === 'number') columns.contextCol = importOptions.contextCol;
+
+    const result = await this.inspectFileRunner({
+      projectId: project.id,
+      inputPath,
+      outputPath,
+      columns,
+      options: {
+        requestMode: 'window-partial',
+        targetBaseline: 'ignore-current-targets',
+        tagPolicy: resolveImportOptionsTagPolicy(importOptions),
+      },
+    });
+
+    return {
+      outputPath: result.outputPath,
+      jsonOutputPath: result.jsonOutputPath,
+      summary: result.summary,
+    };
   }
 
   public async runFileQA(
@@ -425,4 +470,19 @@ export class ProjectFileModule {
 
     return segments;
   }
+}
+
+function isInspectImportOptions(
+  importOptions: ImportOptions | undefined,
+): importOptions is ImportOptions {
+  return (
+    typeof importOptions?.hasHeader === 'boolean' &&
+    isNonnegativeInteger(importOptions.sourceCol) &&
+    isNonnegativeInteger(importOptions.targetCol) &&
+    (importOptions.contextCol === undefined || isNonnegativeInteger(importOptions.contextCol))
+  );
+}
+
+function isNonnegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }

@@ -6,7 +6,11 @@ import type {
   ProjectType,
 } from '@cat/core/project';
 import { CATDatabase } from '@cat/db';
-import { LocalizationEngine, type TranslationAuditSink } from '@cat/localization';
+import {
+  LocalizationEngine,
+  LocalizationInspector,
+  type TranslationAuditSink,
+} from '@cat/localization';
 import { SpreadsheetFilter } from '../filters/SpreadsheetFilter';
 import { TMService } from './TMService';
 import { SegmentService } from './SegmentService';
@@ -19,7 +23,7 @@ import {
   SpreadsheetPreviewData,
 } from './ports';
 import { AIProviderTransport } from './providers/AIProviderTransport';
-import { ProjectFileModule } from './modules/ProjectFileModule';
+import { ProjectFileModule, type InspectFileRunner } from './modules/ProjectFileModule';
 import { TMModule } from './modules/TMModule';
 import { TBModule } from './modules/TBModule';
 import { AIModule } from './modules/AIModule';
@@ -58,6 +62,7 @@ interface ProjectServiceDependencies {
   segmentService?: SegmentService;
   aiTransport?: AITransport;
   aiRuntimeConfigProvider?: AIRuntimeConfigProvider;
+  inspectFileRunner?: InspectFileRunner;
   translationAuditSink?: TranslationAuditSink;
   projectModule?: ProjectFileModule;
   tmModule?: TMModule;
@@ -101,6 +106,9 @@ export class ProjectService {
     const tmService = deps.tmService ?? new TMService(projectRepo, tmRepo);
     const tbService = deps.tbService ?? new TBService(projectRepo, tbRepo);
     this.segmentService = deps.segmentService ?? new SegmentService(segmentRepo, tmService, tx);
+    const aiRuntimeConfigProvider = deps.aiRuntimeConfigProvider;
+    const inspectFileRunner =
+      deps.inspectFileRunner ?? createInspectFileRunner(db, dbPath, aiRuntimeConfigProvider);
 
     const emitProgress = (payload: {
       type: string;
@@ -112,7 +120,8 @@ export class ProjectService {
     };
 
     this.projectModule =
-      deps.projectModule ?? new ProjectFileModule(projectRepo, segmentRepo, filter, projectsDir);
+      deps.projectModule ??
+      new ProjectFileModule(projectRepo, segmentRepo, filter, projectsDir, inspectFileRunner);
     this.tmModule =
       deps.tmModule ??
       new TMModule(
@@ -128,7 +137,6 @@ export class ProjectService {
     this.tbModule = deps.tbModule ?? new TBModule(tbRepo, tx, tbService, emitProgress);
 
     const aiTransport = deps.aiTransport ?? new AIProviderTransport();
-    const aiRuntimeConfigProvider = deps.aiRuntimeConfigProvider;
     this.aiModule =
       deps.aiModule ??
       new AIModule(
@@ -457,4 +465,13 @@ export class ProjectService {
   public async aiTestTranslate(projectId: number, sourceText: string, contextText?: string) {
     return this.aiModule.aiTestTranslate(projectId, sourceText, contextText);
   }
+}
+
+function createInspectFileRunner(
+  db: CATDatabase,
+  dbPath: string,
+  aiRuntimeConfigProvider?: AIRuntimeConfigProvider,
+): InspectFileRunner {
+  const inspector = new LocalizationInspector(db, { dbPath, aiRuntimeConfigProvider });
+  return (input) => inspector.inspectFile(input);
 }
