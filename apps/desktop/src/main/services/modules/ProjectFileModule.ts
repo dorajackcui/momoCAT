@@ -9,6 +9,7 @@ import {
   type ProjectType,
 } from '@cat/core/project';
 import { evaluateSegmentQa, validateSegmentTags } from '@cat/core/qa';
+import type { InspectFileResult } from '@cat/localization';
 import {
   ImportOptions,
   ProjectRepository,
@@ -335,6 +336,10 @@ export class ProjectFileModule {
 
     const storedPath = join(this.projectsDir, file.projectId.toString(), `${file.id}_${file.name}`);
     await this.filter.export(storedPath, segments, finalOptions, outputPath);
+  }
+
+  public async inspectFile(_fileId: number, _outputPath: string): Promise<InspectFileResult> {
+    throw new Error('File inspect is not configured.');
   }
 
   public async runFileQA(

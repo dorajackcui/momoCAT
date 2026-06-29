@@ -43,6 +43,7 @@ describe('createDesktopApi smoke', () => {
     await api.openFileDialog([]);
     await api.readClipboard();
     await api.runFileQA(1);
+    await api.inspectFile(1, 'inspect.xlsx');
     await api.checkForUpdates();
     await api.createPastedSourceFile(12, {
       sources: ['A', 'BB'],
@@ -76,6 +77,7 @@ describe('createDesktopApi smoke', () => {
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.dialog.openFile, []);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.clipboard.read);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.runQA, 1);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.inspect, 1, 'inspect.xlsx');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.app.checkForUpdates);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.project.createPastedSourceFile, 12, {
       sources: ['A', 'BB'],

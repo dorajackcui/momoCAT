@@ -63,6 +63,16 @@ export type ProjectWithStats = Project & {
 
 export type ProjectFileRecord = DbProjectFileRecord;
 
+export interface FileInspectResult {
+  outputPath: string;
+  jsonOutputPath: string;
+  summary: {
+    total: number;
+    ready: number;
+    error: number;
+  };
+}
+
 export type TMRecord = DbTMRecord;
 
 export interface TMWithStats extends TMRecord {
@@ -364,6 +374,7 @@ export interface DesktopApi {
     forceExport?: boolean,
   ) => Promise<void>;
   runFileQA: (fileId: number) => Promise<FileQaReport>;
+  inspectFile: (fileId: number, outputPath: string) => Promise<FileInspectResult>;
   updateSegment: (
     segmentId: string,
     targetTokens: Token[],

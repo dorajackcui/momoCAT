@@ -21,6 +21,7 @@ export const IPC_CHANNELS = {
     getPreview: 'file-get-preview',
     export: 'file-export',
     runQA: 'file-run-qa',
+    inspect: 'file-inspect',
   },
   segment: {
     update: 'segment-update',

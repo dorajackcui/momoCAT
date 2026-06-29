@@ -19,6 +19,7 @@ type ProjectApiKeys =
   | 'getSegments'
   | 'exportFile'
   | 'runFileQA'
+  | 'inspectFile'
   | 'updateSegment';
 
 export function createProjectApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<ProjectApiKeys> {
@@ -94,6 +95,10 @@ export function createProjectApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<
       ) as ReturnType<DesktopApi['exportFile']>,
     runFileQA: (fileId) =>
       ipcRenderer.invoke(IPC_CHANNELS.file.runQA, fileId) as ReturnType<DesktopApi['runFileQA']>,
+    inspectFile: (fileId, outputPath) =>
+      ipcRenderer.invoke(IPC_CHANNELS.file.inspect, fileId, outputPath) as ReturnType<
+        DesktopApi['inspectFile']
+      >,
     updateSegment: (segmentId, targetTokens, status, clientRequestId) =>
       ipcRenderer.invoke(
         IPC_CHANNELS.segment.update,

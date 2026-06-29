@@ -381,6 +381,10 @@ export class ProjectService {
     );
   }
 
+  public async inspectFile(fileId: number, outputPath: string) {
+    return this.projectModule.inspectFile(fileId, outputPath);
+  }
+
   public getAISettings(): { apiKeySet: boolean; apiKeyLast4?: string } {
     return this.aiModule.getAISettings();
   }

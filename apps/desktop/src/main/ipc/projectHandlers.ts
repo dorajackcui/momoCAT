@@ -120,4 +120,9 @@ export function registerProjectHandlers({ ipcMain, projectService }: MainHandler
     const [fileId] = args as [number];
     return projectService.runFileQA(fileId);
   });
+
+  registerHandle({ ipcMain, projectService }, IPC_CHANNELS.file.inspect, (_event, ...args) => {
+    const [fileId, outputPath] = args as [number, string];
+    return projectService.inspectFile(fileId, outputPath);
+  });
 }
