@@ -1,5 +1,5 @@
 import { basename, join } from 'path';
-import { copyFile, mkdir, rm, unlink, writeFile } from 'fs/promises';
+import { access, copyFile, mkdir, rm, unlink, writeFile } from 'fs/promises';
 import { type Segment, type TBMatch } from '@cat/core/models';
 import type { InspectFileInput, InspectFileResult } from '@cat/localization';
 import {
@@ -360,6 +360,15 @@ export class ProjectFileModule {
     }
 
     const inputPath = join(this.projectsDir, file.projectId.toString(), `${file.id}_${file.name}`);
+    try {
+      await access(inputPath);
+    } catch (error) {
+      if (this.isFileNotFoundError(error)) {
+        throw new Error('Source workbook not found. Please re-import the file.');
+      }
+      throw error;
+    }
+
     const columns: InspectFileInput['columns'] = {
       hasHeader: importOptions.hasHeader,
       sourceCol: importOptions.sourceCol,

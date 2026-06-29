@@ -6,6 +6,54 @@ import type { ProjectFileRecord } from '../../../../shared/ipc';
 import { ProjectAITranslateModal } from './ProjectAITranslateModal';
 import { buildProjectAITranslateStartOptions, ProjectFilesPane } from './ProjectFilesPane';
 
+type CapturedButton = {
+  label: string;
+  onClick?: React.MouseEventHandler<HTMLButtonElement>;
+};
+
+type MockButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: string;
+  size?: string;
+  loading?: boolean;
+  iconOnly?: boolean;
+};
+
+const capturedButtons = vi.hoisted<CapturedButton[]>(() => []);
+
+vi.mock('../ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../ui')>();
+  const react = await import('react');
+
+  return {
+    ...actual,
+    Button: ({
+      children,
+      onClick,
+      loading,
+      variant,
+      size,
+      iconOnly,
+      ...props
+    }: MockButtonProps) => {
+      const label = react.Children.toArray(children)
+        .map((child) =>
+          typeof child === 'string' || typeof child === 'number' ? String(child) : '',
+        )
+        .join('')
+        .trim();
+      capturedButtons.push({ label, onClick });
+      void variant;
+      void size;
+      void iconOnly;
+      return react.createElement(
+        'button',
+        { ...props, disabled: props.disabled || loading, onClick },
+        children,
+      );
+    },
+  };
+});
+
 vi.mock('./ProjectAIPane', () => ({
   ProjectAIPane: () => React.createElement('div', { 'data-testid': 'project-ai-pane' }),
 }));
@@ -121,6 +169,34 @@ describe('ProjectFilesPane', () => {
     expect(html).toContain('flex-wrap');
     expect(html).toContain('justify-end');
     expect(html).toContain('group-focus-within:opacity-100');
+  });
+
+  it('calls the inspect handler with the selected file', () => {
+    const { ai } = createAIControllerMock();
+    const file = createFile({ id: 77, name: 'inspect-me.xlsx' });
+    const onInspectFile = vi.fn();
+    capturedButtons.length = 0;
+
+    renderToStaticMarkup(
+      React.createElement(ProjectFilesPane, {
+        files: [file],
+        onOpenFile: vi.fn(),
+        onOpenCommitModal: vi.fn(),
+        onOpenMatchModal: vi.fn(),
+        onInspectFile,
+        onDeleteFile: vi.fn().mockResolvedValue(undefined),
+        onExportFile: vi.fn().mockResolvedValue(undefined),
+        onRunFileQA: vi.fn().mockResolvedValue(undefined),
+        ai,
+        projectType: 'translation',
+      }),
+    );
+
+    const inspectButton = capturedButtons.find((button) => button.label === 'Inspect');
+    expect(inspectButton).toBeDefined();
+    inspectButton?.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
+
+    expect(onInspectFile).toHaveBeenCalledWith(file);
   });
 
   it('renders target baseline options without legacy translation scope controls', () => {

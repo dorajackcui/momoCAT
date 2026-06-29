@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { Segment } from '@cat/core/models';
@@ -365,6 +365,9 @@ describe('ProjectFileModule.createPastedSourceFile', () => {
 describe('ProjectFileModule.inspectFile', () => {
   it('maps stored import options to the shared inspector input and strips artifacts', async () => {
     const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-inspect-'));
+    const storedDir = join(rootDir, '9');
+    mkdirSync(storedDir);
+    writeFileSync(join(storedDir, '12_demo.xlsx'), 'fake spreadsheet');
     const outputPath = join(rootDir, 'inspect.xlsx');
     const inspectResult: InspectFileResult = {
       ...createInspectResult(outputPath),
@@ -454,6 +457,45 @@ describe('ProjectFileModule.inspectFile', () => {
     try {
       await expect(module.inspectFile(12, outputPath)).rejects.toThrow(
         'Inspect options not found for this file. Please re-import the file.',
+      );
+      expect(inspectFileRunner).not.toHaveBeenCalled();
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a missing stored source workbook before calling the runner', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-inspect-'));
+    const outputPath = join(rootDir, 'inspect.xlsx');
+    const inspectFileRunner = vi.fn<[InspectFileInput], Promise<InspectFileResult>>();
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({
+        id: 12,
+        projectId: 9,
+        name: 'demo.xlsx',
+        importOptionsJson: JSON.stringify({
+          hasHeader: true,
+          sourceCol: 2,
+          targetCol: 4,
+          tagPolicy: 'xml',
+        }),
+      }),
+      getProject: vi.fn().mockReturnValue({ id: 9 }),
+    } as unknown as ProjectRepository;
+    const segmentRepo = {} as unknown as SegmentRepository;
+    const filter = {} as unknown as SpreadsheetGateway;
+
+    const module = new ProjectFileModule(
+      projectRepo,
+      segmentRepo,
+      filter,
+      rootDir,
+      inspectFileRunner,
+    );
+
+    try {
+      await expect(module.inspectFile(12, outputPath)).rejects.toThrow(
+        'Source workbook not found. Please re-import the file.',
       );
       expect(inspectFileRunner).not.toHaveBeenCalled();
     } finally {
