@@ -107,8 +107,7 @@ export class ProjectService {
     const tbService = deps.tbService ?? new TBService(projectRepo, tbRepo);
     this.segmentService = deps.segmentService ?? new SegmentService(segmentRepo, tmService, tx);
     const aiRuntimeConfigProvider = deps.aiRuntimeConfigProvider;
-    const inspectFileRunner =
-      deps.inspectFileRunner ?? createInspectFileRunner(db, dbPath, aiRuntimeConfigProvider);
+    const aiTransport = deps.aiTransport ?? new AIProviderTransport();
 
     const emitProgress = (payload: {
       type: string;
@@ -121,7 +120,14 @@ export class ProjectService {
 
     this.projectModule =
       deps.projectModule ??
-      new ProjectFileModule(projectRepo, segmentRepo, filter, projectsDir, inspectFileRunner);
+      new ProjectFileModule(
+        projectRepo,
+        segmentRepo,
+        filter,
+        projectsDir,
+        deps.inspectFileRunner ??
+          createInspectFileRunner(db, dbPath, aiRuntimeConfigProvider, aiTransport),
+      );
     this.tmModule =
       deps.tmModule ??
       new TMModule(
@@ -136,7 +142,6 @@ export class ProjectService {
       );
     this.tbModule = deps.tbModule ?? new TBModule(tbRepo, tx, tbService, emitProgress);
 
-    const aiTransport = deps.aiTransport ?? new AIProviderTransport();
     this.aiModule =
       deps.aiModule ??
       new AIModule(
@@ -471,7 +476,8 @@ function createInspectFileRunner(
   db: CATDatabase,
   dbPath: string,
   aiRuntimeConfigProvider?: AIRuntimeConfigProvider,
+  aiTransport?: AITransport,
 ): InspectFileRunner {
-  const inspector = new LocalizationInspector(db, { dbPath, aiRuntimeConfigProvider });
+  const inspector = new LocalizationInspector(db, { dbPath, aiRuntimeConfigProvider, aiTransport });
   return (input) => inspector.inspectFile(input);
 }

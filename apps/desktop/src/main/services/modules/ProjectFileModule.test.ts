@@ -366,8 +366,10 @@ describe('ProjectFileModule.inspectFile', () => {
   it('maps stored import options to the shared inspector input and strips artifacts', async () => {
     const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-inspect-'));
     const outputPath = join(rootDir, 'inspect.xlsx');
-    const inspectResult = createInspectResult(outputPath);
-    const summary = inspectResult.summary;
+    const inspectResult: InspectFileResult = {
+      ...createInspectResult(outputPath),
+      summary: { total: 3, ready: 2, error: 1, internal: 99 } as InspectFileResult['summary'],
+    };
     const inspectFileRunner = vi.fn<[InspectFileInput], Promise<InspectFileResult>>(
       async () => inspectResult,
     );
@@ -416,8 +418,9 @@ describe('ProjectFileModule.inspectFile', () => {
       expect(result).toEqual({
         outputPath,
         jsonOutputPath: inspectResult.jsonOutputPath,
-        summary,
+        summary: { total: 3, ready: 2, error: 1 },
       } satisfies FileInspectResult);
+      expect(Object.keys(result.summary)).toEqual(['total', 'ready', 'error']);
       expect(result).not.toHaveProperty('artifact');
     } finally {
       rmSync(rootDir, { recursive: true, force: true });

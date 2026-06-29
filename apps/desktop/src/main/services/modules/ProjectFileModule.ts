@@ -382,7 +382,11 @@ export class ProjectFileModule {
     return {
       outputPath: result.outputPath,
       jsonOutputPath: result.jsonOutputPath,
-      summary: result.summary,
+      summary: {
+        total: result.summary.total,
+        ready: result.summary.ready,
+        error: result.summary.error,
+      },
     };
   }
 
