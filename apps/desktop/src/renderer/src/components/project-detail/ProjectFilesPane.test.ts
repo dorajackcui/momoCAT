@@ -143,9 +143,7 @@ describe('ProjectFilesPane', () => {
   });
 
   it('submits modal options as target baseline without extra confirm', () => {
-    expect(
-      buildProjectAITranslateStartOptions({ targetBaseline: 'use-current-targets' }),
-    ).toEqual({
+    expect(buildProjectAITranslateStartOptions({ targetBaseline: 'use-current-targets' })).toEqual({
       targetBaseline: 'use-current-targets',
       confirm: false,
     });

@@ -99,7 +99,10 @@ function createAIControllerMock(): {
 
 describe('ProjectFilesPane wiring', () => {
   it('forwards selected modal target baseline to the AI file translate action', async () => {
-    hookMocks.useState.mockReturnValue([{ id: 1, name: 'demo.xlsx' }, hookMocks.setAiTranslateFile]);
+    hookMocks.useState.mockReturnValue([
+      { id: 1, name: 'demo.xlsx' },
+      hookMocks.setAiTranslateFile,
+    ]);
     const { ai, startAITranslateFile } = createAIControllerMock();
     const { ProjectFilesPane } = await import('./ProjectFilesPane');
 

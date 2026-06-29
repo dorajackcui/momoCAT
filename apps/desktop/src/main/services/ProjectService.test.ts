@@ -8,7 +8,7 @@ const localizationMocks = vi.hoisted(() => {
   return {
     inspectFile,
     LocalizationEngine: vi.fn(function () {}),
-    LocalizationInspector: vi.fn(function (_db: unknown, _options: unknown) {
+    LocalizationInspector: vi.fn(function () {
       return { inspectFile };
     }),
   };

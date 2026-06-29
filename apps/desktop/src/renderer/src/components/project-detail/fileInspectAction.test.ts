@@ -73,11 +73,7 @@ describe('runFileInspectAction', () => {
     expect(saveFileDialog).toHaveBeenCalledWith('demo_inspect.xlsx', INSPECT_OUTPUT_FILTERS);
     expect(runMutation).toHaveBeenCalledTimes(1);
     expect(inspectFile).toHaveBeenCalledWith(7, 'D:/out/demo_inspect.xlsx');
-    expect(order).toEqual([
-      'mutation:start',
-      'inspect:7:D:/out/demo_inspect.xlsx',
-      'mutation:end',
-    ]);
+    expect(order).toEqual(['mutation:start', 'inspect:7:D:/out/demo_inspect.xlsx', 'mutation:end']);
     expect(info).toHaveBeenCalledWith(
       'Inspect exported with issues: 2/3 source rows ready, 1 failed.',
     );
