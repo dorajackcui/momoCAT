@@ -2,7 +2,12 @@ import type { IpcRendererEvent } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import type { DesktopApiSlice, IpcRendererLike } from './types';
 
-type EventApiKeys = 'onSegmentsUpdated' | 'onProgress' | 'onJobProgress' | 'onAppUpdateStatus';
+type EventApiKeys =
+  | 'onSegmentsUpdated'
+  | 'onSegmentsUpdatedBatch'
+  | 'onProgress'
+  | 'onJobProgress'
+  | 'onAppUpdateStatus';
 
 export function createEventApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<EventApiKeys> {
   return {
@@ -13,6 +18,15 @@ export function createEventApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<Ev
       };
       ipcRenderer.on(IPC_CHANNELS.events.segmentsUpdated, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.events.segmentsUpdated, listener);
+    },
+    onSegmentsUpdatedBatch: (callback) => {
+      const listener = (_event: IpcRendererEvent, ...args: unknown[]) => {
+        const [batch] = args as [Parameters<typeof callback>[0]];
+        callback(batch);
+      };
+      ipcRenderer.on(IPC_CHANNELS.events.segmentsUpdatedBatch, listener);
+      return () =>
+        ipcRenderer.removeListener(IPC_CHANNELS.events.segmentsUpdatedBatch, listener);
     },
     onProgress: (callback) => {
       const listener = (_event: IpcRendererEvent, ...args: unknown[]) => {

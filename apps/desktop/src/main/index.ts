@@ -11,6 +11,7 @@ import { JobManager } from './JobManager';
 import { createAppUpdateService, type AppUpdateService } from './services/AppUpdateService';
 import type { AppUpdateStatusEvent } from '../shared/ipc';
 import { IPC_CHANNELS } from '../shared/ipcChannels';
+import { SegmentUpdateBatcher } from './ipc/SegmentUpdateBatcher';
 import { AIRuntimeConfigService } from './services/modules/ai/AIRuntimeConfigService';
 import {
   AI_PROMPT_DEBUG_ENV,
@@ -314,11 +315,10 @@ app.whenReady().then(async () => {
     });
   });
 
-  // Listen for segment updates and broadcast to all windows
+  // Listen for segment updates and broadcast to all windows (batched)
+  const segmentUpdateBatcher = new SegmentUpdateBatcher();
   projectService.onSegmentsUpdated((data) => {
-    BrowserWindow.getAllWindows().forEach((win) => {
-      win.webContents.send(IPC_CHANNELS.events.segmentsUpdated, data);
-    });
+    segmentUpdateBatcher.enqueue(data);
   });
 
   // IPC: Job Management

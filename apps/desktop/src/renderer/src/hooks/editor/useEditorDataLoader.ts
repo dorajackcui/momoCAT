@@ -8,6 +8,23 @@ import type { SegmentsUpdatedEvent } from '../../../../shared/ipc';
 import { resolveFileTagPolicy } from '../../../../shared/fileTagPolicy';
 import { apiClient } from '../../services/apiClient';
 
+export type BatchSegmentAction =
+  | { type: 'direct'; event: SegmentsUpdatedEvent }
+  | { type: 'propagation'; event: SegmentsUpdatedEvent };
+
+export function buildBatchFinalState(
+  batch: SegmentsUpdatedEvent[],
+): Map<string, BatchSegmentAction> {
+  const finalState = new Map<string, BatchSegmentAction>();
+  for (const data of batch) {
+    finalState.set(data.segmentId, { type: 'direct', event: data });
+    for (const propagatedId of data.propagatedIds ?? []) {
+      finalState.set(propagatedId, { type: 'propagation', event: data });
+    }
+  }
+  return finalState;
+}
+
 const SEGMENT_PAGE_SIZE = 1000;
 
 interface UseEditorDataLoaderParams {
@@ -35,6 +52,7 @@ interface RemoteUpdateQueueHandlers {
   shouldDelayRemoteUpdate: (segmentId: string) => boolean;
   isRemoteUpdateStale: (segmentId: string, clientRequestId?: string) => boolean;
   applySegmentsUpdatedEvent: (data: SegmentsUpdatedEvent) => void;
+  applySegmentsUpdatedBatch: (batch: SegmentsUpdatedEvent[]) => void;
 }
 
 export function handleIncomingSegmentsUpdatedEvent(
@@ -54,13 +72,42 @@ export function handleIncomingSegmentsUpdatedEvent(
   return 'applied';
 }
 
+export function handleIncomingSegmentsUpdatedBatch(
+  batch: SegmentsUpdatedEvent[],
+  handlers: RemoteUpdateQueueHandlers,
+): { applied: number; queued: number; stale: number } {
+  const toApply: SegmentsUpdatedEvent[] = [];
+  let queued = 0;
+  let stale = 0;
+
+  for (const data of batch) {
+    if (handlers.isRemoteUpdateStale(data.segmentId, data.clientRequestId)) {
+      stale += 1;
+      continue;
+    }
+    if (handlers.shouldDelayRemoteUpdate(data.segmentId)) {
+      handlers.queuedRemoteUpdates.set(data.segmentId, data);
+      queued += 1;
+      continue;
+    }
+    toApply.push(data);
+  }
+
+  if (toApply.length > 0) {
+    handlers.applySegmentsUpdatedBatch(toApply);
+  }
+
+  return { applied: toApply.length, queued, stale };
+}
+
 export function drainQueuedSegmentsUpdatedEvents(handlers: RemoteUpdateQueueHandlers): {
   appliedCount: number;
   droppedStaleCount: number;
 } {
-  let appliedCount = 0;
   let droppedStaleCount = 0;
+  const toApply: SegmentsUpdatedEvent[] = [];
   const queued = [...handlers.queuedRemoteUpdates.values()];
+
   for (const data of queued) {
     if (handlers.isRemoteUpdateStale(data.segmentId, data.clientRequestId)) {
       handlers.queuedRemoteUpdates.delete(data.segmentId);
@@ -73,11 +120,14 @@ export function drainQueuedSegmentsUpdatedEvents(handlers: RemoteUpdateQueueHand
     }
 
     handlers.queuedRemoteUpdates.delete(data.segmentId);
-    handlers.applySegmentsUpdatedEvent(data);
-    appliedCount += 1;
+    toApply.push(data);
   }
 
-  return { appliedCount, droppedStaleCount };
+  if (toApply.length > 0) {
+    handlers.applySegmentsUpdatedBatch(toApply);
+  }
+
+  return { appliedCount: toApply.length, droppedStaleCount };
 }
 
 export function useEditorDataLoader({
@@ -155,6 +205,63 @@ export function useEditorDataLoader({
           }
 
           return segment;
+        });
+        return changed ? nextSegments : prev;
+      });
+    },
+    [normalizeStatus, normalizeTokens, setSegmentSaveErrors, setSegments],
+  );
+
+  const applySegmentsUpdatedBatch = useCallback(
+    (batch: SegmentsUpdatedEvent[]) => {
+      const finalState = buildBatchFinalState(batch);
+
+      setSegmentSaveErrors((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const segmentId of finalState.keys()) {
+          if (next[segmentId]) {
+            delete next[segmentId];
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+
+      setSegments((prev) => {
+        let changed = false;
+        const nextSegments: Segment[] = prev.map((segment): Segment => {
+          const entry = finalState.get(segment.segmentId);
+          if (!entry) return segment;
+
+          changed = true;
+          if (entry.type === 'direct') {
+            const targetTokens = normalizeTokens(
+              entry.event.targetTokens,
+              `segment ${segment.segmentId} target (batch-update)`,
+            );
+            const nextStatus = normalizeStatus(entry.event.status, targetTokens);
+            return {
+              ...segment,
+              targetTokens,
+              status: nextStatus,
+              qaIssues: nextStatus === 'confirmed' ? segment.qaIssues : undefined,
+              autoFixSuggestions:
+                nextStatus === 'confirmed' ? segment.autoFixSuggestions : undefined,
+            };
+          }
+
+          const targetTokens = normalizeTokens(
+            entry.event.targetTokens,
+            `segment ${segment.segmentId} target (batch-propagation)`,
+          );
+          return {
+            ...segment,
+            targetTokens,
+            status: 'draft' as SegmentStatus,
+            qaIssues: undefined,
+            autoFixSuggestions: undefined,
+          };
         });
         return changed ? nextSegments : prev;
       });
@@ -264,17 +371,32 @@ export function useEditorDataLoader({
   }, [loadEditorData]);
 
   useEffect(() => {
-    const unsubscribe = apiClient.onSegmentsUpdated((data) => {
-      handleIncomingSegmentsUpdatedEvent(data, {
-        queuedRemoteUpdates: queuedRemoteUpdatesRef.current,
-        shouldDelayRemoteUpdate,
-        isRemoteUpdateStale,
-        applySegmentsUpdatedEvent,
-      });
+    const handlers: RemoteUpdateQueueHandlers = {
+      queuedRemoteUpdates: queuedRemoteUpdatesRef.current,
+      shouldDelayRemoteUpdate,
+      isRemoteUpdateStale,
+      applySegmentsUpdatedEvent,
+      applySegmentsUpdatedBatch,
+    };
+
+    const unsubBatch = apiClient.onSegmentsUpdatedBatch((batch) => {
+      handleIncomingSegmentsUpdatedBatch(batch, handlers);
     });
 
-    return () => unsubscribe();
-  }, [applySegmentsUpdatedEvent, isRemoteUpdateStale, shouldDelayRemoteUpdate]);
+    const unsubSingle = apiClient.onSegmentsUpdated((data) => {
+      handleIncomingSegmentsUpdatedEvent(data, handlers);
+    });
+
+    return () => {
+      unsubBatch();
+      unsubSingle();
+    };
+  }, [
+    applySegmentsUpdatedEvent,
+    applySegmentsUpdatedBatch,
+    isRemoteUpdateStale,
+    shouldDelayRemoteUpdate,
+  ]);
 
   useEffect(() => {
     if (queuedRemoteUpdatesRef.current.size === 0) return;
@@ -283,8 +405,15 @@ export function useEditorDataLoader({
       shouldDelayRemoteUpdate,
       isRemoteUpdateStale,
       applySegmentsUpdatedEvent,
+      applySegmentsUpdatedBatch,
     });
-  }, [applySegmentsUpdatedEvent, isRemoteUpdateStale, shouldDelayRemoteUpdate, syncStateVersion]);
+  }, [
+    applySegmentsUpdatedEvent,
+    applySegmentsUpdatedBatch,
+    isRemoteUpdateStale,
+    shouldDelayRemoteUpdate,
+    syncStateVersion,
+  ]);
 
   return {
     loadEditorData,

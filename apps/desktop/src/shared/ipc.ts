@@ -297,6 +297,8 @@ export interface SegmentsUpdatedEvent {
   serverAppliedAt: string;
 }
 
+export type SegmentsUpdatedBatchEvent = SegmentsUpdatedEvent[];
+
 export interface AppProgressEvent {
   type: string;
   current: number;
@@ -436,6 +438,7 @@ export interface DesktopApi {
   readClipboard: () => Promise<ClipboardContent>;
 
   onSegmentsUpdated: (callback: (data: SegmentsUpdatedEvent) => void) => () => void;
+  onSegmentsUpdatedBatch: (callback: (batch: SegmentsUpdatedBatchEvent) => void) => () => void;
   onProgress: (callback: (data: AppProgressEvent) => void) => () => void;
   onJobProgress: (callback: (progress: JobProgressEvent) => void) => () => void;
   onAppUpdateStatus: (callback: (status: AppUpdateStatusEvent) => void) => () => void;

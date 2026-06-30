@@ -77,6 +77,7 @@ export const IPC_CHANNELS = {
   },
   events: {
     segmentsUpdated: 'segments-updated',
+    segmentsUpdatedBatch: 'segments-updated-batch',
     appProgress: 'app-progress',
     jobProgress: 'job-progress',
     appUpdateStatus: 'app-update-status',
