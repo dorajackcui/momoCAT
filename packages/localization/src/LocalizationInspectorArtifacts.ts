@@ -44,6 +44,106 @@ export function buildXlsxFields(
   };
 }
 
+export function buildUnitXlsxFields({
+  mt,
+  unit,
+  unitIndex,
+  maxCellChars,
+}: {
+  mt: PromptArtifact;
+  unit: Pick<InspectUnitArtifact, 'tm' | 'tb'>;
+  unitIndex: number;
+  maxCellChars: number;
+}): InspectUnitArtifact['xlsx'] {
+  const tmPromptInput = buildUnitTMForMt(unit.tm);
+  const tbPromptInput = buildUnitTBForMt(unit.tb);
+  const tmForMt = truncateForCell(
+    tmPromptInput,
+    maxCellChars,
+    `#/units/${unitIndex}/tm/selectedReferences`,
+  );
+  const tbForMt = truncateForCell(
+    tbPromptInput,
+    maxCellChars,
+    `#/units/${unitIndex}/tb/selectedReferences`,
+  );
+  const mtUserPrompt = truncateForCell(
+    mt.userPrompt,
+    maxCellChars,
+    `#/units/${unitIndex}/mt/userPrompt`,
+  );
+
+  return {
+    tmForMt: tmForMt.value,
+    tbForMt: tbForMt.value,
+    mtUserPrompt: mtUserPrompt.value,
+    truncated: {
+      tmForMt: tmForMt.truncated,
+      tbForMt: tbForMt.truncated,
+      mtUserPrompt: mtUserPrompt.truncated,
+    },
+  };
+}
+
+function buildUnitTMForMt(tm: TMArtifact): string {
+  return [
+    buildUnitTMReferenceBlock(tm.selectedReferences.tmReferences),
+    buildUnitConcordanceReferenceBlock(
+      tm.selectedReferences.concordanceReferences,
+    ),
+  ]
+    .filter((block) => block.length > 0)
+    .join('\n\n');
+}
+
+function buildUnitTMReferenceBlock(
+  references: TMArtifact['selectedReferences']['tmReferences'],
+): string {
+  if (references.length === 0) {
+    return '';
+  }
+
+  return [
+    'TM References',
+    ...references.map(
+      (reference, index) =>
+        `${index + 1}. ${reference.similarity}% ${reference.tmName} | ${reference.sourceText} -> ${reference.targetText}`,
+    ),
+  ].join('\n');
+}
+
+function buildUnitConcordanceReferenceBlock(
+  references: TMArtifact['selectedReferences']['concordanceReferences'],
+): string {
+  if (references.length === 0) {
+    return '';
+  }
+
+  return [
+    'Concordance Suggestions',
+    ...references.map(
+      (reference, index) =>
+        `${index + 1}. ${reference.matchedSourceText} (${reference.tmName}) | ${reference.sourceText} -> ${reference.targetText}`,
+    ),
+  ].join('\n');
+}
+
+function buildUnitTBForMt(tb: TBArtifact): string {
+  if (tb.selectedReferences.length === 0) {
+    return '';
+  }
+
+  return [
+    'Terminology References',
+    ...tb.selectedReferences.map((reference, index) => {
+      const note =
+        typeof reference.note === 'string' ? reference.note.trim() : '';
+      const noteSuffix = note ? ` (note: ${note})` : '';
+      return `${index + 1}. ${reference.srcTerm} -> ${reference.tgtTerm}${noteSuffix}`;
+    }),
+  ].join('\n');
+}
+
 export function emptyXlsxFields(): InspectUnitArtifact['xlsx'] {
   return {
     tmForMt: '',
