@@ -9,6 +9,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AITransport } from './ports';
 import type { PromptArtifact } from './artifacts';
 import { LocalizationInspector } from './LocalizationInspector';
+import {
+  emptyTBArtifact,
+  emptyTMArtifact,
+} from './LocalizationInspectorArtifacts';
 import { createTransientSegment } from './transientSegment';
 
 type MockTransport = AITransport & {
@@ -748,6 +752,53 @@ describe('LocalizationInspector.inspectFile', () => {
       expect(segmentRows[1][5]).toBe('ready');
       expect(segmentRows[2][5]).toBe('not-inspected');
       expect(segmentRows[2][5]).not.toBe('error');
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports progress while inspecting row references', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-inspector-progress-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Progress Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
+      const inputPath = writeInputWorkbook(root, [
+        ['source', 'target'],
+        ['First', ''],
+        ['Second', ''],
+        ['Third', ''],
+      ]);
+      const progressEvents: Array<[number, number]> = [];
+      const inspector = new LocalizationInspector(db, {
+        aiTransport: createTransport(),
+        aiRuntimeConfigProvider: runtimeConfigProvider(),
+        tmModule: {
+          inspect: vi.fn((_projectId: number, segment: Segment) =>
+            Promise.resolve(emptyTMArtifact(segment.segmentId, segment.segmentId)),
+          ),
+        },
+        tbModule: {
+          inspect: vi.fn((_projectId: number, segment: Segment) =>
+            Promise.resolve(emptyTBArtifact(segment.segmentId, segment.segmentId)),
+          ),
+        },
+      });
+
+      await inspector.inspectFile({
+        projectId,
+        inputPath,
+        outputPath: join(root, 'inspect.xlsx'),
+        onProgress: (current, total) => progressEvents.push([current, total]),
+      });
+
+      expect(progressEvents).toEqual([
+        [0, 3],
+        [1, 3],
+        [2, 3],
+        [3, 3],
+      ]);
     } finally {
       db.close();
       await rm(root, { recursive: true, force: true });

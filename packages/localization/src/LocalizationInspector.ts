@@ -92,6 +92,7 @@ type InspectReadyRow = InspectRowWithSegment & {
   unit: InspectUnitArtifact;
   unitIndex: number;
 };
+type ProgressEmitter = (current: number) => Promise<void>;
 
 export class LocalizationInspector {
   private readonly projectRepo: SqliteProjectRepository;
@@ -277,23 +278,8 @@ export class LocalizationInspector {
     tagPolicy: TagPolicy,
     onProgress?: (current: number, total: number) => void,
   ): Promise<InspectUnitArtifact[]> {
-    const translatableRows = rows.filter(({ row }) => isRequestRow(row));
-    onProgress?.(0, rows.length);
-    const units = await Promise.all(
-      translatableRows.map(({ row, segment }) =>
-        this.inspectRowReferences(project, row, segment),
-      ),
-    );
-    const readyRowByUnitId = new Map(
-      translatableRows.map((rowWithSegment, unitIndex) => [
-        rowWithSegment.row.unitId,
-        {
-          ...rowWithSegment,
-          unit: units[unitIndex],
-          unitIndex,
-        },
-      ]),
-    );
+    const { units, readyRowByUnitId, emitProgress } =
+      await this.inspectRowReferencesForRows(project, rows, onProgress);
     const inputDocumentId = basename(inputPath);
 
     for (
@@ -364,7 +350,7 @@ export class LocalizationInspector {
           });
         }
       }
-      onProgress?.(Math.min(batchStart + INSPECT_BATCH_SIZE, rows.length), rows.length);
+      await emitProgress(Math.min(batchStart + INSPECT_BATCH_SIZE, rows.length));
     }
 
     return units;
@@ -379,23 +365,8 @@ export class LocalizationInspector {
     tagPolicy: TagPolicy,
     onProgress?: (current: number, total: number) => void,
   ): Promise<InspectUnitArtifact[]> {
-    const requestRows = rows.filter(({ row }) => isRequestRow(row));
-    onProgress?.(0, rows.length);
-    const units = await Promise.all(
-      requestRows.map(({ row, segment }) =>
-        this.inspectRowReferences(project, row, segment),
-      ),
-    );
-    const readyRowByUnitId = new Map(
-      requestRows.map((rowWithSegment, unitIndex) => [
-        rowWithSegment.row.unitId,
-        {
-          ...rowWithSegment,
-          unit: units[unitIndex],
-          unitIndex,
-        },
-      ]),
-    );
+    const { units, readyRowByUnitId, emitProgress } =
+      await this.inspectRowReferencesForRows(project, rows, onProgress);
     const inputDocumentId = basename(inputPath);
     const jobUnits = inspectRowsToJobUnits(contextRows, inputDocumentId);
     const jobUnitsByUnitId = new Map(jobUnits.map((unit) => [unit.unitId, unit]));
@@ -484,10 +455,49 @@ export class LocalizationInspector {
           });
         }
       }
-      onProgress?.(Math.min(batchStart + INSPECT_BATCH_SIZE, rows.length), rows.length);
+      await emitProgress(Math.min(batchStart + INSPECT_BATCH_SIZE, rows.length));
     }
 
     return units;
+  }
+
+  private async inspectRowReferencesForRows(
+    project: ProjectRecord,
+    rows: InspectRowWithSegment[],
+    onProgress?: (current: number, total: number) => void,
+  ): Promise<{
+    units: InspectUnitArtifact[];
+    readyRowByUnitId: Map<string, InspectReadyRow>;
+    emitProgress: ProgressEmitter;
+  }> {
+    const units: InspectUnitArtifact[] = [];
+    const readyRowByUnitId = new Map<string, InspectReadyRow>();
+    const emitProgress = createProgressEmitter(onProgress, rows.length);
+
+    await emitProgress(0);
+    for (const rowWithSegment of rows) {
+      const current = rowWithSegment.sourceIndex + 1;
+      if (!isRequestRow(rowWithSegment.row)) {
+        await emitProgress(current);
+        continue;
+      }
+
+      const unit = await this.inspectRowReferences(
+        project,
+        rowWithSegment.row,
+        rowWithSegment.segment,
+      );
+      const unitIndex = units.length;
+      units.push(unit);
+      readyRowByUnitId.set(rowWithSegment.row.unitId, {
+        ...rowWithSegment,
+        unit,
+        unitIndex,
+      });
+      await emitProgress(current);
+    }
+
+    return { units, readyRowByUnitId, emitProgress };
   }
 
   private async inspectRowReferences(
@@ -624,6 +634,24 @@ function buildInspectWindowContext(
 
 function isRequestRow(row: FileParseRowArtifact): boolean {
   return !row.target.trim();
+}
+
+function createProgressEmitter(
+  onProgress: ((current: number, total: number) => void) | undefined,
+  total: number,
+): ProgressEmitter {
+  let lastCurrent: number | undefined;
+
+  return async (current: number): Promise<void> => {
+    if (!onProgress || current === lastCurrent) return;
+    lastCurrent = current;
+    onProgress(current, total);
+    await yieldToEventLoop();
+  };
+}
+
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 function validatePositiveInteger(
