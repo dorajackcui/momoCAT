@@ -643,7 +643,7 @@ describe('LocalizationInspector.inspectFile', () => {
     }
   });
 
-  it('includes concordance prompt blocks in JSON and TM-for-MT xlsx output', async () => {
+  it('preserves concordance prompt blocks in JSON while leaving xlsx row refs empty without row refs', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
     const db = new CATDatabase(':memory:');
     try {
@@ -697,7 +697,7 @@ describe('LocalizationInspector.inspectFile', () => {
         header: 1,
         defval: '',
       }) as string[][];
-      expect(segmentRows[1][2]).not.toContain('TM prompt block');
+      expect(segmentRows[1][2]).toBe('');
       expect(segmentRows[1][2]).not.toContain('Match: world');
       expect(segmentRows[1][4]).toBe('FULL_PROMPT');
       expect(segmentRows[1][6]).toBe('#/units/0');
