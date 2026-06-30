@@ -20,6 +20,7 @@
     "gate:style": "node scripts/gate-style-classes.mjs",
     "gate:file-size": "node scripts/gate-file-size.mjs",
     "gate:smoke:large-file": "vitest run apps/desktop/src/main/services/modules/TMModule.test.ts -t \"scans segments page by page\"",
+    "typecheck": "npm run typecheck --workspace=apps/desktop",
     "gate:check": "npm run typecheck --workspace=apps/desktop && npm run gate:arch && npm run gate:style && npm run gate:file-size && npm run lint && npm run gate:smoke:large-file",
     "rebuild:electron": "node scripts/rebuild-electron.mjs",
     "rebuild:test": "npm rebuild better-sqlite3",
