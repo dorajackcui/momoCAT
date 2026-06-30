@@ -290,6 +290,77 @@ describe('LocalizationInspector.inspectFile', () => {
     }
   });
 
+  it('keeps inspect TM and TB xlsx columns scoped to each row in a shared window prompt', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Row References Inspect', 'en', 'fr');
+      configureAIProvider(db, projectId);
+      mountDistinctReferenceData(db, projectId);
+      const inputPath = writeInputWorkbook(root, [
+        ['source', 'target'],
+        ['Open', 'Ouvrir'],
+        ['Hello world', ''],
+        ['Preferences', ''],
+      ]);
+      const inspector = new LocalizationInspector(db, {
+        aiTransport: createTransport(),
+        aiRuntimeConfigProvider: runtimeConfigProvider(),
+      });
+
+      const result = await inspector.inspectFile({
+        projectId,
+        inputPath,
+        outputPath: join(root, 'inspect.xlsx'),
+      });
+      const json = JSON.parse(await readFile(result.jsonOutputPath, 'utf8'));
+      const helloUnit = json.units.find(
+        (unit: { unit: { source: string } }) =>
+          unit.unit.source === 'Hello world',
+      );
+      const preferencesUnit = json.units.find(
+        (unit: { unit: { source: string } }) =>
+          unit.unit.source === 'Preferences',
+      );
+
+      expect(helloUnit.mt.batch.currentIds).toEqual(['row-3', 'row-4']);
+      expect(helloUnit.mt.userPrompt).toContain('Bonjour le monde');
+      expect(helloUnit.mt.userPrompt).toContain('Reglages');
+      expect(helloUnit.xlsx.tmForMt).toContain('Bonjour le monde');
+      expect(helloUnit.xlsx.tmForMt).not.toContain('Reglages');
+      expect(helloUnit.xlsx.tbForMt).toContain('world -> monde');
+      expect(helloUnit.xlsx.tbForMt).not.toContain('Preferences -> Reglages');
+      expect(preferencesUnit.xlsx.tmForMt).toContain('Reglages');
+      expect(preferencesUnit.xlsx.tmForMt).not.toContain('Bonjour le monde');
+      expect(preferencesUnit.xlsx.tbForMt).toContain('Preferences -> Reglages');
+      expect(preferencesUnit.xlsx.tbForMt).not.toContain('world -> monde');
+
+      const written = XLSX.read(await readFile(result.outputPath), {
+        type: 'buffer',
+      });
+      const segmentRows = XLSX.utils.sheet_to_json(written.Sheets.Segments, {
+        header: 1,
+        defval: '',
+      }) as string[][];
+
+      expect(segmentRows[2][2]).toContain('Bonjour le monde');
+      expect(segmentRows[2][2]).not.toContain('Reglages');
+      expect(segmentRows[2][3]).toContain('world -> monde');
+      expect(segmentRows[2][3]).not.toContain('Preferences -> Reglages');
+      expect(segmentRows[2][4]).toContain('Bonjour le monde');
+      expect(segmentRows[2][4]).toContain('Reglages');
+      expect(segmentRows[3][2]).toContain('Reglages');
+      expect(segmentRows[3][2]).not.toContain('Bonjour le monde');
+      expect(segmentRows[3][3]).toContain('Preferences -> Reglages');
+      expect(segmentRows[3][3]).not.toContain('world -> monde');
+      expect(segmentRows[3][4]).toContain('Bonjour le monde');
+      expect(segmentRows[3][4]).toContain('Reglages');
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('uses skipped target rows between current rows as previous Window Mode context', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-inspector-'));
     const db = new CATDatabase(':memory:');
@@ -999,6 +1070,49 @@ function mountReferenceData(db: CATDatabase, projectId: number): void {
     srcTerm: 'world',
     tgtTerm: 'monde',
     note: 'Use the common noun.',
+  });
+}
+
+function mountDistinctReferenceData(db: CATDatabase, projectId: number): void {
+  const tmId = db.createTM('Client Main TM', 'en', 'fr', 'main');
+  db.mountTMToProject(projectId, tmId, 10, 'read');
+
+  for (const [sourceText, targetText] of [
+    ['Hello world', 'Bonjour le monde'],
+    ['Preferences', 'Reglages'],
+  ] as const) {
+    const entry = createTMEntry({
+      tmId,
+      projectId,
+      sourceText,
+      targetText,
+    });
+    const entryId = db.upsertTMEntryBySrcHash(entry);
+    db.replaceTMFts(
+      tmId,
+      serializeTokensToDisplayText(entry.sourceTokens),
+      serializeTokensToDisplayText(entry.targetTokens),
+      entryId,
+    );
+  }
+
+  const tbId = db.createTermBase('Client Terms', 'en', 'fr');
+  db.mountTermBaseToProject(projectId, tbId, 20);
+  db.insertTBEntryIfAbsentBySrcTerm({
+    id: 'term-world',
+    tbId,
+    srcLang: 'en',
+    srcTerm: 'world',
+    tgtTerm: 'monde',
+    note: 'Use the common noun.',
+  });
+  db.insertTBEntryIfAbsentBySrcTerm({
+    id: 'term-preferences',
+    tbId,
+    srcLang: 'en',
+    srcTerm: 'Preferences',
+    tgtTerm: 'Reglages',
+    note: 'Use UI noun.',
   });
 }
 

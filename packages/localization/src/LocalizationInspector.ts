@@ -31,7 +31,7 @@ import type {
 } from './artifacts';
 import {
   buildErrorUnit,
-  buildXlsxFields,
+  buildUnitXlsxFields,
   emptyPromptArtifact,
   emptyTBArtifact,
   emptyTMArtifact,
@@ -333,10 +333,18 @@ export class LocalizationInspector {
         });
 
         for (const { unitIndex } of readyRows) {
-          units[unitIndex] = {
+          const unitWithPrompt = {
             ...units[unitIndex],
             mt,
-            xlsx: buildXlsxFields(mt, unitIndex, maxCellChars),
+          };
+          units[unitIndex] = {
+            ...unitWithPrompt,
+            xlsx: buildUnitXlsxFields({
+              mt,
+              unit: unitWithPrompt,
+              unitIndex,
+              maxCellChars,
+            }),
           };
         }
       } catch (error) {
@@ -442,10 +450,18 @@ export class LocalizationInspector {
         });
 
         for (const { unitIndex } of readyRows) {
-          units[unitIndex] = {
+          const unitWithPrompt = {
             ...units[unitIndex],
             mt,
-            xlsx: buildXlsxFields(mt, unitIndex, maxCellChars),
+          };
+          units[unitIndex] = {
+            ...unitWithPrompt,
+            xlsx: buildUnitXlsxFields({
+              mt,
+              unit: unitWithPrompt,
+              unitIndex,
+              maxCellChars,
+            }),
           };
         }
       } catch (error) {
