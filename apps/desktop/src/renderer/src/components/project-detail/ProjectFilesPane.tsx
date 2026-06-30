@@ -177,9 +177,6 @@ function ProjectFileCard({
             Run QA
           </Button>
         )}
-        <Button onClick={() => onOpenFile(file.id)} variant="soft" size="sm">
-          Open
-        </Button>
         <Button onClick={() => void onExportFile(file.id, file.name)} variant="secondary" size="sm">
           Export
         </Button>

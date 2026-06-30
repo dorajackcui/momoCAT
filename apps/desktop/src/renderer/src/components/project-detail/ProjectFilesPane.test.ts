@@ -171,6 +171,15 @@ describe('ProjectFilesPane', () => {
     expect(html).toContain('group-focus-within:opacity-100');
   });
 
+  it('does not duplicate file opening in the action buttons', () => {
+    const { ai } = createAIControllerMock();
+    capturedButtons.length = 0;
+
+    renderPane(ai, 'translation');
+
+    expect(capturedButtons.map((button) => button.label)).not.toContain('Open');
+  });
+
   it('calls the inspect handler with the selected file', () => {
     const { ai } = createAIControllerMock();
     const file = createFile({ id: 77, name: 'inspect-me.xlsx' });
