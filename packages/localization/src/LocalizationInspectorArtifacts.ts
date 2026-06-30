@@ -19,6 +19,40 @@ export function buildUnitXlsxFields({
   unitIndex: number;
   maxCellChars: number;
 }): InspectUnitArtifact['xlsx'] {
+  const references = buildReferenceXlsxFields({
+    unit,
+    unitIndex,
+    maxCellChars,
+  });
+  const mtUserPrompt = truncateForCell(
+    mt.userPrompt,
+    maxCellChars,
+    `#/units/${unitIndex}/mt/userPrompt`,
+  );
+
+  return {
+    tmForMt: references.tmForMt,
+    tbForMt: references.tbForMt,
+    mtUserPrompt: mtUserPrompt.value,
+    truncated: {
+      tmForMt: references.truncated.tmForMt,
+      tbForMt: references.truncated.tbForMt,
+      mtUserPrompt: mtUserPrompt.truncated,
+    },
+  };
+}
+
+export function buildReferenceXlsxFields({
+  unit,
+  unitIndex,
+  maxCellChars,
+}: {
+  unit: Pick<InspectUnitArtifact, 'tm' | 'tb'>;
+  unitIndex: number;
+  maxCellChars: number;
+}): Pick<InspectUnitArtifact['xlsx'], 'tmForMt' | 'tbForMt'> & {
+  truncated: Pick<InspectUnitArtifact['xlsx']['truncated'], 'tmForMt' | 'tbForMt'>;
+} {
   const tmPromptInput = buildUnitTMForMt(unit.tm);
   const tbPromptInput = buildUnitTBForMt(unit.tb);
   const tmForMt = truncateForCell(
@@ -31,20 +65,13 @@ export function buildUnitXlsxFields({
     maxCellChars,
     `#/units/${unitIndex}/tb/selectedReferences`,
   );
-  const mtUserPrompt = truncateForCell(
-    mt.userPrompt,
-    maxCellChars,
-    `#/units/${unitIndex}/mt/userPrompt`,
-  );
 
   return {
     tmForMt: tmForMt.value,
     tbForMt: tbForMt.value,
-    mtUserPrompt: mtUserPrompt.value,
     truncated: {
       tmForMt: tmForMt.truncated,
       tbForMt: tbForMt.truncated,
-      mtUserPrompt: mtUserPrompt.truncated,
     },
   };
 }

@@ -125,4 +125,13 @@ export function registerProjectHandlers({ ipcMain, projectService }: MainHandler
     const [fileId, outputPath] = args as [number, string];
     return projectService.inspectFile(fileId, outputPath);
   });
+
+  registerHandle(
+    { ipcMain, projectService },
+    IPC_CHANNELS.file.exportReferences,
+    (_event, ...args) => {
+      const [fileId, outputPath] = args as [number, string];
+      return projectService.exportReferencesForMt(fileId, outputPath);
+    },
+  );
 }

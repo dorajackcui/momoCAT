@@ -8,6 +8,13 @@ export type {
   InspectFileResult,
   LocalizationInspectorOptions,
 } from './LocalizationInspector';
+export { LocalizationReferenceExporter } from './LocalizationReferenceExporter';
+export type {
+  ExportReferencesForMtInput,
+  ExportReferencesForMtResult,
+  LocalizationReferenceExporterOptions,
+  ReferenceExportUnitResult,
+} from './LocalizationReferenceExporter';
 export type * from './artifacts';
 export type * from './types';
 export type * from './job/types';
@@ -54,10 +61,15 @@ export type {
 export {
   fileRowsToLocalizationUnits,
   parseExternalSpreadsheet,
+  writeReferencesForMtSpreadsheet,
   writeInspectSpreadsheet,
   writeTranslatedSpreadsheet,
 } from './modules/FileModule';
-export type { ParsedSpreadsheetFile, SheetCell } from './modules/FileModule';
+export type {
+  ParsedSpreadsheetFile,
+  ReferenceExportSpreadsheetRow,
+  SheetCell,
+} from './modules/FileModule';
 export { translateSpreadsheetFile } from './spreadsheetFileAdapter';
 export {
   inferFileTranslationJobSidecarPaths,
@@ -151,6 +163,8 @@ export type {
 } from './modules/MTModule';
 export { runTranslateFileCommand } from './cli/translateFileCommand';
 export type { TranslateFileCommandConfig } from './cli/translateFileCommand';
+export { runExportReferencesForMtCommand } from './cli/exportReferencesForMtCommand';
+export type { ExportReferencesForMtCommandConfig } from './cli/exportReferencesForMtCommand';
 export { runInspectLocalizationCommand } from './cli/inspectLocalizationCommand';
 export type { InspectLocalizationCommandConfig } from './cli/inspectLocalizationCommand';
 export { runInspectProjectsCommand } from './cli/inspectProjectsCommand';

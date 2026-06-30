@@ -1,7 +1,12 @@
 import { basename, join } from 'path';
 import { access, copyFile, mkdir, rm, unlink, writeFile } from 'fs/promises';
 import { type Segment, type TBMatch } from '@cat/core/models';
-import type { InspectFileInput, InspectFileResult } from '@cat/localization';
+import type {
+  ExportReferencesForMtInput,
+  ExportReferencesForMtResult,
+  InspectFileInput,
+  InspectFileResult,
+} from '@cat/localization';
 import {
   DEFAULT_PROJECT_QA_SETTINGS,
   type FileQaReport,
@@ -17,7 +22,11 @@ import {
   SpreadsheetGateway,
   SpreadsheetPreviewData,
 } from '../ports';
-import type { FileInspectResult, PastedSourceFileInput } from '../../../shared/ipc';
+import type {
+  FileInspectResult,
+  FileReferenceExportResult,
+  PastedSourceFileInput,
+} from '../../../shared/ipc';
 import {
   parseFileImportOptions,
   resolveImportOptionsTagPolicy,
@@ -29,6 +38,9 @@ import {
 } from './pastedSourceFile';
 
 export type InspectFileRunner = (input: InspectFileInput) => Promise<InspectFileResult>;
+export type ReferenceExportRunner = (
+  input: ExportReferencesForMtInput,
+) => Promise<ExportReferencesForMtResult>;
 
 export class ProjectFileModule {
   private static readonly SEGMENT_PAGE_SIZE = 2000;
@@ -39,6 +51,7 @@ export class ProjectFileModule {
     private readonly filter: SpreadsheetGateway,
     private readonly projectsDir: string,
     private readonly inspectFileRunner?: InspectFileRunner,
+    private readonly referenceExportRunner?: ReferenceExportRunner,
   ) {}
 
   private async ensureDirectory(path: string) {
@@ -396,6 +409,62 @@ export class ProjectFileModule {
     return {
       outputPath: result.outputPath,
       jsonOutputPath: result.jsonOutputPath,
+      summary: {
+        total: result.summary.total,
+        ready: result.summary.ready,
+        error: result.summary.error,
+      },
+    };
+  }
+
+  public async exportReferencesForMt(
+    fileId: number,
+    outputPath: string,
+    onProgress?: (current: number, total: number) => void,
+  ): Promise<FileReferenceExportResult> {
+    if (!this.referenceExportRunner) throw new Error('Reference export is not configured.');
+
+    const file = this.projectRepo.getFile(fileId);
+    if (!file) throw new Error('File not found');
+
+    const project = this.projectRepo.getProject(file.projectId);
+    if (!project) throw new Error('Project not found');
+
+    const importOptions = parseFileImportOptions(file);
+    if (!isInspectImportOptions(importOptions)) {
+      throw new Error('Import options not found for this file. Please re-import the file.');
+    }
+
+    const inputPath = join(this.projectsDir, file.projectId.toString(), `${file.id}_${file.name}`);
+    try {
+      await access(inputPath);
+    } catch (error) {
+      if (this.isFileNotFoundError(error)) {
+        throw new Error('Source workbook not found. Please re-import the file.');
+      }
+      throw error;
+    }
+
+    const columns: ExportReferencesForMtInput['columns'] = {
+      hasHeader: importOptions.hasHeader,
+      sourceCol: importOptions.sourceCol,
+      targetCol: importOptions.targetCol,
+    };
+    if (typeof importOptions.contextCol === 'number') columns.contextCol = importOptions.contextCol;
+
+    const result = await this.referenceExportRunner({
+      projectId: project.id,
+      inputPath,
+      outputPath,
+      columns,
+      options: {
+        tagPolicy: resolveImportOptionsTagPolicy(importOptions),
+      },
+      onProgress,
+    });
+
+    return {
+      outputPath: result.outputPath,
       summary: {
         total: result.summary.total,
         ready: result.summary.ready,

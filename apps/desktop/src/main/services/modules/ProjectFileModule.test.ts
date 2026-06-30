@@ -3,8 +3,13 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { Segment } from '@cat/core/models';
-import type { InspectFileInput, InspectFileResult } from '@cat/localization';
-import type { FileInspectResult } from '../../../shared/ipc';
+import type {
+  ExportReferencesForMtInput,
+  ExportReferencesForMtResult,
+  InspectFileInput,
+  InspectFileResult,
+} from '@cat/localization';
+import type { FileInspectResult, FileReferenceExportResult } from '../../../shared/ipc';
 import { ProjectFileModule } from './ProjectFileModule';
 import { ProjectRepository, SegmentRepository, SpreadsheetGateway } from '../ports';
 
@@ -43,6 +48,14 @@ function createInspectResult(outputPath: string): InspectFileResult {
       },
       units: [],
     },
+  };
+}
+
+function createReferenceExportResult(outputPath: string): ExportReferencesForMtResult {
+  return {
+    outputPath,
+    summary: { total: 3, ready: 2, error: 1 },
+    units: [],
   };
 }
 
@@ -498,6 +511,74 @@ describe('ProjectFileModule.inspectFile', () => {
         'Source workbook not found. Please re-import the file.',
       );
       expect(inspectFileRunner).not.toHaveBeenCalled();
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('ProjectFileModule.exportReferencesForMt', () => {
+  it('maps stored import options to the shared reference exporter input', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-references-'));
+    const storedDir = join(rootDir, '9');
+    mkdirSync(storedDir);
+    writeFileSync(join(storedDir, '12_demo.xlsx'), 'fake spreadsheet');
+    const outputPath = join(rootDir, 'references.xlsx');
+    const exportResult: ExportReferencesForMtResult = {
+      ...createReferenceExportResult(outputPath),
+      summary: { total: 3, ready: 2, error: 1, internal: 99 } as ExportReferencesForMtResult['summary'],
+    };
+    const exportReferencesRunner = vi.fn<
+      [ExportReferencesForMtInput],
+      Promise<ExportReferencesForMtResult>
+    >(async () => exportResult);
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({
+        id: 12,
+        projectId: 9,
+        name: 'demo.xlsx',
+        importOptionsJson: JSON.stringify({
+          hasHeader: true,
+          sourceCol: 2,
+          targetCol: 4,
+          contextCol: 5,
+          tagPolicy: 'none',
+        }),
+      }),
+      getProject: vi.fn().mockReturnValue({ id: 9 }),
+    } as unknown as ProjectRepository;
+    const segmentRepo = {} as unknown as SegmentRepository;
+    const filter = {} as unknown as SpreadsheetGateway;
+
+    const module = new ProjectFileModule(
+      projectRepo,
+      segmentRepo,
+      filter,
+      rootDir,
+      undefined,
+      exportReferencesRunner,
+    );
+
+    try {
+      const result = await module.exportReferencesForMt(12, outputPath);
+
+      expect(exportReferencesRunner).toHaveBeenCalledTimes(1);
+      expect(exportReferencesRunner).toHaveBeenCalledWith({
+        projectId: 9,
+        inputPath: join(rootDir, '9', '12_demo.xlsx'),
+        outputPath,
+        columns: { hasHeader: true, sourceCol: 2, targetCol: 4, contextCol: 5 },
+        options: {
+          tagPolicy: 'none',
+        },
+      });
+
+      expect(result).toEqual({
+        outputPath,
+        summary: { total: 3, ready: 2, error: 1 },
+      } satisfies FileReferenceExportResult);
+      expect(Object.keys(result.summary)).toEqual(['total', 'ready', 'error']);
+      expect(result).not.toHaveProperty('units');
     } finally {
       rmSync(rootDir, { recursive: true, force: true });
     }

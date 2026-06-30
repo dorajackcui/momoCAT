@@ -74,4 +74,25 @@ describe('IPC handler registration smoke', () => {
     await expect(handler?.({}, 7, 'inspect.xlsx')).resolves.toBe(inspectResult);
     expect(inspectFile).toHaveBeenCalledWith(7, 'inspect.xlsx');
   });
+
+  it('delegates reference export requests to the project service with the selected output path', async () => {
+    const handlers = new Map<string, IpcMainListener>();
+    const handle = vi.fn((channel: string, listener: IpcMainListener) => {
+      handlers.set(channel, listener);
+    });
+    const exportResult = {
+      outputPath: 'references.xlsx',
+      summary: { total: 3, ready: 2, error: 1 },
+    };
+    const exportReferencesForMt = vi.fn().mockResolvedValue(exportResult);
+    const projectService = { exportReferencesForMt } as unknown as ProjectService;
+
+    registerProjectHandlers({ ipcMain: { handle }, projectService });
+
+    const handler = handlers.get(IPC_CHANNELS.file.exportReferences);
+    expect(handler).toBeDefined();
+
+    await expect(handler?.({}, 7, 'references.xlsx')).resolves.toBe(exportResult);
+    expect(exportReferencesForMt).toHaveBeenCalledWith(7, 'references.xlsx');
+  });
 });

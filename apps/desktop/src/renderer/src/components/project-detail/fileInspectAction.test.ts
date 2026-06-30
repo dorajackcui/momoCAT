@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { FileInspectResult, ProjectFileRecord } from '../../../../shared/ipc';
+import type { FileReferenceExportResult, ProjectFileRecord } from '../../../../shared/ipc';
 import {
-  buildInspectDefaultPath,
+  buildReferenceExportDefaultPath,
   INSPECT_OUTPUT_FILTERS,
-  runFileInspectAction,
+  runFileReferenceExportAction,
 } from './fileInspectAction';
 
 function createFile(overrides?: Partial<ProjectFileRecord>): ProjectFileRecord {
@@ -28,27 +28,26 @@ function createFile(overrides?: Partial<ProjectFileRecord>): ProjectFileRecord {
   };
 }
 
-describe('buildInspectDefaultPath', () => {
+describe('buildReferenceExportDefaultPath', () => {
   it.each([
-    ['demo.xlsx', 'demo_inspect.xlsx'],
-    ['demo.csv', 'demo_inspect.xlsx'],
-    ['demo', 'demo_inspect.xlsx'],
-  ])('builds inspect workbook path for %s', (fileName, expected) => {
-    expect(buildInspectDefaultPath(fileName)).toBe(expected);
+    ['demo.xlsx', 'demo_tm_tb_refs.xlsx'],
+    ['demo.csv', 'demo_tm_tb_refs.xlsx'],
+    ['demo', 'demo_tm_tb_refs.xlsx'],
+  ])('builds reference export workbook path for %s', (fileName, expected) => {
+    expect(buildReferenceExportDefaultPath(fileName)).toBe(expected);
   });
 });
 
-describe('runFileInspectAction', () => {
-  it('exports file inspect output inside mutation and reports partial issues as info', async () => {
+describe('runFileReferenceExportAction', () => {
+  it('exports TM/TB references inside mutation and reports partial issues as info', async () => {
     const order: string[] = [];
-    const result: FileInspectResult = {
-      outputPath: 'D:/out/demo_inspect.xlsx',
-      jsonOutputPath: 'D:/out/demo_inspect.json',
+    const result: FileReferenceExportResult = {
+      outputPath: 'D:/out/demo_tm_tb_refs.xlsx',
       summary: { total: 3, ready: 2, error: 1 },
     };
-    const saveFileDialog = vi.fn(async () => 'D:/out/demo_inspect.xlsx');
-    const inspectFile = vi.fn(async (fileId: number, outputPath: string) => {
-      order.push(`inspect:${fileId}:${outputPath}`);
+    const saveFileDialog = vi.fn(async () => 'D:/out/demo_tm_tb_refs.xlsx');
+    const exportReferencesForMt = vi.fn(async (fileId: number, outputPath: string) => {
+      order.push(`references:${fileId}:${outputPath}`);
       return result;
     });
     const runMutation = vi.fn(async <T>(fn: () => Promise<T>) => {
@@ -61,71 +60,74 @@ describe('runFileInspectAction', () => {
     const info = vi.fn();
     const error = vi.fn();
 
-    const actual = await runFileInspectAction(createFile(), {
+    const actual = await runFileReferenceExportAction(createFile(), {
       saveFileDialog,
-      inspectFile,
+      exportReferencesForMt,
       runMutation,
       success,
       info,
       error,
     });
 
-    expect(saveFileDialog).toHaveBeenCalledWith('demo_inspect.xlsx', INSPECT_OUTPUT_FILTERS);
+    expect(saveFileDialog).toHaveBeenCalledWith('demo_tm_tb_refs.xlsx', INSPECT_OUTPUT_FILTERS);
     expect(runMutation).toHaveBeenCalledTimes(1);
-    expect(inspectFile).toHaveBeenCalledWith(7, 'D:/out/demo_inspect.xlsx');
-    expect(order).toEqual(['mutation:start', 'inspect:7:D:/out/demo_inspect.xlsx', 'mutation:end']);
+    expect(exportReferencesForMt).toHaveBeenCalledWith(7, 'D:/out/demo_tm_tb_refs.xlsx');
+    expect(order).toEqual([
+      'mutation:start',
+      'references:7:D:/out/demo_tm_tb_refs.xlsx',
+      'mutation:end',
+    ]);
     expect(info).toHaveBeenCalledWith(
-      'Inspect exported with issues: 2/3 source rows ready, 1 failed.',
+      'TM/TB refs exported with issues: 2/3 source rows ready, 1 failed.',
     );
     expect(success).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
     expect(actual).toBe(result);
   });
 
-  it('reports pure inspect exports as success', async () => {
-    const result: FileInspectResult = {
-      outputPath: 'D:/out/demo_inspect.xlsx',
-      jsonOutputPath: 'D:/out/demo_inspect.json',
+  it('reports pure reference exports as success', async () => {
+    const result: FileReferenceExportResult = {
+      outputPath: 'D:/out/demo_tm_tb_refs.xlsx',
       summary: { total: 3, ready: 3, error: 0 },
     };
-    const saveFileDialog = vi.fn(async () => 'D:/out/demo_inspect.xlsx');
-    const inspectFile = vi.fn(async () => result);
+    const saveFileDialog = vi.fn(async () => 'D:/out/demo_tm_tb_refs.xlsx');
+    const exportReferencesForMt = vi.fn(async () => result);
     const runMutation = vi.fn(async <T>(fn: () => Promise<T>) => fn());
     const success = vi.fn();
     const info = vi.fn();
     const error = vi.fn();
 
-    const actual = await runFileInspectAction(createFile(), {
+    const actual = await runFileReferenceExportAction(createFile(), {
       saveFileDialog,
-      inspectFile,
+      exportReferencesForMt,
       runMutation,
       success,
       info,
       error,
     });
 
-    expect(success).toHaveBeenCalledWith('Inspect exported: 3/3 source rows ready.');
+    expect(success).toHaveBeenCalledWith('TM/TB refs exported: 3/3 source rows ready.');
     expect(info).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
     expect(actual).toBe(result);
   });
 
-  it('returns null without inspecting when save dialog is canceled', async () => {
+  it('returns null without exporting when save dialog is canceled', async () => {
     const saveFileDialog = vi.fn(async () => null);
-    const inspectFile = vi.fn();
+    const exportReferencesForMt = vi.fn();
     const runMutation = vi.fn(async <T>(fn: () => Promise<T>) => fn());
 
-    const actual = await runFileInspectAction(createFile(), {
+    const actual = await runFileReferenceExportAction(createFile(), {
       saveFileDialog,
-      inspectFile,
+      exportReferencesForMt,
       runMutation,
       success: vi.fn(),
       info: vi.fn(),
       error: vi.fn(),
     });
 
-    expect(saveFileDialog).toHaveBeenCalledWith('demo_inspect.xlsx', INSPECT_OUTPUT_FILTERS);
-    expect(inspectFile).not.toHaveBeenCalled();
+    expect(saveFileDialog).toHaveBeenCalledWith('demo_tm_tb_refs.xlsx', INSPECT_OUTPUT_FILTERS);
+    expect(exportReferencesForMt).not.toHaveBeenCalled();
     expect(runMutation).not.toHaveBeenCalled();
     expect(actual).toBeNull();
   });
@@ -134,52 +136,52 @@ describe('runFileInspectAction', () => {
     const saveFileDialog = vi.fn(async () => {
       throw new Error('dialog blew up');
     });
-    const inspectFile = vi.fn();
+    const exportReferencesForMt = vi.fn();
     const runMutation = vi.fn(async <T>(fn: () => Promise<T>) => fn());
     const success = vi.fn();
     const info = vi.fn();
     const error = vi.fn();
 
-    const actual = await runFileInspectAction(createFile(), {
+    const actual = await runFileReferenceExportAction(createFile(), {
       saveFileDialog,
-      inspectFile,
+      exportReferencesForMt,
       runMutation,
       success,
       info,
       error,
     });
 
-    expect(inspectFile).not.toHaveBeenCalled();
+    expect(exportReferencesForMt).not.toHaveBeenCalled();
     expect(runMutation).not.toHaveBeenCalled();
     expect(success).not.toHaveBeenCalled();
     expect(info).not.toHaveBeenCalled();
-    expect(error).toHaveBeenCalledWith('Inspect failed: dialog blew up');
+    expect(error).toHaveBeenCalledWith('TM/TB refs export failed: dialog blew up');
     expect(actual).toBeNull();
   });
 
-  it('reports inspect failures with the thrown error message', async () => {
-    const saveFileDialog = vi.fn(async () => 'D:/out/demo_inspect.xlsx');
-    const inspectFile = vi.fn(async () => {
-      throw new Error('inspect blew up');
+  it('reports reference export failures with the thrown error message', async () => {
+    const saveFileDialog = vi.fn(async () => 'D:/out/demo_tm_tb_refs.xlsx');
+    const exportReferencesForMt = vi.fn(async () => {
+      throw new Error('export blew up');
     });
     const runMutation = vi.fn(async <T>(fn: () => Promise<T>) => fn());
     const success = vi.fn();
     const info = vi.fn();
     const error = vi.fn();
 
-    const actual = await runFileInspectAction(createFile(), {
+    const actual = await runFileReferenceExportAction(createFile(), {
       saveFileDialog,
-      inspectFile,
+      exportReferencesForMt,
       runMutation,
       success,
       info,
       error,
     });
 
-    expect(inspectFile).toHaveBeenCalledWith(7, 'D:/out/demo_inspect.xlsx');
+    expect(exportReferencesForMt).toHaveBeenCalledWith(7, 'D:/out/demo_tm_tb_refs.xlsx');
     expect(success).not.toHaveBeenCalled();
     expect(info).not.toHaveBeenCalled();
-    expect(error).toHaveBeenCalledWith('Inspect failed: inspect blew up');
+    expect(error).toHaveBeenCalledWith('TM/TB refs export failed: export blew up');
     expect(actual).toBeNull();
   });
 });

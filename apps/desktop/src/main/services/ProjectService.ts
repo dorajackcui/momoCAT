@@ -9,6 +9,7 @@ import { CATDatabase } from '@cat/db';
 import {
   LocalizationEngine,
   LocalizationInspector,
+  LocalizationReferenceExporter,
   type TranslationAuditSink,
 } from '@cat/localization';
 import { SpreadsheetFilter } from '../filters/SpreadsheetFilter';
@@ -23,7 +24,11 @@ import {
   SpreadsheetPreviewData,
 } from './ports';
 import { AIProviderTransport } from './providers/AIProviderTransport';
-import { ProjectFileModule, type InspectFileRunner } from './modules/ProjectFileModule';
+import {
+  ProjectFileModule,
+  type InspectFileRunner,
+  type ReferenceExportRunner,
+} from './modules/ProjectFileModule';
 import { TMModule } from './modules/TMModule';
 import { TBModule } from './modules/TBModule';
 import { AIModule } from './modules/AIModule';
@@ -39,6 +44,7 @@ import type {
   AIBatchTargetBaseline,
   AIBatchTargetScope,
   FileInspectResult,
+  FileReferenceExportResult,
   ImportOptions,
   PastedSourceFileInput,
   ProxySettings,
@@ -63,6 +69,7 @@ interface ProjectServiceDependencies {
   aiTransport?: AITransport;
   aiRuntimeConfigProvider?: AIRuntimeConfigProvider;
   inspectFileRunner?: InspectFileRunner;
+  referenceExportRunner?: ReferenceExportRunner;
   translationAuditSink?: TranslationAuditSink;
   projectModule?: ProjectFileModule;
   tmModule?: TMModule;
@@ -128,6 +135,7 @@ export class ProjectService {
         projectsDir,
         deps.inspectFileRunner ??
           createInspectFileRunner(db, dbPath, aiRuntimeConfigProvider, aiTransport),
+        deps.referenceExportRunner ?? createReferenceExportRunner(db),
       );
     this.tmModule =
       deps.tmModule ??
@@ -403,6 +411,16 @@ export class ProjectService {
     });
   }
 
+  public async exportReferencesForMt(
+    fileId: number,
+    outputPath: string,
+  ): Promise<FileReferenceExportResult> {
+    const scope = `file:${fileId}`;
+    return this.projectModule.exportReferencesForMt(fileId, outputPath, (current, total) => {
+      this.emitProgress('reference-export', current, total, undefined, scope);
+    });
+  }
+
   public getAISettings(): { apiKeySet: boolean; apiKeyLast4?: string } {
     return this.aiModule.getAISettings();
   }
@@ -484,4 +502,9 @@ function createInspectFileRunner(
 ): InspectFileRunner {
   const inspector = new LocalizationInspector(db, { dbPath, aiRuntimeConfigProvider, aiTransport });
   return (input) => inspector.inspectFile(input);
+}
+
+function createReferenceExportRunner(db: CATDatabase): ReferenceExportRunner {
+  const exporter = new LocalizationReferenceExporter(db);
+  return (input) => exporter.exportReferencesForMtFile(input);
 }

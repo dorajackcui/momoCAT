@@ -44,6 +44,7 @@ describe('createDesktopApi smoke', () => {
     await api.readClipboard();
     await api.runFileQA(1);
     await api.inspectFile(1, 'inspect.xlsx');
+    await api.exportReferencesForMt(1, 'references.xlsx');
     await api.checkForUpdates();
     await api.createPastedSourceFile(12, {
       sources: ['A', 'BB'],
@@ -78,6 +79,11 @@ describe('createDesktopApi smoke', () => {
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.clipboard.read);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.runQA, 1);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.inspect, 1, 'inspect.xlsx');
+    expect(invoke).toHaveBeenCalledWith(
+      IPC_CHANNELS.file.exportReferences,
+      1,
+      'references.xlsx',
+    );
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.app.checkForUpdates);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.project.createPastedSourceFile, 12, {
       sources: ['A', 'BB'],

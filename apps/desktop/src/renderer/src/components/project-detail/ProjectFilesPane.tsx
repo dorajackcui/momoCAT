@@ -131,7 +131,7 @@ function ProjectFileCard({
             size="sm"
             className="!bg-info-soft !text-info"
           >
-            Inspect
+            TM/TB
           </Button>
         )}
         {supportsTMWorkflow ? (

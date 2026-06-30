@@ -37,6 +37,7 @@ const INSPECT_COLUMNS = [
   '_inspect_status',
   '_inspect_json_ref',
 ] as const;
+const REFERENCE_EXPORT_COLUMNS = ['_tm_for_mt', '_tb_for_mt'] as const;
 const DEFAULT_CONTEXT_HEADER = 'context';
 
 export async function parseExternalSpreadsheet(
@@ -139,6 +140,31 @@ export async function writeInspectSpreadsheet(
     workbook,
     XLSX.utils.aoa_to_sheet(buildSystemPromptRows(artifact)),
     'MT_SystemPrompt',
+  );
+
+  await writeWorkbook(workbook, outputPath, 'xlsx');
+}
+
+export interface ReferenceExportSpreadsheetRow {
+  unitId: string;
+  tmForMt: string;
+  tbForMt: string;
+}
+
+export async function writeReferencesForMtSpreadsheet(
+  parsed: ParsedSpreadsheetFile,
+  rows: ReferenceExportSpreadsheetRow[],
+  outputPath: string,
+): Promise<void> {
+  assertNotInputPath(parsed.inputPath, outputPath);
+
+  const workbook = XLSX.utils.book_new();
+  const rowByUnitId = new Map(rows.map((row) => [row.unitId, row] as const));
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    XLSX.utils.aoa_to_sheet(buildReferenceExportRows(parsed, rowByUnitId)),
+    parsed.sheetName,
   );
 
   await writeWorkbook(workbook, outputPath, 'xlsx');
@@ -401,6 +427,45 @@ function buildSegmentRows(
       inspected.xlsx.mtUserPrompt,
       inspected.status,
       `#/units/${inspectedEntry.index}`,
+    ]);
+  }
+
+  return rows;
+}
+
+function buildReferenceExportRows(
+  parsed: ParsedSpreadsheetFile,
+  referenceRowByUnitId: Map<string, ReferenceExportSpreadsheetRow>,
+): FileCellValue[][] {
+  const rows: FileCellValue[][] = [];
+  const parseRowByIndex = new Map(parsed.artifact.rows.map((row) => [row.rowIndex, row] as const));
+
+  if (!parsed.columns.hasHeader) {
+    const width = Math.max(...parsed.rawRows.map((row) => row.length), 0);
+    rows.push([
+      ...Array.from({ length: width }, (_, index) => `Column ${index + 1}`),
+      ...REFERENCE_EXPORT_COLUMNS,
+    ]);
+  }
+
+  for (let rowIndex = 0; rowIndex < parsed.rawRows.length; rowIndex += 1) {
+    const originalCells = (parsed.rawRows[rowIndex] ?? []).map(cellToSerializableValue);
+    if (parsed.columns.hasHeader && rowIndex === 0) {
+      rows.push([...originalCells, ...REFERENCE_EXPORT_COLUMNS]);
+      continue;
+    }
+
+    const parseRow = parseRowByIndex.get(rowIndex);
+    if (!parseRow || !parseRow.source.trim()) {
+      rows.push([...originalCells, '', '']);
+      continue;
+    }
+
+    const referenceRow = referenceRowByUnitId.get(parseRow.unitId);
+    rows.push([
+      ...originalCells,
+      referenceRow?.tmForMt ?? '',
+      referenceRow?.tbForMt ?? '',
     ]);
   }
 

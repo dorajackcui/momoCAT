@@ -105,3 +105,52 @@ describe('ProjectService.inspectFile', () => {
     }
   });
 });
+
+describe('ProjectService.exportReferencesForMt', () => {
+  it('delegates to ProjectFileModule.exportReferencesForMt with scoped progress', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'project-service-reference-export-'));
+    const dbPath = join(rootDir, 'cat.db');
+    const db = new CATDatabase(dbPath);
+    const exportReferencesForMt = vi.fn().mockResolvedValue({
+      outputPath: 'references.xlsx',
+      summary: { total: 1, ready: 1, error: 0 },
+    });
+
+    try {
+      const service = new ProjectService(db, join(rootDir, 'projects'), dbPath, {
+        projectModule: { exportReferencesForMt } as unknown as ProjectFileModule,
+        tmModule: {} as never,
+        tbModule: {} as never,
+        aiModule: { applySavedProxySettings: vi.fn() } as never,
+      });
+
+      const progressEvents: { type: string; current: number; total: number; scope?: string }[] = [];
+      service.onProgress((data) => progressEvents.push(data));
+
+      const result = await service.exportReferencesForMt(44, 'references.xlsx');
+
+      expect(exportReferencesForMt).toHaveBeenCalledWith(
+        44,
+        'references.xlsx',
+        expect.any(Function),
+      );
+      expect(result.summary.ready).toBe(1);
+
+      const onProgress = exportReferencesForMt.mock.calls[0][2] as (
+        current: number,
+        total: number,
+      ) => void;
+      onProgress(5, 10);
+      expect(progressEvents).toContainEqual({
+        type: 'reference-export',
+        current: 5,
+        total: 10,
+        message: undefined,
+        scope: 'file:44',
+      });
+    } finally {
+      db.close();
+      rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
+});

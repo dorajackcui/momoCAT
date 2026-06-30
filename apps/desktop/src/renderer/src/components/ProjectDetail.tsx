@@ -17,7 +17,7 @@ import { ProjectQASettingsModal } from './project-detail/ProjectQASettingsModal'
 import { PasteSourceModal } from './project-detail/PasteSourceModal';
 import { runFileQaWithRefresh } from './project-detail/runFileQaWithRefresh';
 import { buildFileQaFeedback } from './project-detail/fileQaFeedback';
-import { runFileInspectAction } from './project-detail/fileInspectAction';
+import { runFileReferenceExportAction } from './project-detail/fileInspectAction';
 import { Spinner } from './ui';
 
 interface ProjectDetailProps {
@@ -44,9 +44,10 @@ export function ProjectDetail({
   const [qaSettingsDraft, setQaSettingsDraft] = useState<ProjectQASettings>(
     DEFAULT_PROJECT_QA_SETTINGS,
   );
-  const [inspectProgress, setInspectProgress] = useState<{ current: number; total: number } | null>(
-    null,
-  );
+  const [referenceExportProgress, setReferenceExportProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
   const addFileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const {
@@ -264,14 +265,14 @@ export function ProjectDetail({
   const handleInspectFile = async (file: ProjectFileRecord) => {
     const expectedScope = `file:${file.id}`;
     const unsubscribe = apiClient.onProgress((event: AppProgressEvent) => {
-      if (event.type === 'inspect' && event.scope === expectedScope) {
-        setInspectProgress({ current: event.current, total: event.total });
+      if (event.type === 'reference-export' && event.scope === expectedScope) {
+        setReferenceExportProgress({ current: event.current, total: event.total });
       }
     });
     try {
-      await runFileInspectAction(file, {
+      await runFileReferenceExportAction(file, {
         saveFileDialog: apiClient.saveFileDialog,
-        inspectFile: apiClient.inspectFile,
+        exportReferencesForMt: apiClient.exportReferencesForMt,
         runMutation,
         success: (message) => feedbackService.success(message),
         info: (message) => feedbackService.info(message),
@@ -279,7 +280,7 @@ export function ProjectDetail({
       });
     } finally {
       unsubscribe();
-      setInspectProgress(null);
+      setReferenceExportProgress(null);
     }
   };
 
@@ -384,23 +385,23 @@ export function ProjectDetail({
         saving={qaSettingsSaving}
       />
 
-      {inspectProgress && (
+      {referenceExportProgress && (
         <div className="modal-backdrop !z-[100]">
           <div className="modal-card max-w-sm p-6 text-center animate-in fade-in zoom-in duration-200">
             <div className="mb-4">
               <div className="w-12 h-12 bg-brand-soft rounded-full flex items-center justify-center mx-auto mb-3">
                 <Spinner size="lg" tone="brand" />
               </div>
-              <h2 className="text-lg font-bold text-text">Inspecting…</h2>
+              <h2 className="text-lg font-bold text-text">Exporting TM/TB refs...</h2>
               <p className="text-sm text-text-muted mt-1">
-                Processing row {inspectProgress.current} of {inspectProgress.total}
+                Processing row {referenceExportProgress.current} of {referenceExportProgress.total}
               </p>
             </div>
             <div className="overflow-hidden h-2 rounded bg-brand-soft">
               <div
                 className="h-full bg-brand transition-all duration-300"
                 style={{
-                  width: `${Math.round((inspectProgress.current / inspectProgress.total) * 100)}%`,
+                  width: `${referenceExportProgress.total > 0 ? Math.round((referenceExportProgress.current / referenceExportProgress.total) * 100) : 0}%`,
                 }}
               />
             </div>

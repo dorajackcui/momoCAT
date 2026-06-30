@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { runExportReferencesForMtCommand } from './exportReferencesForMtCommand';
 import { runInspectLocalizationCommand } from './inspectLocalizationCommand';
 import { runTranslateFileCommand } from './translateFileCommand';
 
@@ -42,6 +43,25 @@ describe('localization command database guards', () => {
     try {
       await expect(
         runTranslateFileCommand({
+          dbPath,
+          projectId: 1,
+          inputPath,
+          outputPath,
+        }),
+      ).rejects.toThrow();
+      expect(fs.existsSync(dbPath)).toBe(false);
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('runExportReferencesForMtCommand rejects a missing db path without creating it', async () => {
+    const { dbPath, inputPath, outputPath, tempRoot } = createMissingDbFixture(
+      'momocat-export-references-missing-',
+    );
+    try {
+      await expect(
+        runExportReferencesForMtCommand({
           dbPath,
           projectId: 1,
           inputPath,

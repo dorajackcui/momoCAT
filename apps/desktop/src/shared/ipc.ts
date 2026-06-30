@@ -73,6 +73,15 @@ export interface FileInspectResult {
   };
 }
 
+export interface FileReferenceExportResult {
+  outputPath: string;
+  summary: {
+    total: number;
+    ready: number;
+    error: number;
+  };
+}
+
 export type TMRecord = DbTMRecord;
 
 export interface TMWithStats extends TMRecord {
@@ -378,6 +387,10 @@ export interface DesktopApi {
   ) => Promise<void>;
   runFileQA: (fileId: number) => Promise<FileQaReport>;
   inspectFile: (fileId: number, outputPath: string) => Promise<FileInspectResult>;
+  exportReferencesForMt: (
+    fileId: number,
+    outputPath: string,
+  ) => Promise<FileReferenceExportResult>;
   updateSegment: (
     segmentId: string,
     targetTokens: Token[],

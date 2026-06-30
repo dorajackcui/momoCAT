@@ -156,7 +156,7 @@ describe('ProjectFilesPane', () => {
     const html = renderPane(ai, 'translation');
 
     expect(html).toContain('AI Translate');
-    expect(html).toContain('Inspect');
+    expect(html).toContain('TM/TB');
     expect(html).not.toContain('AI Dialogue');
     expect(html).not.toContain('AI Translate Options');
   });
@@ -201,7 +201,7 @@ describe('ProjectFilesPane', () => {
       }),
     );
 
-    const inspectButton = capturedButtons.find((button) => button.label === 'Inspect');
+    const inspectButton = capturedButtons.find((button) => button.label === 'TM/TB');
     expect(inspectButton).toBeDefined();
     inspectButton?.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
 
@@ -246,7 +246,7 @@ describe('ProjectFilesPane', () => {
     const html = renderPane(ai, 'review');
 
     expect(html).toContain('AI Review');
-    expect(html).not.toContain('Inspect');
+    expect(html).not.toContain('TM/TB');
     expect(html).not.toContain('AI Translate Options');
   });
 
@@ -255,6 +255,6 @@ describe('ProjectFilesPane', () => {
     const html = renderPane(ai, 'custom');
 
     expect(html).toContain('AI Process');
-    expect(html).not.toContain('Inspect');
+    expect(html).not.toContain('TM/TB');
   });
 });
