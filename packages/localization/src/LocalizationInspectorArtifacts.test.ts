@@ -4,7 +4,20 @@ import { buildUnitXlsxFields } from './LocalizationInspectorArtifacts';
 
 describe('buildUnitXlsxFields', () => {
   it('renders row-scoped TM, concordance, and TB references while preserving full prompt', () => {
-    const mt = createPromptArtifact('FULL WINDOW PROMPT: row-2 and row-3');
+    const mt = createPromptArtifact(
+      [
+        'FULL WINDOW PROMPT: row-2 and row-3',
+        'Window TM includes Other Row',
+        'Window concordance includes Other Concordance',
+        'Window TB includes Other Term',
+      ].join('\n'),
+      {
+        tmPromptBlock: 'window-level tm block with Other Row',
+        concordancePromptBlock:
+          'window-level concordance block with Other Concordance',
+        tbPromptBlock: 'window-level tb block with Other Term',
+      },
+    );
     const unit = createReadyUnit({
       tmReferences: [
         {
@@ -38,7 +51,12 @@ describe('buildUnitXlsxFields', () => {
       maxCellChars: 1000,
     });
 
-    expect(fields.mtUserPrompt).toBe('FULL WINDOW PROMPT: row-2 and row-3');
+    expect(fields.mtUserPrompt).toContain(
+      'FULL WINDOW PROMPT: row-2 and row-3',
+    );
+    expect(fields.mtUserPrompt).toContain('Other Row');
+    expect(fields.mtUserPrompt).toContain('Other Concordance');
+    expect(fields.mtUserPrompt).toContain('Other Term');
     expect(fields.tmForMt).toContain('TM References');
     expect(fields.tmForMt).toContain(
       '1. 100% Main TM Row 1 | Hello world -> Bonjour le monde',
@@ -48,6 +66,7 @@ describe('buildUnitXlsxFields', () => {
       '1. world (Concordance TM Row 1) | world settings -> parametres monde',
     );
     expect(fields.tmForMt).not.toContain('Other Row');
+    expect(fields.tmForMt).not.toContain('Other Concordance');
     expect(fields.tbForMt).toContain('Terminology References');
     expect(fields.tbForMt).toContain(
       '1. world -> monde (note: Use the common noun.)',
@@ -96,6 +115,9 @@ describe('buildUnitXlsxFields', () => {
     expect(fields.mtUserPrompt).toContain(
       '[TRUNCATED: see #/units/1/mt/userPrompt]',
     );
+    expect(fields.tmForMt.length).toBeLessThanOrEqual(80);
+    expect(fields.tbForMt.length).toBeLessThanOrEqual(80);
+    expect(fields.mtUserPrompt.length).toBeLessThanOrEqual(80);
     expect(fields.truncated).toEqual({
       tmForMt: true,
       tbForMt: true,
@@ -104,7 +126,15 @@ describe('buildUnitXlsxFields', () => {
   });
 });
 
-function createPromptArtifact(userPrompt: string): PromptArtifact {
+function createPromptArtifact(
+  userPrompt: string,
+  overrides: Partial<
+    Pick<
+      PromptArtifact,
+      'tmPromptBlock' | 'concordancePromptBlock' | 'tbPromptBlock'
+    >
+  > = {},
+): PromptArtifact {
   return {
     unitId: 'inspect-window-1',
     provider: {
@@ -117,9 +147,10 @@ function createPromptArtifact(userPrompt: string): PromptArtifact {
     projectPrompt: '',
     projectType: 'translation',
     sourcePayload: 'row-2: Hello world\nrow-3: Preferences',
-    tmPromptBlock: 'window-level tm block',
-    concordancePromptBlock: 'window-level concordance block',
-    tbPromptBlock: 'window-level tb block',
+    tmPromptBlock: overrides.tmPromptBlock ?? 'window-level tm block',
+    concordancePromptBlock:
+      overrides.concordancePromptBlock ?? 'window-level concordance block',
+    tbPromptBlock: overrides.tbPromptBlock ?? 'window-level tb block',
     referencePromptBlock: 'window-level reference block',
     systemPrompt: 'system prompt',
     userPrompt,
