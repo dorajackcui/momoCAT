@@ -8,42 +8,6 @@ import type {
   TMArtifact,
 } from './artifacts';
 
-export function buildXlsxFields(
-  mt: PromptArtifact,
-  unitIndex: number,
-  maxCellChars: number,
-): InspectUnitArtifact['xlsx'] {
-  const tmPromptInput = [mt.tmPromptBlock, mt.concordancePromptBlock]
-    .filter((block) => block.length > 0)
-    .join('\n\n');
-  const tmForMt = truncateForCell(
-    tmPromptInput,
-    maxCellChars,
-    `#/units/${unitIndex}/mt/userPrompt`,
-  );
-  const tbForMt = truncateForCell(
-    mt.tbPromptBlock,
-    maxCellChars,
-    `#/units/${unitIndex}/mt/tbPromptBlock`,
-  );
-  const mtUserPrompt = truncateForCell(
-    mt.userPrompt,
-    maxCellChars,
-    `#/units/${unitIndex}/mt/userPrompt`,
-  );
-
-  return {
-    tmForMt: tmForMt.value,
-    tbForMt: tbForMt.value,
-    mtUserPrompt: mtUserPrompt.value,
-    truncated: {
-      tmForMt: tmForMt.truncated,
-      tbForMt: tbForMt.truncated,
-      mtUserPrompt: mtUserPrompt.truncated,
-    },
-  };
-}
-
 export function buildUnitXlsxFields({
   mt,
   unit,
