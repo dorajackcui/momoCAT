@@ -62,6 +62,7 @@ export interface InspectFileInput extends TranslateFileInput {
   jsonOutputPath?: string;
   unitLimit?: number;
   maxCellChars?: number;
+  onProgress?: (current: number, total: number) => void;
 }
 
 export interface InspectFileResult {
@@ -199,6 +200,7 @@ export class LocalizationInspector {
             parsed.inputPath,
             maxCellChars,
             tagPolicy,
+            input.onProgress,
           )
         : await this.inspectRowsWindowMode(
             project,
@@ -207,6 +209,7 @@ export class LocalizationInspector {
             parsed.inputPath,
             maxCellChars,
             tagPolicy,
+            input.onProgress,
           );
 
     const firstReadyPrompt =
@@ -272,8 +275,10 @@ export class LocalizationInspector {
     inputPath: string,
     maxCellChars: number,
     tagPolicy: TagPolicy,
+    onProgress?: (current: number, total: number) => void,
   ): Promise<InspectUnitArtifact[]> {
     const translatableRows = rows.filter(({ row }) => isRequestRow(row));
+    onProgress?.(0, rows.length);
     const units = await Promise.all(
       translatableRows.map(({ row, segment }) =>
         this.inspectRowReferences(project, row, segment),
@@ -359,6 +364,7 @@ export class LocalizationInspector {
           });
         }
       }
+      onProgress?.(Math.min(batchStart + INSPECT_BATCH_SIZE, rows.length), rows.length);
     }
 
     return units;
@@ -371,8 +377,10 @@ export class LocalizationInspector {
     inputPath: string,
     maxCellChars: number,
     tagPolicy: TagPolicy,
+    onProgress?: (current: number, total: number) => void,
   ): Promise<InspectUnitArtifact[]> {
     const requestRows = rows.filter(({ row }) => isRequestRow(row));
+    onProgress?.(0, rows.length);
     const units = await Promise.all(
       requestRows.map(({ row, segment }) =>
         this.inspectRowReferences(project, row, segment),
@@ -476,6 +484,7 @@ export class LocalizationInspector {
           });
         }
       }
+      onProgress?.(Math.min(batchStart + INSPECT_BATCH_SIZE, rows.length), rows.length);
     }
 
     return units;

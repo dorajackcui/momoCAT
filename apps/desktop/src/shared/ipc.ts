@@ -304,6 +304,7 @@ export interface AppProgressEvent {
   current: number;
   total: number;
   message?: string;
+  scope?: string;
 }
 
 export interface JobProgressEvent {

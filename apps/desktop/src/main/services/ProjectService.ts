@@ -87,6 +87,7 @@ export class ProjectService {
     current: number;
     total: number;
     message?: string;
+    scope?: string;
   }) => void)[] = [];
 
   constructor(
@@ -253,7 +254,7 @@ export class ProjectService {
   }
 
   public onProgress(
-    callback: (data: { type: string; current: number; total: number; message?: string }) => void,
+    callback: (data: { type: string; current: number; total: number; message?: string; scope?: string }) => void,
   ) {
     this.progressCallbacks.push(callback);
     return () => {
@@ -261,8 +262,8 @@ export class ProjectService {
     };
   }
 
-  private emitProgress(type: string, current: number, total: number, message?: string) {
-    this.progressCallbacks.forEach((cb) => cb({ type, current, total, message }));
+  private emitProgress(type: string, current: number, total: number, message?: string, scope?: string) {
+    this.progressCallbacks.forEach((cb) => cb({ type, current, total, message, scope }));
   }
 
   public async findMatches(projectId: number, segment: Segment) {
@@ -396,7 +397,10 @@ export class ProjectService {
   }
 
   public async inspectFile(fileId: number, outputPath: string): Promise<FileInspectResult> {
-    return this.projectModule.inspectFile(fileId, outputPath);
+    const scope = `file:${fileId}`;
+    return this.projectModule.inspectFile(fileId, outputPath, (current, total) => {
+      this.emitProgress('inspect', current, total, undefined, scope);
+    });
   }
 
   public getAISettings(): { apiKeySet: boolean; apiKeyLast4?: string } {

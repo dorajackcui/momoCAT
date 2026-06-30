@@ -345,7 +345,11 @@ export class ProjectFileModule {
     await this.filter.export(storedPath, segments, finalOptions, outputPath);
   }
 
-  public async inspectFile(fileId: number, outputPath: string): Promise<FileInspectResult> {
+  public async inspectFile(
+    fileId: number,
+    outputPath: string,
+    onProgress?: (current: number, total: number) => void,
+  ): Promise<FileInspectResult> {
     if (!this.inspectFileRunner) throw new Error('File inspect is not configured.');
 
     const file = this.projectRepo.getFile(fileId);
@@ -386,6 +390,7 @@ export class ProjectFileModule {
         targetBaseline: 'ignore-current-targets',
         tagPolicy: resolveImportOptionsTagPolicy(importOptions),
       },
+      onProgress,
     });
 
     return {

@@ -53,11 +53,24 @@ describe('ProjectService.inspectFile', () => {
         aiModule: { applySavedProxySettings: vi.fn() } as never,
       });
 
+      const progressEvents: { type: string; current: number; total: number; scope?: string }[] = [];
+      service.onProgress((data) => progressEvents.push(data));
+
       const result = await service.inspectFile(44, 'inspect.xlsx');
 
-      expect(inspectFile).toHaveBeenCalledWith(44, 'inspect.xlsx');
+      expect(inspectFile).toHaveBeenCalledWith(44, 'inspect.xlsx', expect.any(Function));
       expect(result.summary.ready).toBe(1);
       expect(localizationMocks.LocalizationInspector).not.toHaveBeenCalled();
+
+      const onProgress = inspectFile.mock.calls[0][2] as (current: number, total: number) => void;
+      onProgress(5, 10);
+      expect(progressEvents).toContainEqual({
+        type: 'inspect',
+        current: 5,
+        total: 10,
+        message: undefined,
+        scope: 'file:44',
+      });
     } finally {
       db.close();
       rmSync(rootDir, { recursive: true, force: true });
