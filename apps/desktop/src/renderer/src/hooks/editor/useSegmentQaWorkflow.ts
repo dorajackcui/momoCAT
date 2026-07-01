@@ -4,6 +4,7 @@ import type { Segment, TBMatch } from '@cat/core/models';
 import type { SegmentQaRuleId } from '@cat/core/project';
 import { evaluateSegmentQa, TagValidator } from '@cat/core/qa';
 import { apiClient } from '../../services/apiClient';
+import type { SetSegmentsWithChangeHint } from './editorSegmentState';
 
 interface UseSegmentQaWorkflowParams {
   segments: Segment[];
@@ -11,7 +12,7 @@ interface UseSegmentQaWorkflowParams {
   targetLocale: string | null;
   enabledQaRuleIds: SegmentQaRuleId[];
   instantQaOnConfirm: boolean;
-  setSegments: Dispatch<SetStateAction<Segment[]>>;
+  setSegments: SetSegmentsWithChangeHint;
   setActiveSegmentId: Dispatch<SetStateAction<string | null>>;
   setSegmentSaveError: (segmentId: string, message: string) => void;
   clearSegmentSaveError: (segmentId: string) => void;
@@ -79,39 +80,45 @@ export function useSegmentQaWorkflow({
           ? tagValidator.validate(segment.sourceTokens, segment.targetTokens)
           : { issues: [], suggestions: [] };
 
-        setSegments((prev) =>
-          prev.map((item) => {
-            if (item.segmentId !== segmentId) return item;
-            return {
-              ...item,
-              qaIssues: combinedIssues,
-              autoFixSuggestions: tagValidationResult.suggestions,
-            };
-          }),
+        setSegments(
+          (prev) =>
+            prev.map((item) => {
+              if (item.segmentId !== segmentId) return item;
+              return {
+                ...item,
+                qaIssues: combinedIssues,
+                autoFixSuggestions: tagValidationResult.suggestions,
+              };
+            }),
+          { orderChanged: false, changedSegmentIds: [segmentId] },
         );
 
         if (hasBlockingErrors) {
           return;
         }
       } else {
-        setSegments((prev) =>
-          prev.map((item) =>
-            item.segmentId === segmentId
-              ? { ...item, qaIssues: undefined, autoFixSuggestions: undefined }
-              : item,
-          ),
+        setSegments(
+          (prev) =>
+            prev.map((item) =>
+              item.segmentId === segmentId
+                ? { ...item, qaIssues: undefined, autoFixSuggestions: undefined }
+                : item,
+            ),
+          { orderChanged: false, changedSegmentIds: [segmentId] },
         );
       }
 
-      setSegments((prev) =>
-        prev.map((item) =>
-          item.segmentId === segmentId
-            ? {
-                ...item,
-                status: 'confirmed',
-              }
-            : item,
-        ),
+      setSegments(
+        (prev) =>
+          prev.map((item) =>
+            item.segmentId === segmentId
+              ? {
+                  ...item,
+                  status: 'confirmed',
+                }
+              : item,
+          ),
+        { orderChanged: false, changedSegmentIds: [segmentId] },
       );
       clearSegmentSaveError(segmentId);
 
@@ -119,15 +126,17 @@ export function useSegmentQaWorkflow({
         await apiClient.updateSegment(segmentId, segment.targetTokens, 'confirmed');
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        setSegments((prev) =>
-          prev.map((item) =>
-            item.segmentId === segmentId
-              ? {
-                  ...item,
-                  status: previousStatus,
-                }
-              : item,
-          ),
+        setSegments(
+          (prev) =>
+            prev.map((item) =>
+              item.segmentId === segmentId
+                ? {
+                    ...item,
+                    status: previousStatus,
+                  }
+                : item,
+            ),
+          { orderChanged: false, changedSegmentIds: [segmentId] },
         );
         setSegmentSaveError(segmentId, `保存失败：${message}`);
         return;

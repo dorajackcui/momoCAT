@@ -7,6 +7,7 @@ import type { TagPolicy } from '@cat/core/tag';
 import type { SegmentsUpdatedEvent } from '../../../../shared/ipc';
 import { resolveFileTagPolicy } from '../../../../shared/fileTagPolicy';
 import { apiClient } from '../../services/apiClient';
+import type { SetSegmentsWithChangeHint } from './editorSegmentState';
 
 export type BatchSegmentAction =
   | { type: 'direct'; event: SegmentsUpdatedEvent }
@@ -25,13 +26,137 @@ export function buildBatchFinalState(
   return finalState;
 }
 
+export function buildSegmentIndex(segments: readonly Segment[]): Map<string, number> {
+  const index = new Map<string, number>();
+  segments.forEach((segment, position) => {
+    index.set(segment.segmentId, position);
+  });
+  return index;
+}
+
+interface ApplyBatchSegmentUpdatesParams {
+  segments: Segment[];
+  segmentIndex: Map<string, number>;
+  finalState: Map<string, BatchSegmentAction>;
+  normalizeTokens: (tokens: unknown, context: string) => Token[];
+  normalizeStatus: (status: unknown, targetTokens: Token[]) => SegmentStatus;
+  directContext: string;
+  propagationContext: string;
+}
+
+export function applyBatchSegmentUpdatesToSegments({
+  segments,
+  segmentIndex,
+  finalState,
+  normalizeTokens,
+  normalizeStatus,
+  directContext,
+  propagationContext,
+}: ApplyBatchSegmentUpdatesParams): Segment[] {
+  let nextSegments: Segment[] | null = null;
+
+  for (const [segmentId, entry] of finalState) {
+    const index = resolveSegmentIndex(segments, segmentIndex, segmentId);
+    if (index === null) continue;
+
+    const segment = segments[index];
+    if (!segment) continue;
+
+    const nextSegment =
+      entry.type === 'direct'
+        ? applyDirectSegmentUpdate({
+            segment,
+            event: entry.event,
+            normalizeTokens,
+            normalizeStatus,
+            context: directContext,
+          })
+        : applyPropagatedSegmentUpdate({
+            segment,
+            event: entry.event,
+            normalizeTokens,
+            context: propagationContext,
+          });
+
+    if (nextSegments === null) {
+      nextSegments = segments.slice();
+    }
+    nextSegments[index] = nextSegment;
+  }
+
+  return nextSegments ?? segments;
+}
+
+function resolveSegmentIndex(
+  segments: Segment[],
+  segmentIndex: Map<string, number>,
+  segmentId: string,
+): number | null {
+  const indexed = segmentIndex.get(segmentId);
+  if (indexed !== undefined && segments[indexed]?.segmentId === segmentId) {
+    return indexed;
+  }
+
+  for (let index = 0; index < segments.length; index += 1) {
+    if (segments[index]?.segmentId === segmentId) {
+      segmentIndex.set(segmentId, index);
+      return index;
+    }
+  }
+
+  segmentIndex.delete(segmentId);
+  return null;
+}
+
+function applyDirectSegmentUpdate(params: {
+  segment: Segment;
+  event: SegmentsUpdatedEvent;
+  normalizeTokens: (tokens: unknown, context: string) => Token[];
+  normalizeStatus: (status: unknown, targetTokens: Token[]) => SegmentStatus;
+  context: string;
+}): Segment {
+  const targetTokens = params.normalizeTokens(
+    params.event.targetTokens,
+    `segment ${params.segment.segmentId} target (${params.context})`,
+  );
+  const nextStatus = params.normalizeStatus(params.event.status, targetTokens);
+  return {
+    ...params.segment,
+    targetTokens,
+    status: nextStatus,
+    qaIssues: nextStatus === 'confirmed' ? params.segment.qaIssues : undefined,
+    autoFixSuggestions:
+      nextStatus === 'confirmed' ? params.segment.autoFixSuggestions : undefined,
+  };
+}
+
+function applyPropagatedSegmentUpdate(params: {
+  segment: Segment;
+  event: SegmentsUpdatedEvent;
+  normalizeTokens: (tokens: unknown, context: string) => Token[];
+  context: string;
+}): Segment {
+  const targetTokens = params.normalizeTokens(
+    params.event.targetTokens,
+    `segment ${params.segment.segmentId} target (${params.context})`,
+  );
+  return {
+    ...params.segment,
+    targetTokens,
+    status: 'draft' as SegmentStatus,
+    qaIssues: undefined,
+    autoFixSuggestions: undefined,
+  };
+}
+
 const SEGMENT_PAGE_SIZE = 1000;
 
 interface UseEditorDataLoaderParams {
   activeFileId: number | null;
   normalizeTokens: (tokens: unknown, context: string) => Token[];
   normalizeStatus: (status: unknown, targetTokens: Token[]) => SegmentStatus;
-  setSegments: Dispatch<SetStateAction<Segment[]>>;
+  getSegmentIndexById: () => Map<string, number>;
+  setSegments: SetSegmentsWithChangeHint;
   setProjectId: Dispatch<SetStateAction<number | null>>;
   setProjectTgtLang: Dispatch<SetStateAction<string | null>>;
   setEnabledQaRuleIds: Dispatch<SetStateAction<SegmentQaRuleId[]>>;
@@ -157,6 +282,7 @@ export function useEditorDataLoader({
   activeFileId,
   normalizeTokens,
   normalizeStatus,
+  getSegmentIndexById,
   setSegments,
   setProjectId,
   setProjectTgtLang,
@@ -176,63 +302,36 @@ export function useEditorDataLoader({
 
   const applySegmentsUpdatedEvent = useCallback(
     (data: SegmentsUpdatedEvent) => {
+      const finalState = buildBatchFinalState([data]);
+
       setSegmentSaveErrors((prev) => {
         let changed = false;
         const next = { ...prev };
-        if (next[data.segmentId]) {
-          delete next[data.segmentId];
-          changed = true;
-        }
-        for (const propagatedId of data.propagatedIds ?? []) {
-          if (next[propagatedId]) {
-            delete next[propagatedId];
+        for (const segmentId of finalState.keys()) {
+          if (next[segmentId]) {
+            delete next[segmentId];
             changed = true;
           }
         }
         return changed ? next : prev;
       });
 
-      setSegments((prev) => {
-        let changed = false;
-        const nextSegments: Segment[] = prev.map((segment): Segment => {
-          if (segment.segmentId === data.segmentId) {
-            changed = true;
-            const targetTokens = normalizeTokens(
-              data.targetTokens,
-              `segment ${segment.segmentId} target (update)`,
-            );
-            const nextStatus = normalizeStatus(data.status, targetTokens);
-            return {
-              ...segment,
-              targetTokens,
-              status: nextStatus,
-              qaIssues: nextStatus === 'confirmed' ? segment.qaIssues : undefined,
-              autoFixSuggestions:
-                nextStatus === 'confirmed' ? segment.autoFixSuggestions : undefined,
-            };
-          }
-
-          if (data.propagatedIds?.includes(segment.segmentId)) {
-            changed = true;
-            const targetTokens = normalizeTokens(
-              data.targetTokens,
-              `segment ${segment.segmentId} target (propagation)`,
-            );
-            return {
-              ...segment,
-              targetTokens,
-              status: 'draft' as SegmentStatus,
-              qaIssues: undefined,
-              autoFixSuggestions: undefined,
-            };
-          }
-
-          return segment;
-        });
-        return changed ? nextSegments : prev;
-      });
+      setSegments(
+        (prev) => {
+          return applyBatchSegmentUpdatesToSegments({
+            segments: prev,
+            segmentIndex: getSegmentIndexById(),
+            finalState,
+            normalizeTokens,
+            normalizeStatus,
+            directContext: 'update',
+            propagationContext: 'propagation',
+          });
+        },
+        { orderChanged: false, changedSegmentIds: finalState.keys() },
+      );
     },
-    [normalizeStatus, normalizeTokens, setSegmentSaveErrors, setSegments],
+    [getSegmentIndexById, normalizeStatus, normalizeTokens, setSegmentSaveErrors, setSegments],
   );
 
   const applySegmentsUpdatedBatch = useCallback(
@@ -251,50 +350,27 @@ export function useEditorDataLoader({
         return changed ? next : prev;
       });
 
-      setSegments((prev) => {
-        let changed = false;
-        const nextSegments: Segment[] = prev.map((segment): Segment => {
-          const entry = finalState.get(segment.segmentId);
-          if (!entry) return segment;
-
-          changed = true;
-          if (entry.type === 'direct') {
-            const targetTokens = normalizeTokens(
-              entry.event.targetTokens,
-              `segment ${segment.segmentId} target (batch-update)`,
-            );
-            const nextStatus = normalizeStatus(entry.event.status, targetTokens);
-            return {
-              ...segment,
-              targetTokens,
-              status: nextStatus,
-              qaIssues: nextStatus === 'confirmed' ? segment.qaIssues : undefined,
-              autoFixSuggestions:
-                nextStatus === 'confirmed' ? segment.autoFixSuggestions : undefined,
-            };
-          }
-
-          const targetTokens = normalizeTokens(
-            entry.event.targetTokens,
-            `segment ${segment.segmentId} target (batch-propagation)`,
-          );
-          return {
-            ...segment,
-            targetTokens,
-            status: 'draft' as SegmentStatus,
-            qaIssues: undefined,
-            autoFixSuggestions: undefined,
-          };
-        });
-        return changed ? nextSegments : prev;
-      });
+      setSegments(
+        (prev) => {
+          return applyBatchSegmentUpdatesToSegments({
+            segments: prev,
+            segmentIndex: getSegmentIndexById(),
+            finalState,
+            normalizeTokens,
+            normalizeStatus,
+            directContext: 'batch-update',
+            propagationContext: 'batch-propagation',
+          });
+        },
+        { orderChanged: false, changedSegmentIds: finalState.keys() },
+      );
     },
-    [normalizeStatus, normalizeTokens, setSegmentSaveErrors, setSegments],
+    [getSegmentIndexById, normalizeStatus, normalizeTokens, setSegmentSaveErrors, setSegments],
   );
 
   const loadEditorData = useCallback(async () => {
     if (activeFileId === null) {
-      setSegments([]);
+      setSegments([], { orderChanged: true });
       setProjectId(null);
       setProjectTgtLang(null);
       setEnabledQaRuleIds(DEFAULT_PROJECT_QA_SETTINGS.enabledRuleIds);
@@ -358,7 +434,7 @@ export function useEditorDataLoader({
           autoFixSuggestions: undefined,
         };
       });
-      setSegments(normalized);
+      setSegments(normalized, { orderChanged: true });
       setSegmentSaveErrors({});
       setAiTranslatingSegmentIds({});
       clearPersistQueue();

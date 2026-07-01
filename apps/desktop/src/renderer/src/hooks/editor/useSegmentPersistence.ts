@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import { apiClient } from '../../services/apiClient';
+import type { SetSegmentsWithChangeHint } from './editorSegmentState';
 
 const DEFAULT_PERSIST_DEBOUNCE_MS = 350;
 
@@ -245,7 +246,7 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
 }
 
 interface UseSegmentPersistenceParams {
-  setSegments: Dispatch<SetStateAction<Segment[]>>;
+  setSegments: SetSegmentsWithChangeHint;
   setSegmentSaveError: (segmentId: string, message: string) => void;
   clearSegmentSaveError: (segmentId: string) => void;
 }
@@ -307,11 +308,14 @@ export function useSegmentPersistence({
     (segmentId: string, updater: (segment: Segment) => Segment) => {
       let updatedSegment: Segment | undefined;
 
-      setSegments((prev) => {
-        const result = buildOptimisticSegmentUpdate(prev, segmentId, updater);
-        updatedSegment = result.updatedSegment;
-        return result.updatedSegment ? result.segments : prev;
-      });
+      setSegments(
+        (prev) => {
+          const result = buildOptimisticSegmentUpdate(prev, segmentId, updater);
+          updatedSegment = result.updatedSegment;
+          return result.updatedSegment ? result.segments : prev;
+        },
+        { orderChanged: false, changedSegmentIds: [segmentId] },
+      );
 
       if (!updatedSegment) {
         return;

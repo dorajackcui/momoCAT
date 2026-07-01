@@ -23,10 +23,13 @@ import {
 } from './editor/editorFilterStateStorage';
 import {
   buildSearchableEditorSegments,
+  buildSearchableEditorSegmentsIncrementally,
   buildSearchableEditorSegmentsWithWeakCache,
+  resolveActiveFilteredSegmentIndex,
   resolveActiveSegmentIdForFilteredList,
 } from './editor/editorSearchableSegments';
 import { useEditorFilterMenus } from './editor/useEditorFilterMenus';
+import type { SegmentChangeHint } from './editor/editorSegmentState';
 
 const SEARCH_DEBOUNCE_MS = 120;
 
@@ -72,6 +75,8 @@ export const FILTER_SORT_OPTIONS: Array<{
 export interface UseEditorFiltersParams {
   fileId: number;
   segments: Segment[];
+  segmentChangeHint?: SegmentChangeHint;
+  segmentIndexById?: ReadonlyMap<string, number>;
   segmentSaveErrors: Record<string, string>;
   activeSegmentId: string | null;
   setActiveSegmentId: (segmentId: string) => void;
@@ -86,7 +91,9 @@ const SORT_DIRECTION_VALUES = new Set<EditorSortDirection>(['asc', 'desc']);
 
 export {
   buildSearchableEditorSegments,
+  buildSearchableEditorSegmentsIncrementally,
   buildSearchableEditorSegmentsWithWeakCache,
+  resolveActiveFilteredSegmentIndex,
   resolveActiveSegmentIdForFilteredList,
 };
 
@@ -111,6 +118,8 @@ export function sanitizePersistedEditorFilterState(raw: unknown): EditorFilterCr
 export function useEditorFilters({
   fileId,
   segments,
+  segmentChangeHint,
+  segmentIndexById,
   segmentSaveErrors,
   activeSegmentId,
   setActiveSegmentId,
@@ -125,6 +134,8 @@ export function useEditorFilters({
     () => new WeakMap(),
     [],
   );
+  const searchableSegmentsRef = useRef<SearchableEditorSegment[] | null>(null);
+  const previousSegmentSaveErrorsRef = useRef<Record<string, string> | null>(null);
 
   const menus = useEditorFilterMenus();
   const {
@@ -138,15 +149,21 @@ export function useEditorFilters({
     setIsSortMenuOpen,
   } = menus;
 
-  const searchableSegments = useMemo(
-    () =>
-      buildSearchableEditorSegmentsWithWeakCache({
-        segments,
-        segmentSaveErrors,
-        cache: searchableSegmentCache,
-      }),
-    [searchableSegmentCache, segments, segmentSaveErrors],
-  );
+  const searchableSegments = useMemo(() => {
+    const saveErrorsChanged = previousSegmentSaveErrorsRef.current !== segmentSaveErrors;
+    const nextSearchableSegments = buildSearchableEditorSegmentsIncrementally({
+      segments,
+      segmentSaveErrors,
+      cache: searchableSegmentCache,
+      previous: searchableSegmentsRef.current,
+      changedSegmentIds: saveErrorsChanged ? undefined : segmentChangeHint?.changedSegmentIds,
+      segmentIndexById,
+      orderChanged: saveErrorsChanged ? true : (segmentChangeHint?.orderChanged ?? true),
+    });
+    searchableSegmentsRef.current = nextSearchableSegments;
+    previousSegmentSaveErrorsRef.current = segmentSaveErrors;
+    return nextSearchableSegments;
+  }, [searchableSegmentCache, segments, segmentChangeHint, segmentIndexById, segmentSaveErrors]);
 
   const effectiveCriteria = useMemo(
     () => ({
@@ -169,6 +186,16 @@ export function useEditorFilters({
 
   const activeFilterCount = countActiveFilterFields(filterState);
   const hasActiveFilter = activeFilterCount > 0 || filterState.sortBy !== 'default';
+  const activeFilteredIndex = useMemo(
+    () =>
+      resolveActiveFilteredSegmentIndex({
+        activeSegmentId,
+        filteredSegments,
+        segmentIndexById,
+        canUseSegmentIndex: !hasActiveFilter,
+      }),
+    [activeSegmentId, filteredSegments, hasActiveFilter, segmentIndexById],
+  );
 
   const clearFilters = useCallback(() => {
     const defaults = createDefaultEditorFilterCriteria();
@@ -287,11 +314,12 @@ export function useEditorFilters({
       activeSegmentId,
       segments,
       filteredSegments,
+      segmentIndexById,
     });
     if (!nextActiveSegmentId) return;
     if (nextActiveSegmentId === activeSegmentId) return;
     setActiveSegmentId(nextActiveSegmentId);
-  }, [activeSegmentId, filteredSegments, segments, setActiveSegmentId]);
+  }, [activeSegmentId, filteredSegments, segmentIndexById, segments, setActiveSegmentId]);
 
   return {
     sourceQueryInput: filterState.sourceQuery,
@@ -307,6 +335,7 @@ export function useEditorFilters({
     filterMenuRef,
     sortMenuRef,
     filteredSegments,
+    activeFilteredIndex,
     activeFilterCount,
     hasActiveFilter,
     toggleFilterMenu,

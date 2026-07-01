@@ -12,6 +12,7 @@ interface EditorListPaneProps {
   scrollParentRef: React.RefObject<HTMLDivElement | null>;
   virtualized: boolean;
   filteredSegments: SearchableEditorSegment[];
+  activeFilteredIndex: number;
   activeSegmentId: string | null;
   manualActivationSegmentId: string | null;
   suppressAutoFocusSegmentId: string | null;
@@ -36,6 +37,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
   scrollParentRef,
   virtualized,
   filteredSegments,
+  activeFilteredIndex,
   activeSegmentId,
   manualActivationSegmentId,
   suppressAutoFocusSegmentId,
@@ -126,9 +128,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
 
   useEffect(() => {
     if (!virtualized || !activeSegmentId) return;
-    const activeIndex = filteredSegments.findIndex(
-      (item) => item.segment.segmentId === activeSegmentId,
-    );
+    const activeIndex = activeFilteredIndex;
     if (activeIndex < 0) return;
     // Segment edits replace array items without moving the active row; only
     // scroll when the activation target or its list position actually changed.
@@ -142,7 +142,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
     }
     lastScrolledTargetRef.current = { segmentId: activeSegmentId, index: activeIndex };
     virtualizer.scrollToIndex(activeIndex, { align: 'auto' });
-  }, [activeSegmentId, filteredSegments, virtualized, virtualizer]);
+  }, [activeFilteredIndex, activeSegmentId, virtualized, virtualizer]);
 
   return (
     <>

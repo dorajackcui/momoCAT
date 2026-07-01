@@ -70,6 +70,9 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
     handleApplyTerm,
     projectId,
     reloadEditorData,
+    segmentChangeHint,
+    segmentIndexById,
+    segmentStats,
   } = useEditor({ activeFileId: fileId });
 
   const {
@@ -86,6 +89,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
     filterMenuRef,
     sortMenuRef,
     filteredSegments,
+    activeFilteredIndex,
     activeFilterCount,
     hasActiveFilter,
     toggleFilterMenu,
@@ -103,6 +107,8 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
   } = useEditorFilters({
     fileId,
     segments,
+    segmentChangeHint,
+    segmentIndexById,
     segmentSaveErrors,
     activeSegmentId,
     setActiveSegmentId,
@@ -136,11 +142,8 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
     ? clampJobProgress(activeBatchAIJob.progress || 0)
     : 0;
 
-  const totalSegments = segments.length;
-  const confirmedSegments = useMemo(
-    () => segments.filter((segment) => segment.status === 'confirmed').length,
-    [segments],
-  );
+  const totalSegments = segmentStats.totalSegments;
+  const confirmedSegments = segmentStats.confirmedSegments;
   const saveErrorCount = Object.keys(segmentSaveErrors).length;
 
   const handleExport = useCallback(() => {
@@ -338,6 +341,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
               scrollParentRef={listScrollRef}
               virtualized={isVirtualizedListEnabled}
               filteredSegments={filteredSegments}
+              activeFilteredIndex={activeFilteredIndex}
               activeSegmentId={activeSegmentId}
               manualActivationSegmentId={manualActivationSegmentId}
               suppressAutoFocusSegmentId={suppressAutoFocusSegmentId}

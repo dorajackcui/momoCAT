@@ -3,8 +3,10 @@ import type { Segment } from '@cat/core/models';
 import {
   buildEditorFilterStorageKey,
   buildSearchableEditorSegments,
+  buildSearchableEditorSegmentsIncrementally,
   buildSearchableEditorSegmentsWithWeakCache,
   resolveActiveSegmentIdForFilteredList,
+  resolveActiveFilteredSegmentIndex,
   sanitizePersistedEditorFilterState,
 } from './useEditorFilters';
 
@@ -132,6 +134,45 @@ describe('useEditorFilters helpers', () => {
     expect(third[1].hasSaveError).toBe(true);
   });
 
+  it('rebuilds only changed searchable items when order is stable and changed ids are known', () => {
+    const first = createSegment({ id: 's1', source: 'Alpha', target: 'A' });
+    const second = createSegment({ id: 's2', source: 'Beta', target: 'B' });
+    const cache = new WeakMap<Segment, ReturnType<typeof buildSearchableEditorSegments>[number]>();
+    const initial = buildSearchableEditorSegmentsWithWeakCache({
+      segments: [first, second],
+      segmentSaveErrors: {},
+      cache,
+    });
+    const updatedFirst = {
+      ...first,
+      targetTokens: [{ type: 'text' as const, content: 'AA' }],
+    };
+    const poisonSecond = { ...second };
+    Object.defineProperty(poisonSecond, 'targetTokens', {
+      get() {
+        throw new Error('untouched segment target tokens were read');
+      },
+    });
+
+    const next = buildSearchableEditorSegmentsIncrementally({
+      segments: [updatedFirst, poisonSecond],
+      segmentSaveErrors: {},
+      cache,
+      previous: initial,
+      changedSegmentIds: new Set(['s1']),
+      segmentIndexById: new Map([
+        ['s1', 0],
+        ['s2', 1],
+      ]),
+      orderChanged: false,
+    });
+
+    expect(next).not.toBe(initial);
+    expect(next[0]).not.toBe(initial[0]);
+    expect(next[0].targetText).toBe('AA');
+    expect(next[1]).toBe(initial[1]);
+  });
+
   it('keeps active segment when it still exists but is filtered out', () => {
     const segments: Segment[] = [
       createSegment({ id: 's1', source: 'Alpha' }),
@@ -146,6 +187,69 @@ describe('useEditorFilters helpers', () => {
     });
 
     expect(next).toBe('s2');
+  });
+
+  it('uses the segment index to keep active segment existence checks local', () => {
+    const first = createSegment({ id: 's1', source: 'Alpha' });
+    const second = createSegment({ id: 's2', source: 'Beta' });
+    Object.defineProperty(first, 'segmentId', {
+      get() {
+        throw new Error('untouched segment id was scanned');
+      },
+    });
+    const filteredSegments = buildSearchableEditorSegments([second], {});
+
+    const next = resolveActiveSegmentIdForFilteredList({
+      activeSegmentId: 's2',
+      segments: [first, second],
+      filteredSegments,
+      segmentIndexById: new Map([['s2', 1]]),
+    });
+
+    expect(next).toBe('s2');
+  });
+
+  it('resolves active filtered index from the segment index on the default list path', () => {
+    const first = createSegment({ id: 's1', source: 'Alpha' });
+    const second = createSegment({ id: 's2', source: 'Beta' });
+    Object.defineProperty(first, 'segmentId', {
+      get() {
+        throw new Error('untouched filtered item id was scanned');
+      },
+    });
+    const filteredSegments = [
+      {
+        segment: first,
+        originalIndex: 0,
+        sourceText: 'Alpha',
+        targetText: '',
+        hasQaError: false,
+        hasQaWarning: false,
+        hasSaveError: false,
+        isUntranslated: true,
+        hasIssue: false,
+      },
+      {
+        segment: second,
+        originalIndex: 1,
+        sourceText: 'Beta',
+        targetText: '',
+        hasQaError: false,
+        hasQaWarning: false,
+        hasSaveError: false,
+        isUntranslated: true,
+        hasIssue: false,
+      },
+    ];
+
+    const activeIndex = resolveActiveFilteredSegmentIndex({
+      activeSegmentId: 's2',
+      filteredSegments,
+      segmentIndexById: new Map([['s2', 1]]),
+      canUseSegmentIndex: true,
+    });
+
+    expect(activeIndex).toBe(1);
   });
 
   it('falls back to first filtered segment when active segment no longer exists', () => {

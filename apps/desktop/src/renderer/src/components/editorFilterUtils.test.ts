@@ -83,7 +83,17 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
 
   it('keeps all segments when conditions are empty', () => {
     const filtered = filterSearchableSegments(segments, createDefaultEditorFilterCriteria());
+    expect(filtered).toBe(segments);
     expect(filtered).toHaveLength(3);
+  });
+
+  it('keeps the original list when match mode changes without a query', () => {
+    const filtered = filterSearchableSegments(segments, {
+      ...createDefaultEditorFilterCriteria(),
+      matchMode: 'regex',
+    });
+
+    expect(filtered).toBe(segments);
   });
 
   it('filters with source query + target query + status together', () => {

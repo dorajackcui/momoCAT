@@ -137,6 +137,17 @@ export function filterSearchableSegments(
   segments: SearchableEditorSegment[],
   criteria: EditorFilterCriteria,
 ): SearchableEditorSegment[] {
+  const hasFilterCriteria =
+    criteria.status !== 'all' ||
+    criteria.qualityFilters.length > 0 ||
+    criteria.quickPreset !== 'none' ||
+    criteria.sourceQuery.trim().length > 0 ||
+    criteria.targetQuery.trim().length > 0;
+
+  if (!hasFilterCriteria) {
+    return segments;
+  }
+
   return segments.filter((item) => {
     if (criteria.status !== 'all' && item.segment.status !== criteria.status) {
       return false;
