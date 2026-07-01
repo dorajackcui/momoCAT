@@ -152,7 +152,11 @@ export function useProjectAI({
 
   useEffect(() => {
     const unsubscribe = apiClient.onJobProgress((progress) => {
-      if (progress.status === 'completed' || progress.status === 'failed') {
+      if (
+        progress.status === 'completed' ||
+        progress.status === 'failed' ||
+        progress.status === 'cancelled'
+      ) {
         void loadData();
       }
     });
@@ -311,6 +315,26 @@ export function useProjectAI({
     [fileJobTracker, project?.projectType, providerActionBlockMessage],
   );
 
+  const cancelAITranslateFile = useCallback(
+    async (fileId: number) => {
+      const job = fileJobTracker.getFileJob(fileId);
+      if (!job || job.status !== 'running') {
+        return;
+      }
+
+      try {
+        const cancelled = await apiClient.aiCancelFileJob(job.jobId);
+        if (!cancelled) {
+          feedbackService.info('AI translation is no longer running.');
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        feedbackService.error(`Failed to stop AI translation: ${message}`);
+      }
+    },
+    [fileJobTracker],
+  );
+
   return useMemo(
     () => ({
       providerOptions,
@@ -341,6 +365,7 @@ export function useProjectAI({
       savePrompt,
       testPrompt,
       startAITranslateFile,
+      cancelAITranslateFile,
       getFileJob: fileJobTracker.getFileJob,
       subscribeFileJobs: fileJobTracker.subscribe,
     }),
@@ -360,6 +385,7 @@ export function useProjectAI({
       savingPrompt,
       showTestDetails,
       startAITranslateFile,
+      cancelAITranslateFile,
       testContext,
       testError,
       testMeta,

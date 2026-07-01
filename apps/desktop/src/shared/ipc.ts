@@ -321,6 +321,7 @@ export interface JobProgressEvent {
   progress: number;
   status: 'running' | 'completed' | 'failed' | 'cancelled';
   message?: string;
+  cancelRequested?: boolean;
   result?: ImportJobResult;
   error?: StructuredJobError;
 }
@@ -441,6 +442,7 @@ export interface DesktopApi {
   aiTranslateSegment: (segmentId: string) => Promise<AISegmentTranslateResult>;
   aiRefineSegment: (segmentId: string, instruction: string) => Promise<AISegmentTranslateResult>;
   aiTranslateFile: (fileId: number, options?: AITranslateFileOptions) => Promise<string>;
+  aiCancelFileJob: (jobId: string) => Promise<boolean>;
   aiTestTranslate: (
     projectId: number,
     sourceText: string,

@@ -4,6 +4,7 @@ import type { Project } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
 import { runStandardFileTranslation } from './fileTranslationWorkflow';
 import { runDialogueFileTranslation } from './dialogueTranslationWorkflow';
+import { runLocalizationFileTranslation } from './localizationFileTranslationWorkflow';
 import { AI_BATCH_DEBUG_ENV } from './aiBatchDebug';
 
 function createSegment(params: {
@@ -403,6 +404,87 @@ describe('AI translation workflows', () => {
     );
 
     warnSpy.mockRestore();
+  });
+
+  it('stops standard file workflow before writing returned tokens when cancellation is requested', async () => {
+    let cancelRequested = false;
+    const segments = [
+      createSegment({ segmentId: 's1', sourceText: 'Hello' }),
+      createSegment({ segmentId: 's2', sourceText: 'World' }),
+    ];
+    const segmentPagingIterator = {
+      countFileSegments: vi.fn().mockReturnValue(segments.length),
+      countMatchingSegments: vi
+        .fn()
+        .mockImplementation(
+          (_fileId: number, predicate: (segment: Segment) => boolean) =>
+            segments.filter(predicate).length,
+        ),
+      iterateFileSegments: vi.fn().mockReturnValue(segments.values()),
+    };
+    const textTranslator = {
+      translateSegment: vi.fn(async () => {
+        cancelRequested = true;
+        return [{ type: 'text', content: 'Translated' }];
+      }),
+    };
+    const segmentService = {
+      updateSegment: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const result = await runStandardFileTranslation({
+      fileId: 1,
+      projectId: 11,
+      project: createProject({ projectType: 'custom' }),
+      apiKey: 'test-key',
+      baseUrl: 'https://api.example.test/v1',
+      model: 'gpt-5.4-mini',
+      runtimeConfig: { reasoningEffort: 'medium' },
+      tagPolicy: 'default',
+      targetScope: 'blank-only',
+      segmentPagingIterator: segmentPagingIterator as never,
+      textTranslator: textTranslator as never,
+      segmentService: segmentService as never,
+      resolveTranslationPromptReferences: vi.fn().mockResolvedValue({}),
+      intervalMs: 0,
+      cancellationToken: { isCancellationRequested: () => cancelRequested },
+    });
+
+    expect(textTranslator.translateSegment).toHaveBeenCalledTimes(1);
+    expect(segmentService.updateSegment).not.toHaveBeenCalled();
+    expect(result).toEqual({ translated: 0, skipped: 0, failed: 0, total: 2 });
+  });
+
+  it('passes cancellation token into the localization file workflow', async () => {
+    const cancellationToken = { isCancellationRequested: () => false };
+    const segments = [createSegment({ segmentId: 's1', sourceText: 'Hello' })];
+    let receivedCancellationToken: unknown;
+    const localizationEngine = {
+      translateProjectSegments: vi.fn(async (input) => {
+        receivedCancellationToken = input.cancellationToken;
+        return {
+          summary: { total: 1, translated: 0, skipped: 0, failed: 0 },
+          results: [],
+        };
+      }),
+    };
+
+    const result = await runLocalizationFileTranslation({
+      fileId: 1,
+      fileName: 'demo.xlsx',
+      project: createProject(),
+      targetBaseline: 'use-current-targets',
+      tagPolicy: 'default',
+      localizationEngine: localizationEngine as never,
+      segmentPagingIterator: {
+        iterateFileSegments: vi.fn().mockReturnValue(segments.values()),
+      } as never,
+      segmentService: { updateSegment: vi.fn() } as never,
+      cancellationToken,
+    });
+
+    expect(result).toEqual({ translated: 0, skipped: 0, failed: 0, total: 1 });
+    expect(receivedCancellationToken).toBe(cancellationToken);
   });
 
   it('falls back to per-segment translation when dialogue group translation fails', async () => {

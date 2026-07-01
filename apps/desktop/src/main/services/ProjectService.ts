@@ -10,6 +10,7 @@ import {
   LocalizationEngine,
   LocalizationInspector,
   LocalizationReferenceExporter,
+  type CancellationToken,
   type TranslationAuditSink,
 } from '@cat/localization';
 import { SpreadsheetFilter } from '../filters/SpreadsheetFilter';
@@ -465,6 +466,7 @@ export class ProjectService {
       targetScope?: AIBatchTargetScope;
       targetBaseline?: AIBatchTargetBaseline;
       onProgress?: (data: { current: number; total: number; message?: string }) => void;
+      cancellationToken?: CancellationToken;
     },
   ) {
     return this.aiModule.aiTranslateFile(fileId, options);

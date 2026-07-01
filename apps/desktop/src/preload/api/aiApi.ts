@@ -15,6 +15,7 @@ type AIApiKeys =
   | 'aiTranslateSegment'
   | 'aiRefineSegment'
   | 'aiTranslateFile'
+  | 'aiCancelFileJob'
   | 'aiTestTranslate';
 
 export function createAIApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<AIApiKeys> {
@@ -62,6 +63,10 @@ export function createAIApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<AIApi
     aiTranslateFile: (fileId, options) =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.translateFile, fileId, options) as ReturnType<
         DesktopApi['aiTranslateFile']
+      >,
+    aiCancelFileJob: (jobId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.ai.cancelFileJob, jobId) as ReturnType<
+        DesktopApi['aiCancelFileJob']
       >,
     aiTestTranslate: (projectId, sourceText, contextText) =>
       ipcRenderer.invoke(

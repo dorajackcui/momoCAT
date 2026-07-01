@@ -161,6 +161,9 @@ export interface TranslateProjectSegmentsInput {
   };
   onResult?: (result: TranslateUnitResult) => Promise<void> | void;
   onProgress?: (data: { current: number; total: number; message?: string }) => void;
+  cancellationToken?: {
+    isCancellationRequested(): boolean;
+  };
 }
 
 export interface FileTranslationColumns {

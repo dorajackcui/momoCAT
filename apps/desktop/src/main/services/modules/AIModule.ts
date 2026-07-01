@@ -1,5 +1,5 @@
 import { TagValidator } from '@cat/core/qa';
-import type { LocalizationEngine } from '@cat/localization';
+import type { CancellationToken, LocalizationEngine } from '@cat/localization';
 import type {
   AIBatchMode,
   AIBatchTargetBaseline,
@@ -131,6 +131,7 @@ export class AIModule {
       targetScope?: AIBatchTargetScope;
       targetBaseline?: AIBatchTargetBaseline;
       onProgress?: (data: { current: number; total: number; message?: string }) => void;
+      cancellationToken?: CancellationToken;
     },
   ): Promise<{ translated: number; skipped: number; failed: number; total: number }> {
     return this.translationOrchestrator.aiTranslateFile(fileId, options);

@@ -3,6 +3,7 @@ import type { Project } from '@cat/core/project';
 import { parseDisplayTextToTokens, type TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type {
+  CancellationToken,
   LocalizationEngine,
   TranslateProjectSegmentsInput,
   TranslateUnitResult,
@@ -25,6 +26,7 @@ export interface LocalizationFileTranslationParams {
   segmentService: SegmentService;
   onProgress?: (data: { current: number; total: number; message?: string }) => void;
   translationAuditFlush?: () => Promise<void> | void;
+  cancellationToken?: CancellationToken;
 }
 
 export async function runLocalizationFileTranslation(
@@ -75,6 +77,7 @@ export async function runLocalizationFileTranslation(
           message: `${getAIProgressVerb(params.project.projectType || 'translation')} segment ${progress.current} of ${progress.total}`,
         });
       },
+      cancellationToken: params.cancellationToken,
     });
   } finally {
     await flushTranslationAudit(params.translationAuditFlush);

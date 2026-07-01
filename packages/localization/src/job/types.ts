@@ -46,6 +46,10 @@ export interface JobOptions {
   snapshotEverySeconds?: number;
 }
 
+export interface CancellationToken {
+  isCancellationRequested(): boolean;
+}
+
 export interface TranslationJob {
   id: string;
   projectId: number;

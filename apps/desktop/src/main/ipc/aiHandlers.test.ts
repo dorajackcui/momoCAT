@@ -38,7 +38,12 @@ describe('ai handlers', () => {
     registerAIHandlers({
       ipcMain,
       projectService: projectService as never,
-      jobManager: { startJob, updateProgress } as never,
+      jobManager: {
+        startJob,
+        updateProgress,
+        getCancellationToken: vi.fn(() => ({ isCancellationRequested: () => false })),
+        isCancellationRequested: vi.fn(() => false),
+      } as never,
     });
 
     const handler = handlers.get(IPC_CHANNELS.ai.translateFile);
@@ -73,6 +78,91 @@ describe('ai handlers', () => {
     );
   });
 
+  it('registers an AI file job cancel handler', async () => {
+    const { handlers, ipcMain } = createIpcMainStub();
+    const cancelJob = vi.fn().mockReturnValue(true);
+
+    registerAIHandlers({
+      ipcMain,
+      projectService: {
+        getAISettings: vi.fn(),
+        listAIProviders: vi.fn(),
+        addAIProvider: vi.fn(),
+        deleteAIProvider: vi.fn(),
+        getProxySettings: vi.fn(),
+        setProxySettings: vi.fn(),
+        testAIConnection: vi.fn(),
+        aiTranslateSegment: vi.fn(),
+        aiRefineSegment: vi.fn(),
+        aiTranslateFile: vi.fn(),
+        aiTestTranslate: vi.fn(),
+      } as never,
+      jobManager: { startJob: vi.fn(), updateProgress: vi.fn(), cancelJob } as never,
+    });
+
+    const handler = handlers.get(IPC_CHANNELS.ai.cancelFileJob);
+    expect(handler).toBeDefined();
+
+    expect(handler?.({}, 'job-1')).toBe(true);
+    expect(cancelJob).toHaveBeenCalledWith('job-1');
+  });
+
+  it('passes a cancellation token to file translation and settles cancelled jobs as cancelled', async () => {
+    const { handlers, ipcMain } = createIpcMainStub();
+    const startJob = vi.fn();
+    const updateProgress = vi.fn();
+    const cancellationToken = { isCancellationRequested: vi.fn(() => true) };
+    const getCancellationToken = vi.fn(() => cancellationToken);
+    const isCancellationRequested = vi.fn(() => true);
+    let receivedCancellationToken: unknown;
+    const projectService = {
+      getAISettings: vi.fn(),
+      listAIProviders: vi.fn(),
+      addAIProvider: vi.fn(),
+      deleteAIProvider: vi.fn(),
+      getProxySettings: vi.fn(),
+      setProxySettings: vi.fn(),
+      testAIConnection: vi.fn(),
+      aiTranslateSegment: vi.fn(),
+      aiRefineSegment: vi.fn(),
+      aiTestTranslate: vi.fn(),
+      aiTranslateFile: vi.fn(async (_fileId, options) => {
+        receivedCancellationToken = options?.cancellationToken;
+        return { translated: 0, skipped: 0, failed: 0 };
+      }),
+    };
+
+    registerAIHandlers({
+      ipcMain,
+      projectService: projectService as never,
+      jobManager: {
+        startJob,
+        updateProgress,
+        getCancellationToken,
+        isCancellationRequested,
+      } as never,
+    });
+
+    const handler = handlers.get(IPC_CHANNELS.ai.translateFile);
+    const jobId = handler?.({}, 1, undefined) as string;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(getCancellationToken).toHaveBeenCalledWith(jobId);
+    expect(receivedCancellationToken).toBe(cancellationToken);
+    expect(updateProgress).toHaveBeenCalledWith(
+      jobId,
+      expect.objectContaining({
+        progress: 100,
+        status: 'cancelled',
+        message: 'Cancelled. Partial results kept.',
+      }),
+    );
+    expect(updateProgress).not.toHaveBeenCalledWith(
+      jobId,
+      expect.objectContaining({ status: 'completed' }),
+    );
+  });
+
   it('passes ai test translate results through without synthesizing fallback prompts', async () => {
     const { handlers, ipcMain } = createIpcMainStub();
     const projectService = {
@@ -98,7 +188,12 @@ describe('ai handlers', () => {
     registerAIHandlers({
       ipcMain,
       projectService: projectService as never,
-      jobManager: { startJob: vi.fn(), updateProgress: vi.fn() } as never,
+      jobManager: {
+        startJob: vi.fn(),
+        updateProgress: vi.fn(),
+        getCancellationToken: vi.fn(() => ({ isCancellationRequested: () => false })),
+        isCancellationRequested: vi.fn(() => false),
+      } as never,
     });
 
     const handler = handlers.get(IPC_CHANNELS.ai.testTranslate);

@@ -76,6 +76,7 @@ export interface ProjectAIController {
     fileName: string,
     options?: AIBatchMode | StartAITranslateFileOptions,
   ) => Promise<void>;
+  cancelAITranslateFile: (fileId: number) => Promise<void>;
   getFileJob: (fileId: number) => TrackedAIJob | null;
   subscribeFileJobs: (listener: () => void) => () => void;
 }

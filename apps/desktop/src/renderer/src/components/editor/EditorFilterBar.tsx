@@ -12,9 +12,11 @@ interface EditorFilterBarProps {
   supportsBatchActions: boolean;
   canRunActions: boolean;
   isBatchAITranslating: boolean;
+  isBatchAIStopping?: boolean;
   isBatchQARunning: boolean;
   showNonPrintingSymbols: boolean;
   onOpenBatchAIModal: () => void;
+  onCancelBatchAITranslate: () => void;
   onRunBatchQA: () => void;
   onToggleNonPrintingSymbols: () => void;
   sortBy: string;
@@ -51,9 +53,11 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
   supportsBatchActions,
   canRunActions,
   isBatchAITranslating,
+  isBatchAIStopping,
   isBatchQARunning,
   showNonPrintingSymbols,
   onOpenBatchAIModal,
+  onCancelBatchAITranslate,
   onRunBatchQA,
   onToggleNonPrintingSymbols,
   sortBy,
@@ -91,9 +95,11 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
         visible={supportsBatchActions}
         canRunActions={canRunActions}
         isBatchAITranslating={isBatchAITranslating}
+        isBatchAIStopping={isBatchAIStopping}
         isBatchQARunning={isBatchQARunning}
         showNonPrintingSymbols={showNonPrintingSymbols}
         onOpenBatchAIModal={onOpenBatchAIModal}
+        onCancelBatchAITranslate={onCancelBatchAITranslate}
         onRunBatchQA={onRunBatchQA}
         onToggleNonPrintingSymbols={onToggleNonPrintingSymbols}
       />

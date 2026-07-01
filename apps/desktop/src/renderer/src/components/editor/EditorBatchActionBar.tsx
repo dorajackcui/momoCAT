@@ -5,9 +5,11 @@ export interface EditorBatchActionBarProps {
   visible: boolean;
   canRunActions: boolean;
   isBatchAITranslating: boolean;
+  isBatchAIStopping?: boolean;
   isBatchQARunning: boolean;
   showNonPrintingSymbols: boolean;
   onOpenBatchAIModal: () => void;
+  onCancelBatchAITranslate: () => void;
   onRunBatchQA: () => void;
   onToggleNonPrintingSymbols: () => void;
 }
@@ -29,9 +31,11 @@ export function EditorBatchActionBar({
   visible,
   canRunActions,
   isBatchAITranslating,
+  isBatchAIStopping = false,
   isBatchQARunning,
   showNonPrintingSymbols,
   onOpenBatchAIModal,
+  onCancelBatchAITranslate,
   onRunBatchQA,
   onToggleNonPrintingSymbols,
 }: EditorBatchActionBarProps): JSX.Element | null {
@@ -40,16 +44,29 @@ export function EditorBatchActionBar({
   return (
     <div className="flex items-center justify-start gap-1.5 px-4 py-1.5 border-b border-border bg-surface/90">
       <IconButton
-        tone="brand"
+        tone={isBatchAITranslating ? 'danger' : 'brand'}
         size="sm"
         type="button"
-        onClick={onOpenBatchAIModal}
-        disabled={isBatchAITranslating || !canRunActions}
-        aria-label="AI batch translate"
-        title={isBatchAITranslating ? 'AI Translating...' : 'AI Batch Translate'}
+        onClick={isBatchAITranslating ? onCancelBatchAITranslate : onOpenBatchAIModal}
+        disabled={isBatchAIStopping || !canRunActions}
+        aria-label={isBatchAITranslating ? 'Stop AI translation' : 'AI batch translate'}
+        title={
+          isBatchAITranslating
+            ? isBatchAIStopping
+              ? 'Stopping AI translation...'
+              : 'Stop AI translation'
+            : 'AI Batch Translate'
+        }
       >
         {isBatchAITranslating ? (
-          <LoadingIcon />
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 6l12 12M18 6L6 18"
+            />
+          </svg>
         ) : (
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path

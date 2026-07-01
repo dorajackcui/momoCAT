@@ -486,6 +486,7 @@ export class LocalizationEngine {
             ? (result) => input.onResult?.(unitResultToPublicResult(result))
             : undefined,
           onProgress: input.onProgress,
+          cancellationToken: input.cancellationToken,
         },
       );
     } finally {

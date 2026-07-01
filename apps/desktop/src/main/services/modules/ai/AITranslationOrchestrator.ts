@@ -1,5 +1,5 @@
 import type { Segment } from '@cat/core/models';
-import type { LocalizationEngine } from '@cat/localization';
+import type { CancellationToken, LocalizationEngine } from '@cat/localization';
 import type {
   AIBatchMode,
   AIBatchTargetBaseline,
@@ -37,6 +37,7 @@ export interface AITranslateFileOptions {
   targetScope?: AIBatchTargetScope;
   targetBaseline?: AIBatchTargetBaseline;
   onProgress?: (data: { current: number; total: number; message?: string }) => void;
+  cancellationToken?: CancellationToken;
 }
 
 export class AITranslationOrchestrator {
@@ -96,6 +97,7 @@ export class AITranslationOrchestrator {
           this.resolveTranslationPromptReferences(projectId, segment),
         onProgress: options?.onProgress,
         intervalMs: AITranslationOrchestrator.TRANSLATION_INTERVAL_MS,
+        cancellationToken: options?.cancellationToken,
       });
     }
 
@@ -112,6 +114,7 @@ export class AITranslationOrchestrator {
         segmentService: this.segmentService,
         onProgress: options?.onProgress,
         translationAuditFlush: this.translationAuditFlush,
+        cancellationToken: options?.cancellationToken,
       });
     }
 
@@ -133,6 +136,7 @@ export class AITranslationOrchestrator {
       onProgress: options?.onProgress,
       intervalMs: AITranslationOrchestrator.TRANSLATION_INTERVAL_MS,
       maxConcurrency: AITranslationOrchestrator.STANDARD_FILE_TRANSLATION_CONCURRENCY,
+      cancellationToken: options?.cancellationToken,
     });
   }
 

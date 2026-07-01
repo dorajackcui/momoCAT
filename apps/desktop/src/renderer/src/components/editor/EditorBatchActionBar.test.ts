@@ -11,6 +11,7 @@ function renderBar(overrides?: Partial<EditorBatchActionBarProps>) {
     isBatchQARunning: false,
     showNonPrintingSymbols: false,
     onOpenBatchAIModal: vi.fn(),
+    onCancelBatchAITranslate: vi.fn(),
     onRunBatchQA: vi.fn(),
     onToggleNonPrintingSymbols: vi.fn(),
     ...overrides,
@@ -62,13 +63,18 @@ describe('EditorBatchActionBar', () => {
     expect(toggleButton.props['aria-label']).toBe('Toggle non-printing symbols');
   });
 
-  it('disables AI button and shows loading icon when AI translation is running', () => {
-    const { element } = renderBar({ isBatchAITranslating: true });
+  it('turns the AI button into a cancel control when AI translation is running', () => {
+    const onCancelBatchAITranslate = vi.fn();
+    const { element } = renderBar({ isBatchAITranslating: true, onCancelBatchAITranslate });
     const [aiButton] = getButtons(element);
 
-    expect(aiButton.props.disabled).toBe(true);
-    expect(aiButton.props.title).toBe('AI Translating...');
-    expect(resolveIconClassName(aiButton)).toContain('animate-spin');
+    expect(aiButton.props.disabled).toBe(false);
+    expect(aiButton.props.title).toBe('Stop AI translation');
+    expect(aiButton.props['aria-label']).toBe('Stop AI translation');
+
+    aiButton.props.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
+
+    expect(onCancelBatchAITranslate).toHaveBeenCalledTimes(1);
   });
 
   it('disables QA button and shows loading icon when QA is running', () => {

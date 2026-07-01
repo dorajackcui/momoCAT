@@ -91,13 +91,19 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
       const [fileId, options] = args as [number, AITranslateFileOptions | undefined];
       const jobId = randomUUID();
       jobManager.startJob(jobId, 'AI translation started');
+      const cancellationToken = jobManager.getCancellationToken(jobId);
 
       projectService
         .aiTranslateFile(fileId, {
           mode: options?.mode,
           targetScope: options?.targetScope,
           targetBaseline: options?.targetBaseline,
+          cancellationToken,
           onProgress: (data) => {
+            if (jobManager.isCancellationRequested(jobId)) {
+              return;
+            }
+
             const progress = data.total === 0 ? 100 : Math.round((data.current / data.total) * 100);
             jobManager.updateProgress(jobId, {
               progress,
@@ -106,6 +112,16 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
           },
         })
         .then((result) => {
+          if (jobManager.isCancellationRequested(jobId)) {
+            jobManager.updateProgress(jobId, {
+              progress: 100,
+              status: 'cancelled',
+              cancelRequested: true,
+              message: 'Cancelled. Partial results kept.',
+            });
+            return;
+          }
+
           jobManager.updateProgress(jobId, {
             progress: 100,
             status: 'completed',
@@ -113,6 +129,16 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
           });
         })
         .catch((error) => {
+          if (jobManager.isCancellationRequested(jobId)) {
+            jobManager.updateProgress(jobId, {
+              progress: 100,
+              status: 'cancelled',
+              cancelRequested: true,
+              message: 'Cancelled. Partial results kept.',
+            });
+            return;
+          }
+
           jobManager.updateProgress(jobId, {
             progress: 100,
             status: 'failed',
@@ -121,6 +147,15 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
         });
 
       return jobId;
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.ai.cancelFileJob,
+    (_event, ...args) => {
+      const [jobId] = args as [string];
+      return jobManager.cancelJob(jobId);
     },
   );
 

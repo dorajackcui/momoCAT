@@ -63,6 +63,7 @@ function createController(overrides?: Partial<ProjectAIController>): ProjectAICo
     savePrompt: vi.fn().mockResolvedValue(undefined),
     testPrompt: vi.fn().mockResolvedValue(undefined),
     startAITranslateFile: vi.fn().mockResolvedValue(undefined),
+    cancelAITranslateFile: vi.fn().mockResolvedValue(undefined),
     getFileJob: vi.fn().mockReturnValue(null),
     subscribeFileJobs: vi.fn().mockReturnValue(() => {}),
     ...overrides,

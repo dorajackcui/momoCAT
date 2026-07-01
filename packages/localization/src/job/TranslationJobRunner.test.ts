@@ -960,6 +960,56 @@ describe('TranslationJobRunner', () => {
     expect(commit).not.toHaveBeenCalled();
   });
 
+  it('drops in-flight task results and skips later tasks after cancellation is requested', async () => {
+    const harness = await makeHarness();
+    let cancelRequested = false;
+    const append = vi.fn(async (_record: CheckpointRecord) => undefined);
+    const applyResult = vi.fn();
+    const checkpointStore = {
+      load: harness.checkpointStore.load.bind(harness.checkpointStore),
+      append,
+    };
+    const executor = vi.fn<TranslationTaskExecutor>(async (task, context) => {
+      cancelRequested = true;
+      return {
+        results: [
+          makeResult({
+            unitId: task.units[0].unitId,
+            sourceHash: task.units[0].sourceHash,
+            source: task.units[0].source,
+            target: `target ${task.units[0].unitId}`,
+            attempts: context.attempt,
+          }),
+        ],
+      };
+    });
+    const runner = harness.makeRunner(executor, {
+      checkpointStore,
+      applyResult,
+      persistArtifacts: false,
+      cancellationToken: { isCancellationRequested: () => cancelRequested },
+    });
+
+    const result = await runner.run(
+      makeJob({
+        units: [
+          makeUnit({ unitId: 'unit-1', sourceHash: 'hash-1' }),
+          makeUnit({ unitId: 'unit-2', sourceHash: 'hash-2' }),
+        ],
+        options: { maxConcurrency: 1 },
+      }),
+    );
+
+    expect(executor.mock.calls.map(([task]) => task.units[0].unitId)).toEqual(['unit-1']);
+    expect(applyResult).not.toHaveBeenCalled();
+    expect(append).not.toHaveBeenCalled();
+    expect(result.results).toEqual([]);
+    expect(await harness.events()).toEqual([
+      expect.objectContaining({ event: 'job_start', done: 0, total: 2 }),
+      expect.objectContaining({ event: 'job_done', done: 0, total: 2 }),
+    ]);
+  });
+
   it('includes Runtime TM summary in run result and job_done event without artifacts', async () => {
     const harness = await makeHarness();
     const summary = {
@@ -1024,6 +1074,7 @@ async function makeHarness(): Promise<{
       | 'checkpointStore'
       | 'applyResult'
       | 'auditSink'
+      | 'cancellationToken'
     > & { persistArtifacts?: boolean },
   ) => TranslationJobRunner;
   events: () => Promise<ProgressEventRecord[]>;
@@ -1051,6 +1102,7 @@ async function makeHarness(): Promise<{
         applyResult: options.applyResult,
         runtimeTm: options.runtimeTm,
         auditSink: options.auditSink,
+        cancellationToken: options.cancellationToken,
       };
 
       if (options.persistArtifacts !== false) {

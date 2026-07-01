@@ -2,6 +2,7 @@ import { type Segment, type SegmentStatus, type Token } from '@cat/core/models';
 import type { Project, ProjectType } from '@cat/core/project';
 import { serializeTokensToEditorText, type TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
+import type { CancellationToken } from '@cat/localization';
 import type { AIBatchTargetScope } from '../../../../shared/ipc';
 import type { AiModelRuntimeConfig } from '../../ports';
 import { SegmentService } from '../../SegmentService';
@@ -46,6 +47,7 @@ export interface StandardFileTranslationParams {
   onProgress?: (data: { current: number; total: number; message?: string }) => void;
   intervalMs?: number;
   maxConcurrency?: number;
+  cancellationToken?: CancellationToken;
 }
 
 export async function translateBatchSegment(
@@ -124,6 +126,8 @@ export async function runStandardFileTranslation(
   if (maxConcurrency > 1) {
     const iterator = params.segmentPagingIterator.iterateFileSegments(params.fileId);
     const nextTranslatableSegment = (): Segment | null => {
+      if (isCancellationRequested(params)) return null;
+
       while (true) {
         const next = iterator.next();
         if (next.done) return null;
@@ -132,6 +136,10 @@ export async function runStandardFileTranslation(
     };
 
     const processSegment = async (segment: Segment): Promise<void> => {
+      if (isCancellationRequested(params)) {
+        return;
+      }
+
       let stage: 'translate' | 'write' = 'translate';
       logAIBatchSegmentEvent('segment_start', params, segment, {
         targetScope: params.targetScope,
@@ -157,6 +165,10 @@ export async function runStandardFileTranslation(
           },
         );
 
+        if (isCancellationRequested(params)) {
+          return;
+        }
+
         stage = 'write';
         logAIBatchSegmentEvent('segment_translated', params, segment, {
           targetChars: serializeTokensToDisplayText(targetTokens).trim().length,
@@ -171,6 +183,10 @@ export async function runStandardFileTranslation(
         });
         translated += 1;
       } catch (error) {
+        if (isCancellationRequested(params)) {
+          return;
+        }
+
         failed += 1;
         logAIBatchSegmentEvent('segment_failed', params, segment, {
           stage,
@@ -198,6 +214,7 @@ export async function runStandardFileTranslation(
 
     const worker = async (): Promise<void> => {
       while (true) {
+        if (isCancellationRequested(params)) return;
         const segment = nextTranslatableSegment();
         if (!segment) return;
         await processSegment(segment);
@@ -221,6 +238,7 @@ export async function runStandardFileTranslation(
   }
 
   for (const segment of params.segmentPagingIterator.iterateFileSegments(params.fileId)) {
+    if (isCancellationRequested(params)) break;
     if (!isTranslatableSegment(segment, params.targetScope)) continue;
 
     current += 1;
@@ -255,6 +273,10 @@ export async function runStandardFileTranslation(
         },
       );
 
+      if (isCancellationRequested(params)) {
+        break;
+      }
+
       stage = 'write';
       logAIBatchSegmentEvent('segment_translated', params, segment, {
         targetChars: serializeTokensToDisplayText(targetTokens).trim().length,
@@ -269,6 +291,10 @@ export async function runStandardFileTranslation(
       });
       translated += 1;
     } catch (error) {
+      if (isCancellationRequested(params)) {
+        break;
+      }
+
       failed += 1;
       logAIBatchSegmentEvent('segment_failed', params, segment, {
         stage,
@@ -303,6 +329,10 @@ export async function runStandardFileTranslation(
 function normalizeMaxConcurrency(value: number | undefined): number {
   if (value === undefined || !Number.isFinite(value)) return 1;
   return Math.max(1, Math.floor(value));
+}
+
+function isCancellationRequested(params: Pick<StandardFileTranslationParams, 'cancellationToken'>): boolean {
+  return params.cancellationToken?.isCancellationRequested() === true;
 }
 
 function sleep(ms: number): Promise<void> {

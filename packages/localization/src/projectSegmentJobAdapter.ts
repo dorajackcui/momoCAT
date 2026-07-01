@@ -10,6 +10,7 @@ import {
 } from './job/TranslationJobRunner';
 import type {
   CheckpointRecord,
+  CancellationToken,
   JobUnit,
   ProgressEventRecord,
   TranslationJob,
@@ -59,6 +60,7 @@ export interface TranslateProjectSegmentsJobOptions {
   auditSink?: TranslationJobRunnerDependencies['auditSink'];
   applyResult?: TranslationJobRunnerDependencies['applyResult'];
   onProgress?: (data: { current: number; total: number; message?: string }) => void;
+  cancellationToken?: CancellationToken;
 }
 
 export function prepareProjectSegmentTranslationJob(
@@ -123,6 +125,7 @@ export async function translateProjectSegmentsJob(
     runtimeTm: options.runtimeTm,
     auditSink: options.auditSink,
     applyResult: options.applyResult,
+    cancellationToken: options.cancellationToken,
   });
 
   return jobRunResultToTranslateUnitsResult(await runner.run(prepared.job));

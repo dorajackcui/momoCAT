@@ -9,6 +9,7 @@ import { buildProjectAITranslateStartOptions, ProjectFilesPane } from './Project
 type CapturedButton = {
   label: string;
   onClick?: React.MouseEventHandler<HTMLButtonElement>;
+  disabled?: boolean;
 };
 
 type MockButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -41,7 +42,7 @@ vi.mock('../ui', async (importOriginal) => {
         )
         .join('')
         .trim();
-      capturedButtons.push({ label, onClick });
+      capturedButtons.push({ label, onClick, disabled: Boolean(props.disabled || loading) });
       void variant;
       void size;
       void iconOnly;
@@ -125,6 +126,7 @@ function createAIControllerMock(overrides?: Partial<ProjectAIController>): {
     savePrompt: vi.fn().mockResolvedValue(undefined),
     testPrompt: vi.fn().mockResolvedValue(undefined),
     startAITranslateFile,
+    cancelAITranslateFile: vi.fn().mockResolvedValue(undefined),
     getFileJob: vi.fn().mockReturnValue(null),
     subscribeFileJobs: vi.fn().mockReturnValue(() => {}),
     ...overrides,
@@ -206,6 +208,34 @@ describe('ProjectFilesPane', () => {
     inspectButton?.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
 
     expect(onInspectFile).toHaveBeenCalledWith(file);
+  });
+
+  it('turns a running AI file job into a Stop action', () => {
+    const cancelAITranslateFile = vi.fn().mockResolvedValue(undefined);
+    const { ai } = createAIControllerMock({
+      cancelAITranslateFile,
+      getFileJob: vi.fn().mockReturnValue({
+        kind: 'ai-translate-file',
+        jobId: 'job-1',
+        fileId: 1,
+        progress: 42,
+        status: 'running',
+        message: 'AI translation running',
+      }),
+    } as Partial<ProjectAIController>);
+    capturedButtons.length = 0;
+
+    const html = renderPane(ai, 'translation');
+
+    expect(html).toContain('Stop');
+    expect(html).not.toContain('AI Translating...');
+    const stopButton = capturedButtons.find((button) => button.label === 'Stop');
+    expect(stopButton).toBeDefined();
+    expect(stopButton?.disabled).toBe(false);
+
+    stopButton?.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
+
+    expect(cancelAITranslateFile).toHaveBeenCalledWith(1);
   });
 
   it('renders target baseline options without legacy translation scope controls', () => {

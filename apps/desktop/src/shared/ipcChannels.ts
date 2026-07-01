@@ -67,6 +67,7 @@ export const IPC_CHANNELS = {
     translateSegment: 'ai-translate-segment',
     refineSegment: 'ai-refine-segment',
     translateFile: 'ai-translate-file',
+    cancelFileJob: 'ai-cancel-file-job',
     testTranslate: 'ai-test-translate',
   },
   dialog: {

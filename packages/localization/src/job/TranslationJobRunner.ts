@@ -8,6 +8,7 @@ import type {
   ArtifactRecord,
   CheckpointRecord,
   CheckpointStatus,
+  CancellationToken,
   JobUnit,
   ProgressEventRecord,
   TaskExecutionResult,
@@ -72,6 +73,7 @@ export interface TranslationJobRunnerDependencies {
   ) => Promise<void> | void;
   runtimeTm?: TranslationJobRuntimeTMHooks;
   auditSink?: TranslationAuditSink;
+  cancellationToken?: CancellationToken;
 }
 
 export class TranslationJobRunner {
@@ -86,6 +88,7 @@ export class TranslationJobRunner {
   private readonly applyResult?: TranslationJobRunnerDependencies['applyResult'];
   private readonly runtimeTm?: TranslationJobRunnerDependencies['runtimeTm'];
   private readonly auditSink?: TranslationAuditSink;
+  private readonly cancellationToken?: CancellationToken;
 
   constructor(dependencies: TranslationJobRunnerDependencies) {
     this.checkpointStore = dependencies.checkpointStore;
@@ -99,6 +102,7 @@ export class TranslationJobRunner {
     this.applyResult = dependencies.applyResult;
     this.runtimeTm = dependencies.runtimeTm;
     this.auditSink = dependencies.auditSink;
+    this.cancellationToken = dependencies.cancellationToken;
   }
 
   async run(job: TranslationJob): Promise<TranslationJobRunResult> {
@@ -155,16 +159,23 @@ export class TranslationJobRunner {
     const scheduledResults = await runBounded(
       tasks,
       async (task) => {
+        if (this.isCancellationRequested()) return;
+
         const taskResult = await this.executeTaskWithAttempts(job, task, maxAttempts, resultMap);
+
+        if (this.isCancellationRequested()) return;
+
         await enqueuePersistence(async () => {
-          await this.persistTaskResult(job, task, taskResult, resultMap, throttle);
-          if (this.runtimeTm) {
-            await this.runtimeTm.commit(taskResult.results, task, job);
+          if (this.isCancellationRequested()) return;
+
+          const persistedResults = await this.persistTaskResult(job, task, taskResult, resultMap, throttle);
+          if (this.runtimeTm && persistedResults.length > 0) {
+            await this.runtimeTm.commit(persistedResults, task, job);
             this.auditSink?.record({
               event: 'runtime_tm_commit',
               job: job.id,
               task: task.taskId,
-              units: taskResult.results.map((result) => result.unitId),
+              units: persistedResults.map((result) => result.unitId),
             });
           }
         });
@@ -181,7 +192,7 @@ export class TranslationJobRunner {
     const orderedResults = orderedResultsFor(job.units, resultMap);
     const callbackContext = { job, resultMap };
 
-    if (this.writeFinal) {
+    if (this.writeFinal && !this.isCancellationRequested()) {
       await this.writeFinal(orderedResults, callbackContext);
     }
 
@@ -213,6 +224,8 @@ export class TranslationJobRunner {
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      if (this.isCancellationRequested()) return { results: [] };
+
       try {
         const completedResults = new Map(resultMap);
         const result = await this.taskExecutor(task, {
@@ -229,6 +242,7 @@ export class TranslationJobRunner {
         };
       } catch (error) {
         lastError = error;
+        if (this.isCancellationRequested()) return { results: [] };
       }
     }
 
@@ -251,12 +265,15 @@ export class TranslationJobRunner {
     taskResult: TaskExecutionResult,
     resultMap: Map<string, UnitResult>,
     throttle: SnapshotThrottle,
-  ): Promise<void> {
+  ): Promise<UnitResult[]> {
     const artifactsByUnit = this.artifactStore
       ? groupArtifactsByUnit(taskResult.artifacts)
       : new Map<string, ArtifactRecord[]>();
+    const persistedResults: UnitResult[] = [];
 
     for (const result of taskResult.results) {
+      if (this.isCancellationRequested()) break;
+
       for (const artifact of artifactsByUnit.get(unitKeyFromParts(result.documentId, result.unitId)) ?? []) {
         await this.artifactStore?.append(canonicalizeArtifact(artifact, job, task, result));
       }
@@ -288,7 +305,10 @@ export class TranslationJobRunner {
 
       await this.emitUnitEvent(job, unit ?? result, eventName, result.status, resultMap.size, result.error);
       await this.maybeWriteSnapshot(job, resultMap, throttle);
+      persistedResults.push(result);
     }
+
+    return persistedResults;
   }
 
   private async maybeWriteSnapshot(
@@ -340,6 +360,10 @@ export class TranslationJobRunner {
 
   private isoNow(): string {
     return this.clock().toISOString();
+  }
+
+  private isCancellationRequested(): boolean {
+    return this.cancellationToken?.isCancellationRequested() === true;
   }
 }
 

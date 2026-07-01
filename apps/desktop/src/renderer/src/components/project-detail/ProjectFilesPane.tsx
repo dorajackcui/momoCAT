@@ -70,6 +70,16 @@ function ProjectFileCard({
   const progress = toPercent(progressBuckets);
   const job = useTrackedFileJob(ai, file.id);
   const jobRunning = job?.status === 'running';
+  const jobStopping = jobRunning && job.cancelRequested === true;
+  const jobProgressColor =
+    job?.status === 'failed' ? 'bg-danger' : job?.status === 'cancelled' ? 'bg-warning' : 'bg-brand';
+  const jobMessage =
+    job?.message ||
+    (job?.status === 'completed'
+      ? 'Completed'
+      : job?.status === 'cancelled'
+        ? 'Cancelled. Partial results kept.'
+        : 'In progress');
 
   return (
     <Card
@@ -93,13 +103,11 @@ function ProjectFileCard({
           <div className="mt-2 w-48">
             <div className="h-1.5 bg-muted rounded-full overflow-hidden">
               <div
-                className={`h-full ${job.status === 'failed' ? 'bg-danger' : 'bg-brand'}`}
+                className={`h-full ${jobProgressColor}`}
                 style={{ width: `${job.progress || 0}%` }}
               />
             </div>
-            <div className="text-[10px] text-text-faint mt-1">
-              {job.message || (job.status === 'completed' ? 'Completed' : 'In progress')}
-            </div>
+            <div className="text-[10px] text-text-faint mt-1">{jobMessage}</div>
           </div>
         )}
       </div>
@@ -137,29 +145,33 @@ function ProjectFileCard({
         {supportsTMWorkflow ? (
           <>
             <Button
-              onClick={() => onRequestAITranslate(file)}
-              disabled={jobRunning}
-              variant="soft"
+              onClick={() =>
+                jobRunning ? void ai.cancelAITranslateFile(file.id) : onRequestAITranslate(file)
+              }
+              disabled={jobStopping}
+              variant={jobRunning ? 'danger' : 'soft'}
               size="sm"
-              className="!bg-success-soft !text-success"
+              className={jobRunning ? undefined : '!bg-success-soft !text-success'}
             >
-              {jobRunning ? 'AI Translating...' : 'AI Translate'}
+              {jobRunning ? (jobStopping ? 'Stopping...' : 'Stop') : 'AI Translate'}
             </Button>
           </>
         ) : (
           <Button
-            onClick={() => void ai.startAITranslateFile(file.id, file.name)}
-            disabled={jobRunning}
-            variant="soft"
+            onClick={() =>
+              jobRunning
+                ? void ai.cancelAITranslateFile(file.id)
+                : void ai.startAITranslateFile(file.id, file.name)
+            }
+            disabled={jobStopping}
+            variant={jobRunning ? 'danger' : 'soft'}
             size="sm"
-            className="!bg-success-soft !text-success"
+            className={jobRunning ? undefined : '!bg-success-soft !text-success'}
           >
             {jobRunning
-              ? isReviewProject
-                ? 'AI Reviewing...'
-                : isCustomProject
-                  ? 'AI Processing...'
-                  : 'AI Translating...'
+              ? jobStopping
+                ? 'Stopping...'
+                : 'Stop'
               : isReviewProject
                 ? 'AI Review'
                 : isCustomProject

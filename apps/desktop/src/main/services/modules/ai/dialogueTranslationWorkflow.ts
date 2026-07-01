@@ -2,6 +2,7 @@ import type { Project } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
 import { serializeTokensToEditorText, type TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
+import type { CancellationToken } from '@cat/localization';
 import type { AIBatchTargetScope } from '../../../../shared/ipc';
 import type { AiModelRuntimeConfig, AITransport } from '../../ports';
 import { SegmentService } from '../../SegmentService';
@@ -39,6 +40,7 @@ export interface DialogueFileTranslationParams {
   ) => Promise<TranslationPromptReferences>;
   onProgress?: (data: { current: number; total: number; message?: string }) => void;
   intervalMs?: number;
+  cancellationToken?: CancellationToken;
 }
 
 export async function runDialogueFileTranslation(
@@ -75,6 +77,8 @@ export async function runDialogueFileTranslation(
   });
 
   for (const unit of units) {
+    if (isCancellationRequested(params)) break;
+
     logAIBatchDialogueUnitEvent('dialogue_unit_start', params, unit);
     try {
       const result = await translateDialogueUnit({
@@ -96,6 +100,8 @@ export async function runDialogueFileTranslation(
       logAIBatchDialogueUnitEvent('dialogue_unit_translated', params, unit, {
         updateCount: result.updates.length,
       });
+      if (isCancellationRequested(params)) break;
+
       await params.segmentService.updateSegmentsAtomically(result.updates);
       logAIBatchDialogueUnitEvent('dialogue_unit_write_success', params, unit, {
         updateCount: result.updates.length,
@@ -111,6 +117,8 @@ export async function runDialogueFileTranslation(
         });
       }
     } catch (error) {
+      if (isCancellationRequested(params)) break;
+
       logAIBatchDialogueUnitEvent('dialogue_unit_failed_fallback', params, unit, {
         stage: 'translate_or_write',
         error: error instanceof Error ? error.message : String(error),
@@ -126,6 +134,8 @@ export async function runDialogueFileTranslation(
         },
       );
       for (const draft of unit.segments) {
+        if (isCancellationRequested(params)) break;
+
         let stage: 'translate' | 'write' = 'translate';
         logAIBatchDialogueSegmentEvent('dialogue_fallback_segment_start', params, draft.segment);
         try {
@@ -148,6 +158,8 @@ export async function runDialogueFileTranslation(
               resolveTranslationPromptReferences: params.resolveTranslationPromptReferences,
             },
           );
+
+          if (isCancellationRequested(params)) break;
 
           stage = 'write';
           logAIBatchDialogueSegmentEvent(
@@ -192,6 +204,8 @@ export async function runDialogueFileTranslation(
             ),
           };
         } catch (fallbackError) {
+          if (isCancellationRequested(params)) break;
+
           failed += 1;
           logAIBatchDialogueSegmentEvent(
             'dialogue_fallback_segment_failed',
@@ -255,6 +269,10 @@ function buildPolicyPayload(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isCancellationRequested(params: Pick<DialogueFileTranslationParams, 'cancellationToken'>): boolean {
+  return params.cancellationToken?.isCancellationRequested() === true;
 }
 
 function buildPreview(value: string): string {

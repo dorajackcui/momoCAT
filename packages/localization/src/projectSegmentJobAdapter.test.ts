@@ -133,6 +133,35 @@ describe('projectSegmentJobAdapter', () => {
     expect(applied).toEqual([expect.objectContaining({ unitId: 's1', target: 'Un' })]);
   });
 
+  it('passes the runtime cancellation token to the job runner', async () => {
+    const cancellationToken = { isCancellationRequested: () => false };
+    let runnerCancellationToken: unknown;
+
+    await translateProjectSegmentsJob(
+      {
+        projectId: 7,
+        documentId: 'file-1:demo.xlsx',
+        units: [{ id: 's1', source: 'One', target: '' }],
+      },
+      {
+        taskExecutor: async () => ({ results: [] }),
+        cancellationToken,
+        runnerFactory: (dependencies) => ({
+          run: async (job: TranslationJob) => {
+            runnerCancellationToken = dependencies.cancellationToken;
+            return {
+              jobId: job.id,
+              summary: { total: 1, translated: 0, skipped: 0, reused: 0, failed: 0 },
+              results: [],
+            };
+          },
+        }),
+      },
+    );
+
+    expect(runnerCancellationToken).toBe(cancellationToken);
+  });
+
   it('reports progress only for unit completion events', async () => {
     const progressEvents: Array<{ current: number; total: number; message?: string }> = [];
 

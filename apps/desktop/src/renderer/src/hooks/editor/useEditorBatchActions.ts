@@ -18,11 +18,13 @@ interface UseEditorBatchActionsParams {
 export interface EditorBatchActionsController {
   isBatchAIModalOpen: boolean;
   isBatchAITranslating: boolean;
+  isBatchAIStopping: boolean;
   isBatchQARunning: boolean;
   activeBatchAIJob: AIFileJob | null;
   openBatchAIModal: () => void;
   closeBatchAIModal: () => void;
   handleBatchAITranslate: (options: ProjectAITranslateSubmit) => Promise<void>;
+  cancelBatchAITranslate: () => Promise<void>;
   handleBatchQA: () => Promise<void>;
   handleExport: () => Promise<void>;
 }
@@ -134,6 +136,7 @@ export function useEditorBatchActions({
   const activeBatchAIJob = useAIFileJobForFile(aiFileJobTracker, fileId);
   const trackedBatchAIJob = useAIJob(aiFileJobTracker, trackedBatchAIJobId);
   const isBatchAITranslating = activeBatchAIJob?.status === 'running';
+  const isBatchAIStopping = isBatchAITranslating && activeBatchAIJob?.cancelRequested === true;
 
   useEffect(() => {
     setIsBatchAIModalOpen(false);
@@ -193,6 +196,23 @@ export function useEditorBatchActions({
     [aiFileJobTracker, fileId, flushPendingSegmentUpdates, supportsBatchActions],
   );
 
+  const cancelBatchAITranslate = useCallback(async () => {
+    if (!activeBatchAIJob || activeBatchAIJob.status !== 'running') {
+      return;
+    }
+
+    try {
+      const cancelled = await apiClient.aiCancelFileJob(activeBatchAIJob.jobId);
+      if (!cancelled) {
+        feedbackService.info('AI translation is no longer running.');
+      }
+    } catch (error) {
+      feedbackService.error(
+        `Failed to stop AI translation: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }, [activeBatchAIJob]);
+
   const handleBatchQA = useCallback(async () => {
     if (!fileName) return;
 
@@ -225,11 +245,13 @@ export function useEditorBatchActions({
   return {
     isBatchAIModalOpen,
     isBatchAITranslating,
+    isBatchAIStopping,
     isBatchQARunning,
     activeBatchAIJob,
     openBatchAIModal,
     closeBatchAIModal,
     handleBatchAITranslate,
+    cancelBatchAITranslate,
     handleBatchQA,
     handleExport,
   };
