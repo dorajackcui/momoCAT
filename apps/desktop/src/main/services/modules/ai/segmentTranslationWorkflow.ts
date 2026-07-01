@@ -97,6 +97,7 @@ export async function runSegmentTranslation(
     );
 
     return {
+      fileId: updateResult?.fileId ?? segment.fileId,
       segmentId: segment.segmentId,
       targetTokens,
       status: aiStatus,
@@ -192,6 +193,7 @@ export async function runSegmentRefinement(
     );
 
     return {
+      fileId: updateResult?.fileId ?? segment.fileId,
       segmentId: segment.segmentId,
       targetTokens,
       status: aiStatus,

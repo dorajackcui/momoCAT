@@ -23,6 +23,7 @@ interface SegmentUpdateInput {
 }
 
 interface SegmentUpdateEventPayload extends SegmentUpdateInput {
+  fileId: number;
   propagatedIds: string[];
   serverAppliedAt: string;
 }
@@ -53,12 +54,13 @@ export class SegmentService extends EventEmitter {
     status: SegmentStatus,
     clientRequestId?: string,
   ) {
-    const { propagatedIds } = this.tx.runInTransaction(() =>
+    const { fileId, propagatedIds } = this.tx.runInTransaction(() =>
       this.updateSegmentInternal(segmentId, targetTokens, status),
     );
     const serverAppliedAt = new Date().toISOString();
 
     this.emitSegmentUpdated({
+      fileId,
       segmentId,
       targetTokens,
       status,
@@ -67,7 +69,7 @@ export class SegmentService extends EventEmitter {
       serverAppliedAt,
     });
 
-    return { propagatedIds, clientRequestId, serverAppliedAt };
+    return { fileId, propagatedIds, clientRequestId, serverAppliedAt };
   }
 
   /**
@@ -81,13 +83,14 @@ export class SegmentService extends EventEmitter {
 
     const events = this.tx.runInTransaction(() =>
       updates.map((update) => {
-        const { propagatedIds } = this.updateSegmentInternal(
+        const { fileId, propagatedIds } = this.updateSegmentInternal(
           update.segmentId,
           update.targetTokens,
           update.status,
         );
         return {
           ...update,
+          fileId,
           propagatedIds,
           serverAppliedAt: new Date().toISOString(),
         };
@@ -105,28 +108,32 @@ export class SegmentService extends EventEmitter {
     segmentId: string,
     targetTokens: Token[],
     status: SegmentStatus,
-  ): { propagatedIds: string[] } {
+  ): { fileId: number; propagatedIds: string[] } {
+    const existingSegment = this.db.getSegment(segmentId);
+    if (!existingSegment) {
+      throw new Error(`Segment not found: ${segmentId}`);
+    }
+
     this.db.updateSegmentTarget(segmentId, targetTokens, status);
 
+    const fileId = existingSegment.fileId;
     let propagatedIds: string[] = [];
 
     if (status === 'confirmed') {
-      const segment = this.db.getSegment(segmentId);
-      if (segment) {
-        const projectType = this.db.getProjectTypeByFileId(segment.fileId) ?? 'translation';
-        if (projectType !== 'translation') {
-          return { propagatedIds: [] };
-        }
+      const segment = this.db.getSegment(segmentId) ?? existingSegment;
+      const projectType = this.db.getProjectTypeByFileId(segment.fileId) ?? 'translation';
+      if (projectType !== 'translation') {
+        return { fileId, propagatedIds: [] };
+      }
 
-        const projectId = this.db.getProjectIdByFileId(segment.fileId);
-        if (projectId !== undefined) {
-          this.tmService.upsertFromConfirmedSegment(projectId, segment);
-          propagatedIds = this.propagate(projectId, segment);
-        }
+      const projectId = this.db.getProjectIdByFileId(segment.fileId);
+      if (projectId !== undefined) {
+        this.tmService.upsertFromConfirmedSegment(projectId, segment);
+        propagatedIds = this.propagate(projectId, segment);
       }
     }
 
-    return { propagatedIds };
+    return { fileId, propagatedIds };
   }
 
   private emitSegmentUpdated(payload: SegmentUpdateEventPayload) {

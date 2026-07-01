@@ -71,6 +71,82 @@ class FailingPropagationSegmentRepository implements SegmentRepository {
   }
 }
 
+class InMemorySegmentRepository implements SegmentRepository {
+  private readonly segments = new Map<string, Segment>();
+
+  constructor(segments: Segment[]) {
+    for (const segment of segments) {
+      this.segments.set(segment.segmentId, segment);
+    }
+  }
+
+  bulkInsertSegments(segments: Segment[]): void {
+    for (const segment of segments) {
+      this.segments.set(segment.segmentId, segment);
+    }
+  }
+
+  getSegmentsPage(fileId: number, offset: number, limit: number): Segment[] {
+    return [...this.segments.values()]
+      .filter((segment) => segment.fileId === fileId)
+      .sort((left, right) => left.orderIndex - right.orderIndex)
+      .slice(offset, offset + limit);
+  }
+
+  getSegment(segmentId: string): Segment | undefined {
+    return this.segments.get(segmentId);
+  }
+
+  getProjectIdByFileId(): number | undefined {
+    return 1;
+  }
+
+  getProjectTypeByFileId(): 'translation' {
+    return 'translation';
+  }
+
+  getProjectSegmentsByHash(_projectId: number, srcHash: string): Segment[] {
+    return [...this.segments.values()].filter((segment) => segment.srcHash === srcHash);
+  }
+
+  updateSegmentTarget(segmentId: string, targetTokens: Token[], status: SegmentStatus): void {
+    const segment = this.segments.get(segmentId);
+    if (!segment) return;
+    this.segments.set(segmentId, {
+      ...segment,
+      targetTokens,
+      status,
+    });
+  }
+
+  updateSegmentQaIssues(): void {}
+}
+
+describe('SegmentService segment update events', () => {
+  it('includes fileId in update results and emitted payloads', async () => {
+    const fileId = 42;
+    const repo = new InMemorySegmentRepository([
+      buildSegment('seg-1', fileId, 0, 'hash-1'),
+    ]);
+    const tx = { runInTransaction: <T,>(fn: () => T) => fn() };
+    const tmService = { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService;
+    const service = new SegmentService(repo, tmService, tx);
+    const eventSpy = vi.fn();
+    service.on('segments-updated', eventSpy);
+
+    const targetTokens: Token[] = [{ type: 'text', content: 'translated' }];
+    const result = await service.updateSegment('seg-1', targetTokens, 'translated');
+
+    expect(result).toMatchObject({ fileId, propagatedIds: [] });
+    expect(eventSpy).toHaveBeenCalledTimes(1);
+    expect(eventSpy.mock.calls[0][0]).toMatchObject({
+      fileId,
+      segmentId: 'seg-1',
+      status: 'translated',
+    });
+  });
+});
+
 describe('SegmentService transactional confirmation flow', () => {
   let db: CATDatabase | undefined;
 

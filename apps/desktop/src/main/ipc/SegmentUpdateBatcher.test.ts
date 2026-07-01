@@ -12,6 +12,7 @@ import { SegmentUpdateBatcher } from './SegmentUpdateBatcher';
 
 function createPayload(segmentId: string): SegmentsUpdatedPayload {
   return {
+    fileId: 1,
     segmentId,
     targetTokens: [{ type: 'text', content: `target-${segmentId}` }],
     status: 'draft',

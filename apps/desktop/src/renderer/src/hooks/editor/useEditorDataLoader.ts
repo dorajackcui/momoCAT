@@ -48,6 +48,7 @@ interface UseEditorDataLoaderParams {
 }
 
 interface RemoteUpdateQueueHandlers {
+  activeFileId?: number | null;
   queuedRemoteUpdates: Map<string, SegmentsUpdatedEvent>;
   shouldDelayRemoteUpdate: (segmentId: string) => boolean;
   isRemoteUpdateStale: (segmentId: string, clientRequestId?: string) => boolean;
@@ -55,10 +56,23 @@ interface RemoteUpdateQueueHandlers {
   applySegmentsUpdatedBatch: (batch: SegmentsUpdatedEvent[]) => void;
 }
 
+function isSegmentUpdateForActiveFile(
+  data: SegmentsUpdatedEvent,
+  activeFileId: number | null | undefined,
+): boolean {
+  if (activeFileId === undefined) return true;
+  if (activeFileId === null) return false;
+  return data.fileId === activeFileId;
+}
+
 export function handleIncomingSegmentsUpdatedEvent(
   data: SegmentsUpdatedEvent,
   handlers: RemoteUpdateQueueHandlers,
-): 'stale' | 'queued' | 'applied' {
+): 'ignored' | 'stale' | 'queued' | 'applied' {
+  if (!isSegmentUpdateForActiveFile(data, handlers.activeFileId)) {
+    return 'ignored';
+  }
+
   if (handlers.isRemoteUpdateStale(data.segmentId, data.clientRequestId)) {
     return 'stale';
   }
@@ -81,6 +95,10 @@ export function handleIncomingSegmentsUpdatedBatch(
   let stale = 0;
 
   for (const data of batch) {
+    if (!isSegmentUpdateForActiveFile(data, handlers.activeFileId)) {
+      continue;
+    }
+
     if (handlers.isRemoteUpdateStale(data.segmentId, data.clientRequestId)) {
       stale += 1;
       continue;
@@ -109,6 +127,11 @@ export function drainQueuedSegmentsUpdatedEvents(handlers: RemoteUpdateQueueHand
   const queued = [...handlers.queuedRemoteUpdates.values()];
 
   for (const data of queued) {
+    if (!isSegmentUpdateForActiveFile(data, handlers.activeFileId)) {
+      handlers.queuedRemoteUpdates.delete(data.segmentId);
+      continue;
+    }
+
     if (handlers.isRemoteUpdateStale(data.segmentId, data.clientRequestId)) {
       handlers.queuedRemoteUpdates.delete(data.segmentId);
       droppedStaleCount += 1;
@@ -372,6 +395,7 @@ export function useEditorDataLoader({
 
   useEffect(() => {
     const handlers: RemoteUpdateQueueHandlers = {
+      activeFileId,
       queuedRemoteUpdates: queuedRemoteUpdatesRef.current,
       shouldDelayRemoteUpdate,
       isRemoteUpdateStale,
@@ -392,6 +416,7 @@ export function useEditorDataLoader({
       unsubSingle();
     };
   }, [
+    activeFileId,
     applySegmentsUpdatedEvent,
     applySegmentsUpdatedBatch,
     isRemoteUpdateStale,
@@ -401,6 +426,7 @@ export function useEditorDataLoader({
   useEffect(() => {
     if (queuedRemoteUpdatesRef.current.size === 0) return;
     drainQueuedSegmentsUpdatedEvents({
+      activeFileId,
       queuedRemoteUpdates: queuedRemoteUpdatesRef.current,
       shouldDelayRemoteUpdate,
       isRemoteUpdateStale,
@@ -410,6 +436,7 @@ export function useEditorDataLoader({
   }, [
     applySegmentsUpdatedEvent,
     applySegmentsUpdatedBatch,
+    activeFileId,
     isRemoteUpdateStale,
     shouldDelayRemoteUpdate,
     syncStateVersion,

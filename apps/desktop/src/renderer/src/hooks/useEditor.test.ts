@@ -302,6 +302,7 @@ describe('createSegmentPersistor', () => {
     const segments = [createSegment('seg-6', ''), createSegment('seg-7', ''), unchangedConfirmed];
 
     const result = applyAISegmentTranslateResultToSegments(segments, {
+      fileId: 1,
       segmentId: 'seg-6',
       targetTokens: [{ type: 'text', content: 'AI target' }],
       status: 'translated',
@@ -372,6 +373,7 @@ describe('resolveSegmentStateUpdate', () => {
 
     const afterAI = resolveSegmentStateUpdate(current, (prev) =>
       applyAISegmentTranslateResultToSegments(prev, {
+        fileId: 1,
         segmentId: 'seg-ai',
         targetTokens: [{ type: 'text', content: 'AI target' }],
         status: 'translated',

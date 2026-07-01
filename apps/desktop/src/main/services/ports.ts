@@ -199,6 +199,7 @@ export interface ProgressPayload {
 }
 
 export interface SegmentsUpdatedPayload {
+  fileId: number;
   segmentId: string;
   targetTokens: Token[];
   status: SegmentStatus;

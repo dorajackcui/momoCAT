@@ -2629,6 +2629,7 @@ describe('AIModule.aiTranslateSegment', () => {
     const result = await module.aiTranslateSegment('single-1');
 
     expect(result).toEqual({
+      fileId: segment.fileId,
       segmentId: 'single-1',
       targetTokens: expect.any(Array),
       status: 'translated',
@@ -2693,6 +2694,7 @@ describe('AIModule.aiTranslateSegment', () => {
     const result = await module.aiTranslateSegment('single-review-1');
 
     expect(result).toEqual({
+      fileId: segment.fileId,
       segmentId: 'single-review-1',
       targetTokens: expect.any(Array),
       status: 'reviewed',
@@ -2753,6 +2755,7 @@ describe('AIModule.aiTranslateSegment', () => {
     const result = await module.aiTranslateSegment('single-unchanged-1');
 
     expect(result).toEqual({
+      fileId: segment.fileId,
       segmentId: 'single-unchanged-1',
       targetTokens: expect.any(Array),
       status: 'translated',

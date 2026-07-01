@@ -159,6 +159,7 @@ export interface TMConcordanceEntry extends TMEntry {
 }
 
 export interface SegmentUpdateResult {
+  fileId: number;
   propagatedIds: string[];
   clientRequestId?: string;
   serverAppliedAt: string;
@@ -280,6 +281,7 @@ export interface AITestTranslateResult {
 }
 
 export interface AISegmentTranslateResult {
+  fileId: number;
   segmentId: string;
   targetTokens: Token[];
   status: SegmentStatus;
@@ -298,6 +300,7 @@ export interface AITranslateFileOptions {
 }
 
 export interface SegmentsUpdatedEvent {
+  fileId: number;
   segmentId: string;
   targetTokens: Token[];
   status: SegmentStatus;

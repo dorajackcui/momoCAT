@@ -13,6 +13,7 @@ vi.mock('../../services/apiClient', () => ({
 
 function createEvent(segmentId: string, clientRequestId?: string): SegmentsUpdatedEvent {
   return {
+    fileId: 1,
     segmentId,
     targetTokens: [{ type: 'text', content: `target-${segmentId}` }],
     status: 'draft',
@@ -22,11 +23,20 @@ function createEvent(segmentId: string, clientRequestId?: string): SegmentsUpdat
   };
 }
 
+function createEventForFile(segmentId: string, fileId: number): SegmentsUpdatedEvent {
+  return {
+    ...createEvent(segmentId),
+    fileId,
+  };
+}
+
 function createHandlers(overrides?: {
+  activeFileId?: number | null;
   shouldDelay?: (segmentId: string) => boolean;
   isStale?: (segmentId: string) => boolean;
 }) {
   return {
+    activeFileId: overrides?.activeFileId,
     queuedRemoteUpdates: new Map<string, SegmentsUpdatedEvent>(),
     shouldDelayRemoteUpdate: overrides?.shouldDelay ?? (() => false),
     isRemoteUpdateStale: overrides?.isStale ?? (() => false),
@@ -65,6 +75,17 @@ describe('handleIncomingSegmentsUpdatedEvent', () => {
     const result = handleIncomingSegmentsUpdatedEvent(event, handlers);
 
     expect(result).toBe('stale');
+    expect(handlers.applySegmentsUpdatedEvent).not.toHaveBeenCalled();
+    expect(handlers.queuedRemoteUpdates.size).toBe(0);
+  });
+
+  it('ignores incoming remote update for a different file', () => {
+    const handlers = createHandlers({ activeFileId: 10 });
+    const event = createEventForFile('seg-other-file', 20);
+
+    const result = handleIncomingSegmentsUpdatedEvent(event, handlers);
+
+    expect(result).toBe('ignored');
     expect(handlers.applySegmentsUpdatedEvent).not.toHaveBeenCalled();
     expect(handlers.queuedRemoteUpdates.size).toBe(0);
   });
@@ -132,6 +153,22 @@ describe('handleIncomingSegmentsUpdatedBatch', () => {
     expect(result).toEqual({ applied: 1, queued: 0, stale: 0 });
     expect(handlers.applySegmentsUpdatedBatch).toHaveBeenCalledWith([event]);
   });
+
+  it('filters out events for other files before applying a batch', () => {
+    const handlers = createHandlers({ activeFileId: 10 });
+    const currentFileEvent = createEventForFile('seg-current-file', 10);
+    const otherFileEvent = createEventForFile('seg-other-file', 20);
+
+    const result = handleIncomingSegmentsUpdatedBatch(
+      [otherFileEvent, currentFileEvent],
+      handlers,
+    );
+
+    expect(result).toEqual({ applied: 1, queued: 0, stale: 0 });
+    expect(handlers.applySegmentsUpdatedBatch).toHaveBeenCalledTimes(1);
+    expect(handlers.applySegmentsUpdatedBatch).toHaveBeenCalledWith([currentFileEvent]);
+    expect(handlers.queuedRemoteUpdates.size).toBe(0);
+  });
 });
 
 describe('drainQueuedSegmentsUpdatedEvents', () => {
@@ -171,6 +208,7 @@ describe('drainQueuedSegmentsUpdatedEvents', () => {
 describe('buildBatchFinalState', () => {
   it('later propagation overrides earlier direct update for the same segment', () => {
     const directEvent: SegmentsUpdatedEvent = {
+      fileId: 1,
       segmentId: 'seg-B',
       targetTokens: [{ type: 'text', content: 'direct-draft' }],
       status: 'draft',
@@ -178,6 +216,7 @@ describe('buildBatchFinalState', () => {
       serverAppliedAt: '2026-06-30T00:00:00.000Z',
     };
     const confirmEvent: SegmentsUpdatedEvent = {
+      fileId: 1,
       segmentId: 'seg-A',
       targetTokens: [{ type: 'text', content: 'confirmed-translation' }],
       status: 'confirmed',
@@ -193,6 +232,7 @@ describe('buildBatchFinalState', () => {
 
   it('later direct update overrides earlier propagation for the same segment', () => {
     const confirmEvent: SegmentsUpdatedEvent = {
+      fileId: 1,
       segmentId: 'seg-A',
       targetTokens: [{ type: 'text', content: 'confirmed' }],
       status: 'confirmed',
@@ -200,6 +240,7 @@ describe('buildBatchFinalState', () => {
       serverAppliedAt: '2026-06-30T00:00:00.000Z',
     };
     const laterDirect: SegmentsUpdatedEvent = {
+      fileId: 1,
       segmentId: 'seg-B',
       targetTokens: [{ type: 'text', content: 'later-edit' }],
       status: 'draft',
