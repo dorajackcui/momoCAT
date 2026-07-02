@@ -137,13 +137,11 @@ export const TMPanel: React.FC<TMPanelProps> = ({ matches, termMatches, loading,
             : `Term Base: ${tbMatch!.tbName}`;
           const scoreBg = isTM
             ? tmMatch!.kind === 'concordance'
-              ? 'bg-warning'
-              : tmMatch!.similarity >= 95
+              ? 'bg-[#808080]'
+              : tmMatch!.similarity >= 100
                 ? 'bg-success'
-                : tmMatch!.similarity >= 85
-                  ? 'bg-brand'
-                  : 'bg-warning'
-            : 'bg-warning';
+                : 'bg-warning'
+            : 'bg-[#B8930B]';
           const scoreText = isTM
             ? tmMatch!.kind === 'concordance'
               ? 'C'

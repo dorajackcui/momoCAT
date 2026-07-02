@@ -115,9 +115,8 @@ function ProjectFileCard({
         {supportsTMWorkflow && (
           <Button
             onClick={() => void onOpenCommitModal(file)}
-            variant="soft"
+            variant="secondary"
             size="sm"
-            className="!bg-info-soft !text-info"
           >
             Commit
           </Button>
@@ -125,9 +124,8 @@ function ProjectFileCard({
         {supportsTMWorkflow && (
           <Button
             onClick={() => void onOpenMatchModal(file)}
-            variant="soft"
+            variant="secondary"
             size="sm"
-            className="!bg-info-soft !text-info"
           >
             TM Match
           </Button>
@@ -135,27 +133,23 @@ function ProjectFileCard({
         {supportsTMWorkflow && (
           <Button
             onClick={() => void onInspectFile(file)}
-            variant="soft"
+            variant="secondary"
             size="sm"
-            className="!bg-info-soft !text-info"
           >
             TM/TB
           </Button>
         )}
         {supportsTMWorkflow ? (
-          <>
-            <Button
-              onClick={() =>
-                jobRunning ? void ai.cancelAITranslateFile(file.id) : onRequestAITranslate(file)
-              }
-              disabled={jobStopping}
-              variant={jobRunning ? 'danger' : 'soft'}
-              size="sm"
-              className={jobRunning ? undefined : '!bg-success-soft !text-success'}
-            >
-              {jobRunning ? (jobStopping ? 'Stopping...' : 'Stop') : 'AI Translate'}
-            </Button>
-          </>
+          <Button
+            onClick={() =>
+              jobRunning ? void ai.cancelAITranslateFile(file.id) : onRequestAITranslate(file)
+            }
+            disabled={jobStopping}
+            variant={jobRunning ? 'danger' : 'secondary'}
+            size="sm"
+          >
+            {jobRunning ? (jobStopping ? 'Stopping...' : 'Stop') : 'AI Translate'}
+          </Button>
         ) : (
           <Button
             onClick={() =>
@@ -164,9 +158,8 @@ function ProjectFileCard({
                 : void ai.startAITranslateFile(file.id, file.name)
             }
             disabled={jobStopping}
-            variant={jobRunning ? 'danger' : 'soft'}
+            variant={jobRunning ? 'danger' : 'secondary'}
             size="sm"
-            className={jobRunning ? undefined : '!bg-success-soft !text-success'}
           >
             {jobRunning
               ? jobStopping
@@ -182,16 +175,26 @@ function ProjectFileCard({
         {supportsTMWorkflow && (
           <Button
             onClick={() => void onRunFileQA(file.id, file.name)}
-            variant="soft"
+            variant="secondary"
             size="sm"
-            className="!bg-warning-soft !text-warning"
           >
             Run QA
           </Button>
         )}
-        <Button onClick={() => void onExportFile(file.id, file.name)} variant="secondary" size="sm">
-          Export
-        </Button>
+        <IconButton
+          onClick={() => void onExportFile(file.id, file.name)}
+          size="sm"
+          title="Export File"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+            />
+          </svg>
+        </IconButton>
         <IconButton
           onClick={() => void onDeleteFile(file.id, file.name)}
           tone="danger"
