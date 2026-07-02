@@ -346,7 +346,7 @@ export interface AppUpdateStatusEvent {
 
 export interface ReferenceDataChangedEvent {
   projectId: number | null;
-  kind: 'tm' | 'tb' | 'all';
+  kind: 'tm' | 'tb';
   reason:
     | 'tm-created'
     | 'tm-deleted'

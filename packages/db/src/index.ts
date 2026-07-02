@@ -56,10 +56,12 @@ export class CATDatabase {
       fileMustExist: Boolean(options.fileMustExist),
     });
     this.db.pragma("foreign_keys = ON");
+    // temp_store is per-connection and safe on readonly connections; keeping it
+    // on avoids spilling FTS/ORDER BY temp b-trees to disk in the lookup worker.
+    this.db.pragma("temp_store = MEMORY");
     if (!readonly) {
       this.db.pragma("journal_mode = WAL");
       this.db.pragma("synchronous = NORMAL");
-      this.db.pragma("temp_store = MEMORY");
     }
 
     ensureCurrentSchema(this.db, { allowSchemaMaintenance: !readonly });
