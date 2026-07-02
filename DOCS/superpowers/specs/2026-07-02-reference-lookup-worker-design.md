@@ -40,6 +40,33 @@ This scope addresses both root causes:
 - The renderer stops issuing unnecessary or obsolete lookup requests.
 - The Electron main process stops executing synchronous TM/TB database queries.
 
+## Business Logic Boundary
+
+This change is a transport and lifecycle refactor only. It must not change TM/TB query business logic in any workflow.
+
+The implementation must preserve existing behavior for:
+
+- Editor CAT-panel automatic TM/TB lookup.
+- Manual ConcordancePanel search.
+- Single-segment AI translate/refine prompt reference lookup.
+- Batch/file AI translate prompt reference lookup.
+- TM/TB import, mount, unmount, delete, commit, and match-file operations.
+
+The implementation must not change:
+
+- `TMService` matching semantics.
+- `TBService` matching semantics.
+- TM/TB repository query plans, FTS query construction, limits, raw limits, budgets, or ranking.
+- Similarity scoring, concordance classification, suppression rules, sorting, or diversification.
+- AI prompt reference selection, formatting, ordering, or fallback behavior.
+- Any TM/TB result shape consumed by editor UI, ConcordancePanel, or AI prompt composition.
+
+The only intended behavior changes are:
+
+- Automatic editor reference lookup is gated, deduplicated, cached, and latest-only.
+- Editor-triggered TM/TB lookup and manual concordance search run outside the Electron main process.
+- Renderer reference caches are invalidated after successful TM/TB reference-data mutations.
+
 ## Non-Goals
 
 This change will not:
@@ -49,6 +76,8 @@ This change will not:
 - Add a worker pool.
 - Force-kill an active SQLite query.
 - Tune FTS limits, recall budgets, or similarity algorithms.
+- Change TM/TB matching, concordance, or AI prompt-reference business logic.
+- Move batch/file AI translate prompt-reference resolution to the new worker.
 - Change `TMPanel` UI.
 - Change TM/TB result shapes returned to the renderer.
 - Change ConcordancePanel's user-visible behavior or add streaming search results.
@@ -382,6 +411,17 @@ The worker body should stay thin. The existing TM/TB service tests continue to c
 
 If implementation proves the worker path is stable under Vitest, add a small smoke test with a temporary file database. If worker path resolution is brittle in the test runner, skip the real-worker smoke test and rely on manager protocol tests plus desktop build/typecheck.
 
+### Business Logic Regression Tests
+
+The implementation should not add new expected TM/TB outputs. It should keep existing service-level and AI prompt-reference tests as the behavior oracle.
+
+Required guardrails:
+
+- Do not update TM/TB service tests to accept changed matching results.
+- Do not update AI prompt reference tests to accept changed reference ordering, formatting, or fallback behavior.
+- Run targeted TM/TB and AI prompt-reference tests if implementation touches imports, types, or call sites used by those paths.
+- If a business-logic test fails, treat it as a regression in this refactor unless the user explicitly approves a separate TM/TB behavior change.
+
 ## Implementation Order
 
 1. Add renderer controller tests.
@@ -413,6 +453,8 @@ The implementation is complete when:
 - A worker failure affects only reference lookup results, not editor interactivity.
 - The TM/TB result shape consumed by `TMPanel` is unchanged.
 - Concordance search result shape is unchanged.
+- TM/TB matching results, Concordance search results, and AI prompt-reference outputs are unchanged for existing tests.
+- Batch/file AI translate still uses the existing prompt-reference business logic and is not rerouted through this worker in the first version.
 
 ## Future Work
 
