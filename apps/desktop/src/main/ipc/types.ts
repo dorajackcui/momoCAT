@@ -1,6 +1,8 @@
 import type { Dialog } from 'electron';
+import type { ReferenceDataChangedEvent } from '../../shared/ipc';
 import type { ProjectService } from '../services/ProjectService';
 import type { JobManager } from '../JobManager';
+import type { ReferenceLookupService } from '../services/referenceLookup/types';
 
 export interface IpcMainLike {
   handle: (channel: string, listener: IpcMainListener) => void;
@@ -29,6 +31,13 @@ export interface AIHandlerDeps extends MainHandlerDeps {
 
 export interface JobBackedHandlerDeps extends MainHandlerDeps {
   jobManager: JobManager;
+}
+
+export type ReferenceDataChangedNotifier = (event: ReferenceDataChangedEvent) => void;
+
+export interface ReferenceBackedHandlerDeps extends JobBackedHandlerDeps {
+  referenceLookup: ReferenceLookupService;
+  notifyReferenceDataChanged: ReferenceDataChangedNotifier;
 }
 
 export interface DialogHandlerDeps {

@@ -3,19 +3,21 @@ import type { Segment } from '@cat/core/models';
 import type { StructuredJobError, TBImportOptions } from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import { registerHandle } from './registerHandle';
-import type { JobBackedHandlerDeps } from './types';
+import type { ReferenceBackedHandlerDeps } from './types';
 
 export function registerTBHandlers({
   ipcMain,
   projectService,
   jobManager,
-}: JobBackedHandlerDeps): void {
+  referenceLookup,
+  notifyReferenceDataChanged,
+}: ReferenceBackedHandlerDeps): void {
   registerHandle(
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.getMatches,
     (_event, ...args) => {
       const [projectId, segment] = args as [number, Segment];
-      return projectService.findTermMatches(projectId, segment);
+      return referenceLookup.findTbMatches(projectId, segment);
     },
   );
 
@@ -35,18 +37,22 @@ export function registerTBHandlers({
   registerHandle(
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.create,
-    (_event, ...args) => {
+    async (_event, ...args) => {
       const [name, srcLang, tgtLang] = args as [string, string, string];
-      return projectService.createTB(name, srcLang, tgtLang);
+      const tbId = await projectService.createTB(name, srcLang, tgtLang);
+      notifyReferenceDataChanged({ projectId: null, kind: 'tb', reason: 'tb-created' });
+      return tbId;
     },
   );
 
   registerHandle(
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.remove,
-    (_event, ...args) => {
+    async (_event, ...args) => {
       const [tbId] = args as [string];
-      return projectService.deleteTB(tbId);
+      const result = await projectService.deleteTB(tbId);
+      notifyReferenceDataChanged({ projectId: null, kind: 'tb', reason: 'tb-deleted' });
+      return result;
     },
   );
 
@@ -62,18 +68,22 @@ export function registerTBHandlers({
   registerHandle(
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.mount,
-    (_event, ...args) => {
+    async (_event, ...args) => {
       const [projectId, tbId, priority] = args as [number, string, number | undefined];
-      return projectService.mountTBToProject(projectId, tbId, priority);
+      const result = await projectService.mountTBToProject(projectId, tbId, priority);
+      notifyReferenceDataChanged({ projectId, kind: 'tb', reason: 'tb-mounted' });
+      return result;
     },
   );
 
   registerHandle(
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.unmount,
-    (_event, ...args) => {
+    async (_event, ...args) => {
       const [projectId, tbId] = args as [number, string];
-      return projectService.unmountTBFromProject(projectId, tbId);
+      const result = await projectService.unmountTBFromProject(projectId, tbId);
+      notifyReferenceDataChanged({ projectId, kind: 'tb', reason: 'tb-unmounted' });
+      return result;
     },
   );
 
@@ -113,6 +123,7 @@ export function registerTBHandlers({
               skipped: result.skipped,
             },
           });
+          notifyReferenceDataChanged({ projectId: null, kind: 'tb', reason: 'tb-imported' });
         })
         .catch((error) => {
           const structuredError = toStructuredJobError(error, 'TB_IMPORT_FAILED');

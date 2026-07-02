@@ -9,9 +9,10 @@ import { CATDatabase, UnsupportedDatabaseSchemaError } from '@cat/db';
 import { ProjectService } from './services/ProjectService';
 import { JobManager } from './JobManager';
 import { createAppUpdateService, type AppUpdateService } from './services/AppUpdateService';
-import type { AppUpdateStatusEvent } from '../shared/ipc';
+import type { AppUpdateStatusEvent, ReferenceDataChangedEvent } from '../shared/ipc';
 import { IPC_CHANNELS } from '../shared/ipcChannels';
 import { SegmentUpdateBatcher } from './ipc/SegmentUpdateBatcher';
+import { ReferenceLookupWorkerManager } from './services/referenceLookup/ReferenceLookupWorkerManager';
 import { AIRuntimeConfigService } from './services/modules/ai/AIRuntimeConfigService';
 import {
   AI_PROMPT_DEBUG_ENV,
@@ -212,6 +213,12 @@ function broadcastAppUpdateStatus(status: AppUpdateStatusEvent) {
   });
 }
 
+function broadcastReferenceDataChanged(event: ReferenceDataChangedEvent) {
+  BrowserWindow.getAllWindows().forEach((win) => {
+    win.webContents.send(IPC_CHANNELS.events.referenceDataChanged, event);
+  });
+}
+
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.cat.tool');
 
@@ -286,10 +293,23 @@ app.whenReady().then(async () => {
     translationAuditSink: translationAudit?.sink,
   });
   const jobManager = new JobManager();
+  const referenceLookup = new ReferenceLookupWorkerManager({ dbPath });
 
   registerProjectHandlers({ ipcMain, projectService });
-  registerTMHandlers({ ipcMain, projectService, jobManager });
-  registerTBHandlers({ ipcMain, projectService, jobManager });
+  registerTMHandlers({
+    ipcMain,
+    projectService,
+    jobManager,
+    referenceLookup,
+    notifyReferenceDataChanged: broadcastReferenceDataChanged,
+  });
+  registerTBHandlers({
+    ipcMain,
+    projectService,
+    jobManager,
+    referenceLookup,
+    notifyReferenceDataChanged: broadcastReferenceDataChanged,
+  });
   registerAIHandlers({ ipcMain, projectService, jobManager });
   registerDialogHandlers({ ipcMain, dialog });
   registerClipboardHandlers({ ipcMain, clipboard });

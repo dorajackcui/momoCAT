@@ -3,19 +3,21 @@ import type { Segment } from '@cat/core/models';
 import type { StructuredJobError, TMCommitOptions, TMImportOptions, TMType } from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import { registerHandle } from './registerHandle';
-import type { JobBackedHandlerDeps } from './types';
+import type { ReferenceBackedHandlerDeps } from './types';
 
 export function registerTMHandlers({
   ipcMain,
   projectService,
   jobManager,
-}: JobBackedHandlerDeps): void {
+  referenceLookup,
+  notifyReferenceDataChanged,
+}: ReferenceBackedHandlerDeps): void {
   registerHandle(
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.getMatches,
     (_event, ...args) => {
       const [projectId, segment] = args as [number, Segment];
-      return projectService.findMatches(projectId, segment);
+      return referenceLookup.findTmMatches(projectId, segment);
     },
   );
 
@@ -24,7 +26,7 @@ export function registerTMHandlers({
     IPC_CHANNELS.tm.concordance,
     (_event, ...args) => {
       const [projectId, query] = args as [number, string];
-      return projectService.searchConcordance(projectId, query);
+      return referenceLookup.searchConcordance(projectId, query);
     },
   );
 
@@ -49,18 +51,22 @@ export function registerTMHandlers({
   registerHandle(
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.create,
-    (_event, ...args) => {
+    async (_event, ...args) => {
       const [name, srcLang, tgtLang, type] = args as [string, string, string, TMType | undefined];
-      return projectService.createTM(name, srcLang, tgtLang, type);
+      const tmId = await projectService.createTM(name, srcLang, tgtLang, type);
+      notifyReferenceDataChanged({ projectId: null, kind: 'tm', reason: 'tm-created' });
+      return tmId;
     },
   );
 
   registerHandle(
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.remove,
-    (_event, ...args) => {
+    async (_event, ...args) => {
       const [tmId] = args as [string];
-      return projectService.deleteTM(tmId);
+      const result = await projectService.deleteTM(tmId);
+      notifyReferenceDataChanged({ projectId: null, kind: 'tm', reason: 'tm-deleted' });
+      return result;
     },
   );
 
@@ -76,41 +82,49 @@ export function registerTMHandlers({
   registerHandle(
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.mount,
-    (_event, ...args) => {
+    async (_event, ...args) => {
       const [projectId, tmId, priority, permission] = args as [
         number,
         string,
         number | undefined,
         string | undefined,
       ];
-      return projectService.mountTMToProject(projectId, tmId, priority, permission);
+      const result = await projectService.mountTMToProject(projectId, tmId, priority, permission);
+      notifyReferenceDataChanged({ projectId, kind: 'tm', reason: 'tm-mounted' });
+      return result;
     },
   );
 
   registerHandle(
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.unmount,
-    (_event, ...args) => {
+    async (_event, ...args) => {
       const [projectId, tmId] = args as [number, string];
-      return projectService.unmountTMFromProject(projectId, tmId);
+      const result = await projectService.unmountTMFromProject(projectId, tmId);
+      notifyReferenceDataChanged({ projectId, kind: 'tm', reason: 'tm-unmounted' });
+      return result;
     },
   );
 
   registerHandle(
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.commitFile,
-    (_event, ...args) => {
+    async (_event, ...args) => {
       const [tmId, fileId, options] = args as [string, number, TMCommitOptions | undefined];
-      return projectService.commitToMainTM(tmId, fileId, options);
+      const result = await projectService.commitToMainTM(tmId, fileId, options);
+      notifyReferenceDataChanged({ projectId: null, kind: 'tm', reason: 'tm-committed' });
+      return result;
     },
   );
 
   registerHandle(
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.matchFile,
-    (_event, ...args) => {
+    async (_event, ...args) => {
       const [fileId, tmId] = args as [number, string];
-      return projectService.batchMatchFileWithTM(fileId, tmId);
+      const result = await projectService.batchMatchFileWithTM(fileId, tmId);
+      notifyReferenceDataChanged({ projectId: null, kind: 'tm', reason: 'tm-batch-matched' });
+      return result;
     },
   );
 
@@ -150,6 +164,7 @@ export function registerTMHandlers({
               skipped: result.skipped,
             },
           });
+          notifyReferenceDataChanged({ projectId: null, kind: 'tm', reason: 'tm-imported' });
         })
         .catch((error) => {
           const structuredError = toStructuredJobError(error, 'TM_IMPORT_FAILED');

@@ -16,14 +16,32 @@ describe('IPC handler registration smoke', () => {
     const ipcMain = { handle };
     const projectService = {} as ProjectService;
     const jobManager = {} as JobManager;
+    const referenceLookup = {
+      findTmMatches: vi.fn(),
+      findTbMatches: vi.fn(),
+      searchConcordance: vi.fn(),
+    };
+    const notifyReferenceDataChanged = vi.fn();
     const clipboard = {
       readText: vi.fn(),
       readHTML: vi.fn(),
     };
 
     registerProjectHandlers({ ipcMain, projectService });
-    registerTMHandlers({ ipcMain, projectService, jobManager });
-    registerTBHandlers({ ipcMain, projectService, jobManager });
+    registerTMHandlers({
+      ipcMain,
+      projectService,
+      jobManager,
+      referenceLookup,
+      notifyReferenceDataChanged,
+    });
+    registerTBHandlers({
+      ipcMain,
+      projectService,
+      jobManager,
+      referenceLookup,
+      notifyReferenceDataChanged,
+    });
     registerAIHandlers({ ipcMain, projectService, jobManager });
     registerDialogHandlers({
       ipcMain,
