@@ -91,7 +91,8 @@ export function createReferenceLookupControllerLoader(fetchers: ReferenceLookupF
 
       const loadGlobalVersion = globalVersion;
       const loadProjectVersion = projectVersions.get(params.projectId) ?? 0;
-      const promise = (async () => {
+      let promise!: Promise<ReferenceLookupResult>;
+      promise = (async () => {
         const [matchesResult, termsResult] = await Promise.allSettled([
           fetchers.getMatches(params.projectId, params.segment),
           fetchers.getTermMatches(params.projectId, params.segment),
@@ -108,7 +109,9 @@ export function createReferenceLookupControllerLoader(fetchers: ReferenceLookupF
         }
         return result;
       })().finally(() => {
-        inFlight.delete(key);
+        if (inFlight.get(key) === promise) {
+          inFlight.delete(key);
+        }
       });
 
       inFlight.set(key, promise);

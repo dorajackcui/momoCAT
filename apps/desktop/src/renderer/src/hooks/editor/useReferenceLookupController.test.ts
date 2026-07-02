@@ -69,6 +69,45 @@ describe('createReferenceLookupControllerLoader', () => {
     expect(getTermMatches).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps a newer same-key in-flight load when an invalidated older load settles', async () => {
+    const firstTm = deferred<TMMatch[]>();
+    const firstTb = deferred<TBMatch[]>();
+    const secondTm = deferred<TMMatch[]>();
+    const secondTb = deferred<TBMatch[]>();
+    const getMatches = vi
+      .fn()
+      .mockImplementationOnce(() => firstTm.promise)
+      .mockImplementationOnce(() => secondTm.promise);
+    const getTermMatches = vi
+      .fn()
+      .mockImplementationOnce(() => firstTb.promise)
+      .mockImplementationOnce(() => secondTb.promise);
+    const loader = createReferenceLookupControllerLoader({ getMatches, getTermMatches });
+
+    const first = loader.load({ projectId: 7, segment: createSegment('seg-1', 'same') });
+    loader.invalidateProject(7);
+    const second = loader.load({ projectId: 7, segment: createSegment('seg-2', 'same') });
+
+    firstTm.resolve([{ id: 'tm-old' }] as TMMatch[]);
+    firstTb.resolve([{ id: 'tb-old' }] as TBMatch[]);
+    await expect(first).resolves.toEqual({
+      matches: [{ id: 'tm-old' }],
+      terms: [{ id: 'tb-old' }],
+    });
+
+    const third = loader.load({ projectId: 7, segment: createSegment('seg-3', 'same') });
+    expect(third).toBe(second);
+    expect(getMatches).toHaveBeenCalledTimes(2);
+    expect(getTermMatches).toHaveBeenCalledTimes(2);
+
+    secondTm.resolve([{ id: 'tm-new' }] as TMMatch[]);
+    secondTb.resolve([{ id: 'tb-new' }] as TBMatch[]);
+    await expect(second).resolves.toEqual({
+      matches: [{ id: 'tm-new' }],
+      terms: [{ id: 'tb-new' }],
+    });
+  });
+
   it('keeps fulfilled TM matches when TB lookup fails and does not cache partial failures', async () => {
     const getMatches = vi.fn(async () => [{ id: 'tm-1' }] as TMMatch[]);
     const getTermMatches = vi.fn(async () => {
