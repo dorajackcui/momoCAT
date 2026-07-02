@@ -194,6 +194,63 @@ describe('createReferenceLookupScheduler', () => {
     expect(getTermMatches).not.toHaveBeenCalled();
   });
 
+  it('does not publish an already running lookup after being disabled', async () => {
+    const tmDeferred = deferred<TMMatch[]>();
+    let firstSettled = false;
+    const getMatches = vi.fn(() =>
+      tmDeferred.promise.finally(() => {
+        firstSettled = true;
+      }),
+    );
+    const getTermMatches = vi.fn(async () => [] as TBMatch[]);
+    const setResult = vi.fn();
+    const scheduler = createReferenceLookupScheduler({
+      fetchers: { getMatches, getTermMatches },
+      setResult,
+      debounceMs: 350,
+    });
+
+    scheduler.update({ enabled: true, projectId: 7, segment: createSegment('a', 'hash-a') });
+    await vi.advanceTimersByTimeAsync(350);
+    scheduler.update({ enabled: false, projectId: 7, segment: createSegment('a', 'hash-a') });
+
+    tmDeferred.resolve([{ id: 'tm-a' }] as TMMatch[]);
+    await vi.waitFor(() => {
+      expect(firstSettled).toBe(true);
+    });
+
+    expect(setResult).toHaveBeenCalledWith({ matches: [], terms: [] });
+    expect(setResult).not.toHaveBeenCalledWith({ matches: [{ id: 'tm-a' }], terms: [] });
+  });
+
+  it('does not publish the current in-flight lookup after invalidation', async () => {
+    const tmDeferred = deferred<TMMatch[]>();
+    let firstSettled = false;
+    const getMatches = vi.fn(() =>
+      tmDeferred.promise.finally(() => {
+        firstSettled = true;
+      }),
+    );
+    const getTermMatches = vi.fn(async () => [] as TBMatch[]);
+    const setResult = vi.fn();
+    const scheduler = createReferenceLookupScheduler({
+      fetchers: { getMatches, getTermMatches },
+      setResult,
+      debounceMs: 350,
+    });
+
+    scheduler.update({ enabled: true, projectId: 7, segment: createSegment('a', 'hash-a') });
+    await vi.advanceTimersByTimeAsync(350);
+    scheduler.invalidate(7);
+
+    tmDeferred.resolve([{ id: 'tm-a' }] as TMMatch[]);
+    await vi.waitFor(() => {
+      expect(firstSettled).toBe(true);
+    });
+
+    expect(setResult).not.toHaveBeenCalledWith({ matches: [{ id: 'tm-a' }], terms: [] });
+  });
+
   it('debounces rapid active changes and only fetches the latest segment', async () => {
     const getMatches = vi.fn(async (_projectId, segment: Segment) => [
       { id: `tm-${segment.segmentId}` },

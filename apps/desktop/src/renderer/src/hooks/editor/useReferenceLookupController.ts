@@ -139,6 +139,7 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
   let runningKey: string | null = null;
   let queuedLatest: { projectId: number; segment: Segment; key: string } | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let invalidationEpoch = 0;
   let latestState: ReferenceLookupSchedulerState = {
     enabled: false,
     projectId: null,
@@ -157,9 +158,14 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
     }
 
     runningKey = key;
+    const lookupInvalidationEpoch = invalidationEpoch;
     try {
       const result = await loader.load({ projectId, segment });
-      if (currentKey === key && latestState.enabled) {
+      if (
+        currentKey === key &&
+        latestState.enabled &&
+        lookupInvalidationEpoch === invalidationEpoch
+      ) {
         options.setResult(result);
       }
     } finally {
@@ -207,6 +213,7 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
     },
     invalidate(projectId: number | null): void {
       loader.invalidateProject(projectId);
+      invalidationEpoch += 1;
       // Task 3 extends this to reschedule current lookup.
     },
     dispose(): void {
@@ -253,7 +260,7 @@ export function useReferenceLookupController({
       ? segmentsRef.current.find((item) => item.segmentId === activeSegmentId) ?? null
       : null;
     schedulerRef.current?.update({ enabled, projectId, segment: activeSegment });
-  }, [enabled, projectId, activeSegmentId, activeSegmentSourceHash, segments]);
+  }, [enabled, projectId, activeSegmentId, activeSegmentSourceHash]);
 
   useEffect(() => () => schedulerRef.current?.dispose(), []);
 
