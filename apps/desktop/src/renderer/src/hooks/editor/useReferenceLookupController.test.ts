@@ -224,13 +224,17 @@ describe('createReferenceLookupScheduler', () => {
   });
 
   it('does not publish the current in-flight lookup after invalidation', async () => {
-    const tmDeferred = deferred<TMMatch[]>();
+    const first = deferred<TMMatch[]>();
+    const second = deferred<TMMatch[]>();
     let firstSettled = false;
-    const getMatches = vi.fn(() =>
-      tmDeferred.promise.finally(() => {
-        firstSettled = true;
-      }),
-    );
+    const getMatches = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        first.promise.finally(() => {
+          firstSettled = true;
+        }),
+      )
+      .mockImplementationOnce(() => second.promise);
     const getTermMatches = vi.fn(async () => [] as TBMatch[]);
     const setResult = vi.fn();
     const scheduler = createReferenceLookupScheduler({
@@ -243,12 +247,16 @@ describe('createReferenceLookupScheduler', () => {
     await vi.advanceTimersByTimeAsync(350);
     scheduler.invalidate(7);
 
-    tmDeferred.resolve([{ id: 'tm-a' }] as TMMatch[]);
+    first.resolve([{ id: 'tm-a-stale' }] as TMMatch[]);
     await vi.waitFor(() => {
       expect(firstSettled).toBe(true);
     });
 
-    expect(setResult).not.toHaveBeenCalledWith({ matches: [{ id: 'tm-a' }], terms: [] });
+    expect(getMatches).toHaveBeenCalledTimes(2);
+    expect(setResult).not.toHaveBeenCalledWith({
+      matches: [{ id: 'tm-a-stale' }],
+      terms: [],
+    });
   });
 
   it('invalidates cached current results and refetches when reference data changes', async () => {
@@ -355,6 +363,58 @@ describe('createReferenceLookupScheduler', () => {
         terms: [],
       });
     });
+  });
+
+  it('coalesces a queued segment change when invalidation arrives during another lookup', async () => {
+    const a = deferred<TMMatch[]>();
+    const b = deferred<TMMatch[]>();
+    const getMatches = vi
+      .fn()
+      .mockImplementationOnce((_projectId, segment: Segment) => {
+        expect(segment.segmentId).toBe('a');
+        return a.promise;
+      })
+      .mockImplementationOnce((_projectId, segment: Segment) => {
+        expect(segment.segmentId).toBe('b');
+        return b.promise;
+      });
+    const getTermMatches = vi.fn(async () => [] as TBMatch[]);
+    const setResult = vi.fn();
+    const scheduler = createReferenceLookupScheduler({
+      fetchers: { getMatches, getTermMatches },
+      setResult,
+      debounceMs: 350,
+    });
+
+    scheduler.update({ enabled: true, projectId: 7, segment: createSegment('a', 'hash-a') });
+    await vi.advanceTimersByTimeAsync(350);
+    expect(getMatches).toHaveBeenCalledTimes(1);
+
+    scheduler.update({ enabled: true, projectId: 7, segment: createSegment('b', 'hash-b') });
+    await vi.advanceTimersByTimeAsync(350);
+    expect(getMatches).toHaveBeenCalledTimes(1);
+
+    scheduler.invalidate(7);
+    a.resolve([{ id: 'tm-a-stale' }] as TMMatch[]);
+    await vi.waitFor(() => {
+      expect(getMatches).toHaveBeenCalledTimes(2);
+    });
+    expect(getMatches.mock.calls[1][1].segmentId).toBe('b');
+
+    b.resolve([{ id: 'tm-b-fresh' }] as TMMatch[]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(setResult).toHaveBeenLastCalledWith({
+      matches: [{ id: 'tm-b-fresh' }],
+      terms: [],
+    });
+    expect(setResult).not.toHaveBeenCalledWith({
+      matches: [{ id: 'tm-a-stale' }],
+      terms: [],
+    });
+    expect(getMatches).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(350);
+    expect(getMatches).toHaveBeenCalledTimes(2);
   });
 
   it('debounces rapid active changes and only fetches the latest segment', async () => {

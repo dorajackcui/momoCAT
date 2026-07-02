@@ -249,16 +249,22 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
       return;
     }
 
+    const force = optionsOverride?.force ?? false;
     clearTimer();
-    timer = setTimeout(() => {
-      timer = null;
-      void startLookup(
+    if (force && runningKey) {
+      queuedLatest = {
         projectId,
         segment,
         key,
-        optionsOverride?.force ?? false,
+        force,
         invalidationEpoch,
-      );
+      };
+      return;
+    }
+
+    timer = setTimeout(() => {
+      timer = null;
+      void startLookup(projectId, segment, key, force, invalidationEpoch);
     }, debounceMs);
   };
 
