@@ -31,6 +31,8 @@ This design follows option B:
 - Add a renderer-side reference lookup controller.
 - Add a read-only worker for TM/TB reference lookup.
 - Keep the existing invoke-style return shape.
+- Move manual Concordance search (`tm-concordance`) to the same worker path.
+- Add coarse reference-data invalidation so cached lookup results are cleared after TM/TB mutations.
 - Defer progressive streaming, prefetch, worker pools, hard cancellation, and query algorithm tuning.
 
 This scope addresses both root causes:
@@ -49,6 +51,7 @@ This change will not:
 - Tune FTS limits, recall budgets, or similarity algorithms.
 - Change `TMPanel` UI.
 - Change TM/TB result shapes returned to the renderer.
+- Change ConcordancePanel's user-visible behavior or add streaming search results.
 - Fall back to main-thread lookup when the worker fails.
 
 ## Architecture
@@ -106,6 +109,7 @@ Public methods:
 ```ts
 findTmMatches(projectId: number, segment: Segment): Promise<TMMatch[]>
 findTbMatches(projectId: number, segment: Segment): Promise<TBMatch[]>
+searchConcordance(projectId: number, query: string): Promise<TMConcordanceEntry[]>
 dispose(): Promise<void> | void
 ```
 
@@ -113,6 +117,7 @@ The existing IPC channel names remain unchanged:
 
 - `tm-get-matches`
 - `tb-get-matches`
+- `tm-concordance`
 
 ### Worker: `referenceLookupWorker.ts`
 
@@ -129,6 +134,7 @@ Request handling:
 - Accepts messages with `{ requestId, kind, projectId, segment }`.
 - For `kind: 'tm'`, calls the TM service.
 - For `kind: 'tb'`, calls the TB service.
+- For `kind: 'concordance'`, calls the TM concordance query service.
 - Posts `{ requestId, ok: true, result }` on success.
 - Posts `{ requestId, ok: false, error }` on failure.
 
@@ -209,6 +215,8 @@ The worker manager uses request IDs as the source of truth.
 
 The first version does not terminate a worker just because the renderer moved to a newer active segment. Once lookup is in a worker, old work no longer blocks the Electron main process. Stale result correctness is handled by the renderer key guard.
 
+The tradeoff is result latency. If key A is already running in the single worker and key D becomes current, D cannot start until A finishes. This is acceptable for the first version because it removes editor and main-process blocking, but it does not minimize the latest result's wall-clock latency. Future latency work should prefer cooperative cancellation or staged query cancellation before adding a worker pool, because this workload usually cares about the latest request rather than throughput.
+
 ## Failure Handling
 
 Worker failure must not reintroduce main-thread synchronous lookup.
@@ -231,9 +239,57 @@ The worker opens an independent read-only SQLite connection. The database alread
 new CATDatabase(dbPath, { readonly: true, fileMustExist: true })
 ```
 
-The app uses WAL mode for writable connections. Read-only reference lookup can tolerate eventual consistency. A newly mounted/imported TM/TB may not be reflected in an already cached renderer result until the cache is invalidated. The first version clears cache on project changes only.
+The app uses WAL mode for writable connections. A read-only connection should see committed WAL changes on subsequent statements as long as it is not holding an old read transaction. It does not inherently need to wait for a checkpoint.
 
-More precise invalidation for TM/TB mount, unmount, import, or delete can be added later if user-visible staleness becomes a problem.
+The bigger consistency risk is renderer-side caching. A newly mounted/imported/deleted TM/TB may not be reflected in an already cached `projectId:srcHash` result until the cache is invalidated.
+
+## Reference Cache Invalidation
+
+The first version should add a coarse reference-data invalidation event.
+
+New renderer event:
+
+```ts
+onReferenceDataChanged(callback: (event: ReferenceDataChangedEvent) => void): () => void
+```
+
+Suggested payload:
+
+```ts
+interface ReferenceDataChangedEvent {
+  projectId: number | null;
+  kind: 'tm' | 'tb' | 'all';
+  reason:
+    | 'tm-created'
+    | 'tm-deleted'
+    | 'tm-mounted'
+    | 'tm-unmounted'
+    | 'tm-imported'
+    | 'tm-committed'
+    | 'tm-batch-matched'
+    | 'tb-created'
+    | 'tb-deleted'
+    | 'tb-mounted'
+    | 'tb-unmounted'
+    | 'tb-imported';
+}
+```
+
+Invalidation rules:
+
+- If `projectId` is known, clear cached reference results for that project.
+- If `projectId` is `null`, clear all renderer reference caches.
+- If the CAT tab is currently enabled and the current key was invalidated, schedule a fresh lookup for the current segment.
+- The invalidation event is coarse by design. It favors correctness and simplicity over fine-grained cache retention.
+
+Main should emit the event after TM/TB reference mutations:
+
+- TM create/delete/mount/unmount/import/commit/match-file completion.
+- TB create/delete/mount/unmount/import completion.
+
+Import operations complete asynchronously through job progress. The invalidation event should be emitted when the import job completes successfully, not when the job starts.
+
+This event is separate from worker DB visibility. Its purpose is to clear renderer caches and prompt a fresh lookup when reference data changed.
 
 ## File Plan
 
@@ -249,6 +305,9 @@ Modify:
 - `apps/desktop/src/renderer/src/hooks/useEditor.ts`
 - `apps/desktop/src/renderer/src/hooks/editor/useActiveSegmentMatches.ts`
 - `apps/desktop/src/renderer/src/hooks/editor/useActiveSegmentMatches.test.ts`
+- `apps/desktop/src/shared/ipc.ts`
+- `apps/desktop/src/preload/api/eventApi.ts`
+- `apps/desktop/src/preload/api/createDesktopApi.test.ts`
 
 Preferred direction:
 
@@ -271,6 +330,7 @@ Modify:
 - `apps/desktop/src/main/ipc/tbHandlers.ts`
 - `apps/desktop/src/main/ipc/types.ts`
 - `apps/desktop/src/main/index.ts`
+- `apps/desktop/src/shared/ipcChannels.ts`
 
 ## Testing Strategy
 
@@ -287,6 +347,7 @@ Required cases:
 - In-flight cache reuses the same promise and avoids duplicate fetches.
 - Stale promise resolution does not update active matches or terms.
 - Project ID changes clear completed and in-flight cache.
+- Reference-data invalidation clears affected cached results and schedules a fresh current lookup when enabled.
 
 ### Main Manager Tests
 
@@ -302,6 +363,7 @@ Required cases:
 - Clears worker reference on crash.
 - Lazy restarts after crash on next request.
 - `dispose()` terminates the worker and rejects pending requests.
+- Supports TM match, TB match, and Concordance request kinds.
 
 ### IPC Handler Tests
 
@@ -309,7 +371,10 @@ Required cases:
 
 - `tm-get-matches` delegates to `ReferenceLookupWorkerManager.findTmMatches`.
 - `tb-get-matches` delegates to `ReferenceLookupWorkerManager.findTbMatches`.
-- The handlers do not call `projectService.findMatches` or `projectService.findTermMatches` for reference lookup.
+- `tm-concordance` delegates to `ReferenceLookupWorkerManager.searchConcordance`.
+- The handlers do not call `projectService.findMatches`, `projectService.findTermMatches`, or `projectService.searchConcordance` for reference lookup/search.
+- TM/TB mutation handlers emit reference-data invalidation events after successful mutations.
+- TM/TB import handlers emit reference-data invalidation events after successful async import completion.
 
 ### Worker Tests
 
@@ -322,16 +387,18 @@ If implementation proves the worker path is stable under Vitest, add a small smo
 1. Add renderer controller tests.
 2. Implement renderer controller.
 3. Wire controller into `useEditor`.
-4. Run renderer hook/editor tests.
-5. Add worker manager tests with mock Worker.
-6. Implement worker manager.
-7. Add worker protocol types.
-8. Implement `referenceLookupWorker.ts`.
-9. Switch TM/TB IPC handlers to the manager.
-10. Wire manager creation in `main/index.ts`.
-11. Run targeted Vitest tests.
-12. Run desktop typecheck.
-13. Run build or package-path verification if worker path resolution changed.
+4. Add reference-data invalidation event types and renderer subscription.
+5. Run renderer hook/editor tests.
+6. Add worker manager tests with mock Worker.
+7. Implement worker manager.
+8. Add worker protocol types.
+9. Implement `referenceLookupWorker.ts`.
+10. Switch TM/TB match and Concordance IPC handlers to the manager.
+11. Emit reference-data invalidation from TM/TB mutation handlers.
+12. Wire manager creation in `main/index.ts`.
+13. Run targeted Vitest tests.
+14. Run desktop typecheck.
+15. Run build or package-path verification if worker path resolution changed.
 
 ## Acceptance Criteria
 
@@ -341,9 +408,11 @@ The implementation is complete when:
 - Rapid active-segment changes do not issue lookup requests for intermediate stale segments.
 - Duplicate lookup requests for the same `projectId:srcHash` are deduplicated.
 - Stale lookup results cannot update active reference state.
-- `tm-get-matches` and `tb-get-matches` no longer run heavy TM/TB database queries in the Electron main process.
+- Reference caches are invalidated after successful TM/TB mutations.
+- `tm-get-matches`, `tb-get-matches`, and `tm-concordance` no longer run heavy TM/TB database queries in the Electron main process.
 - A worker failure affects only reference lookup results, not editor interactivity.
 - The TM/TB result shape consumed by `TMPanel` is unchanged.
+- Concordance search result shape is unchanged.
 
 ## Future Work
 
@@ -351,6 +420,7 @@ Potential follow-up work:
 
 - Progressive exact/fuzzy/concordance streaming.
 - Adjacent segment prefetch during idle time.
+- Worker warm-up when a project/editor is opened to reduce first-lookup cold start latency.
 - Fine-grained TM/TB cache invalidation by mount/import/delete revision.
 - Worker termination or cooperative cancellation for obsolete long-running queries.
 - Query-level FTS and concordance recall tuning.
