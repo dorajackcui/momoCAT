@@ -294,6 +294,7 @@ app.whenReady().then(async () => {
   });
   const jobManager = new JobManager();
   const referenceLookup = new ReferenceLookupWorkerManager({ dbPath });
+  void referenceLookup.warmUp();
   app.on('before-quit', () => {
     void referenceLookup.dispose();
   });

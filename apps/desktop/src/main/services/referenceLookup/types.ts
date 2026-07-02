@@ -35,6 +35,7 @@ export type ReferenceLookupWorkerResponse =
     };
 
 export interface ReferenceLookupService {
+  warmUp(): Promise<void>;
   findTmMatches(projectId: number, segment: Segment): Promise<TMMatch[]>;
   findTbMatches(projectId: number, segment: Segment): Promise<TBMatch[]>;
   searchConcordance(projectId: number, query: string): Promise<TMConcordanceEntry[]>;

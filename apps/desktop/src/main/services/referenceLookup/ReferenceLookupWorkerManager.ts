@@ -63,6 +63,10 @@ export class ReferenceLookupWorkerManager implements ReferenceLookupService {
     });
   }
 
+  public async warmUp(): Promise<void> {
+    await this.ensureWorker();
+  }
+
   public async dispose(): Promise<void> {
     this.disposed = true;
     const worker = this.worker;

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Segment, TBMatch } from '@cat/core/models';
 import type { ReferenceDataChangedEvent, TMMatch } from '../../../../shared/ipc';
 
-export const REFERENCE_LOOKUP_DEBOUNCE_MS = 350;
+export const REFERENCE_LOOKUP_DEBOUNCE_MS = 150;
 
 export interface ReferenceLookupFetchers {
   getMatches: (projectId: number, segment: Segment) => Promise<TMMatch[]>;
@@ -249,6 +249,8 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
       return;
     }
 
+    options.setResult({ matches: [], terms: [] });
+
     const force = optionsOverride?.force ?? false;
     clearTimer();
     if (force && runningKey) {
@@ -272,6 +274,11 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
     update(nextState: ReferenceLookupSchedulerState): void {
       latestState = nextState;
       schedule(nextState);
+    },
+    prefetch(projectId: number, segments: readonly Segment[]): void {
+      for (const segment of segments) {
+        void loader.load({ projectId, segment });
+      }
     },
     invalidate(projectId: number | null): void {
       loader.invalidateProject(projectId);
@@ -338,6 +345,19 @@ export function useReferenceLookupController({
     });
     return unsubscribe;
   }, [subscribeToReferenceDataChanged]);
+
+  useEffect(() => {
+    if (!enabled || projectId === null || !activeSegmentId) return;
+    const segs = segmentsRef.current;
+    const idx = segs.findIndex((s) => s.segmentId === activeSegmentId);
+    if (idx === -1) return;
+    const neighbors: Segment[] = [];
+    if (idx > 0) neighbors.push(segs[idx - 1]);
+    if (idx < segs.length - 1) neighbors.push(segs[idx + 1]);
+    if (neighbors.length > 0) {
+      schedulerRef.current?.prefetch(projectId, neighbors);
+    }
+  }, [activeMatches, activeTerms]);
 
   useEffect(() => () => schedulerRef.current?.dispose(), []);
 
