@@ -17,6 +17,7 @@ export default defineConfig({
         input: {
           index: resolve('src/main/index.ts'),
           tmImportWorker: resolve('src/main/tmImportWorker.ts'),
+          referenceLookupWorker: resolve('src/main/referenceLookupWorker.ts'),
         },
       },
     },
