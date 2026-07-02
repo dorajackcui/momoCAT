@@ -84,6 +84,22 @@ describe('createReferenceLookupControllerLoader', () => {
     expect(getMatches).toHaveBeenCalledTimes(2);
     expect(getTermMatches).toHaveBeenCalledTimes(2);
   });
+
+  it('keeps fulfilled TB matches when TM lookup fails and does not cache partial failures', async () => {
+    const getMatches = vi.fn(async () => {
+      throw new Error('tm unavailable');
+    });
+    const getTermMatches = vi.fn(async () => [{ id: 'tb-1' }] as TBMatch[]);
+    const loader = createReferenceLookupControllerLoader({ getMatches, getTermMatches });
+
+    await expect(
+      loader.load({ projectId: 7, segment: createSegment('seg-1', 'hash') }),
+    ).resolves.toEqual({ matches: [], terms: [{ id: 'tb-1' }] });
+    await loader.load({ projectId: 7, segment: createSegment('seg-2', 'hash') });
+
+    expect(getMatches).toHaveBeenCalledTimes(2);
+    expect(getTermMatches).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('createReferenceLookupScheduler', () => {
@@ -106,6 +122,33 @@ describe('createReferenceLookupScheduler', () => {
       segment: createSegment('seg-1', 'hash'),
     });
     await vi.runAllTimersAsync();
+
+    expect(setResult).toHaveBeenCalledWith({ matches: [], terms: [] });
+    expect(getMatches).not.toHaveBeenCalled();
+    expect(getTermMatches).not.toHaveBeenCalled();
+  });
+
+  it('clears a queued lookup when disabled before the debounce expires', async () => {
+    const getMatches = vi.fn(async () => [{ id: 'tm-1' }] as TMMatch[]);
+    const getTermMatches = vi.fn(async () => [{ id: 'tb-1' }] as TBMatch[]);
+    const setResult = vi.fn();
+    const scheduler = createReferenceLookupScheduler({
+      fetchers: { getMatches, getTermMatches },
+      setResult,
+      debounceMs: 350,
+    });
+
+    scheduler.update({
+      enabled: true,
+      projectId: 7,
+      segment: createSegment('seg-1', 'hash'),
+    });
+    scheduler.update({
+      enabled: false,
+      projectId: 7,
+      segment: createSegment('seg-1', 'hash'),
+    });
+    await vi.advanceTimersByTimeAsync(350);
 
     expect(setResult).toHaveBeenCalledWith({ matches: [], terms: [] });
     expect(getMatches).not.toHaveBeenCalled();
@@ -156,13 +199,15 @@ describe('createReferenceLookupScheduler', () => {
     expect(getMatches).toHaveBeenCalledTimes(1);
 
     a.resolve([{ id: 'tm-a' }] as TMMatch[]);
-    await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(getMatches).toHaveBeenCalledTimes(2);
+    });
     expect(setResult).not.toHaveBeenCalledWith({ matches: [{ id: 'tm-a' }], terms: [] });
-    expect(getMatches).toHaveBeenCalledTimes(2);
     expect(getMatches.mock.calls[1][1].segmentId).toBe('d');
 
     d.resolve([{ id: 'tm-d' }] as TMMatch[]);
-    await Promise.resolve();
-    expect(setResult).toHaveBeenLastCalledWith({ matches: [{ id: 'tm-d' }], terms: [] });
+    await vi.waitFor(() => {
+      expect(setResult).toHaveBeenLastCalledWith({ matches: [{ id: 'tm-d' }], terms: [] });
+    });
   });
 });
