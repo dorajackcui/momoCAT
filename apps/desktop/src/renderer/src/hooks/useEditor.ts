@@ -5,7 +5,7 @@ import { TagValidator } from '@cat/core/qa';
 import { serializeTokensToEditorText, type TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { AISegmentTranslateResult } from '../../../shared/ipc';
-import { useActiveSegmentMatches } from './editor/useActiveSegmentMatches';
+import { useReferenceLookupController } from './editor/useReferenceLookupController';
 import {
   appendTermToTargetTokens,
   normalizeEditorInputText,
@@ -33,6 +33,7 @@ import { apiClient } from '../services/apiClient';
 
 interface UseEditorProps {
   activeFileId: number | null;
+  activeTab?: 'tm' | 'concordance';
 }
 
 const VALID_SEGMENT_STATUSES: Set<SegmentStatus> = new Set([
@@ -81,7 +82,7 @@ export function applyAISegmentTranslateResultToSegments(
   return changed ? nextSegments : segments;
 }
 
-export function useEditor({ activeFileId }: UseEditorProps) {
+export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
   const [segments, setSegmentsState] = useState<Segment[]>([]);
   const [segmentChangeHint, setSegmentChangeHint] = useState<SegmentChangeHint>(() =>
     createSegmentChangeHint({ orderChanged: true }, 0),
@@ -249,7 +250,8 @@ export function useEditor({ activeFileId }: UseEditorProps) {
     return segment?.srcHash ?? null;
   }, [activeSegmentId, segmentChangeHint, segments]);
 
-  const { activeMatches, activeTerms } = useActiveSegmentMatches({
+  const { activeMatches, activeTerms } = useReferenceLookupController({
+    enabled: activeTab === 'tm',
     activeSegmentId,
     activeSegmentSourceHash,
     projectId,

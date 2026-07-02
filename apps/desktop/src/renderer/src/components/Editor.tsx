@@ -49,6 +49,13 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
     () => isVirtualizedEditorListEnabled(window.localStorage),
     [],
   );
+  const {
+    activeTab,
+    setActiveTab,
+    concordanceFocusSignal,
+    concordanceSearchSignal,
+    concordanceQuery,
+  } = useConcordanceShortcut();
 
   const {
     segments,
@@ -73,7 +80,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
     segmentChangeHint,
     segmentIndexById,
     segmentStats,
-  } = useEditor({ activeFileId: fileId });
+  } = useEditor({ activeFileId: fileId, activeTab });
 
   const {
     sourceQueryInput,
@@ -115,14 +122,6 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
   });
 
   const { layoutRef, sidebarWidth, startSidebarResize } = useEditorLayout();
-  const {
-    activeTab,
-    setActiveTab,
-    concordanceFocusSignal,
-    concordanceSearchSignal,
-    concordanceQuery,
-  } = useConcordanceShortcut();
-
   const supportsBatchActions = project?.projectType === 'translation';
   const batchActions = useEditorBatchActions({
     fileId,
