@@ -162,7 +162,7 @@ describe('createReferenceLookupScheduler', () => {
     });
     await vi.runAllTimersAsync();
 
-    expect(setResult).toHaveBeenCalledWith({ matches: [], terms: [] });
+    expect(setResult).toHaveBeenCalledWith({ matches: [], terms: [] }, false);
     expect(getMatches).not.toHaveBeenCalled();
     expect(getTermMatches).not.toHaveBeenCalled();
   });
@@ -189,7 +189,7 @@ describe('createReferenceLookupScheduler', () => {
     });
     await vi.advanceTimersByTimeAsync(350);
 
-    expect(setResult).toHaveBeenCalledWith({ matches: [], terms: [] });
+    expect(setResult).toHaveBeenCalledWith({ matches: [], terms: [] }, false);
     expect(getMatches).not.toHaveBeenCalled();
     expect(getTermMatches).not.toHaveBeenCalled();
   });
@@ -219,8 +219,8 @@ describe('createReferenceLookupScheduler', () => {
       expect(firstSettled).toBe(true);
     });
 
-    expect(setResult).toHaveBeenCalledWith({ matches: [], terms: [] });
-    expect(setResult).not.toHaveBeenCalledWith({ matches: [{ id: 'tm-a' }], terms: [] });
+    expect(setResult).toHaveBeenCalledWith({ matches: [], terms: [] }, false);
+    expect(setResult).not.toHaveBeenCalledWith({ matches: [{ id: 'tm-a' }], terms: [] }, false);
   });
 
   it('does not publish the current in-flight lookup after invalidation', async () => {
@@ -256,7 +256,7 @@ describe('createReferenceLookupScheduler', () => {
     expect(setResult).not.toHaveBeenCalledWith({
       matches: [{ id: 'tm-a-stale' }],
       terms: [],
-    });
+    }, false);
   });
 
   it('invalidates cached current results and refetches when reference data changes', async () => {
@@ -282,7 +282,7 @@ describe('createReferenceLookupScheduler', () => {
     expect(setResult).toHaveBeenLastCalledWith({
       matches: [{ id: 'tm-first' }],
       terms: [],
-    });
+    }, false);
 
     scheduler.invalidate(7);
     await vi.advanceTimersByTimeAsync(350);
@@ -291,7 +291,7 @@ describe('createReferenceLookupScheduler', () => {
     expect(setResult).toHaveBeenLastCalledWith({
       matches: [{ id: 'tm-second' }],
       terms: [],
-    });
+    }, false);
   });
 
   it('ignores unrelated project invalidation for the current in-flight lookup', async () => {
@@ -321,7 +321,7 @@ describe('createReferenceLookupScheduler', () => {
     });
 
     expect(getMatches).toHaveBeenCalledTimes(1);
-    expect(setResult).toHaveBeenLastCalledWith({ matches: [{ id: 'tm-a' }], terms: [] });
+    expect(setResult).toHaveBeenLastCalledWith({ matches: [{ id: 'tm-a' }], terms: [] }, false);
   });
 
   it('queues a fresh same-key lookup when current in-flight data is invalidated', async () => {
@@ -354,14 +354,14 @@ describe('createReferenceLookupScheduler', () => {
     expect(setResult).not.toHaveBeenCalledWith({
       matches: [{ id: 'tm-stale' }],
       terms: [],
-    });
+    }, false);
 
     second.resolve([{ id: 'tm-fresh' }] as TMMatch[]);
     await vi.waitFor(() => {
       expect(setResult).toHaveBeenLastCalledWith({
         matches: [{ id: 'tm-fresh' }],
         terms: [],
-      });
+      }, false);
     });
   });
 
@@ -406,11 +406,11 @@ describe('createReferenceLookupScheduler', () => {
     expect(setResult).toHaveBeenLastCalledWith({
       matches: [{ id: 'tm-b-fresh' }],
       terms: [],
-    });
+    }, false);
     expect(setResult).not.toHaveBeenCalledWith({
       matches: [{ id: 'tm-a-stale' }],
       terms: [],
-    });
+    }, false);
     expect(getMatches).toHaveBeenCalledTimes(2);
 
     await vi.advanceTimersByTimeAsync(350);
@@ -464,12 +464,12 @@ describe('createReferenceLookupScheduler', () => {
     await vi.waitFor(() => {
       expect(getMatches).toHaveBeenCalledTimes(2);
     });
-    expect(setResult).not.toHaveBeenCalledWith({ matches: [{ id: 'tm-a' }], terms: [] });
+    expect(setResult).not.toHaveBeenCalledWith({ matches: [{ id: 'tm-a' }], terms: [] }, false);
     expect(getMatches.mock.calls[1][1].segmentId).toBe('d');
 
     d.resolve([{ id: 'tm-d' }] as TMMatch[]);
     await vi.waitFor(() => {
-      expect(setResult).toHaveBeenLastCalledWith({ matches: [{ id: 'tm-d' }], terms: [] });
+      expect(setResult).toHaveBeenLastCalledWith({ matches: [{ id: 'tm-d' }], terms: [] }, false);
     });
   });
 });

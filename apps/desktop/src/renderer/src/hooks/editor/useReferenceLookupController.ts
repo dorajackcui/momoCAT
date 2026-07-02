@@ -147,7 +147,7 @@ interface ReferenceLookupSchedulerState {
 
 interface ReferenceLookupSchedulerOptions {
   fetchers: ReferenceLookupFetchers;
-  setResult: (result: ReferenceLookupResult) => void;
+  setResult: (result: ReferenceLookupResult, loading: boolean) => void;
   debounceMs?: number;
 }
 
@@ -202,7 +202,7 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
         latestState.enabled &&
         lookupInvalidationEpoch === invalidationEpoch
       ) {
-        options.setResult(result);
+        options.setResult(result, false);
       }
     } finally {
       runningKey = null;
@@ -234,7 +234,7 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
       currentKey = null;
       clearTimer();
       queuedLatest = null;
-      options.setResult({ matches: [], terms: [] });
+      options.setResult({ matches: [], terms: [] }, false);
       return;
     }
 
@@ -245,11 +245,11 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
     if (cached) {
       clearTimer();
       queuedLatest = null;
-      options.setResult(cached);
+      options.setResult(cached, false);
       return;
     }
 
-    options.setResult({ matches: [], terms: [] });
+    options.setResult({ matches: [], terms: [] }, true);
 
     const force = optionsOverride?.force ?? false;
     clearTimer();
@@ -311,9 +311,11 @@ export function useReferenceLookupController({
 }: UseReferenceLookupControllerParams): {
   activeMatches: TMMatch[];
   activeTerms: TBMatch[];
+  referenceLoading: boolean;
 } {
   const [activeMatches, setActiveMatches] = useState<TMMatch[]>([]);
   const [activeTerms, setActiveTerms] = useState<TBMatch[]>([]);
+  const [referenceLoading, setReferenceLoading] = useState(false);
   const segmentsRef = useRef(segments);
   const schedulerRef = useRef<ReturnType<typeof createReferenceLookupScheduler> | null>(null);
 
@@ -324,9 +326,10 @@ export function useReferenceLookupController({
   if (!schedulerRef.current) {
     schedulerRef.current = createReferenceLookupScheduler({
       fetchers,
-      setResult: (result) => {
+      setResult: (result, loading) => {
         setActiveMatches(result.matches);
         setActiveTerms(result.terms);
+        setReferenceLoading(loading);
       },
       debounceMs: REFERENCE_LOOKUP_DEBOUNCE_MS,
     });
@@ -361,5 +364,5 @@ export function useReferenceLookupController({
 
   useEffect(() => () => schedulerRef.current?.dispose(), []);
 
-  return { activeMatches, activeTerms };
+  return { activeMatches, activeTerms, referenceLoading };
 }

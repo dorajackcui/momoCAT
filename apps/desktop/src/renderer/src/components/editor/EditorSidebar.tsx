@@ -11,6 +11,7 @@ interface EditorSidebarProps {
   onStartResize: (event: React.MouseEvent<HTMLButtonElement>) => void;
   activeMatches: TMMatch[];
   activeTerms: TBMatch[];
+  referenceLoading: boolean;
   onApplyMatch: (tokens: Token[]) => void;
   onApplyTerm: (term: string) => void;
   projectId: number;
@@ -26,6 +27,7 @@ const EditorSidebarComponent: React.FC<EditorSidebarProps> = ({
   onStartResize,
   activeMatches,
   activeTerms,
+  referenceLoading,
   onApplyMatch,
   onApplyTerm,
   projectId,
@@ -76,6 +78,7 @@ const EditorSidebarComponent: React.FC<EditorSidebarProps> = ({
           <TMPanel
             matches={activeMatches}
             termMatches={activeTerms}
+            loading={referenceLoading}
             onApply={onApplyMatch}
             onApplyTerm={onApplyTerm}
           />

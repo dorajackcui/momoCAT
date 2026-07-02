@@ -250,7 +250,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     return segment?.srcHash ?? null;
   }, [activeSegmentId, segmentChangeHint, segments]);
 
-  const { activeMatches, activeTerms } = useReferenceLookupController({
+  const { activeMatches, activeTerms, referenceLoading } = useReferenceLookupController({
     enabled: activeTab === 'tm',
     activeSegmentId,
     activeSegmentSourceHash,
@@ -488,6 +488,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     activeSegmentId,
     activeMatches,
     activeTerms,
+    referenceLoading,
     segmentSaveErrors,
     setActiveSegmentId,
     loading,

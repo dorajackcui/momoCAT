@@ -62,6 +62,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
     activeSegmentId,
     activeMatches,
     activeTerms,
+    referenceLoading,
     segmentSaveErrors,
     aiTranslatingSegmentIds,
     loading,
@@ -370,6 +371,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
           onStartResize={handleStartSidebarResize}
           activeMatches={activeMatches}
           activeTerms={activeTerms}
+          referenceLoading={referenceLoading}
           onApplyMatch={handleApplyMatch}
           onApplyTerm={handleApplyTerm}
           projectId={projectId || 0}

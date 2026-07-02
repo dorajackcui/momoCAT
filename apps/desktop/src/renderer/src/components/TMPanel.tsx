@@ -28,6 +28,7 @@ export type TMMatch = StandardTMMatch | ConcordanceTMMatch;
 interface TMPanelProps {
   matches: TMMatch[];
   termMatches: TBMatch[];
+  loading?: boolean;
   onApply: (tokens: Token[]) => void;
   onApplyTerm: (term: string) => void;
 }
@@ -79,7 +80,7 @@ export function buildCombinedMatches(
   });
 }
 
-export const TMPanel: React.FC<TMPanelProps> = ({ matches, termMatches, onApply, onApplyTerm }) => {
+export const TMPanel: React.FC<TMPanelProps> = ({ matches, termMatches, loading, onApply, onApplyTerm }) => {
   const TM_RENDER_LIMIT = 5;
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -96,6 +97,15 @@ export const TMPanel: React.FC<TMPanelProps> = ({ matches, termMatches, onApply,
     () => buildCombinedMatches(matches, termMatches, TM_RENDER_LIMIT),
     [matches, termMatches],
   );
+
+  if (loading) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-text-faint p-6 text-center">
+        <div className="mb-2 text-2xl">🔍</div>
+        <p className="text-xs">Searching...</p>
+      </div>
+    );
+  }
 
   if (combined.length === 0) {
     return (
