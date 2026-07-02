@@ -125,8 +125,11 @@ describe('createDesktopApi smoke', () => {
     const unsubscribeAppUpdate = api.onAppUpdateStatus(callback);
     const listeners = listenerStore.get(IPC_CHANNELS.events.appProgress) ?? [];
     const appUpdateListeners = listenerStore.get(IPC_CHANNELS.events.appUpdateStatus) ?? [];
+    const referenceDataListeners =
+      listenerStore.get(IPC_CHANNELS.events.referenceDataChanged) ?? [];
     expect(listeners).toHaveLength(1);
     expect(appUpdateListeners).toHaveLength(1);
+    expect(referenceDataListeners).toHaveLength(0);
 
     listeners[0]({} as IpcRendererEvent, { type: 'x', current: 1, total: 1 });
     appUpdateListeners[0]({} as IpcRendererEvent, {
@@ -138,5 +141,26 @@ describe('createDesktopApi smoke', () => {
     unsubscribe();
     unsubscribeAppUpdate();
     expect(removeListener).toHaveBeenCalledTimes(2);
+
+    const onReferenceDataChanged = vi.fn();
+    const unsubscribeReferenceDataChanged =
+      api.onReferenceDataChanged(onReferenceDataChanged);
+    const referenceDataChangedListeners =
+      listenerStore.get(IPC_CHANNELS.events.referenceDataChanged) ?? [];
+    expect(referenceDataChangedListeners).toHaveLength(1);
+
+    referenceDataChangedListeners[0]({} as IpcRendererEvent, {
+      projectId: 7,
+      kind: 'tm',
+      reason: 'tm-mounted',
+    });
+    expect(onReferenceDataChanged).toHaveBeenCalledWith({
+      projectId: 7,
+      kind: 'tm',
+      reason: 'tm-mounted',
+    });
+
+    unsubscribeReferenceDataChanged();
+    expect(listenerStore.get(IPC_CHANNELS.events.referenceDataChanged) ?? []).toHaveLength(0);
   });
 });

@@ -83,6 +83,7 @@ export const IPC_CHANNELS = {
     appProgress: 'app-progress',
     jobProgress: 'job-progress',
     appUpdateStatus: 'app-update-status',
+    referenceDataChanged: 'reference-data-changed',
   },
 } as const;
 

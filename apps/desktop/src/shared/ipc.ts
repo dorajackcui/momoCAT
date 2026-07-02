@@ -344,6 +344,24 @@ export interface AppUpdateStatusEvent {
   percent?: number;
 }
 
+export interface ReferenceDataChangedEvent {
+  projectId: number | null;
+  kind: 'tm' | 'tb' | 'all';
+  reason:
+    | 'tm-created'
+    | 'tm-deleted'
+    | 'tm-mounted'
+    | 'tm-unmounted'
+    | 'tm-imported'
+    | 'tm-committed'
+    | 'tm-batch-matched'
+    | 'tb-created'
+    | 'tb-deleted'
+    | 'tb-mounted'
+    | 'tb-unmounted'
+    | 'tb-imported';
+}
+
 export interface DialogFileFilter {
   name: string;
   extensions: string[];
@@ -461,4 +479,5 @@ export interface DesktopApi {
   onProgress: (callback: (data: AppProgressEvent) => void) => () => void;
   onJobProgress: (callback: (progress: JobProgressEvent) => void) => () => void;
   onAppUpdateStatus: (callback: (status: AppUpdateStatusEvent) => void) => () => void;
+  onReferenceDataChanged: (callback: (event: ReferenceDataChangedEvent) => void) => () => void;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Segment, TBMatch } from '@cat/core/models';
-import type { TMMatch } from '../../../../shared/ipc';
+import type { ReferenceDataChangedEvent, TMMatch } from '../../../../shared/ipc';
 
 export const REFERENCE_LOOKUP_DEBOUNCE_MS = 350;
 
@@ -20,6 +20,9 @@ export interface UseReferenceLookupControllerParams {
   activeSegmentSourceHash: string | null;
   projectId: number | null;
   segments: readonly Segment[];
+  subscribeToReferenceDataChanged?: (
+    callback: (event: ReferenceDataChangedEvent) => void,
+  ) => () => void;
   // The scheduler captures fetchers on first render; callers overriding this
   // should pass a stable object.
   fetchers?: ReferenceLookupFetchers;
@@ -44,6 +47,22 @@ const defaultReferenceLookupFetchers: ReferenceLookupFetchers = {
     return (await getApiClient()).getTermMatches(projectId, segment);
   },
 };
+
+function subscribeToDefaultReferenceDataChanged(
+  callback: (event: ReferenceDataChangedEvent) => void,
+): () => void {
+  let disposed = false;
+  let unsubscribe: (() => void) | null = null;
+  void getApiClient().then((client) => {
+    if (disposed) return;
+    unsubscribe = client.onReferenceDataChanged(callback);
+  });
+
+  return () => {
+    disposed = true;
+    unsubscribe?.();
+  };
+}
 
 export function createReferenceLookupControllerLoader(fetchers: ReferenceLookupFetchers) {
   const completed = new Map<string, ReferenceLookupResult>();
@@ -137,7 +156,13 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
   const debounceMs = options.debounceMs ?? REFERENCE_LOOKUP_DEBOUNCE_MS;
   let currentKey: string | null = null;
   let runningKey: string | null = null;
-  let queuedLatest: { projectId: number; segment: Segment; key: string } | null = null;
+  let queuedLatest: {
+    projectId: number;
+    segment: Segment;
+    key: string;
+    force: boolean;
+    invalidationEpoch: number;
+  } | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let invalidationEpoch = 0;
   let latestState: ReferenceLookupSchedulerState = {
@@ -151,14 +176,25 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
     timer = null;
   };
 
-  const startLookup = async (projectId: number, segment: Segment, key: string): Promise<void> => {
+  const startLookup = async (
+    projectId: number,
+    segment: Segment,
+    key: string,
+    force = false,
+    lookupInvalidationEpoch = invalidationEpoch,
+  ): Promise<void> => {
     if (runningKey) {
-      queuedLatest = { projectId, segment, key };
+      queuedLatest = {
+        projectId,
+        segment,
+        key,
+        force,
+        invalidationEpoch: lookupInvalidationEpoch,
+      };
       return;
     }
 
     runningKey = key;
-    const lookupInvalidationEpoch = invalidationEpoch;
     try {
       const result = await loader.load({ projectId, segment });
       if (
@@ -172,13 +208,27 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
       runningKey = null;
       const next = queuedLatest;
       queuedLatest = null;
-      if (next && next.key !== key && currentKey === next.key && latestState.enabled) {
-        void startLookup(next.projectId, next.segment, next.key);
+      if (
+        next &&
+        currentKey === next.key &&
+        latestState.enabled &&
+        (next.force || next.key !== key)
+      ) {
+        void startLookup(
+          next.projectId,
+          next.segment,
+          next.key,
+          next.force,
+          next.invalidationEpoch,
+        );
       }
     }
   };
 
-  const schedule = (nextState: ReferenceLookupSchedulerState): void => {
+  const schedule = (
+    nextState: ReferenceLookupSchedulerState,
+    optionsOverride?: { force?: boolean },
+  ): void => {
     const { enabled, projectId, segment } = nextState;
     if (!enabled || projectId === null || !segment) {
       currentKey = null;
@@ -202,7 +252,13 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
     clearTimer();
     timer = setTimeout(() => {
       timer = null;
-      void startLookup(projectId, segment, key);
+      void startLookup(
+        projectId,
+        segment,
+        key,
+        optionsOverride?.force ?? false,
+        invalidationEpoch,
+      );
     }, debounceMs);
   };
 
@@ -213,8 +269,15 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
     },
     invalidate(projectId: number | null): void {
       loader.invalidateProject(projectId);
+      const invalidatesCurrent =
+        projectId === null ||
+        (latestState.projectId !== null && projectId === latestState.projectId);
+      if (!invalidatesCurrent) {
+        return;
+      }
+
       invalidationEpoch += 1;
-      // Task 3 extends this to reschedule current lookup.
+      schedule(latestState, { force: true });
     },
     dispose(): void {
       clearTimer();
@@ -230,6 +293,7 @@ export function useReferenceLookupController({
   activeSegmentSourceHash,
   projectId,
   segments,
+  subscribeToReferenceDataChanged = subscribeToDefaultReferenceDataChanged,
   fetchers = defaultReferenceLookupFetchers,
 }: UseReferenceLookupControllerParams): {
   activeMatches: TMMatch[];
@@ -261,6 +325,13 @@ export function useReferenceLookupController({
       : null;
     schedulerRef.current?.update({ enabled, projectId, segment: activeSegment });
   }, [enabled, projectId, activeSegmentId, activeSegmentSourceHash]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToReferenceDataChanged((event) => {
+      schedulerRef.current?.invalidate(event.projectId);
+    });
+    return unsubscribe;
+  }, [subscribeToReferenceDataChanged]);
 
   useEffect(() => () => schedulerRef.current?.dispose(), []);
 

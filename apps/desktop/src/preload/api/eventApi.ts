@@ -7,7 +7,8 @@ type EventApiKeys =
   | 'onSegmentsUpdatedBatch'
   | 'onProgress'
   | 'onJobProgress'
-  | 'onAppUpdateStatus';
+  | 'onAppUpdateStatus'
+  | 'onReferenceDataChanged';
 
 export function createEventApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<EventApiKeys> {
   return {
@@ -51,6 +52,15 @@ export function createEventApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<Ev
       };
       ipcRenderer.on(IPC_CHANNELS.events.appUpdateStatus, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.events.appUpdateStatus, listener);
+    },
+    onReferenceDataChanged: (callback) => {
+      const listener = (_event: IpcRendererEvent, ...args: unknown[]) => {
+        const [event] = args as [Parameters<typeof callback>[0]];
+        callback(event);
+      };
+      ipcRenderer.on(IPC_CHANNELS.events.referenceDataChanged, listener);
+      return () =>
+        ipcRenderer.removeListener(IPC_CHANNELS.events.referenceDataChanged, listener);
     },
   };
 }
