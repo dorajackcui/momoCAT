@@ -1734,7 +1734,7 @@ describe("CATDatabase", () => {
       expect(results.map((row) => row.srcTerm)).toEqual(["领奖台"]);
     });
 
-    it("does not use EN/general single-word fallback for CJK source projects", () => {
+    it("preserves CJK legacy combined FTS recall for Latin single fragments", () => {
       const projectId = db.createProject("TB Search CJK General Guard", "zh-CN", "fr-FR");
       const tbId = db.createTermBase("CJK General Guard TB", "zh-CN", "fr-FR");
       db.mountTermBaseToProject(projectId, tbId, 10);
@@ -1751,7 +1751,7 @@ describe("CATDatabase", () => {
         limit: 10,
       });
 
-      expect(results.map((row) => row.srcTerm)).not.toContain("midnight sun");
+      expect(results.map((row) => row.srcTerm)).toContain("midnight sun");
     });
 
     it("should keep English exact candidates ahead of FTS when exact lookup fills the candidate limit", () => {

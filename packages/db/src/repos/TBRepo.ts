@@ -140,7 +140,7 @@ export class TBRepo {
     const useEnglishSingleFragmentFallback = sourceProfile === 'en';
     const phraseFragments = useEnglishSingleFragmentFallback
       ? searchPlan.ftsFragments.filter((f) => f.includes(' '))
-      : this.filterCjkFtsFragments(searchPlan.ftsFragments, sourceProfile);
+      : searchPlan.ftsFragments;
     const singleFragments = useEnglishSingleFragmentFallback
       ? searchPlan.ftsFragments.filter((f) => !f.includes(' '))
       : [];
@@ -423,11 +423,6 @@ export class TBRepo {
     if (!CJK_LIKE_RE.test(sourceText)) return false;
     if (!srcLang) return true;
     return resolveSourceRecallProfile(srcLang) === 'cjk';
-  }
-
-  private filterCjkFtsFragments(fragments: string[], sourceProfile: string): string[] {
-    if (sourceProfile !== 'cjk') return fragments;
-    return fragments.filter((fragment) => fragment.includes(' ') || CJK_LIKE_RE.test(fragment));
   }
 
   private sortSearchCandidates(rows: ProjectTermEntryRecord[]): ProjectTermEntryRecord[] {
