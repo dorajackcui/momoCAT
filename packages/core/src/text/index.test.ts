@@ -637,6 +637,77 @@ describe('English Term Recognizer', () => {
     ).toEqual(['api-key']);
   });
 
+  it('rejects disallowed punctuation between phrase tokens', () => {
+    const apiKeyRecognizer = buildEnglishTermRecognizer([
+      {
+        id: 'api-key',
+        srcTerm: 'API key',
+      },
+    ]);
+    const skyRedRecognizer = buildEnglishTermRecognizer([
+      {
+        id: 'sky-red',
+        srcTerm: 'Sky Red',
+      },
+    ]);
+    const usRecognizer = buildEnglishTermRecognizer([
+      {
+        id: 'us',
+        srcTerm: 'US',
+      },
+    ]);
+
+    expect(apiKeyRecognizer.scan('API/key', { hardBoundaryOffsets: [] })).toEqual([]);
+    expect(apiKeyRecognizer.scan('API: key', { hardBoundaryOffsets: [] })).toEqual([]);
+    expect(apiKeyRecognizer.scan('API. key', { hardBoundaryOffsets: [] })).toEqual([]);
+    expect(skyRedRecognizer.scan('Sky, Red', { hardBoundaryOffsets: [] })).toEqual([]);
+    expect(
+      usRecognizer.scan('U.S.', {
+        hardBoundaryOffsets: [],
+      }).map((match) => [match.entry.id, match.variantKind, match.start, match.end]),
+    ).toEqual([['us', 'acronym', 0, 3]]);
+    expect(usRecognizer.scan('U-S', { hardBoundaryOffsets: [] })).toEqual([]);
+  });
+
+  it('keeps boundary-adjacent single terms and original offsets', () => {
+    const recognizer = buildEnglishTermRecognizer([
+      {
+        id: 'api',
+        srcTerm: 'API',
+      },
+      {
+        id: 'key',
+        srcTerm: 'key',
+      },
+    ]);
+
+    expect(
+      recognizer.scan('API key', {
+        hardBoundaryOffsets: [3],
+      }).map((match) => ({
+        id: match.entry.id,
+        start: match.start,
+        end: match.end,
+      })),
+    ).toEqual([
+      { id: 'api', start: 0, end: 3 },
+      { id: 'key', start: 4, end: 7 },
+    ]);
+
+    expect(
+      buildEnglishTermRecognizer([
+        {
+          id: 'api',
+          srcTerm: 'API',
+        },
+      ])
+        .scan('ＡＰＩ key', {
+          hardBoundaryOffsets: [],
+        })
+        .map((match) => ({ start: match.start, end: match.end })),
+    ).toEqual([{ start: 0, end: 3 }]);
+  });
+
   it('recognizes leading article add and remove variants', () => {
     const recognizer = buildEnglishTermRecognizer([
       {

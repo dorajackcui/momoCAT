@@ -29,6 +29,7 @@ export interface EnglishTermRecognizerScanOptions {
 interface IndexedVariant<T extends EnglishTermRecognizerEntry> {
   entry: T;
   key: string;
+  tokens: string[];
   tokenCount: number;
   variantKind: EnglishTermVariantKind;
   variantText: string;
@@ -50,6 +51,7 @@ const WORD_RE = /[\p{L}\p{N}]+/gu;
 const RAW_TERM_TOKEN_RE = /[A-Z](?:\.[A-Z]){1,4}\.?|[\p{L}\p{N}]+/gu;
 const LETTER_RE = /\p{L}/u;
 const HYPHEN_RE = /[-\u2010-\u2015]/u;
+const HYPHEN_SEPARATOR_RE = /^[\s\u2010-\u2015-]+$/u;
 const ENGLISH_ARTICLES = new Set(['the', 'a', 'an']);
 const INVARIANT_S_WORDS = new Set(['does', 'news', 'series', 'species']);
 
@@ -66,6 +68,7 @@ export class EnglishTermRecognizer<T extends EnglishTermRecognizerEntry> {
         const indexed: IndexedVariant<T> = {
           entry,
           key,
+          tokens: variant.tokens,
           tokenCount: variant.tokens.length,
           variantKind: variant.kind,
           variantText: variant.text,
@@ -108,6 +111,10 @@ export class EnglishTermRecognizer<T extends EnglishTermRecognizerEntry> {
         if (!variants) continue;
 
         for (const variant of variants) {
+          if (!hasAllowedSeparators(text, sourceTokens, startIndex, endIndex, variant)) {
+            continue;
+          }
+
           matches.push({
             entry: variant.entry,
             variantKind: resolveMatchVariantKind(variant, text.slice(start, end)),
@@ -260,6 +267,69 @@ function resolveMatchVariantKind<T extends EnglishTermRecognizerEntry>(
 
 function crossesHardBoundary(start: number, end: number, hardBoundaryOffsets: number[]): boolean {
   return hardBoundaryOffsets.some((offset) => start < offset && offset < end);
+}
+
+function hasAllowedSeparators<T extends EnglishTermRecognizerEntry>(
+  text: string,
+  sourceTokens: SourceToken[],
+  startIndex: number,
+  endIndex: number,
+  variant: IndexedVariant<T>,
+): boolean {
+  for (let index = startIndex + 1; index <= endIndex; index += 1) {
+    const separator = text.slice(sourceTokens[index - 1].end, sourceTokens[index].start);
+    const variantTokenIndex = index - startIndex;
+    if (!isAllowedSeparator(separator, variant.tokens, variantTokenIndex)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function isAllowedSeparator(
+  separator: string,
+  variantTokens: string[],
+  variantTokenIndex: number,
+): boolean {
+  if (/^\s*$/u.test(separator)) return true;
+  if (
+    HYPHEN_RE.test(separator) &&
+    HYPHEN_SEPARATOR_RE.test(separator) &&
+    !isAcronymLetterBoundary(variantTokens, variantTokenIndex)
+  ) {
+    return true;
+  }
+  return isDottedAcronymSeparator(separator, variantTokens, variantTokenIndex);
+}
+
+function isDottedAcronymSeparator(
+  separator: string,
+  variantTokens: string[],
+  variantTokenIndex: number,
+): boolean {
+  const previous = variantTokens[variantTokenIndex - 1];
+  const current = variantTokens[variantTokenIndex];
+  if (!isSingleAcronymLetter(previous)) return false;
+
+  if (separator === '.' && isSingleAcronymLetter(current)) return true;
+
+  if (/^\.\s+$/u.test(separator) && !isSingleAcronymLetter(current)) {
+    return variantTokenIndex >= 2 && isSingleAcronymLetter(variantTokens[variantTokenIndex - 2]);
+  }
+
+  return false;
+}
+
+function isSingleAcronymLetter(value: string | undefined): boolean {
+  return Boolean(value && /^[a-z]$/u.test(value));
+}
+
+function isAcronymLetterBoundary(variantTokens: string[], variantTokenIndex: number): boolean {
+  return (
+    isSingleAcronymLetter(variantTokens[variantTokenIndex - 1]) &&
+    isSingleAcronymLetter(variantTokens[variantTokenIndex])
+  );
 }
 
 function suppressNestedSameEntryMatches<T extends EnglishTermRecognizerEntry>(
