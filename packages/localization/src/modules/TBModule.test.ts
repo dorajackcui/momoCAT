@@ -222,7 +222,14 @@ describe('TBModule', () => {
 
         const artifact = await module.inspect(projectId, segment);
 
-        expect(artifact.rawMatches.map((match) => match.srcTerm)).toContain('The Day of Birth');
+        expect(artifact.rawMatches).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              srcTerm: 'The Day of Birth',
+              tgtTerm: 'Premier souffle',
+            }),
+          ]),
+        );
         expect(artifact.selectedReferences).toEqual(
           expect.arrayContaining([
             {
