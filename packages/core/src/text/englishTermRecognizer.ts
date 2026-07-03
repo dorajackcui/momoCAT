@@ -160,8 +160,6 @@ function addArticleVariants(
   variants: Map<string, TermVariant>,
   canonicalTokens: string[],
 ): void {
-  if (canonicalTokens.length < 2) return;
-
   const [first, ...rest] = canonicalTokens;
   if (ENGLISH_ARTICLES.has(first)) {
     addVariant(variants, rest, 'article');

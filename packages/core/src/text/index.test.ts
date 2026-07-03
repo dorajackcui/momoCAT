@@ -637,6 +637,30 @@ describe('English Term Recognizer', () => {
     ).toEqual(['api-key']);
   });
 
+  it('recognizes leading article add and remove variants', () => {
+    const recognizer = buildEnglishTermRecognizer([
+      {
+        id: 'beginning',
+        srcTerm: 'Beginning',
+      },
+      {
+        id: 'day',
+        srcTerm: 'The Day of Birth',
+      },
+    ]);
+
+    expect(
+      recognizer.scan('In the beginning there was light.', {
+        hardBoundaryOffsets: [],
+      }).find((match) => match.entry.id === 'beginning')?.variantKind,
+    ).toBe('article');
+    expect(
+      recognizer.scan('Day of Birth', {
+        hardBoundaryOffsets: [],
+      }).find((match) => match.entry.id === 'day')?.variantKind,
+    ).toBe('article');
+  });
+
   it('keeps recognizer ordering deterministic', () => {
     const recognizer = buildEnglishTermRecognizer([
       {
