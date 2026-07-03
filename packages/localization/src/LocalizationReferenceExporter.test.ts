@@ -5,8 +5,15 @@ import type { TMEntry } from '@cat/core/models';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import { CATDatabase } from '../../db/src';
 import * as XLSX from 'xlsx';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { LocalizationReferenceExporter } from './LocalizationReferenceExporter';
+import { SqliteProjectRepository } from './adapters/sqlite/SqliteProjectRepository';
+import { SqliteTBRepository } from './adapters/sqlite/SqliteTBRepository';
+import { SqliteTMRepository } from './adapters/sqlite/SqliteTMRepository';
+import { TBModule } from './modules/TBModule';
+import { TMModule } from './modules/TMModule';
+import { TBService } from './services/TBService';
+import { TMService } from './services/TMService';
 import { createTransientSegment } from './transientSegment';
 
 describe('LocalizationReferenceExporter.exportReferencesForMtFile', () => {
@@ -61,6 +68,70 @@ describe('LocalizationReferenceExporter.exportReferencesForMtFile', () => {
       expect(rows[2][3]).not.toContain('world -> monde');
       expect(rows[0]).not.toContain('_mt_user_prompt');
       expect(rows[0]).not.toContain('_inspect_json_ref');
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('runs TM/TB lookups once per unique source and reuses results for duplicate rows', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-reference-export-dedupe-'));
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Reference Export Dedupe', 'en', 'fr');
+      mountDistinctReferenceData(db, projectId);
+      const inputPath = writeInputWorkbook(root, [
+        ['source', 'target'],
+        ['Hello world', ''],
+        ['Hello world', 'Existing target'],
+        ['Preferences', ''],
+      ]);
+      const outputPath = join(root, 'references.xlsx');
+
+      const projectRepo = new SqliteProjectRepository(db);
+      const tmRepo = new SqliteTMRepository(db);
+      const tbRepo = new SqliteTBRepository(db);
+      const tmService = new TMService(projectRepo, tmRepo);
+      const tbService = new TBService(projectRepo, tbRepo);
+      const tmFindMatches = vi.fn(tmService.findMatches.bind(tmService));
+      const tbFindMatches = vi.fn(tbService.findMatches.bind(tbService));
+      const exporter = new LocalizationReferenceExporter(db, {
+        tmModule: new TMModule({ tmRepo, tmService: { findMatches: tmFindMatches } }),
+        tbModule: new TBModule({ tbRepo, tbService: { findMatches: tbFindMatches } }),
+      });
+
+      const progress: Array<[number, number]> = [];
+      const result = await exporter.exportReferencesForMtFile({
+        projectId,
+        inputPath,
+        outputPath,
+        onProgress: (current, total) => progress.push([current, total]),
+      });
+
+      expect(result.summary).toEqual({ total: 3, ready: 3, error: 0 });
+      expect(tmFindMatches).toHaveBeenCalledTimes(2);
+      expect(tbFindMatches).toHaveBeenCalledTimes(2);
+      expect(progress[0]).toEqual([0, 3]);
+      expect(progress[progress.length - 1]).toEqual([3, 3]);
+
+      const written = XLSX.read(await readFile(outputPath), { type: 'buffer' });
+      const rows = XLSX.utils.sheet_to_json(written.Sheets.Sheet1, {
+        header: 1,
+        defval: '',
+      }) as string[][];
+      expect(rows[1][2]).toContain('Bonjour le monde');
+      expect(rows[2][2]).toBe(rows[1][2]);
+      expect(rows[2][3]).toBe(rows[1][3]);
+      expect(rows[3][2]).toContain('Reglages');
+
+      // Duplicate rows keep their own unit identity on the shared artifacts.
+      for (const unit of result.units) {
+        expect(unit.tm.unitId).toBe(unit.unit.unitId);
+        expect(unit.tb.unitId).toBe(unit.unit.unitId);
+        expect(unit.tm.segmentId).toBe(unit.transientSegment.segmentId);
+        expect(unit.tb.segmentId).toBe(unit.transientSegment.segmentId);
+      }
+      expect(new Set(result.units.map((unit) => unit.unit.unitId)).size).toBe(3);
     } finally {
       db.close();
       await rm(root, { recursive: true, force: true });

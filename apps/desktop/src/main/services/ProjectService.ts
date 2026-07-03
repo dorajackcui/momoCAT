@@ -39,6 +39,7 @@ import { SqliteTMRepository } from './adapters/SqliteTMRepository';
 import { SqliteTBRepository } from './adapters/SqliteTBRepository';
 import { SqliteSettingsRepository } from './adapters/SqliteSettingsRepository';
 import { SqliteTransactionManager } from './adapters/SqliteTransactionManager';
+import { ReferenceExportWorkerRunner } from './referenceExport/ReferenceExportWorkerRunner';
 import { ProxySettingsManager } from './proxy/ProxySettingsManager';
 import type {
   AIBatchMode,
@@ -136,7 +137,7 @@ export class ProjectService {
         projectsDir,
         deps.inspectFileRunner ??
           createInspectFileRunner(db, dbPath, aiRuntimeConfigProvider, aiTransport),
-        deps.referenceExportRunner ?? createReferenceExportRunner(db),
+        deps.referenceExportRunner ?? createReferenceExportRunner(db, dbPath),
       );
     this.tmModule =
       deps.tmModule ??
@@ -263,7 +264,13 @@ export class ProjectService {
   }
 
   public onProgress(
-    callback: (data: { type: string; current: number; total: number; message?: string; scope?: string }) => void,
+    callback: (data: {
+      type: string;
+      current: number;
+      total: number;
+      message?: string;
+      scope?: string;
+    }) => void,
   ) {
     this.progressCallbacks.push(callback);
     return () => {
@@ -271,7 +278,13 @@ export class ProjectService {
     };
   }
 
-  private emitProgress(type: string, current: number, total: number, message?: string, scope?: string) {
+  private emitProgress(
+    type: string,
+    current: number,
+    total: number,
+    message?: string,
+    scope?: string,
+  ) {
     this.progressCallbacks.forEach((cb) => cb({ type, current, total, message, scope }));
   }
 
@@ -506,7 +519,11 @@ function createInspectFileRunner(
   return (input) => inspector.inspectFile(input);
 }
 
-function createReferenceExportRunner(db: CATDatabase): ReferenceExportRunner {
-  const exporter = new LocalizationReferenceExporter(db);
-  return (input) => exporter.exportReferencesForMtFile(input);
+function createReferenceExportRunner(db: CATDatabase, dbPath: string): ReferenceExportRunner {
+  const workerRunner = new ReferenceExportWorkerRunner({
+    dbPath,
+    fallbackRunner: (input) =>
+      new LocalizationReferenceExporter(db).exportReferencesForMtFile(input),
+  });
+  return (input) => workerRunner.run(input);
 }

@@ -40,7 +40,7 @@ import {
 export type InspectFileRunner = (input: InspectFileInput) => Promise<InspectFileResult>;
 export type ReferenceExportRunner = (
   input: ExportReferencesForMtInput,
-) => Promise<ExportReferencesForMtResult>;
+) => Promise<Pick<ExportReferencesForMtResult, 'outputPath' | 'summary'>>;
 
 export class ProjectFileModule {
   private static readonly SEGMENT_PAGE_SIZE = 2000;

@@ -177,29 +177,88 @@ export class LocalizationReferenceExporter {
     const emitProgress = createProgressEmitter(options.onProgress, rows.length);
     let completed = 0;
 
+    // Rows sharing a srcHash share TM/TB lookup results (same key the editor
+    // reference cache uses), so the expensive queries run once per unique source.
+    const groups = new Map<string, ReferenceRowWithSegment[]>();
+    for (const rowWithSegment of rows) {
+      const group = groups.get(rowWithSegment.segment.srcHash);
+      if (group) {
+        group.push(rowWithSegment);
+      } else {
+        groups.set(rowWithSegment.segment.srcHash, [rowWithSegment]);
+      }
+    }
+    const groupList = [...groups.values()];
+
     await emitProgress(0);
-    const results = await runBounded(
-      rows,
-      async (rowWithSegment, unitIndex) => {
-        const unit = await this.resolveRowReferences(
-          project,
-          rowWithSegment,
-          unitIndex,
-          options.maxCellChars,
-        );
-        completed += 1;
+    const scheduled = await runBounded(
+      groupList,
+      async (groupRows) => {
+        const units = await this.resolveGroupReferences(project, groupRows, options.maxCellChars);
+        completed += groupRows.length;
         await emitProgress(completed);
-        return unit;
+        return units;
       },
       { maxConcurrency: options.maxConcurrency },
     );
 
-    return results.map((result, index) => {
-      if (result.status === 'fulfilled') return result.value;
+    const results = new Array<ReferenceExportUnitResult>(rows.length);
+    scheduled.forEach((result, groupIndex) => {
+      const groupRows = groupList[groupIndex];
+      if (result.status === 'fulfilled') {
+        result.value.forEach((unit, indexInGroup) => {
+          results[groupRows[indexInGroup].sourceIndex] = unit;
+        });
+        return;
+      }
 
-      const { row, segment } = rows[index];
-      const tm = emptyTMArtifact(row.unitId, segment.segmentId);
-      const tb = emptyTBArtifact(row.unitId, segment.segmentId);
+      for (const { row, segment, sourceIndex } of groupRows) {
+        const tm = emptyTMArtifact(row.unitId, segment.segmentId);
+        const tb = emptyTBArtifact(row.unitId, segment.segmentId);
+        results[sourceIndex] = {
+          unit: row,
+          transientSegment: segmentMetadata(segment),
+          tm,
+          tb,
+          xlsx: buildReferenceXlsxFields({
+            unit: { tm, tb },
+            unitIndex: sourceIndex,
+            maxCellChars: options.maxCellChars,
+          }),
+          status: 'error',
+          error: errorMessage(result.reason),
+        };
+      }
+    });
+
+    return results;
+  }
+
+  private async resolveGroupReferences(
+    project: ProjectRecord,
+    groupRows: ReferenceRowWithSegment[],
+    maxCellChars: number,
+  ): Promise<ReferenceExportUnitResult[]> {
+    const leadSegment = groupRows[0].segment;
+    const [tmResult, tbResult] = await Promise.allSettled([
+      this.tmModule.inspect(project.id, leadSegment),
+      this.tbModule.inspect(project.id, leadSegment),
+    ]);
+    const referenceErrors = [
+      stageError('tm', tmResult),
+      stageError('tb', tbResult),
+    ].filter((error): error is string => Boolean(error));
+
+    return groupRows.map(({ row, segment, sourceIndex }) => {
+      const tm =
+        tmResult.status === 'fulfilled'
+          ? { ...tmResult.value, unitId: row.unitId, segmentId: segment.segmentId }
+          : emptyTMArtifact(row.unitId, segment.segmentId);
+      const tb =
+        tbResult.status === 'fulfilled'
+          ? { ...tbResult.value, unitId: row.unitId, segmentId: segment.segmentId }
+          : emptyTBArtifact(row.unitId, segment.segmentId);
+
       return {
         unit: row,
         transientSegment: segmentMetadata(segment),
@@ -207,52 +266,13 @@ export class LocalizationReferenceExporter {
         tb,
         xlsx: buildReferenceXlsxFields({
           unit: { tm, tb },
-          unitIndex: index,
-          maxCellChars: options.maxCellChars,
+          unitIndex: sourceIndex,
+          maxCellChars,
         }),
-        status: 'error',
-        error: errorMessage(result.reason),
+        status: referenceErrors.length > 0 ? 'error' : 'ready',
+        error: referenceErrors.length > 0 ? referenceErrors.join('; ') : undefined,
       };
     });
-  }
-
-  private async resolveRowReferences(
-    project: ProjectRecord,
-    rowWithSegment: ReferenceRowWithSegment,
-    unitIndex: number,
-    maxCellChars: number,
-  ): Promise<ReferenceExportUnitResult> {
-    const { row, segment } = rowWithSegment;
-    const [tmResult, tbResult] = await Promise.allSettled([
-      this.tmModule.inspect(project.id, segment),
-      this.tbModule.inspect(project.id, segment),
-    ]);
-    const tm =
-      tmResult.status === 'fulfilled'
-        ? tmResult.value
-        : emptyTMArtifact(row.unitId, segment.segmentId);
-    const tb =
-      tbResult.status === 'fulfilled'
-        ? tbResult.value
-        : emptyTBArtifact(row.unitId, segment.segmentId);
-    const referenceErrors = [
-      stageError('tm', tmResult),
-      stageError('tb', tbResult),
-    ].filter((error): error is string => Boolean(error));
-
-    return {
-      unit: row,
-      transientSegment: segmentMetadata(segment),
-      tm,
-      tb,
-      xlsx: buildReferenceXlsxFields({
-        unit: { tm, tb },
-        unitIndex,
-        maxCellChars,
-      }),
-      status: referenceErrors.length > 0 ? 'error' : 'ready',
-      error: referenceErrors.length > 0 ? referenceErrors.join('; ') : undefined,
-    };
   }
 }
 
