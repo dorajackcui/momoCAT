@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Token } from '../models';
 import {
+  buildEnglishTermRecognizer,
   buildEnglishTMConcordancePhraseTerms,
   buildEnglishTMRecallTerms,
   buildTermSearchPlan,
@@ -19,6 +20,7 @@ import {
   serializeTokensToSearchTextWithBoundaries,
   serializeTokensToTextOnly,
   suppressNestedTermMatches,
+  type EnglishTermRecognizerEntry,
 } from './index';
 
 describe('Text Utilities', () => {
@@ -564,6 +566,98 @@ describe('Term Matching Helpers', () => {
 
     expect(matches).toHaveLength(2);
     expect(matches.map((match) => match.id)).toEqual(['long', 'partial']);
+  });
+});
+
+describe('English Term Recognizer', () => {
+  const entries: EnglishTermRecognizerEntry[] = [
+    {
+      id: 'account',
+      srcTerm: 'account',
+      priority: 10,
+      usageCount: 0,
+    },
+    {
+      id: 'real-time',
+      srcTerm: 'real time',
+      priority: 10,
+      usageCount: 0,
+    },
+    {
+      id: 'us',
+      srcTerm: 'US',
+      priority: 10,
+      usageCount: 0,
+    },
+    {
+      id: 'day-of-birth',
+      srcTerm: 'The Day of Birth',
+      priority: 10,
+      usageCount: 0,
+    },
+  ];
+
+  it('recognizes canonical and conservative EN variants', () => {
+    const recognizer = buildEnglishTermRecognizer(entries);
+    const matches = recognizer.scan('Accounts use real-time U.S. settings. The Day of Birth opens.', {
+      hardBoundaryOffsets: [],
+    });
+
+    expect(matches.map((match) => match.entry.id)).toEqual(
+      expect.arrayContaining(['account', 'real-time', 'us', 'day-of-birth']),
+    );
+    expect(matches.find((match) => match.entry.id === 'account')?.variantKind).toBe(
+      'inflection',
+    );
+    expect(matches.find((match) => match.entry.id === 'us')?.variantKind).toBe('acronym');
+    expect(matches.find((match) => match.entry.id === 'day-of-birth')?.variantKind).toBe(
+      'canonical',
+    );
+  });
+
+  it('does not recognize terms across hard token boundaries', () => {
+    const recognizer = buildEnglishTermRecognizer([
+      {
+        id: 'api-key',
+        srcTerm: 'API key',
+        priority: 10,
+        usageCount: 0,
+      },
+    ]);
+
+    expect(
+      recognizer.scan('API key', {
+        hardBoundaryOffsets: [3],
+      }),
+    ).toEqual([]);
+    expect(
+      recognizer.scan('API key', {
+        hardBoundaryOffsets: [],
+      }).map((match) => match.entry.id),
+    ).toEqual(['api-key']);
+  });
+
+  it('keeps recognizer ordering deterministic', () => {
+    const recognizer = buildEnglishTermRecognizer([
+      {
+        id: 'short',
+        srcTerm: 'Birth',
+        priority: 10,
+        usageCount: 0,
+      },
+      {
+        id: 'long',
+        srcTerm: 'The Day of Birth',
+        priority: 10,
+        usageCount: 0,
+      },
+    ]);
+
+    expect(
+      recognizer.scan('The Day of Birth', {
+        hardBoundaryOffsets: [],
+      }).map((match) => match.entry.id),
+    ).toEqual(['long', 'short']);
   });
 });
 

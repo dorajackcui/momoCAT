@@ -1,4 +1,12 @@
 export {
+  EnglishTermRecognizer,
+  buildEnglishTermRecognizer,
+  type EnglishTermRecognizerEntry,
+  type EnglishTermRecognizerMatch,
+  type EnglishTermRecognizerScanOptions,
+  type EnglishTermVariantKind,
+} from './englishTermRecognizer';
+export {
   buildTermSearchPlan,
   buildTermSearchFragments,
   findTermPositionsInText,
