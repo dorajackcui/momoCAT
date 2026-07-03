@@ -12,6 +12,7 @@ import {
   hasEnglishTMConcordanceEvidence,
   normalizeTextForTMSimilarity,
   normalizeTermForLookup,
+  resolveSourceRecallProfile,
   resolveTMTextProfile,
   serializeTokensToDisplayText,
   serializeTokensToSearchText,
@@ -270,6 +271,9 @@ describe('Term Matching Helpers', () => {
 
     expect(
       findTermPositionsInTextForLocale('Accounts are synced.', 'account', { locale: 'fr-FR' }),
+    ).toHaveLength(1);
+    expect(
+      findTermPositionsInTextForLocale('Accounts are synced.', 'account', { locale: 'zh-CN' }),
     ).toHaveLength(0);
     expect(
       findTermPositionsInTextForLocale('winter event', 'win', { locale: 'en-US' }),
@@ -307,6 +311,14 @@ describe('Term Matching Helpers', () => {
       expect.arrayContaining(['account', 'real time', 'real-time', 'us']),
     );
     expect(englishPlan.ftsFragments.length).toBeLessThanOrEqual(24);
+
+    const frenchProfilePlan = buildTermSearchPlanForLocale('Accounts use real-time settings.', {
+      locale: 'fr-FR',
+      maxFragments: 12,
+    });
+    expect(frenchProfilePlan.exactLookupTerms).toEqual(
+      expect.arrayContaining(['account', 'real time', 'real-time']),
+    );
 
     expect(
       buildTermSearchPlanForLocale('Cases and bases are supported.', {
@@ -523,14 +535,29 @@ describe('TM Matching Profiles', () => {
   const HEARTBEAT_ZONE_LONG_SOURCE =
     'Gravity is abnormal in the Heartbeat Zone. After Nikki enters, she will become weightless and float in the air, wrapped in a bubble. Moving while floating consumes Drifting Power. If Drifting Power runs out, the bubble will automatically pop. When Drifting Power is full, movement speed increases for a certain time, and moving during this period will not consume Drifting Power. After the acceleration ends, a certain amount of Drifting Power will be deducted.|Four different Music Bubbles float within the Heartbeat Zone: Heartstring Bubbles increase Drifting Power and Heartstrings; Speed Bubbles allow Nikki dash forward quickly for a short distance and grant a small amount of Drifting Power and Heartstrings; Fish Bubbles spit out many Heartstring Bubbles, which can be collected to gain extra Heartstrings; Spike Bubbles stop Nikki in place for a short time and reduce Drifting Power.|Heartstrings can also be obtained by playing with the Bom-Bom Bubble Machine in the Rest Zone or sitting in viewing chairs to enjoy the meteors. Besides the activities that grant Heartstrings, the stage lights can also be controlled to reveal dazzling changes of light and shadow.';
 
-  it('resolves only English locales to the English TM profile', () => {
+  it('resolves project source recall profiles from source locale only', () => {
+    expect(resolveSourceRecallProfile('zh-CN')).toBe('cjk');
+    expect(resolveSourceRecallProfile('ja-JP')).toBe('cjk');
+    expect(resolveSourceRecallProfile('ko')).toBe('cjk');
+    expect(resolveSourceRecallProfile('cmn-Hans-CN')).toBe('cjk');
+    expect(resolveSourceRecallProfile('yue-Hant-HK')).toBe('cjk');
+
+    expect(resolveSourceRecallProfile('en')).toBe('en');
+    expect(resolveSourceRecallProfile('en-US')).toBe('en');
+    expect(resolveSourceRecallProfile('fr-FR')).toBe('en');
+    expect(resolveSourceRecallProfile('de-DE')).toBe('en');
+    expect(resolveSourceRecallProfile(undefined)).toBe('en');
+  });
+
+  it('routes CJK TM to default and non-CJK TM to the English profile', () => {
+    expect(resolveTMTextProfile('zh-CN')).toBe('default');
+    expect(resolveTMTextProfile('ja-JP')).toBe('default');
+    expect(resolveTMTextProfile('ko-KR')).toBe('default');
     expect(resolveTMTextProfile('en')).toBe('english');
     expect(resolveTMTextProfile('en-US')).toBe('english');
     expect(resolveTMTextProfile('EN-gb')).toBe('english');
-    expect(resolveTMTextProfile('zh-CN')).toBe('default');
-    expect(resolveTMTextProfile('ja-JP')).toBe('default');
-    expect(resolveTMTextProfile('fr-FR')).toBe('default');
-    expect(resolveTMTextProfile(undefined)).toBe('default');
+    expect(resolveTMTextProfile('fr-FR')).toBe('english');
+    expect(resolveTMTextProfile(undefined)).toBe('english');
   });
 
   it('keeps default TM similarity normalization equivalent to current behavior', () => {

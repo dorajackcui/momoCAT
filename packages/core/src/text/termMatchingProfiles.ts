@@ -7,6 +7,7 @@ import {
   type TermSearchOptions,
   type TermSearchPlan,
 } from './termMatching';
+import { resolveSourceRecallProfile } from './sourceRecallProfile';
 
 const CJK_LIKE_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 const LETTER_RE = /\p{L}/u;
@@ -38,7 +39,7 @@ const ENGLISH_STOPWORDS = new Set([
 ]);
 
 function isEnglishLocale(locale?: string): boolean {
-  return locale?.toLowerCase() === 'en' || locale?.toLowerCase().startsWith('en-') || false;
+  return resolveSourceRecallProfile(locale) === 'en';
 }
 
 function hasCjkLikeScript(value: string): boolean {

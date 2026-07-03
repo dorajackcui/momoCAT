@@ -1,3 +1,5 @@
+import { resolveSourceRecallProfile } from './sourceRecallProfile';
+
 export type TMTextProfile = 'default' | 'english';
 
 const MAX_ENGLISH_TM_RECALL_TERMS = 32;
@@ -52,9 +54,7 @@ const ENGLISH_PHRASE_BOUNDARY_STOPWORDS = new Set([
 const INVARIANT_S_WORDS = new Set(['does', 'news', 'series', 'species']);
 
 export function resolveTMTextProfile(locale?: string): TMTextProfile {
-  const normalized = locale?.toLowerCase();
-  if (normalized === 'en' || normalized?.startsWith('en-')) return 'english';
-  return 'default';
+  return resolveSourceRecallProfile(locale) === 'en' ? 'english' : 'default';
 }
 
 export function normalizeTextForTMSimilarity(

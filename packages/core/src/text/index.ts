@@ -24,6 +24,11 @@ export {
   type TMTextProfile,
 } from './tmMatchingProfiles';
 export {
+  isCjkSourceRecallProfile,
+  resolveSourceRecallProfile,
+  type SourceRecallProfile,
+} from './sourceRecallProfile';
+export {
   computeMatchKey,
   computeSrcHash,
   serializeTokensToDisplayText,
