@@ -315,10 +315,10 @@ export class TBRepo {
     const seen = new Map<string, ProjectTermEntryRecord>();
 
     for (const fragment of singleFragments) {
-      const rows = this.searchProjectTermEntriesByFts(
+      const rows = this.searchProjectTermEntriesBySingleFragmentFts(
         projectId,
         mountedTbIds,
-        [fragment],
+        fragment,
         perFragmentLimit,
       );
       for (const row of rows) {
@@ -327,6 +327,34 @@ export class TBRepo {
     }
 
     return Array.from(seen.values());
+  }
+
+  private searchProjectTermEntriesBySingleFragmentFts(
+    projectId: number,
+    mountedTbIds: string[],
+    fragment: string,
+    limit: number,
+  ): ProjectTermEntryRecord[] {
+    const placeholders = mountedTbIds.map(() => '?').join(',');
+    const ftsQuery = `"${this.escapeFtsFragment(fragment)}"`;
+
+    const rows = this.db
+      .prepare(`
+      SELECT tb_entries.*, term_bases.name as tbName, project_term_bases.priority
+      FROM tb_fts
+      JOIN tb_entries ON tb_fts.tbEntryId = tb_entries.id
+      JOIN term_bases ON tb_entries.tbId = term_bases.id
+      JOIN project_term_bases ON project_term_bases.tbId = term_bases.id
+      WHERE project_term_bases.projectId = ?
+        AND project_term_bases.isEnabled = 1
+        AND tb_fts.tbId IN (${placeholders})
+        AND tb_fts MATCH ?
+      ORDER BY project_term_bases.priority ASC, length(tb_entries.srcTerm) ASC, tb_entries.usageCount DESC
+      LIMIT ${limit}
+    `)
+      .all(projectId, ...mountedTbIds, ftsQuery) as ProjectTermEntryRecord[];
+
+    return rows.map((row) => ({ ...row }));
   }
 
   private searchProjectTermEntriesByExactSourceNorm(

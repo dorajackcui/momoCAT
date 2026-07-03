@@ -1950,5 +1950,36 @@ describe("CATDatabase", () => {
 
       expect(results.map((row) => row.srcTerm)).toContain("Midnight Sun");
     });
+
+    it("ranks single-fragment FTS candidates before applying the per-fragment limit", () => {
+      const projectId = db.createProject("TB Search Single Fragment SQL Limit", "en-US", "fr-FR");
+      const tbId = db.createTermBase("Single Fragment SQL Limit TB", "en-US", "fr-FR");
+      db.mountTermBaseToProject(projectId, tbId, 10);
+
+      for (let index = 0; index < 12; index += 1) {
+        db.insertTBEntryIfAbsentBySrcTerm({
+          id: `tb-single-fragment-limit-noise-${index}`,
+          tbId,
+          srcLang: "en-US",
+          srcTerm: `Midnight Configuration Archive Variant ${index} Long Name`,
+          tgtTerm: `noise-${index}`,
+        });
+      }
+
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-single-fragment-limit-target",
+        tbId,
+        srcLang: "en-US",
+        srcTerm: "Midnight Sun",
+        tgtTerm: "soleil de minuit",
+      });
+
+      const results = db.searchProjectTermEntries(projectId, "The archive opens at midnight.", {
+        srcLang: "en-US",
+        limit: 5,
+      });
+
+      expect(results.map((row) => row.srcTerm)).toContain("Midnight Sun");
+    });
   });
 });
