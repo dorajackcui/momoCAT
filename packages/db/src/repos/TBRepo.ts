@@ -136,11 +136,11 @@ export class TBRepo {
 
     const limit = Math.max(1, Math.min(options?.limit ?? 200, 500));
 
-    const useEnglishSingleFragmentFallback =
-      resolveSourceRecallProfile(options?.srcLang) === 'en';
+    const sourceProfile = resolveSourceRecallProfile(options?.srcLang);
+    const useEnglishSingleFragmentFallback = sourceProfile === 'en';
     const phraseFragments = useEnglishSingleFragmentFallback
       ? searchPlan.ftsFragments.filter((f) => f.includes(' '))
-      : searchPlan.ftsFragments;
+      : this.filterCjkFtsFragments(searchPlan.ftsFragments, sourceProfile);
     const singleFragments = useEnglishSingleFragmentFallback
       ? searchPlan.ftsFragments.filter((f) => !f.includes(' '))
       : [];
@@ -423,6 +423,11 @@ export class TBRepo {
     if (!CJK_LIKE_RE.test(sourceText)) return false;
     if (!srcLang) return true;
     return resolveSourceRecallProfile(srcLang) === 'cjk';
+  }
+
+  private filterCjkFtsFragments(fragments: string[], sourceProfile: string): string[] {
+    if (sourceProfile !== 'cjk') return fragments;
+    return fragments.filter((fragment) => fragment.includes(' ') || CJK_LIKE_RE.test(fragment));
   }
 
   private sortSearchCandidates(rows: ProjectTermEntryRecord[]): ProjectTermEntryRecord[] {

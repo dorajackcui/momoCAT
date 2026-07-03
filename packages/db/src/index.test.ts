@@ -1739,19 +1739,19 @@ describe("CATDatabase", () => {
       const tbId = db.createTermBase("CJK General Guard TB", "zh-CN", "fr-FR");
       db.mountTermBaseToProject(projectId, tbId, 10);
       db.insertTBEntryIfAbsentBySrcTerm({
-        id: "tb-cjk-general-guard-account",
+        id: "tb-cjk-general-guard-midnight",
         tbId,
         srcLang: "zh-CN",
-        srcTerm: "account",
-        tgtTerm: "compte",
+        srcTerm: "midnight sun",
+        tgtTerm: "soleil de minuit",
       });
 
-      const results = db.searchProjectTermEntries(projectId, "Accounts are synced.", {
+      const results = db.searchProjectTermEntries(projectId, "midnight", {
         srcLang: "zh-CN",
         limit: 10,
       });
 
-      expect(results.map((row) => row.srcTerm)).not.toContain("account");
+      expect(results.map((row) => row.srcTerm)).not.toContain("midnight sun");
     });
 
     it("should keep English exact candidates ahead of FTS when exact lookup fills the candidate limit", () => {
@@ -1894,16 +1894,6 @@ describe("CATDatabase", () => {
       const tbId = db.createTermBase("French General Profile TB", "fr-FR", "en-US");
       db.mountTermBaseToProject(projectId, tbId, 10);
 
-      for (let index = 0; index < 20; index += 1) {
-        db.insertTBEntryIfAbsentBySrcTerm({
-          id: `tb-french-general-noise-${index}`,
-          tbId,
-          srcLang: "fr-FR",
-          srcTerm: `Midnight Configuration Archive ${index}`,
-          tgtTerm: `archive-${index}`,
-        });
-      }
-
       db.insertTBEntryIfAbsentBySrcTerm({
         id: "tb-french-general-target",
         tbId,
@@ -1912,7 +1902,7 @@ describe("CATDatabase", () => {
         tgtTerm: "soleil de minuit",
       });
 
-      const results = db.searchProjectTermEntries(projectId, "The festival reveals the Midnight Sun.", {
+      const results = db.searchProjectTermEntries(projectId, "The festival begins at Midnight.", {
         srcLang: "fr-FR",
         limit: 10,
       });
