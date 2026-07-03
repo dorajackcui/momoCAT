@@ -21,7 +21,9 @@ remain on its current path.
 - Do not change the TB database schema in the first implementation.
 - Do not migrate existing local DB files.
 - Do not replace the CAT stack with an external CAT project.
-- Do not change CJK TB recall behavior except for shared profile routing.
+- Do not change CJK TM recall, scoring, or matching behavior.
+- Do not change CJK TB recall, candidate merge, fallback, or final matching
+  behavior.
 - Do not make full mounted-TB scans the default fallback for every lookup.
 - Do not introduce broad stemming, edit distance, or semantic matching in v1.
 
@@ -44,6 +46,25 @@ This rule has two important consequences:
 - An English project containing Chinese text still uses the EN/general profile.
 - A Chinese, Japanese, or Korean project containing English terms still uses the
   CJK profile.
+
+## CJK Route Invariance
+
+The shared profile resolver is only a routing boundary. It must not change the
+implementation selected for CJK source projects.
+
+For CJK source projects:
+
+- TM continues to use the existing CJK/default TM route, including current
+  recall terms, fuzzy/concordance candidate selection, scoring, diversity, and
+  thresholds.
+- TB continues to use the existing CJK TB route, including current exact lookup,
+  FTS fragments, candidate merge behavior, mounted-TB fallback policy, and final
+  position matching.
+- The EN/general recognizer, EN article handling, EN hyphen/acronym variants,
+  and EN single-word FTS fallback do not run.
+
+Any future CJK TM or TB redesign requires a separate spec. This document is only
+for the EN/general TB route.
 
 ## Current Problem
 
@@ -283,7 +304,8 @@ Repository/service tests:
 
 Regression tests:
 
-- CJK source project behavior remains on the current CJK path,
+- CJK source project TM behavior remains on the current CJK/default TM path,
+- CJK source project TB behavior remains on the current CJK TB path,
 - a non-CJK source such as `fr-FR` uses the EN/general profile by the project
   source-language rule,
 - mounted TB priority and nested suppression remain stable.
@@ -313,7 +335,7 @@ Phase 2:
   lookup.
 - EN long-source terminology is not missed solely because it appears near the
   tail of the segment.
-- CJK TB tests keep passing without adopting EN recognizer behavior.
+- CJK TM and TB tests keep passing without adopting EN recognizer behavior.
 - Existing local DB files continue to open and search without migration.
 - The new EN behavior is isolated behind profile dispatch and can be iterated
   without scattering language checks through repository code.
