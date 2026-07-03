@@ -1735,11 +1735,11 @@ describe("CATDatabase", () => {
     });
 
     it("preserves CJK legacy combined FTS recall for Latin single fragments", () => {
-      const projectId = db.createProject("TB Search CJK General Guard", "zh-CN", "fr-FR");
-      const tbId = db.createTermBase("CJK General Guard TB", "zh-CN", "fr-FR");
+      const projectId = db.createProject("TB Search CJK Legacy FTS", "zh-CN", "fr-FR");
+      const tbId = db.createTermBase("CJK Legacy FTS TB", "zh-CN", "fr-FR");
       db.mountTermBaseToProject(projectId, tbId, 10);
       db.insertTBEntryIfAbsentBySrcTerm({
-        id: "tb-cjk-general-guard-midnight",
+        id: "tb-cjk-legacy-fts-midnight",
         tbId,
         srcLang: "zh-CN",
         srcTerm: "midnight sun",
@@ -1752,6 +1752,37 @@ describe("CATDatabase", () => {
       });
 
       expect(results.map((row) => row.srcTerm)).toContain("midnight sun");
+    });
+
+    it("does not use EN/general per-fragment fallback for CJK source projects", () => {
+      const projectId = db.createProject("TB Search CJK General Guard", "zh-CN", "fr-FR");
+      const tbId = db.createTermBase("CJK General Guard TB", "zh-CN", "fr-FR");
+      db.mountTermBaseToProject(projectId, tbId, 10);
+
+      for (let index = 0; index < 20; index += 1) {
+        db.insertTBEntryIfAbsentBySrcTerm({
+          id: `tb-cjk-general-noise-${index}`,
+          tbId,
+          srcLang: "zh-CN",
+          srcTerm: `Change Details: Configuration Panel Option ${index} Settings`,
+          tgtTerm: `bruit-${index}`,
+        });
+      }
+
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-cjk-general-target",
+        tbId,
+        srcLang: "zh-CN",
+        srcTerm: "midnight sun",
+        tgtTerm: "soleil de minuit",
+      });
+
+      const results = db.searchProjectTermEntries(projectId, "Change Details celebrating midnight ceremonies.", {
+        srcLang: "zh-CN",
+        limit: 10,
+      });
+
+      expect(results.map((row) => row.srcTerm)).not.toContain("midnight sun");
     });
 
     it("should keep English exact candidates ahead of FTS when exact lookup fills the candidate limit", () => {
@@ -1894,6 +1925,16 @@ describe("CATDatabase", () => {
       const tbId = db.createTermBase("French General Profile TB", "fr-FR", "en-US");
       db.mountTermBaseToProject(projectId, tbId, 10);
 
+      for (let index = 0; index < 20; index += 1) {
+        db.insertTBEntryIfAbsentBySrcTerm({
+          id: `tb-french-general-noise-${index}`,
+          tbId,
+          srcLang: "fr-FR",
+          srcTerm: `Change Details: Configuration Panel Option ${index} Settings`,
+          tgtTerm: `archive-${index}`,
+        });
+      }
+
       db.insertTBEntryIfAbsentBySrcTerm({
         id: "tb-french-general-target",
         tbId,
@@ -1902,7 +1943,7 @@ describe("CATDatabase", () => {
         tgtTerm: "soleil de minuit",
       });
 
-      const results = db.searchProjectTermEntries(projectId, "The festival begins at Midnight.", {
+      const results = db.searchProjectTermEntries(projectId, "Change Details celebrating midnight ceremonies.", {
         srcLang: "fr-FR",
         limit: 10,
       });

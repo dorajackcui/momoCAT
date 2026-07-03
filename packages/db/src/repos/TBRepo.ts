@@ -372,7 +372,7 @@ export class TBRepo {
     const merged = new Map<string, ProjectTermEntryRecord>();
     const sortedExact = this.sortSearchCandidates(exactCandidates);
     const sortedPhrase = this.sortSearchCandidates(phraseFtsCandidates);
-    const sortedSingle = this.sortSearchCandidates(singleFtsCandidates);
+    const sortedSingle = this.sortSingleFtsCandidates(singleFtsCandidates);
 
     const singleReserve =
       sortedSingle.length > 0 && limit > 1
@@ -429,6 +429,14 @@ export class TBRepo {
     return rows.slice().sort((a, b) => {
       if (a.priority !== b.priority) return a.priority - b.priority;
       if (b.srcTerm.length !== a.srcTerm.length) return b.srcTerm.length - a.srcTerm.length;
+      return b.usageCount - a.usageCount;
+    });
+  }
+
+  private sortSingleFtsCandidates(rows: ProjectTermEntryRecord[]): ProjectTermEntryRecord[] {
+    return rows.slice().sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      if (a.srcTerm.length !== b.srcTerm.length) return a.srcTerm.length - b.srcTerm.length;
       return b.usageCount - a.usageCount;
     });
   }
