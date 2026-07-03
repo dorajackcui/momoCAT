@@ -232,6 +232,54 @@ describe('TBModule', () => {
     }
   });
 
+  it('suppresses nested EN/general TB positions independently', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('English Nested Position TB Profile', 'en-US', 'fr-FR');
+      const tbId = db.createTermBase('Nested Position Terms', 'en-US', 'fr-FR');
+      db.mountTermBaseToProject(projectId, tbId, 20);
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'term-day',
+        tbId,
+        srcLang: 'en-US',
+        srcTerm: 'Day',
+        tgtTerm: 'jour',
+      });
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'term-day-x',
+        tbId,
+        srcLang: 'en-US',
+        srcTerm: 'Day X',
+        tgtTerm: 'jour X',
+      });
+
+      const segment = createTransientSegment(
+        { id: 'unit-nested-day-position', source: 'The Day. Day X' },
+        0,
+        {
+          projectId,
+          sourceLanguage: 'en-US',
+          targetLanguage: 'fr-FR',
+        },
+      );
+      const projectRepo = new SqliteProjectRepository(db);
+      const tbRepo = new SqliteTBRepository(db);
+      const module = new TBModule({
+        tbRepo,
+        tbService: new TBService(projectRepo, tbRepo),
+      });
+
+      const artifact = await module.inspect(projectId, segment);
+      const dayMatch = artifact.rawMatches.find((match) => match.srcTerm === 'Day');
+      const dayXMatch = artifact.rawMatches.find((match) => match.srcTerm === 'Day X');
+
+      expect(dayMatch?.positions).toEqual([{ start: 0, end: 7 }]);
+      expect(dayXMatch?.positions).toEqual([{ start: 9, end: 14 }]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('applies EN/general TB recall rules to non-CJK source projects', async () => {
     const db = new CATDatabase(':memory:');
     try {

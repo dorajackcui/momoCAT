@@ -36,6 +36,11 @@ interface EnglishTBCandidate {
   variantKind?: EnglishTermVariantKind;
 }
 
+interface EnglishTBPositionCandidate {
+  match: TBMatch;
+  position: { start: number; end: number };
+}
+
 export class TBService {
   private static readonly TB_CANDIDATE_LIMIT = 200;
 
@@ -196,16 +201,14 @@ export class TBService {
         positions: this.uniquePositions(candidate.positions),
       }));
 
-    return suppressNestedTermMatches(this.sortEnglishMatchesForNestedSuppression(matches)).sort(
-      (a, b) => {
-        const candidateA = bySrcNorm.get(a.srcNorm);
-        const candidateB = bySrcNorm.get(b.srcNorm);
-        if (candidateA && candidateB) {
-          return this.compareEnglishCandidates(candidateA, candidateB);
-        }
-        return 0;
-      },
-    );
+    return this.suppressNestedEnglishPositions(matches, bySrcNorm).sort((a, b) => {
+      const candidateA = bySrcNorm.get(a.srcNorm);
+      const candidateB = bySrcNorm.get(b.srcNorm);
+      if (candidateA && candidateB) {
+        return this.compareEnglishCandidates(candidateA, candidateB);
+      }
+      return 0;
+    });
   }
 
   private compareEnglishCandidates = (a: EnglishTBCandidate, b: EnglishTBCandidate): number => {
@@ -219,43 +222,97 @@ export class TBService {
     return a.entry.id.localeCompare(b.entry.id);
   };
 
-  private sortEnglishMatchesForNestedSuppression(matches: TBMatch[]): TBMatch[] {
-    return matches.slice().sort((a, b) => {
-      const lengthDiff = this.longestPositionLength(b) - this.longestPositionLength(a);
-      if (lengthDiff !== 0) return lengthDiff;
-      if (b.srcTerm.length !== a.srcTerm.length) return b.srcTerm.length - a.srcTerm.length;
+  private suppressNestedEnglishPositions(
+    matches: TBMatch[],
+    candidateBySrcNorm: Map<string, EnglishTBCandidate>,
+  ): TBMatch[] {
+    const occupiedRanges: Array<{ start: number; end: number }> = [];
+    const selectedBySrcNorm = new Map<string, TBMatch>();
+    const positionCandidates = this.flattenEnglishPositionCandidates(matches).sort((a, b) =>
+      this.compareEnglishPositionCandidates(a, b, candidateBySrcNorm),
+    );
 
-      const startDiff = this.firstPositionStart(a) - this.firstPositionStart(b);
-      if (startDiff !== 0) return startDiff;
+    for (const candidate of positionCandidates) {
+      if (
+        occupiedRanges.some((range) =>
+          this.isStrictlyContainedPosition(candidate.position, range),
+        )
+      ) {
+        continue;
+      }
 
-      const endDiff = this.lastPositionEnd(b) - this.lastPositionEnd(a);
-      if (endDiff !== 0) return endDiff;
+      occupiedRanges.push(candidate.position);
+      const existing = selectedBySrcNorm.get(candidate.match.srcNorm);
+      if (existing) {
+        existing.positions.push(candidate.position);
+        continue;
+      }
 
-      if (a.priority !== b.priority) return a.priority - b.priority;
-      if (b.usageCount !== a.usageCount) return b.usageCount - a.usageCount;
-      return a.id.localeCompare(b.id);
+      selectedBySrcNorm.set(candidate.match.srcNorm, {
+        ...candidate.match,
+        positions: [candidate.position],
+      });
+    }
+
+    return Array.from(selectedBySrcNorm.values()).map((match) => ({
+      ...match,
+      positions: this.sortPositions(match.positions),
+    }));
+  }
+
+  private flattenEnglishPositionCandidates(matches: TBMatch[]): EnglishTBPositionCandidate[] {
+    return matches.flatMap((match) =>
+      match.positions.map((position) => ({
+        match,
+        position,
+      })),
+    );
+  }
+
+  private compareEnglishPositionCandidates(
+    a: EnglishTBPositionCandidate,
+    b: EnglishTBPositionCandidate,
+    candidateBySrcNorm: Map<string, EnglishTBCandidate>,
+  ): number {
+    const lengthDiff = this.positionLength(b.position) - this.positionLength(a.position);
+    if (lengthDiff !== 0) return lengthDiff;
+
+    const startDiff = a.position.start - b.position.start;
+    if (startDiff !== 0) return startDiff;
+
+    const endDiff = b.position.end - a.position.end;
+    if (endDiff !== 0) return endDiff;
+
+    const candidateA = candidateBySrcNorm.get(a.match.srcNorm);
+    const candidateB = candidateBySrcNorm.get(b.match.srcNorm);
+    if (candidateA && candidateB) {
+      const candidateDiff = this.compareEnglishCandidates(candidateA, candidateB);
+      if (candidateDiff !== 0) return candidateDiff;
+    }
+
+    return a.match.id.localeCompare(b.match.id);
+  }
+
+  private isStrictlyContainedPosition(
+    inner: { start: number; end: number },
+    outer: { start: number; end: number },
+  ): boolean {
+    return (
+      outer.start <= inner.start &&
+      outer.end >= inner.end &&
+      this.positionLength(outer) > this.positionLength(inner)
+    );
+  }
+
+  private positionLength(position: { start: number; end: number }): number {
+    return position.end - position.start;
+  }
+
+  private sortPositions(positions: Array<{ start: number; end: number }>) {
+    return positions.slice().sort((a, b) => {
+      if (a.start !== b.start) return a.start - b.start;
+      return b.end - a.end;
     });
-  }
-
-  private longestPositionLength(match: TBMatch): number {
-    return match.positions.reduce(
-      (longest, position) => Math.max(longest, position.end - position.start),
-      0,
-    );
-  }
-
-  private firstPositionStart(match: TBMatch): number {
-    return match.positions.reduce(
-      (first, position) => Math.min(first, position.start),
-      Number.POSITIVE_INFINITY,
-    );
-  }
-
-  private lastPositionEnd(match: TBMatch): number {
-    return match.positions.reduce(
-      (last, position) => Math.max(last, position.end),
-      Number.NEGATIVE_INFINITY,
-    );
   }
 
   private pickBetterEnglishTier(
