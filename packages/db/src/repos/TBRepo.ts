@@ -1,13 +1,16 @@
 import Database from 'better-sqlite3';
 import type { TBEntry } from '@cat/core/models';
-import { buildTermSearchPlanForLocale, normalizeTermForLookup } from '@cat/core/text';
+import {
+  buildTermSearchPlanForLocale,
+  normalizeTermForLookup,
+  resolveSourceRecallProfile,
+} from '@cat/core/text';
 import { randomUUID } from 'crypto';
 import type { MountedTBRecord, ProjectTermEntryRecord, TBRecord } from '../types';
 
 type TBEntryDbRow = TBEntry;
 const EXACT_CJK_BATCH_SIZE = 200;
 const CJK_LIKE_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
-const CJK_SOURCE_LOCALE_RE = /^(zh|ja|ko|cmn|yue)(?:-|$)/i;
 
 export class TBRepo {
   private stmtDeleteTbFtsByEntryId: Database.Statement;
@@ -133,7 +136,8 @@ export class TBRepo {
 
     const limit = Math.max(1, Math.min(options?.limit ?? 200, 500));
 
-    const useEnglishSingleFragmentFallback = this.isEnglishSourceLocale(options?.srcLang);
+    const useEnglishSingleFragmentFallback =
+      resolveSourceRecallProfile(options?.srcLang) === 'en';
     const phraseFragments = useEnglishSingleFragmentFallback
       ? searchPlan.ftsFragments.filter((f) => f.includes(' '))
       : searchPlan.ftsFragments;
@@ -418,11 +422,7 @@ export class TBRepo {
   private shouldReserveFtsCandidates(sourceText: string, srcLang?: string): boolean {
     if (!CJK_LIKE_RE.test(sourceText)) return false;
     if (!srcLang) return true;
-    return CJK_SOURCE_LOCALE_RE.test(srcLang);
-  }
-
-  private isEnglishSourceLocale(srcLang?: string): boolean {
-    return /^en(?:-|$)/i.test(srcLang ?? '');
+    return resolveSourceRecallProfile(srcLang) === 'cjk';
   }
 
   private sortSearchCandidates(rows: ProjectTermEntryRecord[]): ProjectTermEntryRecord[] {
