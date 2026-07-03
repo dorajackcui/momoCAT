@@ -183,6 +183,55 @@ describe('TBModule', () => {
     }
   });
 
+  it('prefers longer EN/general TB matches when suppressing nested terms', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('English Nested TB Profile', 'en-US', 'fr-FR');
+      const shortTbId = db.createTermBase('Short Nested Terms', 'en-US', 'fr-FR');
+      const longTbId = db.createTermBase('Long Nested Terms', 'en-US', 'fr-FR');
+      db.mountTermBaseToProject(projectId, shortTbId, 10);
+      db.mountTermBaseToProject(projectId, longTbId, 20);
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'term-birth',
+        tbId: shortTbId,
+        srcLang: 'en-US',
+        srcTerm: 'Birth',
+        tgtTerm: 'naissance',
+      });
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'term-day-of-birth-nested',
+        tbId: longTbId,
+        srcLang: 'en-US',
+        srcTerm: 'The Day of Birth',
+        tgtTerm: 'Premier souffle',
+      });
+
+      const segment = createTransientSegment(
+        { id: 'unit-nested-day-of-birth', source: 'The Day of Birth' },
+        0,
+        {
+          projectId,
+          sourceLanguage: 'en-US',
+          targetLanguage: 'fr-FR',
+        },
+      );
+      const projectRepo = new SqliteProjectRepository(db);
+      const tbRepo = new SqliteTBRepository(db);
+      const module = new TBModule({
+        tbRepo,
+        tbService: new TBService(projectRepo, tbRepo),
+      });
+
+      const artifact = await module.inspect(projectId, segment);
+      const rawSrcTerms = artifact.rawMatches.map((match) => match.srcTerm);
+
+      expect(rawSrcTerms).toContain('The Day of Birth');
+      expect(rawSrcTerms).not.toContain('Birth');
+    } finally {
+      db.close();
+    }
+  });
+
   it('applies EN/general TB recall rules to non-CJK source projects', async () => {
     const db = new CATDatabase(':memory:');
     try {

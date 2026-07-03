@@ -194,17 +194,18 @@ export class TBService {
       .map((candidate) => ({
         ...candidate.entry,
         positions: this.uniquePositions(candidate.positions),
-      }))
-      .sort((a, b) => {
+      }));
+
+    return suppressNestedTermMatches(this.sortEnglishMatchesForNestedSuppression(matches)).sort(
+      (a, b) => {
         const candidateA = bySrcNorm.get(a.srcNorm);
         const candidateB = bySrcNorm.get(b.srcNorm);
         if (candidateA && candidateB) {
           return this.compareEnglishCandidates(candidateA, candidateB);
         }
         return 0;
-      });
-
-    return suppressNestedTermMatches(matches);
+      },
+    );
   }
 
   private compareEnglishCandidates = (a: EnglishTBCandidate, b: EnglishTBCandidate): number => {
@@ -217,6 +218,45 @@ export class TBService {
     if (b.entry.usageCount !== a.entry.usageCount) return b.entry.usageCount - a.entry.usageCount;
     return a.entry.id.localeCompare(b.entry.id);
   };
+
+  private sortEnglishMatchesForNestedSuppression(matches: TBMatch[]): TBMatch[] {
+    return matches.slice().sort((a, b) => {
+      const lengthDiff = this.longestPositionLength(b) - this.longestPositionLength(a);
+      if (lengthDiff !== 0) return lengthDiff;
+      if (b.srcTerm.length !== a.srcTerm.length) return b.srcTerm.length - a.srcTerm.length;
+
+      const startDiff = this.firstPositionStart(a) - this.firstPositionStart(b);
+      if (startDiff !== 0) return startDiff;
+
+      const endDiff = this.lastPositionEnd(b) - this.lastPositionEnd(a);
+      if (endDiff !== 0) return endDiff;
+
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      if (b.usageCount !== a.usageCount) return b.usageCount - a.usageCount;
+      return a.id.localeCompare(b.id);
+    });
+  }
+
+  private longestPositionLength(match: TBMatch): number {
+    return match.positions.reduce(
+      (longest, position) => Math.max(longest, position.end - position.start),
+      0,
+    );
+  }
+
+  private firstPositionStart(match: TBMatch): number {
+    return match.positions.reduce(
+      (first, position) => Math.min(first, position.start),
+      Number.POSITIVE_INFINITY,
+    );
+  }
+
+  private lastPositionEnd(match: TBMatch): number {
+    return match.positions.reduce(
+      (last, position) => Math.max(last, position.end),
+      Number.NEGATIVE_INFINITY,
+    );
+  }
 
   private pickBetterEnglishTier(
     current: EnglishCandidateTier,
