@@ -133,6 +133,56 @@ describe('TBModule', () => {
     }
   });
 
+  it('recalls stopword-prefixed English TB terms through module lookup', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('English Article Terms', 'en-US', 'fr-FR');
+      const tbId = db.createTermBase('Article Terms', 'en-US', 'fr-FR');
+      db.mountTermBaseToProject(projectId, tbId, 20);
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'term-day-of-birth',
+        tbId,
+        srcLang: 'en-US',
+        srcTerm: 'The Day of Birth',
+        tgtTerm: 'Premier souffle',
+      });
+
+      const segment = createTransientSegment(
+        {
+          id: 'unit-day-of-birth',
+          source: 'Change Details: The Self Reclaimed (Backpiece) The Day of Birth (Dress)',
+        },
+        0,
+        {
+          projectId,
+          sourceLanguage: 'en-US',
+          targetLanguage: 'fr-FR',
+        },
+      );
+      const projectRepo = new SqliteProjectRepository(db);
+      const tbRepo = new SqliteTBRepository(db);
+      const module = new TBModule({
+        tbRepo,
+        tbService: new TBService(projectRepo, tbRepo),
+      });
+
+      const artifact = await module.inspect(projectId, segment);
+
+      expect(artifact.rawMatches.map((match) => match.srcTerm)).toContain('The Day of Birth');
+      expect(artifact.selectedReferences).toEqual(
+        expect.arrayContaining([
+          {
+            srcTerm: 'The Day of Birth',
+            tgtTerm: 'Premier souffle',
+            note: null,
+          },
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('does not apply English TB recall rules to non-English source projects', async () => {
     const db = new CATDatabase(':memory:');
     try {

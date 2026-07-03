@@ -456,6 +456,48 @@ describe('Term Matching Helpers', () => {
     );
   });
 
+  it('retains significant single-word FTS fragments for English recall', () => {
+    const plan = buildTermSearchPlanForLocale(
+      'The intersecting streets offer plenty of room for the passing Mechadolls and the occasional frolicking Shroomseras.',
+      { locale: 'en-US', maxFragments: 36 },
+    );
+
+    expect(plan.ftsFragments).toEqual(
+      expect.arrayContaining(['intersecting', 'streets', 'plenty', 'passing', 'mechadolls', 'occasional', 'frolicking', 'shroomseras']),
+    );
+    expect(plan.ftsFragments).not.toEqual(
+      expect.arrayContaining(['the', 'and', 'for', 'of', 'room']),
+    );
+  });
+
+  it('recalls stopword-prefixed terms via single-word FTS fragments and article-prefix exact aliases', () => {
+    const plan = buildTermSearchPlanForLocale(
+      'Change Details The Self Reclaimed Backpiece The Day of Birth Dress',
+      { locale: 'en-US', maxFragments: 36 },
+    );
+
+    expect(plan.ftsFragments).toEqual(
+      expect.arrayContaining(['birth', 'reclaimed']),
+    );
+    expect(plan.exactLookupTerms).toEqual(
+      expect.arrayContaining(['the day of birth']),
+    );
+  });
+
+  it('generates article-prefix exact aliases for terms like the beginning', () => {
+    const plan = buildTermSearchPlanForLocale(
+      'In the beginning there was light',
+      { locale: 'en-US', maxFragments: 36 },
+    );
+
+    expect(plan.ftsFragments).toEqual(
+      expect.arrayContaining(['beginning', 'there', 'light']),
+    );
+    expect(plan.exactLookupTerms).toEqual(
+      expect.arrayContaining(['the beginning']),
+    );
+  });
+
   it('suppresses only fully nested shorter matches and keeps partial overlaps', () => {
     const matches = suppressNestedTermMatches([
       {

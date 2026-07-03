@@ -258,6 +258,12 @@ function buildDelimiterPhraseVariants(words: string[]): string[] {
   return Array.from(variants);
 }
 
+const ENGLISH_ARTICLES = new Set(['the', 'a', 'an']);
+
+function isEnglishArticle(word: string): boolean {
+  return ENGLISH_ARTICLES.has(word.toLowerCase());
+}
+
 function addEnglishSearchPhraseAliases(target: Set<string>, value: string): void {
   const words = tokenizeEnglishPhraseWords(value);
 
@@ -273,7 +279,23 @@ function addEnglishSearchPhraseAliases(target: Set<string>, value: string): void
         addSearchAlias(target, phrase);
         addTrailingWordInflectionAliases(target, phrase, MAX_ENGLISH_SEARCH_EXACT_TERMS);
       }
+
+      if (start > 0 && isEnglishArticle(words[start - 1])) {
+        const prefixed = [words[start - 1], ...slice];
+        for (const phrase of buildDelimiterPhraseVariants(prefixed)) {
+          addSearchAlias(target, phrase);
+          addTrailingWordInflectionAliases(target, phrase, MAX_ENGLISH_SEARCH_EXACT_TERMS);
+        }
+      }
     }
+  }
+
+  for (let i = 0; i < words.length - 1; i += 1) {
+    if (!isEnglishArticle(words[i])) continue;
+    const next = words[i + 1];
+    if (isEnglishStopword(next) || next.length < 3) continue;
+    addSearchAlias(target, `${words[i]} ${next}`);
+    addTrailingWordInflectionAliases(target, `${words[i]} ${next}`, MAX_ENGLISH_SEARCH_EXACT_TERMS);
   }
 }
 
@@ -296,7 +318,9 @@ function buildEnglishSearchExactLookupTerms(value: string, strictPlan: TermSearc
 
 function shouldKeepEnglishFtsFragment(fragment: string): boolean {
   const words = fragment.split(/\s+/u).filter(Boolean);
-  if (words.length < 2) return false;
+  if (words.length === 1) {
+    return !isEnglishStopword(words[0]) && words[0].length >= 4;
+  }
   if (isEnglishStopword(words[0]) || isEnglishStopword(words[words.length - 1])) return false;
   return countSignificantEnglishWords(words) >= 2;
 }

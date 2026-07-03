@@ -132,9 +132,22 @@ export class TBRepo {
     if (searchPlan.ftsFragments.length === 0 && searchPlan.exactLookupTerms.length === 0) return [];
 
     const limit = Math.max(1, Math.min(options?.limit ?? 200, 500));
-    const ftsCandidates =
-      searchPlan.ftsFragments.length > 0
-        ? this.searchProjectTermEntriesByFts(projectId, mountedTbIds, searchPlan.ftsFragments, limit)
+
+    const useEnglishSingleFragmentFallback = this.isEnglishSourceLocale(options?.srcLang);
+    const phraseFragments = useEnglishSingleFragmentFallback
+      ? searchPlan.ftsFragments.filter((f) => f.includes(' '))
+      : searchPlan.ftsFragments;
+    const singleFragments = useEnglishSingleFragmentFallback
+      ? searchPlan.ftsFragments.filter((f) => !f.includes(' '))
+      : [];
+
+    const phraseCandidates =
+      phraseFragments.length > 0
+        ? this.searchProjectTermEntriesByFts(projectId, mountedTbIds, phraseFragments, limit)
+        : [];
+    const singleCandidates =
+      singleFragments.length > 0
+        ? this.searchProjectTermEntriesByPerFragmentFts(projectId, mountedTbIds, singleFragments)
         : [];
     const exactCandidates =
       searchPlan.exactLookupTerms.length > 0
@@ -145,7 +158,7 @@ export class TBRepo {
           )
         : [];
 
-    return this.mergeSearchCandidates(limit, exactCandidates, ftsCandidates, {
+    return this.mergeSearchCandidates(limit, exactCandidates, phraseCandidates, singleCandidates, {
       reserveFtsCandidates: this.shouldReserveFtsCandidates(sourceText, options?.srcLang),
     });
   }
@@ -289,6 +302,29 @@ export class TBRepo {
     return rows.map((row) => ({ ...row }));
   }
 
+  private searchProjectTermEntriesByPerFragmentFts(
+    projectId: number,
+    mountedTbIds: string[],
+    singleFragments: string[],
+  ): ProjectTermEntryRecord[] {
+    const perFragmentLimit = Math.max(3, Math.min(10, Math.ceil(60 / singleFragments.length)));
+    const seen = new Map<string, ProjectTermEntryRecord>();
+
+    for (const fragment of singleFragments) {
+      const rows = this.searchProjectTermEntriesByFts(
+        projectId,
+        mountedTbIds,
+        [fragment],
+        perFragmentLimit,
+      );
+      for (const row of rows) {
+        if (!seen.has(row.id)) seen.set(row.id, row);
+      }
+    }
+
+    return Array.from(seen.values());
+  }
+
   private searchProjectTermEntriesByExactSourceNorm(
     projectId: number,
     mountedTbIds: string[],
@@ -325,15 +361,18 @@ export class TBRepo {
   private mergeSearchCandidates(
     limit: number,
     exactCandidates: ProjectTermEntryRecord[],
-    ftsCandidates: ProjectTermEntryRecord[],
+    phraseFtsCandidates: ProjectTermEntryRecord[],
+    singleFtsCandidates: ProjectTermEntryRecord[],
     options?: { reserveFtsCandidates?: boolean },
   ): Array<TBEntry & { tbName: string; priority: number }> {
     const merged = new Map<string, ProjectTermEntryRecord>();
-    const sortedExactCandidates = this.sortSearchCandidates(exactCandidates);
-    const sortedFtsCandidates = this.sortSearchCandidates(ftsCandidates);
-    const ftsReserve =
-      options?.reserveFtsCandidates && limit > 1 && sortedExactCandidates.length >= limit && sortedFtsCandidates.length > 0
-        ? Math.min(limit - 1, sortedFtsCandidates.length, Math.max(1, Math.floor(limit * 0.1)))
+    const sortedExact = this.sortSearchCandidates(exactCandidates);
+    const sortedPhrase = this.sortSearchCandidates(phraseFtsCandidates);
+    const sortedSingle = this.sortSearchCandidates(singleFtsCandidates);
+
+    const singleReserve =
+      sortedSingle.length > 0 && limit > 1
+        ? Math.min(sortedSingle.length, Math.max(1, Math.floor(limit * 0.15)))
         : 0;
 
     const addCandidates = (rows: ProjectTermEntryRecord[], maxAdded = limit) => {
@@ -351,12 +390,26 @@ export class TBRepo {
       return added;
     };
 
-    addCandidates(sortedExactCandidates, limit - ftsReserve);
-    addCandidates(sortedFtsCandidates, ftsReserve);
+    // For CJK: when exact overwhelms, leave room for FTS
+    const ftsReserve =
+      options?.reserveFtsCandidates && limit > 1 && sortedExact.length >= limit && (sortedPhrase.length + sortedSingle.length) > 0
+        ? Math.min(limit - 1, Math.max(1, Math.floor(limit * 0.1)))
+        : 0;
 
+    // Tier 1: exact (highest confidence, only capped for CJK overflow)
+    addCandidates(sortedExact, ftsReserve > 0 ? limit - ftsReserve : limit);
+
+    // Tier 2: phrase FTS (leave room for single reserve)
+    addCandidates(sortedPhrase, Math.max(0, limit - merged.size - singleReserve));
+
+    // Tier 3: single-word FTS (guaranteed minimum slots)
+    addCandidates(sortedSingle, singleReserve);
+
+    // Fill remaining capacity
     if (merged.size < limit) {
-      addCandidates(sortedExactCandidates);
-      addCandidates(sortedFtsCandidates);
+      addCandidates(sortedExact);
+      addCandidates(sortedPhrase);
+      addCandidates(sortedSingle);
     }
 
     return Array.from(merged.values());
@@ -366,6 +419,10 @@ export class TBRepo {
     if (!CJK_LIKE_RE.test(sourceText)) return false;
     if (!srcLang) return true;
     return CJK_SOURCE_LOCALE_RE.test(srcLang);
+  }
+
+  private isEnglishSourceLocale(srcLang?: string): boolean {
+    return /^en(?:-|$)/i.test(srcLang ?? '');
   }
 
   private sortSearchCandidates(rows: ProjectTermEntryRecord[]): ProjectTermEntryRecord[] {

@@ -1830,5 +1830,74 @@ describe("CATDatabase", () => {
       expect(results).toHaveLength(3);
       expect(results.every((row) => row.srcTerm.length === 2)).toBe(true);
     });
+
+    it("should recall a short single-word-matched entry even when phrase-matched noise fills the pool", () => {
+      const projectId = db.createProject("TB Tiered Merge", "en-US", "fr-FR");
+      const tbId = db.createTermBase("Tiered Merge TB", "en-US", "fr-FR");
+      db.mountTermBaseToProject(projectId, tbId, 1);
+
+      // Create 220 long entries matching phrase fragment "change details"
+      for (let index = 0; index < 220; index += 1) {
+        db.insertTBEntryIfAbsentBySrcTerm({
+          id: `tb-tiered-noise-${index}`,
+          tbId,
+          srcLang: "en-US",
+          srcTerm: `Change Details: Configuration Panel Option ${index} Settings`,
+          tgtTerm: `noise-${index}`,
+        });
+      }
+
+      // Target entry: only recallable via single-word FTS "midnight"
+      // (no article prefix in source, no phrase containing "midnight")
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-tiered-target",
+        tbId,
+        srcLang: "en-US",
+        srcTerm: "Midnight Sun",
+        tgtTerm: "Soleil de minuit",
+      });
+
+      // Source text: "midnight" appears but not preceded by an article,
+      // and no multi-word phrase involving "midnight" survives stopword filter.
+      // The 220 noise entries match phrase fragment "change details".
+      const results = db.searchProjectTermEntries(
+        projectId,
+        "Change Details: The Self Reclaimed (Backpiece) celebrating midnight ceremonies Configuration Panel Option",
+        { srcLang: "en-US", limit: 200 },
+      );
+
+      expect(results.map((row) => row.srcTerm)).toContain("Midnight Sun");
+    });
+
+    it("should keep non-English single-fragment FTS on the full candidate budget", () => {
+      const projectId = db.createProject("TB Non-English Single FTS", "fr-FR", "en-US");
+      const tbId = db.createTermBase("Non-English Single FTS TB", "fr-FR", "en-US");
+      db.mountTermBaseToProject(projectId, tbId, 1);
+
+      for (let index = 0; index < 10; index += 1) {
+        db.insertTBEntryIfAbsentBySrcTerm({
+          id: `tb-non-english-single-noise-${index}`,
+          tbId,
+          srcLang: "fr-FR",
+          srcTerm: `Midnight Configuration Panel Option ${index} Settings`,
+          tgtTerm: `noise-${index}`,
+        });
+      }
+
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-non-english-single-target",
+        tbId,
+        srcLang: "fr-FR",
+        srcTerm: "Midnight Sun",
+        tgtTerm: "midnight sun",
+      });
+
+      const results = db.searchProjectTermEntries(projectId, "midnight", {
+        srcLang: "fr-FR",
+        limit: 200,
+      });
+
+      expect(results.map((row) => row.srcTerm)).toContain("Midnight Sun");
+    });
   });
 });
