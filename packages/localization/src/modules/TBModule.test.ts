@@ -183,10 +183,10 @@ describe('TBModule', () => {
     }
   });
 
-  it('does not apply English TB recall rules to non-English source projects', async () => {
+  it('applies EN/general TB recall rules to non-CJK source projects', async () => {
     const db = new CATDatabase(':memory:');
     try {
-      const projectId = db.createProject('French TB Guard', 'fr-FR', 'en-US');
+      const projectId = db.createProject('French General TB Profile', 'fr-FR', 'en-US');
       const tbId = db.createTermBase('French Client Terms', 'fr-FR', 'en-US');
       db.mountTermBaseToProject(projectId, tbId, 20);
       db.insertTBEntryIfAbsentBySrcTerm({
@@ -198,7 +198,7 @@ describe('TBModule', () => {
       });
 
       const segment = createTransientSegment(
-        { id: 'unit-french-guard', source: 'Accounts are synced.' },
+        { id: 'unit-french-general', source: 'Accounts are synced.' },
         0,
         {
           projectId,
@@ -215,10 +215,92 @@ describe('TBModule', () => {
 
       const artifact = await module.inspect(projectId, segment);
 
-      expect(artifact.rawMatches.map((match) => match.srcTerm)).not.toContain('account');
-      expect(artifact.selectedReferences.map((reference) => reference.srcTerm)).not.toContain(
+      expect(artifact.rawMatches.map((match) => match.srcTerm)).toContain('account');
+      expect(artifact.selectedReferences.map((reference) => reference.srcTerm)).toContain(
         'account',
       );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('keeps CJK source projects off the EN/general TB recognizer route', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Chinese TB Guard', 'zh-CN', 'fr-FR');
+      const tbId = db.createTermBase('Chinese Client Terms', 'zh-CN', 'fr-FR');
+      db.mountTermBaseToProject(projectId, tbId, 20);
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'term-account-zh-source',
+        tbId,
+        srcLang: 'zh-CN',
+        srcTerm: 'account',
+        tgtTerm: 'compte',
+      });
+
+      const segment = createTransientSegment(
+        { id: 'unit-chinese-guard', source: 'Accounts are synced.' },
+        0,
+        {
+          projectId,
+          sourceLanguage: 'zh-CN',
+          targetLanguage: 'fr-FR',
+        },
+      );
+      const projectRepo = new SqliteProjectRepository(db);
+      const tbRepo = new SqliteTBRepository(db);
+      const module = new TBModule({
+        tbRepo,
+        tbService: new TBService(projectRepo, tbRepo),
+      });
+
+      const artifact = await module.inspect(projectId, segment);
+
+      expect(artifact.rawMatches.map((match) => match.srcTerm)).not.toContain('account');
+    } finally {
+      db.close();
+    }
+  });
+
+  it('does not match EN/general TB terms across protected token boundaries', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('English Boundary TB Profile', 'en-US', 'fr-FR');
+      const tbId = db.createTermBase('Boundary Terms', 'en-US', 'fr-FR');
+      db.mountTermBaseToProject(projectId, tbId, 20);
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'term-api-key',
+        tbId,
+        srcLang: 'en-US',
+        srcTerm: 'API key',
+        tgtTerm: 'cle API',
+      });
+
+      const segment = createTransientSegment(
+        { id: 'unit-api-boundary', source: 'API key' },
+        0,
+        {
+          projectId,
+          sourceLanguage: 'en-US',
+          targetLanguage: 'fr-FR',
+        },
+      );
+      segment.sourceTokens = [
+        { type: 'text', content: 'API' },
+        { type: 'tag', content: '{1}', meta: { id: '{1}' } },
+        { type: 'text', content: 'key' },
+      ];
+
+      const projectRepo = new SqliteProjectRepository(db);
+      const tbRepo = new SqliteTBRepository(db);
+      const module = new TBModule({
+        tbRepo,
+        tbService: new TBService(projectRepo, tbRepo),
+      });
+
+      const artifact = await module.inspect(projectId, segment);
+
+      expect(artifact.rawMatches.map((match) => match.srcTerm)).not.toContain('API key');
     } finally {
       db.close();
     }
