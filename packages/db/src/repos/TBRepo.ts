@@ -16,6 +16,7 @@ export class TBRepo {
   private stmtDeleteTbFtsByEntryId: Database.Statement;
   private stmtDeleteTbFtsByTbId: Database.Statement;
   private stmtInsertTbFts: Database.Statement;
+  private tbDataVersion = 0;
 
   constructor(private readonly db: Database.Database) {
     this.stmtDeleteTbFtsByEntryId = this.db.prepare('DELETE FROM tb_fts WHERE tbEntryId = ?');
@@ -29,6 +30,17 @@ export class TBRepo {
     return this.db.prepare('SELECT * FROM term_bases ORDER BY updatedAt DESC').all() as TBRecord[];
   }
 
+  // In-process version of all recognizer-visible TB data (term sets, mounts, priorities).
+  // usageCount-only updates are excluded on purpose: they only affect ranking tie-breaks
+  // and must not thrash recognizer index caches keyed on this value.
+  public getTBDataVersion(): number {
+    return this.tbDataVersion;
+  }
+
+  private bumpTBDataVersion(): void {
+    this.tbDataVersion += 1;
+  }
+
   public createTermBase(name: string, srcLang: string, tgtLang: string): string {
     const id = randomUUID();
     this.db
@@ -37,12 +49,14 @@ export class TBRepo {
       VALUES (?, ?, ?, ?)
     `)
       .run(id, name, srcLang, tgtLang);
+    this.bumpTBDataVersion();
     return id;
   }
 
   public deleteTermBase(id: string) {
     this.stmtDeleteTbFtsByTbId.run(id);
     this.db.prepare('DELETE FROM term_bases WHERE id = ?').run(id);
+    this.bumpTBDataVersion();
   }
 
   public getTermBase(tbId: string): TBRecord | undefined {
@@ -72,10 +86,12 @@ export class TBRepo {
         isEnabled = 1
     `)
       .run(projectId, tbId, priority);
+    this.bumpTBDataVersion();
   }
 
   public unmountTermBaseFromProject(projectId: number, tbId: string) {
     this.db.prepare('DELETE FROM project_term_bases WHERE projectId = ? AND tbId = ?').run(projectId, tbId);
+    this.bumpTBDataVersion();
   }
 
   public getProjectMountedTermBases(projectId: number): MountedTBRecord[] {
@@ -203,6 +219,7 @@ export class TBRepo {
       `)
         .run(params.tbId);
       this.replaceTbFts(params.tbId, row.id, srcNorm);
+      this.bumpTBDataVersion();
     }
 
     return row?.id;
@@ -252,11 +269,14 @@ export class TBRepo {
     `)
       .run(params.tbId);
     this.replaceTbFts(params.tbId, row.id, srcNorm);
+    this.bumpTBDataVersion();
 
     return row.id;
   }
 
   public incrementTBUsage(tbEntryId: string) {
+    // Deliberately does not bump the TB data version: usage counts only refine
+    // ranking, and bumping here would rebuild recognizer indexes on every use.
     this.db
       .prepare(`
       UPDATE tb_entries

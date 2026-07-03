@@ -25,6 +25,10 @@ export class SqliteTBRepository implements TBRepository {
     return this.db.getTermBaseStats(tbId);
   }
 
+  getTBDataVersion(): number {
+    return this.db.getTBDataVersion();
+  }
+
   getProjectMountedTermBases(projectId: number): MountedTBRecord[] {
     return this.db.getProjectMountedTermBases(projectId);
   }

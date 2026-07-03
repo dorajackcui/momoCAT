@@ -264,6 +264,10 @@ export class CATDatabase {
     return this.tbRepo.getTermBaseStats(tbId);
   }
 
+  public getTBDataVersion(): number {
+    return this.tbRepo.getTBDataVersion();
+  }
+
   public mountTermBaseToProject(
     projectId: number,
     tbId: string,

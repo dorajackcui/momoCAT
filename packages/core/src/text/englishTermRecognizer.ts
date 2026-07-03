@@ -84,6 +84,7 @@ const INVARIANT_S_WORDS = new Set(['does', 'news', 'series', 'species']);
 
 export class EnglishTermRecognizer<T extends EnglishTermRecognizerEntry> {
   private readonly variantsByKey = new Map<string, IndexedVariant<T>[]>();
+  private readonly keyPrefixes = new Set<string>();
   private readonly maxTokenCount: number;
 
   public constructor(entries: T[]) {
@@ -104,6 +105,7 @@ export class EnglishTermRecognizer<T extends EnglishTermRecognizerEntry> {
         const bucket = this.variantsByKey.get(key) ?? [];
         bucket.push(indexed);
         this.variantsByKey.set(key, bucket);
+        this.addKeyPrefixes(variant.tokens);
         maxTokenCount = Math.max(maxTokenCount, variant.tokens.length);
       }
     }
@@ -113,6 +115,14 @@ export class EnglishTermRecognizer<T extends EnglishTermRecognizerEntry> {
     }
 
     this.maxTokenCount = maxTokenCount;
+  }
+
+  private addKeyPrefixes(tokens: string[]): void {
+    let prefix = '';
+    for (const token of tokens) {
+      prefix = prefix.length === 0 ? token : `${prefix} ${token}`;
+      this.keyPrefixes.add(prefix);
+    }
   }
 
   public scan(
@@ -126,16 +136,22 @@ export class EnglishTermRecognizer<T extends EnglishTermRecognizerEntry> {
     const matches: EnglishTermRecognizerMatch<T>[] = [];
 
     for (let startIndex = 0; startIndex < sourceTokens.length; startIndex += 1) {
-      const parts: string[] = [];
+      const start = sourceTokens[startIndex].start;
       const maxEnd = Math.min(sourceTokens.length, startIndex + this.maxTokenCount);
+      let key = '';
 
       for (let endIndex = startIndex; endIndex < maxEnd; endIndex += 1) {
-        const start = sourceTokens[startIndex].start;
         const end = sourceTokens[endIndex].end;
         if (crossesHardBoundary(start, end, hardBoundaryOffsets)) break;
 
-        parts.push(sourceTokens[endIndex].value);
-        const variants = this.variantsByKey.get(parts.join(' '));
+        key =
+          key.length === 0
+            ? sourceTokens[endIndex].value
+            : `${key} ${sourceTokens[endIndex].value}`;
+        // No indexed variant extends this token sequence; longer spans cannot match.
+        if (!this.keyPrefixes.has(key)) break;
+
+        const variants = this.variantsByKey.get(key);
         if (!variants) continue;
 
         for (const variant of variants) {

@@ -10,7 +10,7 @@ import {
   type EnglishTermRecognizerMatch,
   type EnglishTermVariantKind,
 } from '@cat/core/text';
-import type { MountedTBRecord, ProjectRepository, TBRepository } from '../ports';
+import type { ProjectRepository, TBRepository } from '../ports';
 
 type ProjectTBEntry = TBEntry & {
   tbName: string;
@@ -27,6 +27,7 @@ type EnglishCandidateTier = 'recognizerCanonical' | 'recognizerVariant' | 'dbFal
 interface EnglishTBRecognizerCacheEntry {
   key: string;
   recognizer: EnglishTermRecognizer<EnglishRecognizerEntry>;
+  isComplete: boolean;
 }
 
 interface EnglishTBCandidate {
@@ -43,6 +44,8 @@ interface EnglishTBPositionCandidate {
 
 export class TBService {
   private static readonly TB_CANDIDATE_LIMIT = 200;
+  private static readonly ENGLISH_TB_RECOGNIZER_PROFILE_VERSION = 1;
+  private static readonly ENGLISH_TB_RECOGNIZER_CACHE_MAX_PROJECTS = 4;
 
   private projectRepo: ProjectRepository;
   private db: TBRepository;
@@ -116,42 +119,86 @@ export class TBService {
     const searchText = serializeTokensToSearchTextWithBoundaries(segment.sourceTokens);
     if (!searchText.text.trim()) return [];
 
-    const recognizer = this.getEnglishRecognizer(projectId);
+    const recognizerIndex = this.getEnglishRecognizer(projectId);
     const recognizerCandidates = this.toEnglishCandidates(
-      recognizer.scan(searchText.text, {
+      recognizerIndex.recognizer.scan(searchText.text, {
         hardBoundaryOffsets: searchText.hardBoundaryOffsets,
       }),
     );
 
-    const dbCandidates = this.db.searchProjectTermEntries(projectId, searchText.text, {
-      srcLang,
-      limit: TBService.TB_CANDIDATE_LIMIT,
-    }) as EnglishRecognizerEntry[];
-    const dbRecognizer = buildEnglishTermRecognizer(dbCandidates);
-    const dbRecognizedCandidates = this.toEnglishCandidates(
-      dbRecognizer.scan(searchText.text, {
-        hardBoundaryOffsets: searchText.hardBoundaryOffsets,
-      }),
-      'dbFallback',
-    );
+    const dbRecognizedCandidates = recognizerIndex.isComplete
+      ? []
+      : this.findEnglishDbFallbackCandidates(projectId, searchText.text, srcLang, {
+          hardBoundaryOffsets: searchText.hardBoundaryOffsets,
+        });
 
     return this.mergeEnglishCandidates([...recognizerCandidates, ...dbRecognizedCandidates]);
   }
 
-  private getEnglishRecognizer(projectId: number): EnglishTermRecognizer<EnglishRecognizerEntry> {
-    const mountedTbs = this.db.getProjectMountedTermBases(projectId);
-    const key = this.buildEnglishRecognizerCacheKey(mountedTbs);
+  private getEnglishRecognizer(projectId: number): EnglishTBRecognizerCacheEntry {
+    const key = this.buildEnglishRecognizerCacheKey();
     const cached = this.englishRecognizerCache.get(projectId);
-    if (cached?.key === key) return cached.recognizer;
+    if (cached?.key === key) {
+      this.refreshEnglishRecognizerCacheRecency(projectId, cached);
+      return cached;
+    }
 
     const entries = this.db.listProjectTermEntries(projectId) as EnglishRecognizerEntry[];
     const recognizer = buildEnglishTermRecognizer(entries);
-    this.englishRecognizerCache.set(projectId, { key, recognizer });
-    return recognizer;
+    const totalMountedEntryCount = this.db
+      .getProjectMountedTermBases(projectId)
+      .reduce((total, tb) => total + this.db.getTermBaseStats(tb.id).entryCount, 0);
+    const cacheEntry = {
+      key,
+      recognizer,
+      isComplete: entries.length >= totalMountedEntryCount,
+    };
+    if (!cacheEntry.isComplete) {
+      console.warn(
+        `[TBService] EN recognizer index for project ${projectId} holds ${entries.length} of ` +
+          `${totalMountedEntryCount} mounted TB entries; per-segment DB fallback recall is enabled`,
+      );
+    }
+    this.englishRecognizerCache.set(projectId, cacheEntry);
+    this.evictStaleEnglishRecognizerCacheEntries();
+    return cacheEntry;
   }
 
-  private buildEnglishRecognizerCacheKey(mountedTbs: MountedTBRecord[]): string {
-    return mountedTbs.map((tb) => `${tb.id}:${tb.priority}:${tb.updatedAt}`).join('|');
+  private buildEnglishRecognizerCacheKey(): string {
+    return `profile=${TBService.ENGLISH_TB_RECOGNIZER_PROFILE_VERSION}|v=${this.db.getTBDataVersion()}`;
+  }
+
+  private refreshEnglishRecognizerCacheRecency(
+    projectId: number,
+    cacheEntry: EnglishTBRecognizerCacheEntry,
+  ): void {
+    this.englishRecognizerCache.delete(projectId);
+    this.englishRecognizerCache.set(projectId, cacheEntry);
+  }
+
+  private evictStaleEnglishRecognizerCacheEntries(): void {
+    while (this.englishRecognizerCache.size > TBService.ENGLISH_TB_RECOGNIZER_CACHE_MAX_PROJECTS) {
+      const oldestProjectId = this.englishRecognizerCache.keys().next().value;
+      if (oldestProjectId === undefined) return;
+      this.englishRecognizerCache.delete(oldestProjectId);
+    }
+  }
+
+  private findEnglishDbFallbackCandidates(
+    projectId: number,
+    sourceText: string,
+    srcLang: string,
+    scanOptions: { hardBoundaryOffsets: number[] },
+  ): EnglishTBCandidate[] {
+    const dbCandidates = this.db.searchProjectTermEntries(projectId, sourceText, {
+      srcLang,
+      limit: TBService.TB_CANDIDATE_LIMIT,
+    }) as EnglishRecognizerEntry[];
+    const dbRecognizer = buildEnglishTermRecognizer(dbCandidates);
+    return this.toEnglishCandidates(
+      dbRecognizer.scan(sourceText, scanOptions),
+      'dbFallback',
+    );
   }
 
   private toEnglishCandidates(

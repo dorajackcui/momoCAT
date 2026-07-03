@@ -175,6 +175,31 @@ The index maps normalized token sequences to one or more TB entries. A token
 trie is enough for v1. An Aho-Corasick implementation can replace the internals
 later without changing the public recognizer interface.
 
+### Amendment (2026-07-03, post-implementation)
+
+The stats-based cache key above was replaced by an in-process TB data version:
+
+- `TBRepo` keeps a monotonic counter bumped by every structural TB write
+  (create/delete TB, mount/unmount, entry insert/upsert). The recognizer cache
+  key is `profile version + data version`, so the steady-state lookup path does
+  not run `COUNT(*)`/`MAX(updatedAt)` per segment.
+- `incrementTBUsage` deliberately does not bump the version. Usage counts only
+  refine ranking tie-breaks; bumping would rebuild the index on every use.
+  Recognizer entries may therefore hold slightly stale usage counts until the
+  next structural write.
+- The per-service recognizer cache is LRU-bounded (4 projects) so switching
+  between many projects cannot grow memory without bound.
+- When the index is incomplete (mounted entries exceed the project entry read
+  limit), the rebuild logs a warning naming the covered/total entry counts, so
+  degraded per-segment DB fallback recall is observable.
+- The recognizer scan is prefix-gated: span extension stops as soon as the
+  token sequence is no longer a prefix of any indexed variant, so one long
+  indexed term does not slow scanning of unrelated text.
+- Implementation note: DB fallback candidates currently share a single
+  `dbFallback` rank tier instead of the exact/phrase/single split listed under
+  Ranking and Merge Policy; fallback candidates still require recognizer
+  position validation, so the coarser tiering has no recall effect.
+
 ## Variant Rules
 
 Variant generation must be conservative. It should improve known CAT

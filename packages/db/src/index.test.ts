@@ -1357,6 +1357,60 @@ describe("CATDatabase", () => {
   });
 
   describe("Term Base System (v10)", () => {
+    it("bumps the TB data version on structural writes but not on usage increments", () => {
+      const initialVersion = db.getTBDataVersion();
+
+      const projectId = db.createProject("TB Version Project", "en", "zh");
+      const tbId = db.createTermBase("Versioned Terms", "en", "zh");
+      expect(db.getTBDataVersion()).toBeGreaterThan(initialVersion);
+
+      const afterCreate = db.getTBDataVersion();
+      db.mountTermBaseToProject(projectId, tbId, 5);
+      expect(db.getTBDataVersion()).toBeGreaterThan(afterCreate);
+
+      const afterMount = db.getTBDataVersion();
+      const entryId = db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-version-e1",
+        tbId,
+        srcLang: "en-US",
+        srcTerm: "Power Supply",
+        tgtTerm: "电源",
+      });
+      expect(entryId).toBe("tb-version-e1");
+      expect(db.getTBDataVersion()).toBeGreaterThan(afterMount);
+
+      const afterInsert = db.getTBDataVersion();
+      const duplicateInsert = db.insertTBEntryIfAbsentBySrcTerm({
+        id: "tb-version-e2",
+        tbId,
+        srcLang: "en-US",
+        srcTerm: " power   supply ",
+        tgtTerm: "供电",
+      });
+      expect(duplicateInsert).toBeUndefined();
+      expect(db.getTBDataVersion()).toBe(afterInsert);
+
+      db.incrementTBUsage("tb-version-e1");
+      expect(db.getTBDataVersion()).toBe(afterInsert);
+
+      db.upsertTBEntryBySrcTerm({
+        id: "tb-version-e3",
+        tbId,
+        srcLang: "en-US",
+        srcTerm: "Power Supply",
+        tgtTerm: "供电模块",
+      });
+      expect(db.getTBDataVersion()).toBeGreaterThan(afterInsert);
+
+      const afterUpsert = db.getTBDataVersion();
+      db.unmountTermBaseFromProject(projectId, tbId);
+      expect(db.getTBDataVersion()).toBeGreaterThan(afterUpsert);
+
+      const afterUnmount = db.getTBDataVersion();
+      db.deleteTermBase(tbId);
+      expect(db.getTBDataVersion()).toBeGreaterThan(afterUnmount);
+    });
+
     it("should create and mount term base to project", () => {
       const projectId = db.createProject("TB Project", "en", "zh");
       const tbId = db.createTermBase("Product Terms", "en", "zh");

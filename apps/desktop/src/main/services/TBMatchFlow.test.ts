@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Segment, TBEntry, TBMatch } from '@cat/core/models';
 import {
+  buildEnglishTermRecognizer,
   buildTermSearchPlanForLocale,
   findTermPositionsInTextForLocale,
   normalizeTermForLookup,
+  resolveSourceRecallProfile,
   serializeTokensToSearchText,
+  serializeTokensToSearchTextWithBoundaries,
   suppressNestedTermMatches,
 } from '@cat/core/text';
 import { CATDatabase } from '../../../../../packages/db/src';
@@ -118,6 +121,15 @@ function summarizeMatch(match: TBMatch) {
   };
 }
 
+function uniqueProjectTBEntries(entries: ProjectTBEntry[]): ProjectTBEntry[] {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    if (seen.has(entry.id)) return false;
+    seen.add(entry.id);
+    return true;
+  });
+}
+
 function collectFocusEntriesFromMountedTBs(
   db: CATDatabase,
   mountedTBs: ReturnType<CATDatabase['getProjectMountedTermBases']>,
@@ -142,7 +154,7 @@ function collectFocusEntriesFromMountedTBs(
   return results;
 }
 
-function traceCandidateFinalMatching(params: {
+function traceLegacyCandidateFinalMatching(params: {
   sourceText: string;
   srcLang: string;
   candidates: ProjectTBEntry[];
@@ -180,6 +192,52 @@ function traceCandidateFinalMatching(params: {
   });
 }
 
+function traceEnglishCandidateFinalMatching(params: {
+  sourceText: string;
+  hardBoundaryOffsets: number[];
+  candidates: ProjectTBEntry[];
+}) {
+  const recognizedMatches = buildEnglishTermRecognizer(params.candidates).scan(params.sourceText, {
+    hardBoundaryOffsets: params.hardBoundaryOffsets,
+  });
+  const positionsByEntryId = new Map<string, Array<{ start: number; end: number }>>();
+
+  for (const match of recognizedMatches) {
+    const positions = positionsByEntryId.get(match.entry.id) ?? [];
+    positions.push({ start: match.start, end: match.end });
+    positionsByEntryId.set(match.entry.id, positions);
+  }
+
+  const seenSrcNorm = new Set<string>();
+  return params.candidates.map((entry) => {
+    if (seenSrcNorm.has(entry.srcNorm)) {
+      return {
+        ...summarizeEntry(entry),
+        accepted: false,
+        droppedAt: 'duplicateSrcNorm',
+        positions: [],
+      };
+    }
+
+    const positions = positionsByEntryId.get(entry.id) ?? [];
+    if (positions.length === 0) {
+      return {
+        ...summarizeEntry(entry),
+        accepted: false,
+        droppedAt: 'noFinalTermPosition',
+        positions,
+      };
+    }
+
+    seenSrcNorm.add(entry.srcNorm);
+    return {
+      ...summarizeEntry(entry),
+      accepted: true,
+      positions,
+    };
+  });
+}
+
 async function traceTBMatchFlow(params: TraceTBMatchFlowParams) {
   const project = params.db.getProject(params.projectId);
   if (!project) {
@@ -191,8 +249,10 @@ async function traceTBMatchFlow(params: TraceTBMatchFlowParams) {
     params.db as unknown as TBRepository,
   );
   const segment = params.segment ?? createSegment(params.source ?? '');
-  const sourceText = serializeTokensToSearchText(segment.sourceTokens);
+  const serializedSearchText = serializeTokensToSearchTextWithBoundaries(segment.sourceTokens);
+  const sourceText = serializedSearchText.text;
   const mountedTBs = params.db.getProjectMountedTermBases(params.projectId);
+  const sourceProfile = resolveSourceRecallProfile(project.srcLang);
   const searchPlan = buildTermSearchPlanForLocale(sourceText, {
     locale: project.srcLang,
     maxFragments: 36,
@@ -201,17 +261,43 @@ async function traceTBMatchFlow(params: TraceTBMatchFlowParams) {
     srcLang: project.srcLang,
     limit: TB_CANDIDATE_LIMIT,
   }) as ProjectTBEntry[];
+  const mountedEntryCount = mountedTBs.reduce(
+    (total, tb) => total + params.db.getTermBaseStats(tb.id).entryCount,
+    0,
+  );
+  const recognizerEntries =
+    sourceProfile === 'en'
+      ? (params.db.listProjectTermEntries(params.projectId) as ProjectTBEntry[])
+      : [];
+  const isRecognizerComplete =
+    sourceProfile === 'en' && recognizerEntries.length >= mountedEntryCount;
+  const shouldUseLegacyFullMountedScan = sourceProfile === 'cjk' && repoCandidates.length === 0;
+  const wouldQueryDbFallback = sourceProfile === 'en' && !isRecognizerComplete;
   const fallbackScanCandidates =
-    repoCandidates.length === 0
+    shouldUseLegacyFullMountedScan
       ? (params.db.listProjectTermEntries(params.projectId) as ProjectTBEntry[])
       : [];
   const serviceCandidateSet =
-    repoCandidates.length > 0 ? repoCandidates : fallbackScanCandidates;
-  const candidateFinalMatching = traceCandidateFinalMatching({
-    sourceText,
-    srcLang: project.srcLang,
-    candidates: serviceCandidateSet,
-  });
+    sourceProfile === 'en'
+      ? uniqueProjectTBEntries([
+          ...recognizerEntries,
+          ...(wouldQueryDbFallback ? repoCandidates : []),
+        ])
+      : repoCandidates.length > 0
+        ? repoCandidates
+        : fallbackScanCandidates;
+  const candidateFinalMatching =
+    sourceProfile === 'en'
+      ? traceEnglishCandidateFinalMatching({
+          sourceText,
+          hardBoundaryOffsets: serializedSearchText.hardBoundaryOffsets,
+          candidates: serviceCandidateSet,
+        })
+      : traceLegacyCandidateFinalMatching({
+          sourceText,
+          srcLang: project.srcLang,
+          candidates: serviceCandidateSet,
+        });
   const finalMatches = await service.findMatches(params.projectId, segment);
   const focusSrcTerms = params.focusSrcTerms ?? [];
   const focusTgtTerms = params.focusTgtTerms ?? [];
@@ -239,6 +325,7 @@ async function traceTBMatchFlow(params: TraceTBMatchFlowParams) {
       name: project.name,
       srcLang: project.srcLang,
       tgtLang: project.tgtLang,
+      sourceProfile,
     },
     step0MountedTBs: mountedTBs.map((tb) => ({
       id: tb.id,
@@ -264,7 +351,9 @@ async function traceTBMatchFlow(params: TraceTBMatchFlowParams) {
       focusCandidates: focusRepoCandidates.map(summarizeEntry),
     },
     step4FallbackScan: {
-      wouldUseFullMountedScan: repoCandidates.length === 0,
+      wouldUseFullMountedScan: shouldUseLegacyFullMountedScan,
+      wouldQueryDbFallback,
+      isRecognizerComplete,
       count: fallbackScanCandidates.length,
       focusEntriesInMountedTBs: focusEntriesInMountedTBs.map(summarizeEntry),
     },
@@ -493,7 +582,7 @@ describe('TB match flow trace', () => {
     }
   });
 
-  it('does not use English alias recall for non-English project source locale', async () => {
+  it('uses English alias recall for non-CJK project source locales', async () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Trace French TB Match Guard', 'fr-FR', 'en-US');
@@ -514,7 +603,52 @@ describe('TB match flow trace', () => {
         focusSrcTerms: ['account'],
       });
 
-      expect(trace.step3RepoCandidateRecall.focusCandidates).toEqual([]);
+      expect(trace.step3RepoCandidateRecall.focusCandidates.map((entry) => entry.srcTerm)).toEqual([
+        'account',
+      ]);
+      expect(trace.step6FinalMatches.focusMatches.map((match) => match.srcTerm)).toEqual([
+        'account',
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('does not mark English trace candidates accepted across protected tag boundaries', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Trace English Boundary Guard', 'en-US', 'fr-FR');
+      const tbId = db.createTermBase('English Boundary Terms', 'en-US', 'fr-FR');
+      db.mountTermBaseToProject(projectId, tbId, 1);
+      db.insertTBEntryIfAbsentBySrcTerm({
+        id: 'tb-api-key-boundary',
+        tbId,
+        srcLang: 'en-US',
+        srcTerm: 'API key',
+        tgtTerm: 'cle API',
+      });
+
+      const segment = createSegment('API key');
+      segment.sourceTokens = [
+        { type: 'text', content: 'API' },
+        { type: 'tag', content: '{1}', meta: { id: '{1}' } },
+        { type: 'text', content: 'key' },
+      ];
+
+      const trace = await traceTBMatchFlow({
+        db,
+        projectId,
+        segment,
+        focusSrcTerms: ['API key'],
+      });
+
+      expect(trace.step5CandidateFinalMatching).toEqual([
+        expect.objectContaining({
+          srcTerm: 'API key',
+          accepted: false,
+          droppedAt: 'noFinalTermPosition',
+        }),
+      ]);
       expect(trace.step6FinalMatches.focusMatches).toEqual([]);
     } finally {
       db.close();

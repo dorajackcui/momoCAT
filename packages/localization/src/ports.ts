@@ -110,6 +110,7 @@ export interface TBRepository {
   deleteTermBase(id: string): void;
   getTermBase(tbId: string): TBRecord | undefined;
   getTermBaseStats(tbId: string): { entryCount: number; maxEntryUpdatedAt?: string | null };
+  getTBDataVersion(): number;
   getProjectMountedTermBases(projectId: number): MountedTBRecord[];
   mountTermBaseToProject(projectId: number, tbId: string, priority?: number): void;
   unmountTermBaseFromProject(projectId: number, tbId: string): void;

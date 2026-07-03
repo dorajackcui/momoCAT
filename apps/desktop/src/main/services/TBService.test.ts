@@ -39,10 +39,42 @@ function createServiceWithEntries(
       tgtLang: options?.tgtLang ?? 'fr-FR',
     }),
   } satisfies Pick<ProjectRepository, 'getProject'>;
+  const mountedTbs = Array.from(
+    new Map(
+      entries.map((entry) => [
+        entry.tbId,
+        {
+          id: entry.tbId,
+          name: entry.tbName,
+          srcLang: options?.srcLang ?? 'en-US',
+          tgtLang: options?.tgtLang ?? 'fr-FR',
+          createdAt: '',
+          updatedAt: '',
+          priority: entry.priority,
+          isEnabled: 1,
+        },
+      ]),
+    ).values(),
+  ).sort((a, b) => a.priority - b.priority);
   const dbMock = {
     listProjectTermEntries: () => entries,
     searchProjectTermEntries: () => options?.searchEntries ?? entries,
-  } satisfies Pick<TBRepository, 'listProjectTermEntries' | 'searchProjectTermEntries'>;
+    getProjectMountedTermBases: () => mountedTbs,
+    getTBDataVersion: () => 1,
+    getTermBaseStats: (tbId: string) => ({
+      entryCount: entries.filter((entry) => entry.tbId === tbId).length,
+      maxEntryUpdatedAt: null,
+    }),
+    listTBEntries: (tbId: string) => entries.filter((entry) => entry.tbId === tbId),
+  } satisfies Pick<
+    TBRepository,
+    | 'listProjectTermEntries'
+    | 'searchProjectTermEntries'
+    | 'getProjectMountedTermBases'
+    | 'getTBDataVersion'
+    | 'getTermBaseStats'
+    | 'listTBEntries'
+  >;
   return new TBService(projectRepoMock as ProjectRepository, dbMock as TBRepository);
 }
 
@@ -144,10 +176,13 @@ describe('TBService', () => {
       buildSegment("Accounts sync from the user's real-time U.S. profile."),
     );
 
-    expect(matches.map((match) => match.srcTerm)).toEqual(['real time', 'account', 'user', 'US']);
+    expect(matches.map((match) => match.srcTerm)).toEqual(
+      expect.arrayContaining(['real time', 'account', 'user', 'US']),
+    );
+    expect(matches).toHaveLength(4);
   });
 
-  it('keeps non-English final matching strict', async () => {
+  it('uses English-profile variants for non-CJK source locales', async () => {
     const service = createServiceWithEntries(
       [
         {
@@ -169,7 +204,8 @@ describe('TBService', () => {
 
     const matches = await service.findMatches(1, buildSegment('Accounts are synced.'));
 
-    expect(matches).toHaveLength(0);
+    expect(matches).toHaveLength(1);
+    expect(matches[0].srcTerm).toBe('account');
   });
 
   it('does not match a multi-word English term from one component word', async () => {
@@ -224,9 +260,8 @@ describe('TBService', () => {
   });
 
   it('matches multi-word English terms when only the final word is pluralized', async () => {
-    const service = createServiceWithEntries([], {
-      srcLang: 'en-US',
-      searchEntries: [
+    const service = createServiceWithEntries(
+      [
         {
           id: 'tb-nela-bird',
           tbId: 'tb-en',
@@ -254,14 +289,18 @@ describe('TBService', () => {
           priority: 2,
         },
       ],
-    });
+      { srcLang: 'en-US', searchEntries: [] },
+    );
 
     const matches = await service.findMatches(
       1,
       buildSegment('Nela Birds and Masquerade Lynxes appear.'),
     );
 
-    expect(matches.map((match) => match.srcTerm)).toEqual(['Masquerade Lynx', 'Nela Bird']);
+    expect(matches.map((match) => match.srcTerm)).toEqual(
+      expect.arrayContaining(['Masquerade Lynx', 'Nela Bird']),
+    );
+    expect(matches).toHaveLength(2);
   });
 
   it('matches cjk term in sentence', async () => {
@@ -279,7 +318,7 @@ describe('TBService', () => {
         tbName: 'UI TB',
         priority: 1,
       },
-    ]);
+    ], { srcLang: 'zh-CN' });
 
     const matches = await service.findMatches(1, buildSegment('请点击设置按钮然后保存'));
     expect(matches).toHaveLength(1);
@@ -302,7 +341,7 @@ describe('TBService', () => {
         tbName: 'UI TB',
         priority: 1,
       },
-    ]);
+    ], { srcLang: 'zh-CN' });
 
     const matches = await service.findMatches(
       1,
@@ -333,7 +372,7 @@ describe('TBService', () => {
         tbName: 'UI TB',
         priority: 1,
       },
-    ]);
+    ], { srcLang: 'zh-CN' });
 
     const matches = await service.findMatches(1, buildSegment('请保管好ＡＰＩ key。'));
     expect(matches).toHaveLength(1);
@@ -410,7 +449,7 @@ describe('TBService', () => {
     expect(matches[0].tgtTerm).toBe('clé API');
   });
 
-  it('falls back to full mounted term scan for non-English projects when candidate search returns no rows', async () => {
+  it('falls back to full mounted term scan for CJK projects when candidate search returns no rows', async () => {
     const entries = [
       {
         id: 'tb-fallback',
@@ -433,7 +472,7 @@ describe('TBService', () => {
     expect(matches[0].tbName).toBe('Fallback TB');
   });
 
-  it('does not use full mounted term scan for English projects when candidate search returns no rows', async () => {
+  it('matches English mounted terms through recognizer when candidate search returns no rows', async () => {
     const entries = [
       {
         id: 'tb-english-fallback',
@@ -459,17 +498,43 @@ describe('TBService', () => {
     const dbMock = {
       listProjectTermEntries: vi.fn().mockReturnValue(entries),
       searchProjectTermEntries: vi.fn().mockReturnValue([]),
-    } satisfies Pick<TBRepository, 'listProjectTermEntries' | 'searchProjectTermEntries'>;
+      getProjectMountedTermBases: vi.fn().mockReturnValue([
+        {
+          id: 'tb-english-fallback-base',
+          name: 'English Fallback TB',
+          srcLang: 'en-US',
+          tgtLang: 'fr-FR',
+          createdAt: '',
+          updatedAt: '',
+          priority: 1,
+          isEnabled: 1,
+        },
+      ]),
+      getTBDataVersion: vi.fn().mockReturnValue(1),
+      getTermBaseStats: vi.fn().mockReturnValue({
+        entryCount: entries.length,
+        maxEntryUpdatedAt: null,
+      }),
+      listTBEntries: vi.fn().mockReturnValue(entries),
+    } satisfies Pick<
+      TBRepository,
+      | 'listProjectTermEntries'
+      | 'searchProjectTermEntries'
+      | 'getProjectMountedTermBases'
+      | 'getTBDataVersion'
+      | 'getTermBaseStats'
+      | 'listTBEntries'
+    >;
     const service = new TBService(projectRepoMock as ProjectRepository, dbMock as TBRepository);
 
     const matches = await service.findMatches(1, buildSegment('Open Settings now.'));
 
-    expect(matches).toEqual([]);
-    expect(dbMock.listProjectTermEntries).not.toHaveBeenCalled();
+    expect(matches.map((match) => match.srcTerm)).toEqual(['Settings']);
+    expect(dbMock.listProjectTermEntries).toHaveBeenCalledWith(1);
   });
 
   it('passes project source locale into candidate search and final term matching', async () => {
-    const searchProjectTermEntries = vi.fn().mockReturnValue([
+    const localeEntries = [
       {
         id: 'tb-locale',
         tbId: 'tb-locale-base',
@@ -483,7 +548,8 @@ describe('TBService', () => {
         tbName: 'Locale TB',
         priority: 1,
       },
-    ]);
+    ];
+    const searchProjectTermEntries = vi.fn().mockReturnValue(localeEntries);
     const projectRepoMock = {
       getProject: () => ({
         id: 1,
@@ -492,9 +558,35 @@ describe('TBService', () => {
       }),
     } satisfies Pick<ProjectRepository, 'getProject'>;
     const dbMock = {
-      listProjectTermEntries: () => [],
+      listProjectTermEntries: () => localeEntries,
       searchProjectTermEntries,
-    } satisfies Pick<TBRepository, 'listProjectTermEntries' | 'searchProjectTermEntries'>;
+      getProjectMountedTermBases: () => [
+        {
+          id: 'tb-locale-base',
+          name: 'Locale TB',
+          srcLang: 'en-US',
+          tgtLang: 'ko-KR',
+          createdAt: '',
+          updatedAt: '',
+          priority: 1,
+          isEnabled: 1,
+        },
+      ],
+      getTBDataVersion: () => 1,
+      getTermBaseStats: () => ({
+        entryCount: localeEntries.length + 1,
+        maxEntryUpdatedAt: null,
+      }),
+      listTBEntries: () => localeEntries,
+    } satisfies Pick<
+      TBRepository,
+      | 'listProjectTermEntries'
+      | 'searchProjectTermEntries'
+      | 'getProjectMountedTermBases'
+      | 'getTBDataVersion'
+      | 'getTermBaseStats'
+      | 'listTBEntries'
+    >;
     const service = new TBService(projectRepoMock as ProjectRepository, dbMock as TBRepository);
 
     const matches = await service.findMatches(1, buildSegment('Please keep your API key secure.'));

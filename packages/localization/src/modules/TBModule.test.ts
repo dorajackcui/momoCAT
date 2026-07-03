@@ -3,7 +3,7 @@ import { CATDatabase } from '../../../db/src';
 import { describe, expect, it, vi } from 'vitest';
 import { SqliteProjectRepository } from '../adapters/sqlite/SqliteProjectRepository';
 import { SqliteTBRepository } from '../adapters/sqlite/SqliteTBRepository';
-import type { TBRepository } from '../ports';
+import type { ProjectRepository, TBRepository } from '../ports';
 import { TBService } from '../internalServices';
 import { createTransientSegment } from '../transientSegment';
 import {
@@ -14,6 +14,188 @@ import {
 } from './TBModule';
 
 describe('TBModule', () => {
+  it('does not query DB fallback when the EN/general recognizer has a complete mounted TB index', async () => {
+    const entry = makeProjectTermEntry({
+      id: 'term-settings',
+      tbId: 'tb-complete',
+      srcTerm: 'Settings',
+      tgtTerm: 'parametres',
+      srcNorm: 'settings',
+    });
+    const searchProjectTermEntries = vi.fn().mockReturnValue([]);
+    const service = new TBService(
+      makeProjectRepo('en-US', 'fr-FR') as ProjectRepository,
+      {
+        getTBDataVersion: vi.fn().mockReturnValue(1),
+        getProjectMountedTermBases: vi.fn().mockReturnValue([
+          makeMountedTBRecord({ id: 'tb-complete' }),
+        ]),
+        getTermBaseStats: vi.fn().mockReturnValue({
+          entryCount: 1,
+          maxEntryUpdatedAt: entry.updatedAt,
+        }),
+        listProjectTermEntries: vi.fn().mockReturnValue([entry]),
+        searchProjectTermEntries,
+      } as unknown as TBRepository,
+    );
+
+    const matches = await service.findMatches(
+      1,
+      createTransientSegment(
+        { id: 'unit-complete-en-recognizer', source: 'Open Settings now.' },
+        0,
+        {
+          projectId: 1,
+          sourceLanguage: 'en-US',
+          targetLanguage: 'fr-FR',
+        },
+      ),
+    );
+
+    expect(matches.map((match) => match.srcTerm)).toEqual(['Settings']);
+    expect(searchProjectTermEntries).not.toHaveBeenCalled();
+  });
+
+  it('refreshes the EN/general recognizer cache when the TB data version changes', async () => {
+    const firstEntry = makeProjectTermEntry({
+      id: 'term-settings',
+      tbId: 'tb-cache',
+      srcTerm: 'Settings',
+      tgtTerm: 'parametres',
+      srcNorm: 'settings',
+      updatedAt: '2026-07-03T09:00:00.000Z',
+    });
+    const secondEntry = makeProjectTermEntry({
+      id: 'term-wardrobe',
+      tbId: 'tb-cache',
+      srcTerm: 'Wardrobe',
+      tgtTerm: 'garde-robe',
+      srcNorm: 'wardrobe',
+      updatedAt: '2026-07-03T09:01:00.000Z',
+    });
+    let entries = [firstEntry];
+    let tbDataVersion = 1;
+    const listProjectTermEntries = vi.fn().mockImplementation(() => entries);
+    const service = new TBService(
+      makeProjectRepo('en-US', 'fr-FR') as ProjectRepository,
+      {
+        getTBDataVersion: vi.fn().mockImplementation(() => tbDataVersion),
+        getProjectMountedTermBases: vi.fn().mockReturnValue([
+          makeMountedTBRecord({ id: 'tb-cache', updatedAt: '2026-07-03T08:00:00.000Z' }),
+        ]),
+        getTermBaseStats: vi.fn().mockImplementation(() => ({
+          entryCount: entries.length,
+          maxEntryUpdatedAt: null,
+        })),
+        listProjectTermEntries,
+        searchProjectTermEntries: vi.fn().mockReturnValue([]),
+      } as unknown as TBRepository,
+    );
+
+    const firstMatches = await service.findMatches(
+      1,
+      createTransientSegment({ id: 'unit-cache-first', source: 'Open Settings.' }, 0, {
+        projectId: 1,
+        sourceLanguage: 'en-US',
+        targetLanguage: 'fr-FR',
+      }),
+    );
+    entries = [firstEntry, secondEntry];
+    tbDataVersion += 1;
+    const secondMatches = await service.findMatches(
+      1,
+      createTransientSegment({ id: 'unit-cache-second', source: 'Open Wardrobe.' }, 0, {
+        projectId: 1,
+        sourceLanguage: 'en-US',
+        targetLanguage: 'fr-FR',
+      }),
+    );
+
+    expect(firstMatches.map((match) => match.srcTerm)).toEqual(['Settings']);
+    expect(secondMatches.map((match) => match.srcTerm)).toEqual(['Wardrobe']);
+    expect(listProjectTermEntries).toHaveBeenCalledTimes(2);
+  });
+
+  it('reuses the EN/general recognizer cache while the TB data version is unchanged', async () => {
+    const entry = makeProjectTermEntry({
+      id: 'term-settings',
+      tbId: 'tb-stable',
+      srcTerm: 'Settings',
+      tgtTerm: 'parametres',
+      srcNorm: 'settings',
+    });
+    const listProjectTermEntries = vi.fn().mockReturnValue([entry]);
+    const service = new TBService(
+      makeProjectRepo('en-US', 'fr-FR') as ProjectRepository,
+      {
+        getTBDataVersion: vi.fn().mockReturnValue(7),
+        getProjectMountedTermBases: vi.fn().mockReturnValue([
+          makeMountedTBRecord({ id: 'tb-stable' }),
+        ]),
+        getTermBaseStats: vi.fn().mockReturnValue({ entryCount: 1, maxEntryUpdatedAt: null }),
+        listProjectTermEntries,
+        searchProjectTermEntries: vi.fn().mockReturnValue([]),
+      } as unknown as TBRepository,
+    );
+
+    for (let iteration = 0; iteration < 3; iteration += 1) {
+      const matches = await service.findMatches(
+        1,
+        createTransientSegment(
+          { id: `unit-cache-stable-${iteration}`, source: 'Open Settings.' },
+          0,
+          { projectId: 1, sourceLanguage: 'en-US', targetLanguage: 'fr-FR' },
+        ),
+      );
+      expect(matches.map((match) => match.srcTerm)).toEqual(['Settings']);
+    }
+
+    expect(listProjectTermEntries).toHaveBeenCalledTimes(1);
+  });
+
+  it('evicts the least recently used EN/general recognizer index beyond the project cap', async () => {
+    const entry = makeProjectTermEntry({
+      id: 'term-settings',
+      tbId: 'tb-lru',
+      srcTerm: 'Settings',
+      tgtTerm: 'parametres',
+      srcNorm: 'settings',
+    });
+    const listProjectTermEntries = vi.fn().mockReturnValue([entry]);
+    const service = new TBService(
+      makeProjectRepo('en-US', 'fr-FR') as ProjectRepository,
+      {
+        getTBDataVersion: vi.fn().mockReturnValue(1),
+        getProjectMountedTermBases: vi.fn().mockReturnValue([
+          makeMountedTBRecord({ id: 'tb-lru' }),
+        ]),
+        getTermBaseStats: vi.fn().mockReturnValue({ entryCount: 1, maxEntryUpdatedAt: null }),
+        listProjectTermEntries,
+        searchProjectTermEntries: vi.fn().mockReturnValue([]),
+      } as unknown as TBRepository,
+    );
+    const findMatchesForProject = (projectId: number, iteration: number) =>
+      service.findMatches(
+        projectId,
+        createTransientSegment(
+          { id: `unit-cache-lru-${projectId}-${iteration}`, source: 'Open Settings.' },
+          0,
+          { projectId, sourceLanguage: 'en-US', targetLanguage: 'fr-FR' },
+        ),
+      );
+
+    for (let projectId = 1; projectId <= 5; projectId += 1) {
+      await findMatchesForProject(projectId, 0);
+    }
+    expect(listProjectTermEntries).toHaveBeenCalledTimes(5);
+
+    // Projects 2-5 are still cached; project 1 was evicted and rebuilds on access.
+    await findMatchesForProject(5, 1);
+    expect(listProjectTermEntries).toHaveBeenCalledTimes(5);
+    await findMatchesForProject(1, 1);
+    expect(listProjectTermEntries).toHaveBeenCalledTimes(6);
+  });
+
   it('inspects mounted TBs, raw matches, selected TB references, and policy limits', async () => {
     const db = new CATDatabase(':memory:');
     try {
@@ -526,6 +708,58 @@ describe('TBModule', () => {
     expect(artifact).not.toHaveProperty('promptText');
   });
 });
+
+function makeProjectRepo(srcLang: string, tgtLang: string): Pick<ProjectRepository, 'getProject'> {
+  return {
+    getProject: () => ({
+      id: 1,
+      name: 'Test Project',
+      srcLang,
+      tgtLang,
+      projectType: 'translation',
+      aiPrompt: null,
+      aiModel: null,
+      qaSettings: {},
+      createdAt: '2026-07-03T00:00:00.000Z',
+      updatedAt: '2026-07-03T00:00:00.000Z',
+    }),
+  };
+}
+
+function makeMountedTBRecord(
+  overrides: Partial<ReturnType<TBRepository['getProjectMountedTermBases']>[number]> = {},
+): ReturnType<TBRepository['getProjectMountedTermBases']>[number] {
+  return {
+    id: 'tb-1',
+    name: 'Mounted TB',
+    srcLang: 'en-US',
+    tgtLang: 'fr-FR',
+    createdAt: '2026-07-03T00:00:00.000Z',
+    updatedAt: '2026-07-03T00:00:00.000Z',
+    priority: 1,
+    isEnabled: 1,
+    ...overrides,
+  };
+}
+
+function makeProjectTermEntry(
+  overrides: Partial<ReturnType<TBRepository['listProjectTermEntries']>[number]> = {},
+): ReturnType<TBRepository['listProjectTermEntries']>[number] {
+  return {
+    id: 'term-1',
+    tbId: 'tb-1',
+    srcTerm: 'term',
+    tgtTerm: 'terme',
+    srcNorm: 'term',
+    note: null,
+    createdAt: '2026-07-03T00:00:00.000Z',
+    updatedAt: '2026-07-03T00:00:00.000Z',
+    usageCount: 1,
+    tbName: 'Mounted TB',
+    priority: 1,
+    ...overrides,
+  };
+}
 
 function createTBMatch(index: number): TBMatch {
   const now = new Date().toISOString();
