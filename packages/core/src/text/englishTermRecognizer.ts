@@ -30,6 +30,7 @@ interface IndexedVariant<T extends EnglishTermRecognizerEntry> {
   entry: T;
   key: string;
   tokens: string[];
+  separators: SeparatorRule[];
   tokenCount: number;
   variantKind: EnglishTermVariantKind;
   variantText: string;
@@ -45,6 +46,32 @@ interface TermVariant {
   kind: EnglishTermVariantKind;
   text: string;
   tokens: string[];
+  separators: SeparatorRule[];
+}
+
+interface SeparatorRule {
+  kind: 'whitespace' | 'hyphen' | 'exact' | 'dotted-acronym' | 'dotted-acronym-final';
+  value?: string;
+}
+
+interface TermTokenization {
+  normalizedText: string;
+  units: TermUnit[];
+  tokens: string[];
+  separators: SeparatorRule[];
+}
+
+interface TermUnit {
+  raw: string;
+  start: number;
+  end: number;
+  fragment: TermFragment;
+}
+
+interface TermFragment {
+  tokens: string[];
+  separators: SeparatorRule[];
+  requiresFinalAcronymPeriod: boolean;
 }
 
 const WORD_RE = /[\p{L}\p{N}]+/gu;
@@ -69,6 +96,7 @@ export class EnglishTermRecognizer<T extends EnglishTermRecognizerEntry> {
           entry,
           key,
           tokens: variant.tokens,
+          separators: variant.separators,
           tokenCount: variant.tokens.length,
           variantKind: variant.kind,
           variantText: variant.text,
@@ -111,7 +139,7 @@ export class EnglishTermRecognizer<T extends EnglishTermRecognizerEntry> {
         if (!variants) continue;
 
         for (const variant of variants) {
-          if (!hasAllowedSeparators(text, sourceTokens, startIndex, endIndex, variant)) {
+          if (!hasExpectedSeparators(text, sourceTokens, startIndex, endIndex, variant)) {
             continue;
           }
 
@@ -140,13 +168,19 @@ export function buildEnglishTermRecognizer<T extends EnglishTermRecognizerEntry>
 
 function buildEnglishTermVariants(srcTerm: string): TermVariant[] {
   const variants = new Map<string, TermVariant>();
-  const canonicalTokens = tokenizeKey(srcTerm);
-  if (canonicalTokens.length === 0) return [];
+  const term = tokenizeTerm(srcTerm);
+  if (term.tokens.length === 0) return [];
 
-  addVariant(variants, canonicalTokens, 'canonical', normalizeVariantText(srcTerm));
-  addArticleVariants(variants, canonicalTokens);
-  addFinalInflectionVariants(variants, canonicalTokens);
-  addAcronymVariants(variants, srcTerm);
+  addVariantWithHyphenSpace(
+    variants,
+    term.tokens,
+    term.separators,
+    'canonical',
+    normalizeVariantText(srcTerm),
+  );
+  addArticleVariants(variants, term.tokens, term.separators);
+  addFinalInflectionVariants(variants, term.tokens, term.separators);
+  addAcronymVariants(variants, term);
 
   return Array.from(variants.values());
 }
@@ -154,71 +188,205 @@ function buildEnglishTermVariants(srcTerm: string): TermVariant[] {
 function addVariant(
   variants: Map<string, TermVariant>,
   tokens: string[],
+  separators: SeparatorRule[],
   kind: EnglishTermVariantKind,
   text = tokens.join(' '),
 ): void {
   if (tokens.length === 0) return;
-  const key = tokens.join(' ');
+  if (separators.length !== tokens.length - 1) return;
+  const key = variantIdentity(tokens, separators);
   if (variants.has(key)) return;
-  variants.set(key, { kind, text, tokens });
+  variants.set(key, { kind, text, tokens, separators });
+}
+
+function addVariantWithHyphenSpace(
+  variants: Map<string, TermVariant>,
+  tokens: string[],
+  separators: SeparatorRule[],
+  kind: EnglishTermVariantKind,
+  text = tokens.join(' '),
+): void {
+  addVariant(variants, tokens, separators, kind, text);
+  addHyphenSpaceVariants(variants, tokens, separators);
+}
+
+function addHyphenSpaceVariants(
+  variants: Map<string, TermVariant>,
+  tokens: string[],
+  separators: SeparatorRule[],
+): void {
+  for (let index = 0; index < separators.length; index += 1) {
+    const replacement = toHyphenSpaceSeparator(separators[index]);
+    if (!replacement) continue;
+    const variantSeparators = separators.slice();
+    variantSeparators[index] = replacement;
+    addVariant(variants, tokens, variantSeparators, 'hyphen-space');
+  }
 }
 
 function addArticleVariants(
   variants: Map<string, TermVariant>,
   canonicalTokens: string[],
+  canonicalSeparators: SeparatorRule[],
 ): void {
   const [first, ...rest] = canonicalTokens;
   if (ENGLISH_ARTICLES.has(first)) {
-    addVariant(variants, rest, 'article');
+    addVariantWithHyphenSpace(variants, rest, canonicalSeparators.slice(1), 'article');
     return;
   }
 
   for (const article of ENGLISH_ARTICLES) {
-    addVariant(variants, [article, ...canonicalTokens], 'article');
+    addVariantWithHyphenSpace(
+      variants,
+      [article, ...canonicalTokens],
+      [{ kind: 'whitespace' }, ...canonicalSeparators],
+      'article',
+    );
   }
 }
 
 function addFinalInflectionVariants(
   variants: Map<string, TermVariant>,
   canonicalTokens: string[],
+  canonicalSeparators: SeparatorRule[],
 ): void {
   const last = canonicalTokens[canonicalTokens.length - 1];
   const prefix = canonicalTokens.slice(0, -1);
   const singular = singularizeRegularWord(last);
   const plural = pluralizeRegularWord(last);
 
-  if (singular) addVariant(variants, [...prefix, singular], 'inflection');
-  if (plural) addVariant(variants, [...prefix, plural], 'inflection');
+  if (singular) {
+    addVariantWithHyphenSpace(variants, [...prefix, singular], canonicalSeparators, 'inflection');
+  }
+  if (plural) {
+    addVariantWithHyphenSpace(variants, [...prefix, plural], canonicalSeparators, 'inflection');
+  }
 }
 
 function addAcronymVariants(
   variants: Map<string, TermVariant>,
-  srcTerm: string,
+  term: TermTokenization,
 ): void {
-  const rawTokens = tokenizeRawTermTokens(srcTerm);
+  for (let index = 0; index < term.units.length; index += 1) {
+    const acronymFragment = buildAcronymFragment(term.units[index].raw);
+    if (!acronymFragment) continue;
 
-  for (let index = 0; index < rawTokens.length; index += 1) {
-    const acronymTokens = buildAcronymTokens(rawTokens[index]);
-    if (!acronymTokens) continue;
-
-    const tokens = rawTokens.flatMap((token, tokenIndex) =>
-      tokenIndex === index ? acronymTokens : tokenizeKey(token),
+    const fragments = term.units.map((unit, unitIndex) =>
+      unitIndex === index ? acronymFragment : unit.fragment,
     );
-    addVariant(variants, tokens, 'acronym');
+    const variant = buildVariantFromFragments(term, fragments, 'acronym');
+    addVariant(variants, variant.tokens, variant.separators, variant.kind, variant.text);
   }
 }
 
-function buildAcronymTokens(rawToken: string): string[] | null {
+function buildAcronymFragment(rawToken: string): TermFragment | null {
   const raw = rawToken.normalize('NFKC').trim();
-  if (/^[A-Z]{2,5}$/u.test(raw)) return Array.from(raw.toLowerCase());
+  if (/^[A-Z]{2,5}$/u.test(raw)) {
+    const tokens = Array.from(raw.toLowerCase());
+    return {
+      tokens,
+      separators: tokens.slice(1).map(() => ({ kind: 'dotted-acronym' })),
+      requiresFinalAcronymPeriod: true,
+    };
+  }
   if (/^[A-Z](?:\.[A-Z]){1,4}\.?$/u.test(raw)) {
-    return [raw.replace(/\./g, '').toLowerCase()];
+    return {
+      tokens: [raw.replace(/\./g, '').toLowerCase()],
+      separators: [],
+      requiresFinalAcronymPeriod: false,
+    };
   }
   return null;
 }
 
-function tokenizeRawTermTokens(value: string): string[] {
-  return Array.from(value.normalize('NFKC').matchAll(RAW_TERM_TOKEN_RE), (match) => match[0]);
+function tokenizeTerm(value: string): TermTokenization {
+  const normalizedText = value.normalize('NFKC');
+  const units = Array.from(normalizedText.matchAll(RAW_TERM_TOKEN_RE), (match) => ({
+    raw: match[0],
+    start: match.index ?? 0,
+    end: (match.index ?? 0) + match[0].length,
+    fragment: buildTermFragment(match[0]),
+  })).filter((unit) => unit.fragment.tokens.length > 0);
+  const canonical = buildVariantFromFragments(
+    { normalizedText, units },
+    units.map((unit) => unit.fragment),
+    'canonical',
+  );
+
+  return {
+    normalizedText,
+    units,
+    tokens: canonical.tokens,
+    separators: canonical.separators,
+  };
+}
+
+function buildVariantFromFragments(
+  term: Pick<TermTokenization, 'normalizedText' | 'units'>,
+  fragments: TermFragment[],
+  kind: EnglishTermVariantKind,
+): TermVariant {
+  const tokens: string[] = [];
+  const separators: SeparatorRule[] = [];
+
+  for (let index = 0; index < fragments.length; index += 1) {
+    const fragment = fragments[index];
+    if (fragment.tokens.length === 0) continue;
+
+    if (tokens.length > 0) {
+      separators.push(buildInterUnitSeparator(term, fragments[index - 1], index));
+    }
+
+    tokens.push(fragment.tokens[0]);
+    for (let tokenIndex = 1; tokenIndex < fragment.tokens.length; tokenIndex += 1) {
+      separators.push(fragment.separators[tokenIndex - 1]);
+      tokens.push(fragment.tokens[tokenIndex]);
+    }
+  }
+
+  return {
+    kind,
+    text: tokens.join(' '),
+    tokens,
+    separators,
+  };
+}
+
+function buildInterUnitSeparator(
+  term: Pick<TermTokenization, 'normalizedText' | 'units'>,
+  previousFragment: TermFragment,
+  unitIndex: number,
+): SeparatorRule {
+  const separator = term.normalizedText.slice(
+    term.units[unitIndex - 1].end,
+    term.units[unitIndex].start,
+  );
+
+  if (previousFragment.requiresFinalAcronymPeriod && /^\s+$/u.test(separator)) {
+    return { kind: 'dotted-acronym-final' };
+  }
+
+  return buildCanonicalSeparator(separator);
+}
+
+function buildTermFragment(rawValue: string): TermFragment {
+  const normalized = rawValue.normalize('NFKC');
+  const matches = Array.from(normalized.matchAll(WORD_RE));
+  const tokens = matches.map((match) => normalizeToken(match[0]));
+  const separators: SeparatorRule[] = [];
+
+  for (let index = 1; index < matches.length; index += 1) {
+    const previous = matches[index - 1];
+    const current = matches[index];
+    const previousEnd = (previous.index ?? 0) + previous[0].length;
+    separators.push(buildCanonicalSeparator(normalized.slice(previousEnd, current.index ?? 0)));
+  }
+
+  return {
+    tokens,
+    separators,
+    requiresFinalAcronymPeriod: /^[A-Z](?:\.[A-Z]){1,4}\.$/u.test(normalized),
+  };
 }
 
 function tokenizeKey(value: string): string[] {
@@ -269,7 +437,7 @@ function crossesHardBoundary(start: number, end: number, hardBoundaryOffsets: nu
   return hardBoundaryOffsets.some((offset) => start < offset && offset < end);
 }
 
-function hasAllowedSeparators<T extends EnglishTermRecognizerEntry>(
+function hasExpectedSeparators<T extends EnglishTermRecognizerEntry>(
   text: string,
   sourceTokens: SourceToken[],
   startIndex: number,
@@ -279,7 +447,7 @@ function hasAllowedSeparators<T extends EnglishTermRecognizerEntry>(
   for (let index = startIndex + 1; index <= endIndex; index += 1) {
     const separator = text.slice(sourceTokens[index - 1].end, sourceTokens[index].start);
     const variantTokenIndex = index - startIndex;
-    if (!isAllowedSeparator(separator, variant.tokens, variantTokenIndex)) {
+    if (!matchesSeparatorRule(separator, variant.separators[variantTokenIndex - 1])) {
       return false;
     }
   }
@@ -287,49 +455,52 @@ function hasAllowedSeparators<T extends EnglishTermRecognizerEntry>(
   return true;
 }
 
-function isAllowedSeparator(
-  separator: string,
-  variantTokens: string[],
-  variantTokenIndex: number,
-): boolean {
-  if (/^\s*$/u.test(separator)) return true;
-  if (
-    HYPHEN_RE.test(separator) &&
-    HYPHEN_SEPARATOR_RE.test(separator) &&
-    !isAcronymLetterBoundary(variantTokens, variantTokenIndex)
-  ) {
-    return true;
+function buildCanonicalSeparator(separator: string): SeparatorRule {
+  const normalized = normalizeSeparator(separator);
+  if (/^\s+$/u.test(normalized)) return { kind: 'whitespace' };
+  if (HYPHEN_RE.test(normalized) && HYPHEN_SEPARATOR_RE.test(normalized)) {
+    return { kind: 'hyphen' };
   }
-  return isDottedAcronymSeparator(separator, variantTokens, variantTokenIndex);
+  return { kind: 'exact', value: normalized };
 }
 
-function isDottedAcronymSeparator(
-  separator: string,
-  variantTokens: string[],
-  variantTokenIndex: number,
-): boolean {
-  const previous = variantTokens[variantTokenIndex - 1];
-  const current = variantTokens[variantTokenIndex];
-  if (!isSingleAcronymLetter(previous)) return false;
-
-  if (separator === '.' && isSingleAcronymLetter(current)) return true;
-
-  if (/^\.\s+$/u.test(separator) && !isSingleAcronymLetter(current)) {
-    return variantTokenIndex >= 2 && isSingleAcronymLetter(variantTokens[variantTokenIndex - 2]);
+function matchesSeparatorRule(separator: string, rule: SeparatorRule): boolean {
+  const normalized = normalizeSeparator(separator);
+  switch (rule.kind) {
+    case 'whitespace':
+      return /^\s+$/u.test(normalized);
+    case 'hyphen':
+      return HYPHEN_RE.test(normalized) && HYPHEN_SEPARATOR_RE.test(normalized);
+    case 'exact':
+      return normalized === rule.value;
+    case 'dotted-acronym':
+      return normalized === '.';
+    case 'dotted-acronym-final':
+      return /^\.\s+$/u.test(normalized);
   }
-
-  return false;
 }
 
-function isSingleAcronymLetter(value: string | undefined): boolean {
-  return Boolean(value && /^[a-z]$/u.test(value));
+function toHyphenSpaceSeparator(separator: SeparatorRule): SeparatorRule | null {
+  switch (separator.kind) {
+    case 'whitespace':
+      return { kind: 'hyphen' };
+    case 'hyphen':
+      return { kind: 'whitespace' };
+    default:
+      return null;
+  }
 }
 
-function isAcronymLetterBoundary(variantTokens: string[], variantTokenIndex: number): boolean {
-  return (
-    isSingleAcronymLetter(variantTokens[variantTokenIndex - 1]) &&
-    isSingleAcronymLetter(variantTokens[variantTokenIndex])
-  );
+function normalizeSeparator(separator: string): string {
+  return separator.normalize('NFKC');
+}
+
+function variantIdentity(tokens: string[], separators: SeparatorRule[]): string {
+  return `${tokens.join('\u0001')}\u0002${separators.map(separatorIdentity).join('\u0001')}`;
+}
+
+function separatorIdentity(separator: SeparatorRule): string {
+  return separator.value ? `${separator.kind}:${separator.value}` : separator.kind;
 }
 
 function suppressNestedSameEntryMatches<T extends EnglishTermRecognizerEntry>(

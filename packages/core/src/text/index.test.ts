@@ -644,6 +644,12 @@ describe('English Term Recognizer', () => {
         srcTerm: 'API key',
       },
     ]);
+    const apiSlashKeyRecognizer = buildEnglishTermRecognizer([
+      {
+        id: 'api-slash-key',
+        srcTerm: 'API/key',
+      },
+    ]);
     const skyRedRecognizer = buildEnglishTermRecognizer([
       {
         id: 'sky-red',
@@ -660,12 +666,24 @@ describe('English Term Recognizer', () => {
     expect(apiKeyRecognizer.scan('API/key', { hardBoundaryOffsets: [] })).toEqual([]);
     expect(apiKeyRecognizer.scan('API: key', { hardBoundaryOffsets: [] })).toEqual([]);
     expect(apiKeyRecognizer.scan('API. key', { hardBoundaryOffsets: [] })).toEqual([]);
+    expect(
+      apiSlashKeyRecognizer.scan('API/key', {
+        hardBoundaryOffsets: [],
+      }).map((match) => [match.entry.id, match.variantKind, match.start, match.end]),
+    ).toEqual([['api-slash-key', 'canonical', 0, 7]]);
+    expect(apiSlashKeyRecognizer.scan('API key', { hardBoundaryOffsets: [] })).toEqual([]);
     expect(skyRedRecognizer.scan('Sky, Red', { hardBoundaryOffsets: [] })).toEqual([]);
+    expect(
+      usRecognizer.scan('US', {
+        hardBoundaryOffsets: [],
+      }).map((match) => [match.entry.id, match.variantKind, match.start, match.end]),
+    ).toEqual([['us', 'canonical', 0, 2]]);
     expect(
       usRecognizer.scan('U.S.', {
         hardBoundaryOffsets: [],
       }).map((match) => [match.entry.id, match.variantKind, match.start, match.end]),
     ).toEqual([['us', 'acronym', 0, 3]]);
+    expect(usRecognizer.scan('U S', { hardBoundaryOffsets: [] })).toEqual([]);
     expect(usRecognizer.scan('U-S', { hardBoundaryOffsets: [] })).toEqual([]);
   });
 
