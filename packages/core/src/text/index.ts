@@ -33,5 +33,7 @@ export {
   computeSrcHash,
   serializeTokensToDisplayText,
   serializeTokensToSearchText,
+  serializeTokensToSearchTextWithBoundaries,
   serializeTokensToTextOnly,
+  type SearchTextWithBoundaries,
 } from './tokenText';

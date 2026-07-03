@@ -16,6 +16,7 @@ import {
   resolveTMTextProfile,
   serializeTokensToDisplayText,
   serializeTokensToSearchText,
+  serializeTokensToSearchTextWithBoundaries,
   serializeTokensToTextOnly,
   suppressNestedTermMatches,
 } from './index';
@@ -69,6 +70,41 @@ describe('Text Utilities', () => {
     ]);
 
     expect(cjkTaggedText).toBe('喵居商店购买获得 5.当任意单个小鱼干');
+  });
+
+  it('marks hard search boundaries introduced by non-text tokens', () => {
+    const tagged = serializeTokensToSearchTextWithBoundaries([
+      { type: 'text', content: 'API' },
+      { type: 'tag', content: '<b>' },
+      { type: 'text', content: 'key' },
+    ]);
+
+    expect(tagged.text).toBe('API key');
+    expect(tagged.hardBoundaryOffsets).toEqual([3]);
+
+    const plain = serializeTokensToSearchTextWithBoundaries([
+      { type: 'text', content: 'API key' },
+    ]);
+
+    expect(plain.text).toBe('API key');
+    expect(plain.hardBoundaryOffsets).toEqual([]);
+  });
+
+  it('keeps boundary-aware search text equal to regular search text', () => {
+    const tokens: Token[] = [
+      { type: 'ws', content: '  ' },
+      { type: 'text', content: '  Hello' },
+      { type: 'tag', content: '{1}' },
+      { type: 'text', content: 'world  ' },
+    ];
+
+    expect(serializeTokensToSearchTextWithBoundaries(tokens).text).toBe(
+      serializeTokensToSearchText(tokens),
+    );
+    expect(serializeTokensToSearchTextWithBoundaries(tokens)).toEqual({
+      text: 'Hello world',
+      hardBoundaryOffsets: [5],
+    });
   });
 });
 
