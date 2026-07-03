@@ -183,6 +183,61 @@ describe('TBModule', () => {
     }
   });
 
+  it.each([10, 50, 120, 219])(
+    'recalls EN/general TB terms at token position %s in long source segments',
+    async (termPosition) => {
+      const db = new CATDatabase(':memory:');
+      try {
+        const projectId = db.createProject('English Long Source TB Recall', 'en-US', 'fr-FR');
+        const tbId = db.createTermBase('Long Source Terms', 'en-US', 'fr-FR');
+        db.mountTermBaseToProject(projectId, tbId, 20);
+        db.insertTBEntryIfAbsentBySrcTerm({
+          id: `term-day-of-birth-${termPosition}`,
+          tbId,
+          srcLang: 'en-US',
+          srcTerm: 'The Day of Birth',
+          tgtTerm: 'Premier souffle',
+        });
+
+        const words = Array.from({ length: 230 }, (_, index) => `filler${index}`);
+        words.splice(termPosition, 0, 'The', 'Day', 'of', 'Birth');
+        const segment = createTransientSegment(
+          {
+            id: `unit-day-of-birth-${termPosition}`,
+            source: words.join(' '),
+          },
+          0,
+          {
+            projectId,
+            sourceLanguage: 'en-US',
+            targetLanguage: 'fr-FR',
+          },
+        );
+        const projectRepo = new SqliteProjectRepository(db);
+        const tbRepo = new SqliteTBRepository(db);
+        const module = new TBModule({
+          tbRepo,
+          tbService: new TBService(projectRepo, tbRepo),
+        });
+
+        const artifact = await module.inspect(projectId, segment);
+
+        expect(artifact.rawMatches.map((match) => match.srcTerm)).toContain('The Day of Birth');
+        expect(artifact.selectedReferences).toEqual(
+          expect.arrayContaining([
+            {
+              srcTerm: 'The Day of Birth',
+              tgtTerm: 'Premier souffle',
+              note: null,
+            },
+          ]),
+        );
+      } finally {
+        db.close();
+      }
+    },
+  );
+
   it('prefers longer EN/general TB matches when suppressing nested terms', async () => {
     const db = new CATDatabase(':memory:');
     try {
