@@ -423,6 +423,8 @@ export interface DesktopApi {
   getMatches: (projectId: number, segment: Segment) => Promise<TMMatch[]>;
   searchConcordance: (projectId: number, query: string) => Promise<TMConcordanceEntry[]>;
   getTermMatches: (projectId: number, segment: Segment) => Promise<TBMatch[]>;
+  prefetchMatches: (projectId: number, segment: Segment) => Promise<TMMatch[]>;
+  prefetchTermMatches: (projectId: number, segment: Segment) => Promise<TBMatch[]>;
 
   listTMs: (type?: TMType) => Promise<TMWithStats[]>;
   getTMPreview: (tmId: string) => Promise<TMAssetPreview>;

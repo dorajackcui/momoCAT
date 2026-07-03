@@ -472,4 +472,202 @@ describe('createReferenceLookupScheduler', () => {
       expect(setResult).toHaveBeenLastCalledWith({ matches: [{ id: 'tm-d' }], terms: [] }, false);
     });
   });
+
+  it('routes prefetch through prefetch fetchers, never the active fetchers', async () => {
+    const getMatches = vi.fn(async () => [{ id: 'tm-active' }] as TMMatch[]);
+    const getTermMatches = vi.fn(async () => [] as TBMatch[]);
+    const prefetchGetMatches = vi.fn(async () => [{ id: 'tm-prefetched' }] as TMMatch[]);
+    const prefetchGetTermMatches = vi.fn(async () => [] as TBMatch[]);
+    const setResult = vi.fn();
+    const scheduler = createReferenceLookupScheduler({
+      fetchers: { getMatches, getTermMatches },
+      prefetchFetchers: {
+        getMatches: prefetchGetMatches,
+        getTermMatches: prefetchGetTermMatches,
+      },
+      setResult,
+      debounceMs: 350,
+    });
+
+    scheduler.prefetch(7, [createSegment('b', 'hash-b')]);
+    await vi.runAllTimersAsync();
+
+    expect(prefetchGetMatches).toHaveBeenCalledTimes(1);
+    expect(prefetchGetTermMatches).toHaveBeenCalledTimes(1);
+    expect(getMatches).not.toHaveBeenCalled();
+    expect(getTermMatches).not.toHaveBeenCalled();
+  });
+
+  it('serves a prefetched segment from cache without an active fetch', async () => {
+    const getMatches = vi.fn(async () => [{ id: 'tm-active' }] as TMMatch[]);
+    const getTermMatches = vi.fn(async () => [] as TBMatch[]);
+    const prefetchGetMatches = vi.fn(async () => [{ id: 'tm-prefetched' }] as TMMatch[]);
+    const prefetchGetTermMatches = vi.fn(async () => [{ id: 'tb-prefetched' }] as TBMatch[]);
+    const setResult = vi.fn();
+    const scheduler = createReferenceLookupScheduler({
+      fetchers: { getMatches, getTermMatches },
+      prefetchFetchers: {
+        getMatches: prefetchGetMatches,
+        getTermMatches: prefetchGetTermMatches,
+      },
+      setResult,
+      debounceMs: 350,
+    });
+
+    scheduler.prefetch(7, [createSegment('b', 'hash-b')]);
+    await vi.runAllTimersAsync();
+
+    // Navigating to the prefetched segment must be an instant cache hit.
+    scheduler.update({ enabled: true, projectId: 7, segment: createSegment('b', 'hash-b') });
+    await vi.runAllTimersAsync();
+
+    expect(setResult).toHaveBeenLastCalledWith(
+      { matches: [{ id: 'tm-prefetched' }], terms: [{ id: 'tb-prefetched' }] },
+      false,
+    );
+    expect(getMatches).not.toHaveBeenCalled();
+    expect(getTermMatches).not.toHaveBeenCalled();
+  });
+
+  it('does not let an active lookup wait behind a stuck in-flight prefetch', async () => {
+    const prefetchTm = deferred<TMMatch[]>();
+    const getMatches = vi.fn(async () => [{ id: 'tm-active' }] as TMMatch[]);
+    const getTermMatches = vi.fn(async () => [] as TBMatch[]);
+    // Simulates a prefetch queued behind long work on the prefetch worker.
+    const prefetchGetMatches = vi.fn(() => prefetchTm.promise);
+    const prefetchGetTermMatches = vi.fn(async () => [] as TBMatch[]);
+    const setResult = vi.fn();
+    const scheduler = createReferenceLookupScheduler({
+      fetchers: { getMatches, getTermMatches },
+      prefetchFetchers: {
+        getMatches: prefetchGetMatches,
+        getTermMatches: prefetchGetTermMatches,
+      },
+      setResult,
+      debounceMs: 350,
+    });
+
+    scheduler.prefetch(7, [createSegment('b', 'hash-b')]);
+    scheduler.update({ enabled: true, projectId: 7, segment: createSegment('b', 'hash-b') });
+    await vi.advanceTimersByTimeAsync(350);
+
+    // The active lookup fires on the active channel instead of waiting for
+    // the stuck prefetch, and its result is published immediately.
+    expect(getMatches).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(setResult).toHaveBeenLastCalledWith(
+        { matches: [{ id: 'tm-active' }], terms: [] },
+        false,
+      );
+    });
+
+    // The stuck prefetch settling later must not disturb anything.
+    prefetchTm.resolve([{ id: 'tm-prefetched' }] as TMMatch[]);
+    await vi.runAllTimersAsync();
+    expect(setResult).toHaveBeenLastCalledWith({ matches: [{ id: 'tm-active' }], terms: [] }, false);
+  });
+
+  it('publishes an in-flight prefetch result when it wins the race against the active channel', async () => {
+    const activeTm = deferred<TMMatch[]>();
+    const getMatches = vi.fn(() => activeTm.promise);
+    const getTermMatches = vi.fn(async () => [] as TBMatch[]);
+    const prefetchGetMatches = vi.fn(async () => [{ id: 'tm-prefetched' }] as TMMatch[]);
+    const prefetchGetTermMatches = vi.fn(async () => [] as TBMatch[]);
+    const setResult = vi.fn();
+    const scheduler = createReferenceLookupScheduler({
+      fetchers: { getMatches, getTermMatches },
+      prefetchFetchers: {
+        getMatches: prefetchGetMatches,
+        getTermMatches: prefetchGetTermMatches,
+      },
+      setResult,
+      debounceMs: 350,
+    });
+
+    scheduler.prefetch(7, [createSegment('b', 'hash-b')]);
+    scheduler.update({ enabled: true, projectId: 7, segment: createSegment('b', 'hash-b') });
+    await vi.advanceTimersByTimeAsync(350);
+
+    // Prefetch resolves first; its result is published without waiting for
+    // the slower active-channel request.
+    await vi.waitFor(() => {
+      expect(setResult).toHaveBeenLastCalledWith(
+        { matches: [{ id: 'tm-prefetched' }], terms: [] },
+        false,
+      );
+    });
+
+    activeTm.resolve([{ id: 'tm-active' }] as TMMatch[]);
+    await vi.runAllTimersAsync();
+  });
+
+  it('dedupes a prefetch against an in-flight active lookup for the same segment', async () => {
+    const activeTm = deferred<TMMatch[]>();
+    const getMatches = vi.fn(() => activeTm.promise);
+    const getTermMatches = vi.fn(async () => [] as TBMatch[]);
+    const prefetchGetMatches = vi.fn(async () => [] as TMMatch[]);
+    const prefetchGetTermMatches = vi.fn(async () => [] as TBMatch[]);
+    const setResult = vi.fn();
+    const scheduler = createReferenceLookupScheduler({
+      fetchers: { getMatches, getTermMatches },
+      prefetchFetchers: {
+        getMatches: prefetchGetMatches,
+        getTermMatches: prefetchGetTermMatches,
+      },
+      setResult,
+      debounceMs: 350,
+    });
+
+    scheduler.update({ enabled: true, projectId: 7, segment: createSegment('b', 'hash-b') });
+    await vi.advanceTimersByTimeAsync(350);
+    expect(getMatches).toHaveBeenCalledTimes(1);
+
+    // Prefetching the segment already being actively looked up must not
+    // issue a duplicate query on the prefetch channel.
+    scheduler.prefetch(7, [createSegment('b', 'hash-b')]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(prefetchGetMatches).not.toHaveBeenCalled();
+
+    activeTm.resolve([{ id: 'tm-active' }] as TMMatch[]);
+    await vi.waitFor(() => {
+      expect(setResult).toHaveBeenLastCalledWith(
+        { matches: [{ id: 'tm-active' }], terms: [] },
+        false,
+      );
+    });
+  });
+
+  it('invalidation also clears prefetched cache entries', async () => {
+    const getMatches = vi.fn(async () => [{ id: 'tm-active' }] as TMMatch[]);
+    const getTermMatches = vi.fn(async () => [] as TBMatch[]);
+    const prefetchGetMatches = vi.fn(async () => [{ id: 'tm-prefetched' }] as TMMatch[]);
+    const prefetchGetTermMatches = vi.fn(async () => [] as TBMatch[]);
+    const setResult = vi.fn();
+    const scheduler = createReferenceLookupScheduler({
+      fetchers: { getMatches, getTermMatches },
+      prefetchFetchers: {
+        getMatches: prefetchGetMatches,
+        getTermMatches: prefetchGetTermMatches,
+      },
+      setResult,
+      debounceMs: 350,
+    });
+
+    scheduler.prefetch(7, [createSegment('b', 'hash-b')]);
+    await vi.runAllTimersAsync();
+
+    scheduler.invalidate(7);
+    scheduler.update({ enabled: true, projectId: 7, segment: createSegment('b', 'hash-b') });
+    await vi.runAllTimersAsync();
+
+    // Stale prefetched data must not be served after invalidation; the
+    // active channel refetches.
+    expect(getMatches).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(setResult).toHaveBeenLastCalledWith(
+        { matches: [{ id: 'tm-active' }], terms: [] },
+        false,
+      );
+    });
+  });
 });

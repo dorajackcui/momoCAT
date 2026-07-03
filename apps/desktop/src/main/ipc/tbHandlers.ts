@@ -10,6 +10,7 @@ export function registerTBHandlers({
   projectService,
   jobManager,
   referenceLookup,
+  referenceLookupPrefetch,
   notifyReferenceDataChanged,
 }: ReferenceBackedHandlerDeps): void {
   registerHandle(
@@ -18,6 +19,15 @@ export function registerTBHandlers({
     (_event, ...args) => {
       const [projectId, segment] = args as [number, Segment];
       return referenceLookup.findTbMatches(projectId, segment);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.tb.prefetch,
+    (_event, ...args) => {
+      const [projectId, segment] = args as [number, Segment];
+      return referenceLookupPrefetch.findTbMatches(projectId, segment);
     },
   );
 

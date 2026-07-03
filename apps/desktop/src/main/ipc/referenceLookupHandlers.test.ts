@@ -55,6 +55,11 @@ function createDeps() {
       findTbMatches: vi.fn().mockResolvedValue([{ id: 'tb-match' }]),
       searchConcordance: vi.fn().mockResolvedValue([{ id: 'concordance-match' }]),
     },
+    referenceLookupPrefetch: {
+      findTmMatches: vi.fn().mockResolvedValue([{ id: 'tm-prefetch-match' }]),
+      findTbMatches: vi.fn().mockResolvedValue([{ id: 'tb-prefetch-match' }]),
+      searchConcordance: vi.fn().mockResolvedValue([]),
+    },
     notifyReferenceDataChanged: vi.fn(),
   };
 }
@@ -86,6 +91,34 @@ describe('reference lookup IPC handlers', () => {
     ]);
     expect(deps.referenceLookup.findTbMatches).toHaveBeenCalledWith(7, segment);
     expect(deps.projectService.findTermMatches).not.toHaveBeenCalled();
+  });
+
+  it('delegates TM prefetch to the dedicated prefetch service, not the active one', async () => {
+    const { handlers, ipcMain } = createIpcMainStub();
+    const deps = createDeps();
+    const segment = createSegment();
+
+    registerTMHandlers({ ipcMain, ...deps } as never);
+
+    await expect(handlers.get(IPC_CHANNELS.tm.prefetch)?.({}, 7, segment)).resolves.toEqual([
+      { id: 'tm-prefetch-match' },
+    ]);
+    expect(deps.referenceLookupPrefetch.findTmMatches).toHaveBeenCalledWith(7, segment);
+    expect(deps.referenceLookup.findTmMatches).not.toHaveBeenCalled();
+  });
+
+  it('delegates TB prefetch to the dedicated prefetch service, not the active one', async () => {
+    const { handlers, ipcMain } = createIpcMainStub();
+    const deps = createDeps();
+    const segment = createSegment();
+
+    registerTBHandlers({ ipcMain, ...deps } as never);
+
+    await expect(handlers.get(IPC_CHANNELS.tb.prefetch)?.({}, 7, segment)).resolves.toEqual([
+      { id: 'tb-prefetch-match' },
+    ]);
+    expect(deps.referenceLookupPrefetch.findTbMatches).toHaveBeenCalledWith(7, segment);
+    expect(deps.referenceLookup.findTbMatches).not.toHaveBeenCalled();
   });
 
   it('delegates TM concordance to referenceLookup instead of projectService', async () => {

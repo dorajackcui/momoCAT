@@ -26,6 +26,7 @@ export interface UseReferenceLookupControllerParams {
   // The scheduler captures fetchers on first render; callers overriding this
   // should pass a stable object.
   fetchers?: ReferenceLookupFetchers;
+  prefetchFetchers?: ReferenceLookupFetchers;
 }
 
 export function getReferenceLookupCacheKey(projectId: number, segment: Segment): string {
@@ -48,6 +49,15 @@ const defaultReferenceLookupFetchers: ReferenceLookupFetchers = {
   },
 };
 
+const defaultPrefetchFetchers: ReferenceLookupFetchers = {
+  async getMatches(projectId, segment) {
+    return (await getApiClient()).prefetchMatches(projectId, segment);
+  },
+  async getTermMatches(projectId, segment) {
+    return (await getApiClient()).prefetchTermMatches(projectId, segment);
+  },
+};
+
 function subscribeToDefaultReferenceDataChanged(
   callback: (event: ReferenceDataChangedEvent) => void,
 ): () => void {
@@ -64,9 +74,16 @@ function subscribeToDefaultReferenceDataChanged(
   };
 }
 
-export function createReferenceLookupControllerLoader(fetchers: ReferenceLookupFetchers) {
+export function createReferenceLookupControllerLoader(
+  fetchers: ReferenceLookupFetchers,
+  prefetchFetchers: ReferenceLookupFetchers = fetchers,
+) {
   const completed = new Map<string, ReferenceLookupResult>();
-  const inFlight = new Map<string, Promise<ReferenceLookupResult>>();
+  interface InFlightEntry {
+    promise: Promise<ReferenceLookupResult>;
+    prefetch: boolean;
+  }
+  const inFlight = new Map<string, InFlightEntry>();
   const projectVersions = new Map<number, number>();
   let globalVersion = 0;
 
@@ -100,21 +117,37 @@ export function createReferenceLookupControllerLoader(fetchers: ReferenceLookupF
     getCached(projectId: number, segment: Segment): ReferenceLookupResult | undefined {
       return completed.get(getReferenceLookupCacheKey(projectId, segment));
     },
-    load(params: { projectId: number; segment: Segment }): Promise<ReferenceLookupResult> {
+    load(params: {
+      projectId: number;
+      segment: Segment;
+      prefetch?: boolean;
+    }): Promise<ReferenceLookupResult> {
       const key = getReferenceLookupCacheKey(params.projectId, params.segment);
       const cached = completed.get(key);
       if (cached) return Promise.resolve(cached);
 
+      const prefetch = Boolean(params.prefetch);
       const running = inFlight.get(key);
-      if (running) return running;
+      // A prefetch caller is satisfied by any in-flight request. An active
+      // caller may only reuse an in-flight *active* request: an in-flight
+      // prefetch can itself be queued behind long work on the prefetch
+      // worker, and the active lookup must never wait on that channel.
+      // Instead, fire an active-channel request and race the two below.
+      if (running && (prefetch || !running.prefetch)) {
+        return running.promise;
+      }
 
+      // Prefetch loads go through a dedicated fetch channel (backed by a
+      // separate worker) so they can never block active-segment lookups, but
+      // they share this loader's cache so a prefetched neighbor is an instant
+      // cache hit when the user navigates to it.
+      const activeFetchers = prefetch ? prefetchFetchers : fetchers;
       const loadGlobalVersion = globalVersion;
       const loadProjectVersion = projectVersions.get(params.projectId) ?? 0;
-      let promise!: Promise<ReferenceLookupResult>;
-      promise = (async () => {
+      const fetchPromise = (async () => {
         const [matchesResult, termsResult] = await Promise.allSettled([
-          fetchers.getMatches(params.projectId, params.segment),
-          fetchers.getTermMatches(params.projectId, params.segment),
+          activeFetchers.getMatches(params.projectId, params.segment),
+          activeFetchers.getTermMatches(params.projectId, params.segment),
         ]);
         const result = {
           matches: matchesResult.status === 'fulfilled' ? matchesResult.value || [] : [],
@@ -127,13 +160,20 @@ export function createReferenceLookupControllerLoader(fetchers: ReferenceLookupF
           completed.set(key, result);
         }
         return result;
-      })().finally(() => {
-        if (inFlight.get(key) === promise) {
+      })();
+
+      // Racing an in-flight prefetch keeps the best of both worlds: if the
+      // prefetch result is about to land it wins, otherwise the fresh
+      // active-channel request does. Neither branch ever rejects.
+      const promise = running ? Promise.race([fetchPromise, running.promise]) : fetchPromise;
+      const entry: InFlightEntry = { promise, prefetch };
+      void promise.finally(() => {
+        if (inFlight.get(key) === entry) {
           inFlight.delete(key);
         }
       });
 
-      inFlight.set(key, promise);
+      inFlight.set(key, entry);
       return promise;
     },
   };
@@ -147,12 +187,15 @@ interface ReferenceLookupSchedulerState {
 
 interface ReferenceLookupSchedulerOptions {
   fetchers: ReferenceLookupFetchers;
+  prefetchFetchers?: ReferenceLookupFetchers;
   setResult: (result: ReferenceLookupResult, loading: boolean) => void;
   debounceMs?: number;
 }
 
 export function createReferenceLookupScheduler(options: ReferenceLookupSchedulerOptions) {
-  const loader = createReferenceLookupControllerLoader(options.fetchers);
+  // One loader, one cache: prefetched results must be visible to active
+  // lookups. Only the fetch channel differs (see loader.load's prefetch flag).
+  const loader = createReferenceLookupControllerLoader(options.fetchers, options.prefetchFetchers);
   const debounceMs = options.debounceMs ?? REFERENCE_LOOKUP_DEBOUNCE_MS;
   let currentKey: string | null = null;
   let runningKey: string | null = null;
@@ -277,7 +320,7 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
     },
     prefetch(projectId: number, segments: readonly Segment[]): void {
       for (const segment of segments) {
-        void loader.load({ projectId, segment });
+        void loader.load({ projectId, segment, prefetch: true });
       }
     },
     invalidate(projectId: number | null): void {
@@ -308,6 +351,9 @@ export function useReferenceLookupController({
   segments,
   subscribeToReferenceDataChanged = subscribeToDefaultReferenceDataChanged,
   fetchers = defaultReferenceLookupFetchers,
+  // When callers override fetchers (e.g. tests) without supplying prefetch
+  // fetchers, prefetch must not fall through to the real IPC bridge.
+  prefetchFetchers = fetchers === defaultReferenceLookupFetchers ? defaultPrefetchFetchers : fetchers,
 }: UseReferenceLookupControllerParams): {
   activeMatches: TMMatch[];
   activeTerms: TBMatch[];
@@ -326,6 +372,7 @@ export function useReferenceLookupController({
   if (!schedulerRef.current) {
     schedulerRef.current = createReferenceLookupScheduler({
       fetchers,
+      prefetchFetchers,
       setResult: (result, loading) => {
         setActiveMatches(result.matches);
         setActiveTerms(result.terms);

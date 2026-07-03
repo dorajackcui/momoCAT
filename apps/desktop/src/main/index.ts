@@ -294,9 +294,12 @@ app.whenReady().then(async () => {
   });
   const jobManager = new JobManager();
   const referenceLookup = new ReferenceLookupWorkerManager({ dbPath });
+  const referenceLookupPrefetch = new ReferenceLookupWorkerManager({ dbPath });
   void referenceLookup.warmUp();
+  void referenceLookupPrefetch.warmUp();
   app.on('before-quit', () => {
     void referenceLookup.dispose();
+    void referenceLookupPrefetch.dispose();
   });
 
   registerProjectHandlers({ ipcMain, projectService });
@@ -305,6 +308,7 @@ app.whenReady().then(async () => {
     projectService,
     jobManager,
     referenceLookup,
+    referenceLookupPrefetch,
     notifyReferenceDataChanged: broadcastReferenceDataChanged,
   });
   registerTBHandlers({
@@ -312,6 +316,7 @@ app.whenReady().then(async () => {
     projectService,
     jobManager,
     referenceLookup,
+    referenceLookupPrefetch,
     notifyReferenceDataChanged: broadcastReferenceDataChanged,
   });
   registerAIHandlers({ ipcMain, projectService, jobManager });

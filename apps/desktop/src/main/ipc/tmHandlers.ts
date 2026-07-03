@@ -10,6 +10,7 @@ export function registerTMHandlers({
   projectService,
   jobManager,
   referenceLookup,
+  referenceLookupPrefetch,
   notifyReferenceDataChanged,
 }: ReferenceBackedHandlerDeps): void {
   registerHandle(
@@ -18,6 +19,15 @@ export function registerTMHandlers({
     (_event, ...args) => {
       const [projectId, segment] = args as [number, Segment];
       return referenceLookup.findTmMatches(projectId, segment);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.tm.prefetch,
+    (_event, ...args) => {
+      const [projectId, segment] = args as [number, Segment];
+      return referenceLookupPrefetch.findTmMatches(projectId, segment);
     },
   );
 

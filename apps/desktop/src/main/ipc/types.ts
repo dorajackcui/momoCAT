@@ -37,6 +37,7 @@ export type ReferenceDataChangedNotifier = (event: ReferenceDataChangedEvent) =>
 
 export interface ReferenceBackedHandlerDeps extends JobBackedHandlerDeps {
   referenceLookup: ReferenceLookupService;
+  referenceLookupPrefetch: ReferenceLookupService;
   notifyReferenceDataChanged: ReferenceDataChangedNotifier;
 }
 

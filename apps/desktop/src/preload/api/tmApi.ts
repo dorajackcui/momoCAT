@@ -4,6 +4,7 @@ import type { DesktopApiSlice, IpcRendererLike } from './types';
 
 type TMApiKeys =
   | 'getMatches'
+  | 'prefetchMatches'
   | 'searchConcordance'
   | 'listTMs'
   | 'getTMPreview'
@@ -22,6 +23,10 @@ export function createTMApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<TMApi
     getMatches: (projectId, segment) =>
       ipcRenderer.invoke(IPC_CHANNELS.tm.getMatches, projectId, segment) as ReturnType<
         DesktopApi['getMatches']
+      >,
+    prefetchMatches: (projectId, segment) =>
+      ipcRenderer.invoke(IPC_CHANNELS.tm.prefetch, projectId, segment) as ReturnType<
+        DesktopApi['prefetchMatches']
       >,
     searchConcordance: (projectId, query) =>
       ipcRenderer.invoke(IPC_CHANNELS.tm.concordance, projectId, query) as ReturnType<

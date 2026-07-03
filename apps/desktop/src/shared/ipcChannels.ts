@@ -29,6 +29,7 @@ export const IPC_CHANNELS = {
   },
   tm: {
     getMatches: 'tm-get-matches',
+    prefetch: 'tm-prefetch',
     concordance: 'tm-concordance',
     list: 'tm-list',
     preview: 'tm-preview',
@@ -44,6 +45,7 @@ export const IPC_CHANNELS = {
   },
   tb: {
     getMatches: 'tb-get-matches',
+    prefetch: 'tb-prefetch',
     list: 'tb-list',
     preview: 'tb-preview',
     create: 'tb-create',
