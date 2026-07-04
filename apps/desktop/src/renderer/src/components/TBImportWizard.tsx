@@ -9,6 +9,8 @@ import type {
   TBImportOptions,
 } from '../../../shared/ipc';
 
+export type TBWizardMode = 'import' | 'sync';
+
 interface TBImportWizardProps {
   isOpen: boolean;
   onClose: () => void;
@@ -17,7 +19,34 @@ interface TBImportWizardProps {
   onJobCompleted: (result: ImportExecutionResult) => void;
   onJobFailed: (error: StructuredJobError) => void;
   previewData: SpreadsheetPreviewData;
+  mode?: TBWizardMode;
 }
+
+const WIZARD_COPY: Record<
+  TBWizardMode,
+  {
+    title: string;
+    subtitle: string;
+    confirmLabel: string;
+    progressTitle: string;
+    failCode: string;
+  }
+> = {
+  import: {
+    title: 'Import Terms from File',
+    subtitle: 'Map source/target columns to build your term base.',
+    confirmLabel: 'Start Import',
+    progressTitle: 'Importing Term Base...',
+    failCode: 'TB_IMPORT_FAILED',
+  },
+  sync: {
+    title: 'Sync with Excel',
+    subtitle: 'Map columns once. Each sync mirrors this Excel into the term base.',
+    confirmLabel: 'Save & Sync',
+    progressTitle: 'Syncing Term Base...',
+    failCode: 'TB_SYNC_FAILED',
+  },
+};
 
 export function TBImportWizard({
   isOpen,
@@ -27,6 +56,7 @@ export function TBImportWizard({
   onJobCompleted,
   onJobFailed,
   previewData,
+  mode = 'import',
 }: TBImportWizardProps) {
   const [hasHeader, setHasHeader] = useState(true);
   const [sourceCol, setSourceCol] = useState(0);
@@ -46,7 +76,9 @@ export function TBImportWizard({
   useEffect(() => {
     if (!isOpen || !jobId) return undefined;
 
-    const unsubscribe = apiClient.onJobProgress((progress) => {
+    let active = true;
+
+    const handleProgress = (progress: JobProgressEvent) => {
       if (progress.jobId !== jobId) return;
       setJobProgress(progress);
 
@@ -54,7 +86,7 @@ export function TBImportWizard({
 
       if (progress.status === 'completed') {
         terminalStateHandledRef.current = true;
-        if (progress.result?.kind === 'tb-import') {
+        if (progress.result?.kind === 'tb-import' || progress.result?.kind === 'tb-sync') {
           onJobCompleted({
             success: progress.result.success,
             skipped: progress.result.skipped,
@@ -68,15 +100,29 @@ export function TBImportWizard({
         terminalStateHandledRef.current = true;
         onJobFailed(
           progress.error ?? {
-            code: 'TB_IMPORT_FAILED',
-            message: progress.message || 'TB import failed',
+            code: WIZARD_COPY[mode].failCode,
+            message: progress.message || 'TB job failed',
           },
         );
       }
+    };
+
+    const unsubscribe = apiClient.onJobProgress(handleProgress);
+
+    // A job started before this modal subscribed (e.g. "Sync now" kicks the job
+    // off, then opens the modal) may have already emitted its terminal event.
+    // Replay the last known state so the modal never sticks on "Starting...".
+    void apiClient.getJobStatus(jobId).then((snapshot) => {
+      if (active && snapshot && !terminalStateHandledRef.current) {
+        handleProgress(snapshot);
+      }
     });
 
-    return () => unsubscribe();
-  }, [isOpen, jobId, onJobCompleted, onJobFailed]);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [isOpen, jobId, mode, onJobCompleted, onJobFailed]);
 
   if (!isOpen) return null;
 
@@ -95,7 +141,7 @@ export function TBImportWizard({
             <div className="w-16 h-16 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-4">
               <Spinner size="lg" tone="success" />
             </div>
-            <h2 className="text-xl font-bold text-text">Importing Term Base...</h2>
+            <h2 className="text-xl font-bold text-text">{WIZARD_COPY[mode].progressTitle}</h2>
             <p className="text-sm text-text-muted mt-1">{progressMessage}</p>
           </div>
 
@@ -116,10 +162,8 @@ export function TBImportWizard({
       <div className="modal-card max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="panel-header px-8 py-6 flex justify-between items-center">
           <div>
-            <h2 className="text-xl font-bold text-text">Import Terms from File</h2>
-            <p className="text-sm text-text-muted mt-1">
-              Map source/target columns to build your term base.
-            </p>
+            <h2 className="text-xl font-bold text-text">{WIZARD_COPY[mode].title}</h2>
+            <p className="text-sm text-text-muted mt-1">{WIZARD_COPY[mode].subtitle}</p>
           </div>
           <IconButton onClick={onClose} tone="neutral" aria-label="Close">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -196,20 +240,31 @@ export function TBImportWizard({
               />
               <span className="text-sm font-medium text-text-muted">First row is header</span>
             </Card>
-            <Card
-              variant="subtle"
-              className="flex items-center gap-3 p-4 border-brand/20 bg-brand-soft/50"
-            >
-              <input
-                type="checkbox"
-                checked={overwrite}
-                onChange={(e) => setOverwrite(e.target.checked)}
-                className="w-4 h-4 accent-brand"
-              />
-              <span className="text-sm font-medium text-text-muted">
-                Overwrite existing source terms
-              </span>
-            </Card>
+            {mode === 'import' ? (
+              <Card
+                variant="subtle"
+                className="flex items-center gap-3 p-4 border-brand/20 bg-brand-soft/50"
+              >
+                <input
+                  type="checkbox"
+                  checked={overwrite}
+                  onChange={(e) => setOverwrite(e.target.checked)}
+                  className="w-4 h-4 accent-brand"
+                />
+                <span className="text-sm font-medium text-text-muted">
+                  Overwrite existing source terms
+                </span>
+              </Card>
+            ) : (
+              <Card
+                variant="subtle"
+                className="flex items-center gap-3 p-4 border-brand/20 bg-brand-soft/50"
+              >
+                <span className="text-sm font-medium text-text-muted">
+                  Sync replaces all terms with the Excel contents.
+                </span>
+              </Card>
+            )}
           </div>
 
           <Card variant="surface" className="table-shell !rounded-xl !shadow-sm">
@@ -250,13 +305,19 @@ export function TBImportWizard({
           </Button>
           <Button
             onClick={() => {
-              onConfirm({ hasHeader, sourceCol, targetCol, noteCol, overwrite });
+              onConfirm({
+                hasHeader,
+                sourceCol,
+                targetCol,
+                noteCol,
+                overwrite: mode === 'import' ? overwrite : false,
+              });
             }}
             variant="primary"
             size="lg"
             className="!px-8"
           >
-            Start Import
+            {WIZARD_COPY[mode].confirmLabel}
           </Button>
         </div>
       </div>

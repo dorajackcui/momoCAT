@@ -17,6 +17,10 @@ export class SqliteTBRepository implements TBRepository {
     this.db.deleteTermBase(id);
   }
 
+  clearTermBaseEntries(tbId: string): void {
+    this.db.clearTermBaseEntries(tbId);
+  }
+
   getTermBase(tbId: string): TBRecord | undefined {
     return this.db.getTermBase(tbId);
   }

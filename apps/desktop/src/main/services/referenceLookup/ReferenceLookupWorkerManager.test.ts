@@ -17,10 +17,7 @@ class MockWorker extends EventEmitter {
   public readonly terminate = vi.fn(async () => 0);
 }
 
-const WORKER_PATH = join(
-  process.cwd(),
-  'apps/desktop/src/main/services/referenceLookup/types.ts',
-);
+const WORKER_PATH = join(process.cwd(), 'apps/desktop/src/main/services/referenceLookup/types.ts');
 const WORKER_OPTIONS: WorkerFactoryOptions = { workerData: { dbPath: 'cat.db' } };
 
 function createSegment(segmentId = 'seg-1'): Segment {
@@ -337,5 +334,41 @@ describe('ReferenceLookupWorkerManager', () => {
 
     expect(worker.terminate).toHaveBeenCalledTimes(1);
     await expect(pending).rejects.toThrow('Reference lookup worker disposed');
+  });
+
+  it('invalidateReferenceData is a no-op when no worker has been started', async () => {
+    const { manager, workerFactory } = createManager();
+
+    await manager.invalidateReferenceData();
+
+    expect(workerFactory).not.toHaveBeenCalled();
+  });
+
+  it('invalidateReferenceData sends an invalidate request to a live worker', async () => {
+    const { manager, workers, workerFactory } = createManager();
+    const segment = createSegment();
+    const warm = manager.findTmMatches(7, segment);
+    const worker = await waitForWorkerStart(workers, workerFactory);
+    worker.emit('message', {
+      requestId: 1,
+      ok: true,
+      kind: 'tm',
+      result: [],
+    } satisfies ReferenceLookupWorkerResponse);
+    await warm;
+
+    const invalidate = manager.invalidateReferenceData();
+    await vi.waitFor(() => {
+      expect(worker.postMessage).toHaveBeenCalledWith({ requestId: 2, kind: 'invalidate' });
+    });
+    worker.emit('message', {
+      requestId: 2,
+      ok: true,
+      kind: 'invalidate',
+      result: null,
+    } satisfies ReferenceLookupWorkerResponse);
+
+    await expect(invalidate).resolves.toBeUndefined();
+    expect(workerFactory).toHaveBeenCalledTimes(1);
   });
 });

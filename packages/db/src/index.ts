@@ -256,6 +256,10 @@ export class CATDatabase {
     this.tbRepo.deleteTermBase(id);
   }
 
+  public clearTermBaseEntries(tbId: string) {
+    this.tbRepo.clearTermBaseEntries(tbId);
+  }
+
   public getTermBase(tbId: string): TBRecord | undefined {
     return this.tbRepo.getTermBase(tbId);
   }

@@ -59,6 +59,19 @@ export class TBRepo {
     this.bumpTBDataVersion();
   }
 
+  public clearTermBaseEntries(tbId: string) {
+    this.stmtDeleteTbFtsByTbId.run(tbId);
+    this.db.prepare('DELETE FROM tb_entries WHERE tbId = ?').run(tbId);
+    this.db
+      .prepare(`
+      UPDATE term_bases
+      SET updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      WHERE id = ?
+    `)
+      .run(tbId);
+    this.bumpTBDataVersion();
+  }
+
   public getTermBase(tbId: string): TBRecord | undefined {
     return this.db.prepare('SELECT * FROM term_bases WHERE id = ?').get(tbId) as TBRecord | undefined;
   }

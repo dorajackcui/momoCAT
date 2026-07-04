@@ -50,6 +50,18 @@ async function handleRequest(
     };
   }
 
+  if (message.kind === 'invalidate') {
+    // Reference data changed through the main process connection; this
+    // worker's in-process caches (English TB recognizer) are stale now.
+    tbService.invalidateCachedIndexes();
+    return {
+      requestId: message.requestId,
+      kind: 'invalidate',
+      ok: true,
+      result: null,
+    };
+  }
+
   return {
     requestId: message.requestId,
     kind: 'concordance',

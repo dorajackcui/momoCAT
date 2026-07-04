@@ -63,6 +63,13 @@ export class ReferenceLookupWorkerManager implements ReferenceLookupService {
     });
   }
 
+  public async invalidateReferenceData(): Promise<void> {
+    // Only a live worker holds caches worth dropping; a lazily-started one
+    // will read fresh data anyway, so don't spin a worker up just for this.
+    if (!this.worker && !this.workerStartPromise) return;
+    await this.request<null>({ requestId: 0, kind: 'invalidate' });
+  }
+
   public async warmUp(): Promise<void> {
     await this.ensureWorker();
   }
@@ -150,12 +157,11 @@ export class ReferenceLookupWorkerManager implements ReferenceLookupService {
       return this.workerPath;
     }
 
-    const candidatePaths =
-      this.options.workerPathCandidates ?? [
-        join(__dirname, 'referenceLookupWorker.js'),
-        join(__dirname, '../referenceLookupWorker.js'),
-        join(__dirname, '../../referenceLookupWorker.js'),
-      ];
+    const candidatePaths = this.options.workerPathCandidates ?? [
+      join(__dirname, 'referenceLookupWorker.js'),
+      join(__dirname, '../referenceLookupWorker.js'),
+      join(__dirname, '../../referenceLookupWorker.js'),
+    ];
 
     for (const candidatePath of candidatePaths) {
       try {

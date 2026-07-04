@@ -1,10 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { TBImportWizard } from './TBImportWizard';
+import { TBImportWizard, type TBWizardMode } from './TBImportWizard';
 import { AssetPreviewModal } from './AssetPreviewModal';
 import { LanguageSelect } from './LanguageSelect';
 import { apiClient } from '../services/apiClient';
 import { feedbackService } from '../services/feedbackService';
 import { DEFAULT_ASSET_SOURCE_LANG, DEFAULT_ASSET_TARGET_LANG } from './languageOptions';
+import {
+  confirmTBSyncLink,
+  pickTBSyncSource,
+  runTBSyncNow,
+  TB_SPREADSHEET_FILTERS,
+} from './tb-manager/tbSyncActions';
+import { TBCard } from './tb-manager/TBCard';
 import type {
   ImportExecutionResult,
   SpreadsheetPreviewData,
@@ -19,6 +26,13 @@ type ImportNotice = {
   message: string;
 };
 
+type CreateSource = 'upload' | 'sync';
+
+const CREATE_SOURCE_OPTIONS: Array<{ value: CreateSource; label: string; hint: string }> = [
+  { value: 'upload', label: 'Standard TB', hint: 'Update by uploading Excel files' },
+  { value: 'sync', label: 'Sync with Excel', hint: 'Mirror a linked local file' },
+];
+
 export const TBManager: React.FC = () => {
   const [tbs, setTBs] = useState<TBWithStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,7 +40,9 @@ export const TBManager: React.FC = () => {
   const [newName, setNewName] = useState('');
   const [newSrc, setNewSrc] = useState(DEFAULT_ASSET_SOURCE_LANG);
   const [newTgt, setNewTgt] = useState(DEFAULT_ASSET_TARGET_LANG);
+  const [createSource, setCreateSource] = useState<CreateSource>('upload');
 
+  const [wizardMode, setWizardMode] = useState<TBWizardMode>('import');
   const [importingTBId, setImportingTBId] = useState<string | null>(null);
   const [importPreview, setImportPreview] = useState<SpreadsheetPreviewData>([]);
   const [importFilePath, setImportFilePath] = useState<string | null>(null);
@@ -54,8 +70,8 @@ export const TBManager: React.FC = () => {
     loadTBs();
   }, []);
 
-  const selectedPreviewTB = previewTBId ? tbs.find((tb) => tb.id === previewTBId) ?? null : null;
-  const selectedPreview = previewTBId ? previewCache[previewTBId] ?? null : null;
+  const selectedPreviewTB = previewTBId ? (tbs.find((tb) => tb.id === previewTBId) ?? null) : null;
+  const selectedPreview = previewTBId ? (previewCache[previewTBId] ?? null) : null;
 
   const clearPreviewCache = (tbId: string) => {
     setPreviewCache((current) => {
@@ -69,13 +85,21 @@ export const TBManager: React.FC = () => {
     event.preventDefault();
     if (!newName.trim()) return;
 
+    let tbId: string;
     try {
-      await apiClient.createTB(newName.trim(), newSrc.trim(), newTgt.trim());
+      tbId = await apiClient.createTB(newName.trim(), newSrc.trim(), newTgt.trim());
       setNewName('');
       setShowCreate(false);
       await loadTBs();
     } catch {
       feedbackService.error('Failed to create term base.');
+      return;
+    }
+
+    // A standard TB starts empty and is updated later via the card's upload
+    // button; a synced TB is unusable without its binding, so link it now.
+    if (createSource === 'sync') {
+      await handleStartLink(tbId);
     }
   };
 
@@ -122,13 +146,12 @@ export const TBManager: React.FC = () => {
 
   const handleStartImport = async (tbId: string) => {
     setImportNotice(null);
-    const filePath = await apiClient.openFileDialog([
-      { name: 'Spreadsheets', extensions: ['xlsx', 'xls', 'csv'] },
-    ]);
+    const filePath = await apiClient.openFileDialog(TB_SPREADSHEET_FILTERS);
     if (!filePath) return;
 
     try {
       const preview = await apiClient.getTBImportPreview(filePath);
+      setWizardMode('import');
       setImportingTBId(tbId);
       setImportFilePath(filePath);
       setImportPreview(preview);
@@ -138,8 +161,64 @@ export const TBManager: React.FC = () => {
     }
   };
 
+  const handleStartLink = async (tbId: string) => {
+    setImportNotice(null);
+    const picked = await pickTBSyncSource({
+      openFileDialog: apiClient.openFileDialog,
+      getTBImportPreview: apiClient.getTBImportPreview,
+      error: feedbackService.error,
+    });
+    if (!picked) return;
+
+    setWizardMode('sync');
+    setImportingTBId(tbId);
+    setImportFilePath(picked.filePath);
+    setImportPreview(picked.preview);
+    setIsImportWizardOpen(true);
+  };
+
+  const handleSyncNow = async (tb: TBWithStats) => {
+    setImportNotice(null);
+    const outcome = await runTBSyncNow(tb, {
+      syncTBWithExcel: apiClient.syncTBWithExcel,
+      confirmRelink: feedbackService.confirm,
+      error: feedbackService.error,
+    });
+
+    if (outcome.kind === 'started') {
+      setWizardMode('sync');
+      setImportingTBId(tb.id);
+      setImportFilePath(tb.syncConfig?.filePath ?? null);
+      setImportPreview([]);
+      setIsImportWizardOpen(true);
+      setImportJobId(outcome.jobId);
+    } else if (outcome.kind === 'relink-requested') {
+      await handleStartLink(tb.id);
+    }
+  };
+
   const handleConfirmImport = async (options: TBImportOptions) => {
     if (!importingTBId || !importFilePath) return;
+
+    if (wizardMode === 'sync') {
+      const result = await confirmTBSyncLink(importingTBId, importFilePath, options, {
+        setTBSyncConfig: apiClient.setTBSyncConfig,
+        syncTBWithExcel: apiClient.syncTBWithExcel,
+        error: feedbackService.error,
+      });
+      if (!result || result.status !== 'started') {
+        setIsImportWizardOpen(false);
+        setImportJobId(null);
+        setImportingTBId(null);
+        setImportFilePath(null);
+        if (result?.status === 'file-missing') {
+          feedbackService.error(`The linked Excel file could not be read: ${result.filePath}`);
+        }
+        return;
+      }
+      setImportJobId(result.jobId);
+      return;
+    }
 
     try {
       const jobId = await apiClient.importTBEntries(importingTBId, importFilePath, options);
@@ -160,7 +239,10 @@ export const TBManager: React.FC = () => {
     const completedTBId = importingTBId;
     setImportNotice({
       tone: 'success',
-      message: `Import completed: ${result.success} imported, ${result.skipped} skipped.`,
+      message:
+        wizardMode === 'sync'
+          ? `Sync completed: ${result.success} terms mirrored, ${result.skipped} rows skipped.`
+          : `Import completed: ${result.success} imported, ${result.skipped} skipped.`,
     });
     setIsImportWizardOpen(false);
     setImportJobId(null);
@@ -175,12 +257,16 @@ export const TBManager: React.FC = () => {
   const handleImportFailed = (error: StructuredJobError) => {
     setImportNotice({
       tone: 'error',
-      message: `Import failed (${error.code}): ${error.message}`,
+      message:
+        wizardMode === 'sync'
+          ? `Sync failed (${error.code}): ${error.message}`
+          : `Import failed (${error.code}): ${error.message}`,
     });
     setIsImportWizardOpen(false);
     setImportJobId(null);
     setImportingTBId(null);
     setImportFilePath(null);
+    void loadTBs();
   };
 
   return (
@@ -189,6 +275,7 @@ export const TBManager: React.FC = () => {
         isOpen={isImportWizardOpen}
         previewData={importPreview}
         jobId={importJobId}
+        mode={wizardMode}
         onClose={() => {
           if (importJobId) return;
           setIsImportWizardOpen(false);
@@ -250,6 +337,26 @@ export const TBManager: React.FC = () => {
         {showCreate && (
           <div className="mb-8 p-6 surface-card animate-in fade-in slide-in-from-top-4">
             <h2 className="field-label !text-[10px] mb-4">Create New Term Base</h2>
+            <div className="mb-4">
+              <label className="field-label !text-[10px]">Type</label>
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                {CREATE_SOURCE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setCreateSource(option.value)}
+                    className={`rounded-control border px-3 py-2 text-left transition-colors ${
+                      createSource === option.value
+                        ? 'border-brand bg-brand-soft text-brand'
+                        : 'border-border/60 bg-surface text-text-muted hover:border-brand/40'
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold">{option.label}</span>
+                    <span className="block text-[10px] opacity-70">{option.hint}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             <form onSubmit={handleCreate} className="grid grid-cols-4 gap-4 items-end">
               <div className="col-span-2">
                 <label className="field-label !text-[10px]">Name</label>
@@ -316,102 +423,14 @@ export const TBManager: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {tbs.map((tb) => (
-              <div
+              <TBCard
                 key={tb.id}
-                className="surface-card p-5 hover:border-brand/40 transition-colors group"
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h3 className="font-bold text-text group-hover:text-brand transition-colors">
-                      {tb.name}
-                    </h3>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] font-semibold text-brand bg-brand-soft px-1.5 py-0.5 rounded-control uppercase tracking-wider">
-                        {tb.srcLang} → {tb.tgtLang}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => void handleOpenPreview(tb.id)}
-                      className="p-1.5 text-text-faint hover:text-brand hover:bg-brand-soft rounded-control transition-colors"
-                      title="Preview term base"
-                      aria-label={`Preview ${tb.name}`}
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12z"
-                        />
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 15.25A3.25 3.25 0 1012 8.75a3.25 3.25 0 000 6.5z"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => handleStartImport(tb.id)}
-                      className="p-1.5 text-text-faint hover:text-brand hover:bg-brand-soft rounded-control transition-colors"
-                      title="Import terms from file"
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => handleDelete(tb.id)}
-                      className="p-1.5 text-text-faint hover:text-danger hover:bg-danger-soft rounded-control transition-colors"
-                      title="Delete term base"
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pt-4 border-t border-border/40">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-semibold text-text-faint uppercase tracking-widest mb-0.5">
-                      Size
-                    </span>
-                    <span className="text-sm font-semibold text-text-muted">
-                      {tb.stats.entryCount} terms
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-text-faint font-medium">
-                    Last updated {new Date().toLocaleDateString()}
-                  </div>
-                </div>
-              </div>
+                tb={tb}
+                onPreview={(tbId) => void handleOpenPreview(tbId)}
+                onImport={(tbId) => void handleStartImport(tbId)}
+                onSync={(target) => void handleSyncNow(target)}
+                onDelete={(tbId) => void handleDelete(tbId)}
+              />
             ))}
           </div>
         )}

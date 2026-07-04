@@ -122,6 +122,7 @@ export interface TBRepository {
   listTermBases(): TBRecord[];
   createTermBase(name: string, srcLang: string, tgtLang: string): string;
   deleteTermBase(id: string): void;
+  clearTermBaseEntries(tbId: string): void;
   getTermBase(tbId: string): TBRecord | undefined;
   getTermBaseStats(tbId: string): { entryCount: number; maxEntryUpdatedAt?: string | null };
   getTBDataVersion(): number;
@@ -212,20 +213,13 @@ export interface SegmentsUpdatedPayload {
 export type ProgressEmitter = (payload: ProgressPayload) => void;
 
 export interface AITransport {
-  listModels(params: {
-    apiKey: string;
-    baseUrl: string;
-  }): Promise<{
+  listModels(params: { apiKey: string; baseUrl: string }): Promise<{
     models: string[];
     status: number;
     endpoint: string;
     rawResponseText?: string;
   }>;
-  testConnection(params: {
-    apiKey: string;
-    baseUrl: string;
-    model: string;
-  }): Promise<{
+  testConnection(params: { apiKey: string; baseUrl: string; model: string }): Promise<{
     ok: true;
     status: number;
     endpoint: string;

@@ -13,7 +13,9 @@ type TBApiKeys =
   | 'mountTBToProject'
   | 'unmountTBFromProject'
   | 'getTBImportPreview'
-  | 'importTBEntries';
+  | 'importTBEntries'
+  | 'setTBSyncConfig'
+  | 'syncTBWithExcel';
 
 export function createTBApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<TBApiKeys> {
   return {
@@ -27,9 +29,7 @@ export function createTBApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<TBApi
       >,
     listTBs: () => ipcRenderer.invoke(IPC_CHANNELS.tb.list) as ReturnType<DesktopApi['listTBs']>,
     getTBPreview: (tbId) =>
-      ipcRenderer.invoke(IPC_CHANNELS.tb.preview, tbId) as ReturnType<
-        DesktopApi['getTBPreview']
-      >,
+      ipcRenderer.invoke(IPC_CHANNELS.tb.preview, tbId) as ReturnType<DesktopApi['getTBPreview']>,
     createTB: (name, srcLang, tgtLang) =>
       ipcRenderer.invoke(IPC_CHANNELS.tb.create, name, srcLang, tgtLang) as ReturnType<
         DesktopApi['createTB']
@@ -55,6 +55,14 @@ export function createTBApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<TBApi
     importTBEntries: (tbId, filePath, options) =>
       ipcRenderer.invoke(IPC_CHANNELS.tb.importExecute, tbId, filePath, options) as ReturnType<
         DesktopApi['importTBEntries']
+      >,
+    setTBSyncConfig: (tbId, config) =>
+      ipcRenderer.invoke(IPC_CHANNELS.tb.syncSetConfig, tbId, config) as ReturnType<
+        DesktopApi['setTBSyncConfig']
+      >,
+    syncTBWithExcel: (tbId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.tb.syncExecute, tbId) as ReturnType<
+        DesktopApi['syncTBWithExcel']
       >,
   };
 }

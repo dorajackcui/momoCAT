@@ -53,6 +53,28 @@ export interface TBImportOptions {
   overwrite: boolean;
 }
 
+export interface TBSyncColumns {
+  sourceCol: number;
+  targetCol: number;
+  noteCol?: number;
+  hasHeader: boolean;
+}
+
+export interface TBSyncConfigInput {
+  filePath: string;
+  columns: TBSyncColumns;
+}
+
+export interface TBSyncConfig extends TBSyncConfigInput {
+  lastSyncedAt?: string;
+  lastSyncStatus?: 'success' | 'failed';
+  lastSyncError?: string;
+}
+
+export type TBSyncStartResult =
+  | { status: 'started'; jobId: string }
+  | { status: 'file-missing'; filePath: string };
+
 export type SpreadsheetPreviewCell = string | number | boolean | null | undefined;
 export type SpreadsheetPreviewData = SpreadsheetPreviewCell[][];
 
@@ -109,6 +131,7 @@ export type TBRecord = DbTBRecord;
 
 export interface TBWithStats extends TBRecord {
   stats: { entryCount: number };
+  syncConfig?: TBSyncConfig | null;
 }
 
 export interface TBPreviewRow {
@@ -184,7 +207,7 @@ export interface ImportExecutionResult {
 }
 
 export interface ImportJobResult extends ImportExecutionResult {
-  kind: 'tm-import' | 'tb-import';
+  kind: 'tm-import' | 'tb-import' | 'tb-sync';
 }
 
 export interface StructuredJobError {
@@ -359,7 +382,8 @@ export interface ReferenceDataChangedEvent {
     | 'tb-deleted'
     | 'tb-mounted'
     | 'tb-unmounted'
-    | 'tb-imported';
+    | 'tb-imported'
+    | 'tb-synced';
 }
 
 export interface DialogFileFilter {
@@ -409,10 +433,7 @@ export interface DesktopApi {
   ) => Promise<void>;
   runFileQA: (fileId: number) => Promise<FileQaReport>;
   inspectFile: (fileId: number, outputPath: string) => Promise<FileInspectResult>;
-  exportReferencesForMt: (
-    fileId: number,
-    outputPath: string,
-  ) => Promise<FileReferenceExportResult>;
+  exportReferencesForMt: (fileId: number, outputPath: string) => Promise<FileReferenceExportResult>;
   updateSegment: (
     segmentId: string,
     targetTokens: Token[],
@@ -452,6 +473,8 @@ export interface DesktopApi {
   unmountTBFromProject: (projectId: number, tbId: string) => Promise<void>;
   getTBImportPreview: (filePath: string) => Promise<SpreadsheetPreviewData>;
   importTBEntries: (tbId: string, filePath: string, options: TBImportOptions) => Promise<string>;
+  setTBSyncConfig: (tbId: string, config: TBSyncConfigInput) => Promise<void>;
+  syncTBWithExcel: (tbId: string) => Promise<TBSyncStartResult>;
 
   getAISettings: () => Promise<AISettings>;
   listAIConnections: () => Promise<AIConnectionSummary[]>;
@@ -480,6 +503,7 @@ export interface DesktopApi {
   onSegmentsUpdatedBatch: (callback: (batch: SegmentsUpdatedBatchEvent) => void) => () => void;
   onProgress: (callback: (data: AppProgressEvent) => void) => () => void;
   onJobProgress: (callback: (progress: JobProgressEvent) => void) => () => void;
+  getJobStatus: (jobId: string) => Promise<JobProgressEvent | null>;
   onAppUpdateStatus: (callback: (status: AppUpdateStatusEvent) => void) => () => void;
   onReferenceDataChanged: (callback: (event: ReferenceDataChangedEvent) => void) => () => void;
 }

@@ -45,6 +45,12 @@ function createDeps() {
       deleteTB: vi.fn().mockResolvedValue(undefined),
       mountTBToProject: vi.fn().mockResolvedValue(undefined),
       unmountTBFromProject: vi.fn().mockResolvedValue(undefined),
+      getTBSyncConfig: vi.fn().mockReturnValue({
+        filePath: 'D:/terms/glossary.xlsx',
+        columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+      }),
+      setTBSyncConfig: vi.fn().mockResolvedValue(undefined),
+      syncTBEntriesFromExcel: vi.fn().mockResolvedValue({ success: 2, skipped: 0, removed: 1 }),
     },
     jobManager: {
       startJob: vi.fn(),
@@ -165,15 +171,18 @@ describe('reference lookup IPC handlers', () => {
       args: [11, 'tm-1'],
       expected: { projectId: null, kind: 'tm', reason: 'tm-batch-matched' },
     },
-  ])('emits reference invalidation after successful $channel', async ({ channel, args, expected }) => {
-    const { handlers, ipcMain } = createIpcMainStub();
-    const deps = createDeps();
+  ])(
+    'emits reference invalidation after successful $channel',
+    async ({ channel, args, expected }) => {
+      const { handlers, ipcMain } = createIpcMainStub();
+      const deps = createDeps();
 
-    registerTMHandlers({ ipcMain, ...deps } as never);
+      registerTMHandlers({ ipcMain, ...deps } as never);
 
-    await handlers.get(channel)?.({}, ...args);
-    expect(deps.notifyReferenceDataChanged).toHaveBeenCalledWith(expected);
-  });
+      await handlers.get(channel)?.({}, ...args);
+      expect(deps.notifyReferenceDataChanged).toHaveBeenCalledWith(expected);
+    },
+  );
 
   it.each([
     {
@@ -196,13 +205,118 @@ describe('reference lookup IPC handlers', () => {
       args: [7, 'tb-1'],
       expected: { projectId: 7, kind: 'tb', reason: 'tb-unmounted' },
     },
-  ])('emits reference invalidation after successful $channel', async ({ channel, args, expected }) => {
+  ])(
+    'emits reference invalidation after successful $channel',
+    async ({ channel, args, expected }) => {
+      const { handlers, ipcMain } = createIpcMainStub();
+      const deps = createDeps();
+
+      registerTBHandlers({ ipcMain, ...deps } as never);
+
+      await handlers.get(channel)?.({}, ...args);
+      expect(deps.notifyReferenceDataChanged).toHaveBeenCalledWith(expected);
+    },
+  );
+
+  it('tb-sync-set-config delegates to projectService.setTBSyncConfig', async () => {
     const { handlers, ipcMain } = createIpcMainStub();
     const deps = createDeps();
+    const config = {
+      filePath: 'D:/terms/glossary.xlsx',
+      columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+    };
 
     registerTBHandlers({ ipcMain, ...deps } as never);
 
-    await handlers.get(channel)?.({}, ...args);
-    expect(deps.notifyReferenceDataChanged).toHaveBeenCalledWith(expected);
+    await handlers.get(IPC_CHANNELS.tb.syncSetConfig)?.({}, 'tb-1', config);
+    expect(deps.projectService.setTBSyncConfig).toHaveBeenCalledWith('tb-1', config);
+  });
+
+  it('tb-sync-execute returns file-missing without starting a job when the bound file is unreadable', async () => {
+    const { handlers, ipcMain } = createIpcMainStub();
+    const deps = createDeps();
+    deps.projectService.getTBSyncConfig.mockReturnValue({
+      filePath: 'D:/definitely-missing/glossary.xlsx',
+      columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+    });
+
+    registerTBHandlers({ ipcMain, ...deps } as never);
+
+    await expect(handlers.get(IPC_CHANNELS.tb.syncExecute)?.({}, 'tb-1')).resolves.toEqual({
+      status: 'file-missing',
+      filePath: 'D:/definitely-missing/glossary.xlsx',
+    });
+    expect(deps.jobManager.startJob).not.toHaveBeenCalled();
+    expect(deps.projectService.syncTBEntriesFromExcel).not.toHaveBeenCalled();
+  });
+
+  it('tb-sync-execute starts a job and emits tb-synced invalidation on success', async () => {
+    const { handlers, ipcMain } = createIpcMainStub();
+    const deps = createDeps();
+    // Point the binding at a file that exists so the access() precheck passes.
+    deps.projectService.getTBSyncConfig.mockReturnValue({
+      filePath: __filename,
+      columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+    });
+
+    registerTBHandlers({ ipcMain, ...deps } as never);
+
+    const result = (await handlers.get(IPC_CHANNELS.tb.syncExecute)?.({}, 'tb-1')) as {
+      status: string;
+      jobId: string;
+    };
+    expect(result.status).toBe('started');
+    expect(result.jobId).toBeTruthy();
+    expect(deps.jobManager.startJob).toHaveBeenCalledWith(result.jobId, 'TB sync started');
+
+    await vi.waitFor(() => {
+      expect(deps.projectService.syncTBEntriesFromExcel).toHaveBeenCalledWith(
+        'tb-1',
+        expect.any(Function),
+      );
+      expect(deps.jobManager.updateProgress).toHaveBeenCalledWith(
+        result.jobId,
+        expect.objectContaining({
+          status: 'completed',
+          result: { kind: 'tb-sync', success: 2, skipped: 0 },
+        }),
+      );
+      expect(deps.notifyReferenceDataChanged).toHaveBeenCalledWith({
+        projectId: null,
+        kind: 'tb',
+        reason: 'tb-synced',
+      });
+    });
+  });
+
+  it('tb-sync-execute marks the job failed when the sync throws', async () => {
+    const { handlers, ipcMain } = createIpcMainStub();
+    const deps = createDeps();
+    deps.projectService.getTBSyncConfig.mockReturnValue({
+      filePath: __filename,
+      columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+    });
+    deps.projectService.syncTBEntriesFromExcel.mockRejectedValue(new Error('boom'));
+
+    registerTBHandlers({ ipcMain, ...deps } as never);
+
+    const result = (await handlers.get(IPC_CHANNELS.tb.syncExecute)?.({}, 'tb-1')) as {
+      status: string;
+      jobId: string;
+    };
+    expect(result.status).toBe('started');
+
+    await vi.waitFor(() => {
+      expect(deps.jobManager.updateProgress).toHaveBeenCalledWith(
+        result.jobId,
+        expect.objectContaining({
+          status: 'failed',
+          error: expect.objectContaining({ code: 'TB_SYNC_FAILED', message: 'boom' }),
+        }),
+      );
+    });
+    expect(deps.notifyReferenceDataChanged).not.toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'tb-synced' }),
+    );
   });
 });

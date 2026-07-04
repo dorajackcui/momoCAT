@@ -1,12 +1,13 @@
 import type { Segment, TBMatch } from '@cat/core/models';
 import type { TMConcordanceEntry, TMMatch } from '../../../shared/ipc';
 
-export type ReferenceLookupRequestKind = 'tm' | 'tb' | 'concordance';
+export type ReferenceLookupRequestKind = 'tm' | 'tb' | 'concordance' | 'invalidate';
 
 export type ReferenceLookupWorkerRequest =
   | { requestId: number; kind: 'tm'; projectId: number; segment: Segment }
   | { requestId: number; kind: 'tb'; projectId: number; segment: Segment }
-  | { requestId: number; kind: 'concordance'; projectId: number; query: string };
+  | { requestId: number; kind: 'concordance'; projectId: number; query: string }
+  | { requestId: number; kind: 'invalidate' };
 
 export type ReferenceLookupWorkerResponse =
   | {
@@ -29,6 +30,12 @@ export type ReferenceLookupWorkerResponse =
     }
   | {
       requestId: number;
+      ok: true;
+      kind: 'invalidate';
+      result: null;
+    }
+  | {
+      requestId: number;
       ok: false;
       kind: ReferenceLookupRequestKind;
       error: string;
@@ -39,4 +46,5 @@ export interface ReferenceLookupService {
   findTmMatches(projectId: number, segment: Segment): Promise<TMMatch[]>;
   findTbMatches(projectId: number, segment: Segment): Promise<TBMatch[]>;
   searchConcordance(projectId: number, query: string): Promise<TMConcordanceEntry[]>;
+  invalidateReferenceData(): Promise<void>;
 }

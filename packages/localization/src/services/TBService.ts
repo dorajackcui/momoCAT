@@ -68,6 +68,16 @@ export class TBService {
     return this.findLegacyProfileMatches(projectId, segment, project.srcLang);
   }
 
+  /**
+   * Drop cached recognizer indexes. Needed when TB data changed through another
+   * DB connection (e.g. the main process synced a TB while this service runs in
+   * a lookup worker): the in-process TB data version never bumps in that case,
+   * so the version-keyed cache would keep serving stale terms.
+   */
+  public invalidateCachedIndexes(): void {
+    this.englishRecognizerCache.clear();
+  }
+
   private findLegacyProfileMatches(
     projectId: number,
     segment: Segment,

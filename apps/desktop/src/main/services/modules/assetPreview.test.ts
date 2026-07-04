@@ -51,9 +51,9 @@ function makeTBEntry(index: number): TBEntry {
 
 describe('asset preview modules', () => {
   it('returns at most ten lightweight TM preview rows', async () => {
-    const listTMEntries = vi.fn().mockReturnValue(
-      Array.from({ length: 12 }, (_, index) => makeTMEntry(index)),
-    );
+    const listTMEntries = vi
+      .fn()
+      .mockReturnValue(Array.from({ length: 12 }, (_, index) => makeTMEntry(index)));
 
     const module = new TMModule(
       {} as ProjectRepository,
@@ -80,15 +80,16 @@ describe('asset preview modules', () => {
   });
 
   it('returns at most ten lightweight TB preview rows', async () => {
-    const listTBEntries = vi.fn().mockReturnValue(
-      Array.from({ length: 12 }, (_, index) => makeTBEntry(index)),
-    );
+    const listTBEntries = vi
+      .fn()
+      .mockReturnValue(Array.from({ length: 12 }, (_, index) => makeTBEntry(index)));
 
     const module = new TBModule(
       { listTBEntries } as unknown as TBRepository,
       tx,
       {} as TBService,
       vi.fn(),
+      { getSetting: vi.fn(), setSetting: vi.fn() },
     );
 
     const preview = await module.getTBPreview('tb-1');

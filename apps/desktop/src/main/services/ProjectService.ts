@@ -52,6 +52,8 @@ import type {
   ProxySettings,
   ProxySettingsInput,
   TBImportOptions,
+  TBSyncConfig,
+  TBSyncConfigInput,
   TMCommitOptions,
   TMImportOptions,
 } from '../../shared/ipc';
@@ -151,7 +153,8 @@ export class ProjectService {
         dbPath,
         emitProgress,
       );
-    this.tbModule = deps.tbModule ?? new TBModule(tbRepo, tx, tbService, emitProgress);
+    this.tbModule =
+      deps.tbModule ?? new TBModule(tbRepo, tx, tbService, emitProgress, settingsRepo);
 
     this.aiModule =
       deps.aiModule ??
@@ -390,6 +393,21 @@ export class ProjectService {
     onProgress?: (progress: ImportProgress) => void,
   ): Promise<{ success: number; skipped: number }> {
     return this.tbModule.importTBEntries(tbId, filePath, options, onProgress);
+  }
+
+  public getTBSyncConfig(tbId: string): TBSyncConfig | null {
+    return this.tbModule.getTBSyncConfig(tbId);
+  }
+
+  public async setTBSyncConfig(tbId: string, config: TBSyncConfigInput): Promise<void> {
+    return this.tbModule.setTBSyncConfig(tbId, config);
+  }
+
+  public async syncTBEntriesFromExcel(
+    tbId: string,
+    onProgress?: (progress: ImportProgress) => void,
+  ): Promise<{ success: number; skipped: number; removed: number }> {
+    return this.tbModule.syncTBEntriesFromExcel(tbId, onProgress);
   }
 
   public async commitToMainTM(tmId: string, fileId: number, options?: TMCommitOptions) {

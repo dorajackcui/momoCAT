@@ -34,6 +34,7 @@ import { registerTBHandlers } from './ipc/tbHandlers';
 import { registerAIHandlers } from './ipc/aiHandlers';
 import { registerDialogHandlers } from './ipc/dialogHandlers';
 import { registerClipboardHandlers } from './ipc/clipboardHandlers';
+import { registerJobHandlers } from './ipc/jobHandlers';
 
 const { autoUpdater } = electronUpdater;
 
@@ -302,6 +303,20 @@ app.whenReady().then(async () => {
     void referenceLookupPrefetch.dispose();
   });
 
+  // TM/TB mutations happen on the main-process DB connection; the lookup
+  // workers keep their own connection plus in-process caches (English TB
+  // recognizer keyed by a per-connection data version). Invalidate them
+  // alongside the renderer broadcast or warmed workers keep serving stale terms.
+  const notifyReferenceDataChanged = (event: ReferenceDataChangedEvent) => {
+    void referenceLookup.invalidateReferenceData().catch((error) => {
+      console.error('[ReferenceLookup] Failed to invalidate worker caches:', error);
+    });
+    void referenceLookupPrefetch.invalidateReferenceData().catch((error) => {
+      console.error('[ReferenceLookup] Failed to invalidate prefetch worker caches:', error);
+    });
+    broadcastReferenceDataChanged(event);
+  };
+
   registerProjectHandlers({ ipcMain, projectService });
   registerTMHandlers({
     ipcMain,
@@ -309,7 +324,7 @@ app.whenReady().then(async () => {
     jobManager,
     referenceLookup,
     referenceLookupPrefetch,
-    notifyReferenceDataChanged: broadcastReferenceDataChanged,
+    notifyReferenceDataChanged,
   });
   registerTBHandlers({
     ipcMain,
@@ -317,11 +332,12 @@ app.whenReady().then(async () => {
     jobManager,
     referenceLookup,
     referenceLookupPrefetch,
-    notifyReferenceDataChanged: broadcastReferenceDataChanged,
+    notifyReferenceDataChanged,
   });
   registerAIHandlers({ ipcMain, projectService, jobManager });
   registerDialogHandlers({ ipcMain, dialog });
   registerClipboardHandlers({ ipcMain, clipboard });
+  registerJobHandlers({ ipcMain, jobManager });
 
   const appUpdateService = createAppUpdateService({
     appName: 'momoCAT',

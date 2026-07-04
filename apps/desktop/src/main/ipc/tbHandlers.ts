@@ -1,6 +1,12 @@
 import { randomUUID } from 'crypto';
+import { access } from 'fs/promises';
 import type { Segment } from '@cat/core/models';
-import type { StructuredJobError, TBImportOptions } from '../../shared/ipc';
+import type {
+  StructuredJobError,
+  TBImportOptions,
+  TBSyncConfigInput,
+  TBSyncStartResult,
+} from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import { registerHandle } from './registerHandle';
 import type { ReferenceBackedHandlerDeps } from './types';
@@ -146,6 +152,69 @@ export function registerTBHandlers({
         });
 
       return jobId;
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.tb.syncSetConfig,
+    (_event, ...args) => {
+      const [tbId, config] = args as [string, TBSyncConfigInput];
+      return projectService.setTBSyncConfig(tbId, config);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.tb.syncExecute,
+    async (_event, ...args): Promise<TBSyncStartResult> => {
+      const [tbId] = args as [string];
+      const config = projectService.getTBSyncConfig(tbId);
+      if (!config) {
+        throw new Error('This term base is not bound to a local Excel file.');
+      }
+
+      try {
+        await access(config.filePath);
+      } catch {
+        return { status: 'file-missing', filePath: config.filePath };
+      }
+
+      const jobId = randomUUID();
+      jobManager.startJob(jobId, 'TB sync started');
+
+      void projectService
+        .syncTBEntriesFromExcel(tbId, (data) => {
+          const progress = data.total === 0 ? 0 : Math.round((data.current / data.total) * 100);
+          jobManager.updateProgress(jobId, {
+            progress,
+            message: data.message,
+          });
+        })
+        .then((result) => {
+          jobManager.updateProgress(jobId, {
+            progress: 100,
+            status: 'completed',
+            message: `TB sync completed: ${result.success} synced, ${result.skipped} skipped`,
+            result: {
+              kind: 'tb-sync',
+              success: result.success,
+              skipped: result.skipped,
+            },
+          });
+          notifyReferenceDataChanged({ projectId: null, kind: 'tb', reason: 'tb-synced' });
+        })
+        .catch((error) => {
+          const structuredError = toStructuredJobError(error, 'TB_SYNC_FAILED');
+          jobManager.updateProgress(jobId, {
+            progress: 100,
+            status: 'failed',
+            message: structuredError.message,
+            error: structuredError,
+          });
+        });
+
+      return { status: 'started', jobId };
     },
   );
 }

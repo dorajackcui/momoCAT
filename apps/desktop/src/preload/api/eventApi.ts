@@ -1,4 +1,5 @@
 import type { IpcRendererEvent } from 'electron';
+import type { DesktopApi } from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import type { DesktopApiSlice, IpcRendererLike } from './types';
 
@@ -7,6 +8,7 @@ type EventApiKeys =
   | 'onSegmentsUpdatedBatch'
   | 'onProgress'
   | 'onJobProgress'
+  | 'getJobStatus'
   | 'onAppUpdateStatus'
   | 'onReferenceDataChanged';
 
@@ -26,8 +28,7 @@ export function createEventApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<Ev
         callback(batch);
       };
       ipcRenderer.on(IPC_CHANNELS.events.segmentsUpdatedBatch, listener);
-      return () =>
-        ipcRenderer.removeListener(IPC_CHANNELS.events.segmentsUpdatedBatch, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.events.segmentsUpdatedBatch, listener);
     },
     onProgress: (callback) => {
       const listener = (_event: IpcRendererEvent, ...args: unknown[]) => {
@@ -45,6 +46,10 @@ export function createEventApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<Ev
       ipcRenderer.on(IPC_CHANNELS.events.jobProgress, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.events.jobProgress, listener);
     },
+    getJobStatus: (jobId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.job.getStatus, jobId) as ReturnType<
+        DesktopApi['getJobStatus']
+      >,
     onAppUpdateStatus: (callback) => {
       const listener = (_event: IpcRendererEvent, ...args: unknown[]) => {
         const [status] = args as [Parameters<typeof callback>[0]];
@@ -59,8 +64,7 @@ export function createEventApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<Ev
         callback(event);
       };
       ipcRenderer.on(IPC_CHANNELS.events.referenceDataChanged, listener);
-      return () =>
-        ipcRenderer.removeListener(IPC_CHANNELS.events.referenceDataChanged, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.events.referenceDataChanged, listener);
     },
   };
 }

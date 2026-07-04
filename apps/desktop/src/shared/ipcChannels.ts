@@ -55,6 +55,8 @@ export const IPC_CHANNELS = {
     unmount: 'tb-unmount',
     importPreview: 'tb-import-preview',
     importExecute: 'tb-import-execute',
+    syncSetConfig: 'tb-sync-set-config',
+    syncExecute: 'tb-sync-execute',
   },
   ai: {
     getSettings: 'ai-settings-get',
@@ -78,6 +80,9 @@ export const IPC_CHANNELS = {
   },
   clipboard: {
     read: 'clipboard-read',
+  },
+  job: {
+    getStatus: 'job-get-status',
   },
   events: {
     segmentsUpdated: 'segments-updated',
