@@ -601,6 +601,76 @@ describe('TBService', () => {
     );
   });
 
+  it('caps the English recognizer cache so a third project evicts the least-recent one', async () => {
+    const entryFor = (projectId: number) => [
+      {
+        id: `tb-cache-${projectId}`,
+        tbId: `tb-cache-base-${projectId}`,
+        srcTerm: 'Settings',
+        tgtTerm: 'settings',
+        srcNorm: 'settings',
+        note: null,
+        createdAt: '',
+        updatedAt: '',
+        usageCount: 1,
+        tbName: `Cache TB ${projectId}`,
+        priority: 1,
+      },
+    ];
+    const listProjectTermEntries = vi.fn((projectId: number) => entryFor(projectId));
+    const dbMock = {
+      listProjectTermEntries,
+      searchProjectTermEntries: () => [],
+      getProjectMountedTermBases: (projectId: number) => [
+        {
+          id: `tb-cache-base-${projectId}`,
+          name: `Cache TB ${projectId}`,
+          srcLang: 'en-US',
+          tgtLang: 'fr-FR',
+          createdAt: '',
+          updatedAt: '',
+          priority: 1,
+          isEnabled: 1,
+        },
+      ],
+      getTBDataVersion: () => 1,
+      getTermBaseStats: () => ({ entryCount: 1, maxEntryUpdatedAt: null }),
+      listTBEntries: () => entryFor(1),
+    } satisfies Pick<
+      TBRepository,
+      | 'listProjectTermEntries'
+      | 'searchProjectTermEntries'
+      | 'getProjectMountedTermBases'
+      | 'getTBDataVersion'
+      | 'getTermBaseStats'
+      | 'listTBEntries'
+    >;
+    const projectRepoMock = {
+      getProject: (id: number) => ({ id, srcLang: 'en-US', tgtLang: 'fr-FR' }),
+    } satisfies Pick<ProjectRepository, 'getProject'>;
+    const service = new TBService(projectRepoMock as ProjectRepository, dbMock as TBRepository);
+    const segment = buildSegment('Open Settings now.');
+
+    // Warm two projects; both stay cached (limit is 2).
+    await service.findMatches(1, segment);
+    await service.findMatches(2, segment);
+    await service.findMatches(1, segment);
+    await service.findMatches(2, segment);
+    expect(listProjectTermEntries).toHaveBeenCalledTimes(2);
+
+    // A third project evicts the least-recent (project 1); cache holds {2, 3}.
+    await service.findMatches(3, segment);
+    expect(listProjectTermEntries).toHaveBeenCalledTimes(3);
+
+    // Project 3 is still cached — no rebuild.
+    await service.findMatches(3, segment);
+    expect(listProjectTermEntries).toHaveBeenCalledTimes(3);
+
+    // Project 1 was evicted, so it rebuilds.
+    await service.findMatches(1, segment);
+    expect(listProjectTermEntries).toHaveBeenCalledTimes(4);
+  });
+
   it('matches both long and short blind-spot terms from repo candidates without service-level补扫', async () => {
     const service = createServiceWithEntries([], {
       srcLang: 'zh-CN',

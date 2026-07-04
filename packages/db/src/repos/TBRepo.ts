@@ -11,6 +11,11 @@ import type { MountedTBRecord, ProjectTermEntryRecord, TBRecord } from '../types
 type TBEntryDbRow = TBEntry;
 const EXACT_CJK_BATCH_SIZE = 200;
 const CJK_LIKE_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+// Upper bound on entries pulled for a project's in-memory recognizer / CJK
+// fallback. Sized so typical English TBs (10k-20k) load fully into the fast
+// recognizer path; larger sets still fall back to per-segment FTS recall.
+// See TBService English recognizer benchmark (~6.9KB retained heap per entry).
+const PROJECT_TERM_ENTRY_LIMIT = 20000;
 
 export class TBRepo {
   private stmtDeleteTbFtsByEntryId: Database.Statement;
@@ -142,7 +147,7 @@ export class TBRepo {
       JOIN tb_entries ON tb_entries.tbId = term_bases.id
       WHERE project_term_bases.projectId = ? AND project_term_bases.isEnabled = 1
       ORDER BY project_term_bases.priority ASC, length(tb_entries.srcTerm) DESC
-      LIMIT 5000
+      LIMIT ${PROJECT_TERM_ENTRY_LIMIT}
     `)
       .all(projectId) as ProjectTermEntryRecord[];
 

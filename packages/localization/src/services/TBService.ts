@@ -45,7 +45,11 @@ interface EnglishTBPositionCandidate {
 export class TBService {
   private static readonly TB_CANDIDATE_LIMIT = 200;
   private static readonly ENGLISH_TB_RECOGNIZER_PROFILE_VERSION = 1;
-  private static readonly ENGLISH_TB_RECOGNIZER_CACHE_MAX_PROJECTS = 4;
+  // Bounded to cap worst-case worker memory: each cached project recognizer
+  // retains ~6.9KB/entry, so at the 20k entry ceiling one project is ~140MB.
+  // Two workers (lookup + prefetch) each hold their own cache, so keep this
+  // small — 2 projects/worker keeps the worst case near ~560MB total.
+  private static readonly ENGLISH_TB_RECOGNIZER_CACHE_MAX_PROJECTS = 2;
 
   private projectRepo: ProjectRepository;
   private db: TBRepository;
