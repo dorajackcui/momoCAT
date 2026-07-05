@@ -1,6 +1,7 @@
 import type { ProjectType } from '@cat/core/project';
 import { ProjectAIController } from '../../hooks/projectDetail/useProjectAI';
 import { Badge, Button, Card, Input, Notice, Select, Textarea } from '../ui';
+import { ProjectPromptManagerModal } from './ProjectPromptManagerModal';
 
 interface ProjectAIPaneProps {
   ai: ProjectAIController;
@@ -92,12 +93,39 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
         </Select>
       </div>
       <div className="mb-3">
-        <label
-          htmlFor="project-ai-custom-prompt"
-          className="block text-xs font-bold text-text-faint uppercase tracking-wider mb-1"
-        >
-          Custom Prompt
-        </label>
+        <div className="mb-1 flex items-end justify-between gap-2">
+          <label
+            htmlFor="project-ai-custom-prompt"
+            className="block text-xs font-bold text-text-faint uppercase tracking-wider"
+          >
+            Custom Prompt
+          </label>
+          <div className="flex items-center gap-2">
+            <Select
+              id="project-ai-saved-prompt"
+              aria-label="Saved Prompts"
+              value={ai.savedPrompts.selectedPromptId ?? ''}
+              onChange={(event) => {
+                const promptId = Number(event.target.value);
+                if (promptId) ai.savedPrompts.applyPrompt(promptId);
+              }}
+              className="w-48 !text-xs"
+              disabled={ai.savedPrompts.prompts.length === 0}
+            >
+              <option value="">
+                {ai.savedPrompts.prompts.length === 0 ? 'No saved prompts' : 'Saved prompts…'}
+              </option>
+              {ai.savedPrompts.prompts.map((prompt) => (
+                <option key={prompt.id} value={prompt.id}>
+                  {prompt.name}
+                </option>
+              ))}
+            </Select>
+            <Button onClick={ai.savedPrompts.openManager} size="sm" variant="ghost">
+              Manage
+            </Button>
+          </div>
+        </div>
         <Textarea
           id="project-ai-custom-prompt"
           value={ai.promptDraft}
@@ -237,9 +265,9 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
             )}
             {ai.testRawResponse && (
               <div className="mt-2">
-                  <div className="text-[10px] font-bold text-text-faint uppercase tracking-wider mb-1">
+                <div className="text-[10px] font-bold text-text-faint uppercase tracking-wider mb-1">
                   Raw Provider Response
-                  </div>
+                </div>
                 <Card
                   variant="surface"
                   className="text-[10px] text-text-muted px-3 py-2 whitespace-pre-wrap max-h-40 overflow-auto"
@@ -251,6 +279,14 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
           </>
         )}
       </div>
+      {ai.savedPrompts.managerOpen && (
+        <ProjectPromptManagerModal
+          open={true}
+          onClose={ai.savedPrompts.closeManager}
+          savedPrompts={ai.savedPrompts}
+          currentDraft={ai.promptDraft}
+        />
+      )}
     </Card>
   );
 }

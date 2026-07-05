@@ -8,7 +8,7 @@ import {
   type ProjectAIModel,
 } from '@cat/core/project';
 import { randomUUID } from 'crypto';
-import type { FileSegmentStatusStats, ProjectFileRecord } from '../types';
+import type { FileSegmentStatusStats, ProjectFileRecord, ProjectSavedPromptRecord } from '../types';
 
 interface FileWithSegmentStatsRow extends Omit<ProjectFileRecord, 'segmentStatusStats'> {
   qaProblemSegments?: number | null;
@@ -145,6 +145,74 @@ export class ProjectRepo {
 
   public deleteProject(id: number) {
     this.db.prepare('DELETE FROM projects WHERE id = ?').run(id);
+  }
+
+  public listProjectSavedPrompts(projectId: number): ProjectSavedPromptRecord[] {
+    return this.db
+      .prepare('SELECT * FROM project_prompts WHERE projectId = ? ORDER BY name COLLATE NOCASE')
+      .all(projectId) as ProjectSavedPromptRecord[];
+  }
+
+  public createProjectSavedPrompt(
+    projectId: number,
+    name: string,
+    content: string,
+  ): ProjectSavedPromptRecord {
+    const trimmedName = this.normalizeSavedPromptName(name);
+    this.assertSavedPromptNameAvailable(projectId, trimmedName);
+    const result = this.db
+      .prepare('INSERT INTO project_prompts (projectId, name, content) VALUES (?, ?, ?)')
+      .run(projectId, trimmedName, content);
+    return this.db
+      .prepare('SELECT * FROM project_prompts WHERE id = ?')
+      .get(result.lastInsertRowid) as ProjectSavedPromptRecord;
+  }
+
+  public updateProjectSavedPromptContent(promptId: number, content: string) {
+    this.db
+      .prepare(
+        "UPDATE project_prompts SET content = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?",
+      )
+      .run(content, promptId);
+  }
+
+  public renameProjectSavedPrompt(promptId: number, name: string) {
+    const trimmedName = this.normalizeSavedPromptName(name);
+    const existing = this.db
+      .prepare('SELECT projectId FROM project_prompts WHERE id = ?')
+      .get(promptId) as { projectId: number } | undefined;
+    if (!existing) {
+      throw new Error('Saved prompt not found.');
+    }
+    this.assertSavedPromptNameAvailable(existing.projectId, trimmedName, promptId);
+    this.db
+      .prepare(
+        "UPDATE project_prompts SET name = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?",
+      )
+      .run(trimmedName, promptId);
+  }
+
+  public deleteProjectSavedPrompt(promptId: number) {
+    this.db.prepare('DELETE FROM project_prompts WHERE id = ?').run(promptId);
+  }
+
+  private normalizeSavedPromptName(name: string): string {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      throw new Error('Prompt name cannot be empty.');
+    }
+    return trimmed;
+  }
+
+  private assertSavedPromptNameAvailable(projectId: number, name: string, excludeId?: number) {
+    const duplicate = this.db
+      .prepare(
+        'SELECT id FROM project_prompts WHERE projectId = ? AND name = ? COLLATE NOCASE AND id IS NOT ?',
+      )
+      .get(projectId, name, excludeId ?? null) as { id: number } | undefined;
+    if (duplicate) {
+      throw new Error(`A prompt named "${name}" already exists in this project.`);
+    }
   }
 
   public countFilesByProject(projectId: number): number {

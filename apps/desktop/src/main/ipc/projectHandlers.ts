@@ -52,6 +52,51 @@ export function registerProjectHandlers({ ipcMain, projectService }: MainHandler
     },
   );
 
+  registerHandle(
+    { ipcMain, projectService },
+    IPC_CHANNELS.project.listSavedPrompts,
+    (_event, ...args) => {
+      const [projectId] = args as [number];
+      return projectService.listProjectSavedPrompts(projectId);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService },
+    IPC_CHANNELS.project.createSavedPrompt,
+    (_event, ...args) => {
+      const [projectId, name, content] = args as [number, string, string];
+      return projectService.createProjectSavedPrompt(projectId, name, content);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService },
+    IPC_CHANNELS.project.updateSavedPromptContent,
+    (_event, ...args) => {
+      const [promptId, content] = args as [number, string];
+      return projectService.updateProjectSavedPromptContent(promptId, content);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService },
+    IPC_CHANNELS.project.renameSavedPrompt,
+    (_event, ...args) => {
+      const [promptId, name] = args as [number, string];
+      return projectService.renameProjectSavedPrompt(promptId, name);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService },
+    IPC_CHANNELS.project.deleteSavedPrompt,
+    (_event, ...args) => {
+      const [promptId] = args as [number];
+      return projectService.deleteProjectSavedPrompt(promptId);
+    },
+  );
+
   registerHandle({ ipcMain, projectService }, IPC_CHANNELS.project.remove, (_event, ...args) => {
     const [projectId] = args as [number];
     return projectService.deleteProject(projectId);

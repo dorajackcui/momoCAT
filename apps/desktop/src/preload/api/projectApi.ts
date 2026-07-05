@@ -10,6 +10,11 @@ type ProjectApiKeys =
   | 'updateProjectPrompt'
   | 'updateProjectAISettings'
   | 'updateProjectQASettings'
+  | 'listProjectSavedPrompts'
+  | 'createProjectSavedPrompt'
+  | 'updateProjectSavedPromptContent'
+  | 'renameProjectSavedPrompt'
+  | 'deleteProjectSavedPrompt'
   | 'getProjectFiles'
   | 'getFile'
   | 'getFilePreview'
@@ -60,6 +65,31 @@ export function createProjectApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<
         projectId,
         qaSettings,
       ) as ReturnType<DesktopApi['updateProjectQASettings']>,
+    listProjectSavedPrompts: (projectId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.project.listSavedPrompts, projectId) as ReturnType<
+        DesktopApi['listProjectSavedPrompts']
+      >,
+    createProjectSavedPrompt: (projectId, name, content) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.project.createSavedPrompt,
+        projectId,
+        name,
+        content,
+      ) as ReturnType<DesktopApi['createProjectSavedPrompt']>,
+    updateProjectSavedPromptContent: (promptId, content) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.project.updateSavedPromptContent,
+        promptId,
+        content,
+      ) as ReturnType<DesktopApi['updateProjectSavedPromptContent']>,
+    renameProjectSavedPrompt: (promptId, name) =>
+      ipcRenderer.invoke(IPC_CHANNELS.project.renameSavedPrompt, promptId, name) as ReturnType<
+        DesktopApi['renameProjectSavedPrompt']
+      >,
+    deleteProjectSavedPrompt: (promptId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.project.deleteSavedPrompt, promptId) as ReturnType<
+        DesktopApi['deleteProjectSavedPrompt']
+      >,
     getProjectFiles: (projectId) =>
       ipcRenderer.invoke(IPC_CHANNELS.project.getFiles, projectId) as ReturnType<
         DesktopApi['getProjectFiles']

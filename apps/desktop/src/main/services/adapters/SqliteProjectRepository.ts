@@ -1,6 +1,12 @@
 import type { ProjectAIModel, ProjectQASettings, ProjectType } from '@cat/core/project';
 import { CATDatabase } from '@cat/db';
-import { ProjectRepository, ProjectFileRecord, ProjectListRecord, ProjectRecord } from '../ports';
+import {
+  ProjectRepository,
+  ProjectFileRecord,
+  ProjectListRecord,
+  ProjectRecord,
+  ProjectSavedPromptRecord,
+} from '../ports';
 
 export class SqliteProjectRepository implements ProjectRepository {
   constructor(private readonly db: CATDatabase) {}
@@ -40,6 +46,30 @@ export class SqliteProjectRepository implements ProjectRepository {
 
   deleteProject(id: number): void {
     this.db.deleteProject(id);
+  }
+
+  listProjectSavedPrompts(projectId: number): ProjectSavedPromptRecord[] {
+    return this.db.listProjectSavedPrompts(projectId);
+  }
+
+  createProjectSavedPrompt(
+    projectId: number,
+    name: string,
+    content: string,
+  ): ProjectSavedPromptRecord {
+    return this.db.createProjectSavedPrompt(projectId, name, content);
+  }
+
+  updateProjectSavedPromptContent(promptId: number, content: string): void {
+    this.db.updateProjectSavedPromptContent(promptId, content);
+  }
+
+  renameProjectSavedPrompt(promptId: number, name: string): void {
+    this.db.renameProjectSavedPrompt(promptId, name);
+  }
+
+  deleteProjectSavedPrompt(promptId: number): void {
+    this.db.deleteProjectSavedPrompt(promptId);
   }
 
   createFile(projectId: number, name: string, importOptionsJson?: string): number {

@@ -84,6 +84,73 @@ describe("CATDatabase", () => {
     expect(project?.qaSettings?.instantQaOnConfirm).toBe(false);
   });
 
+  describe("project saved prompts", () => {
+    it("creates, lists, updates, renames and deletes saved prompts", () => {
+      const projectId = db.createProject("Prompt Project", "en-US", "zh-CN");
+
+      const created = db.createProjectSavedPrompt(
+        projectId,
+        "  Formal tone  ",
+        "Translate with a formal tone.",
+      );
+      expect(created.id).toBeGreaterThan(0);
+      expect(created.projectId).toBe(projectId);
+      expect(created.name).toBe("Formal tone");
+      expect(created.content).toBe("Translate with a formal tone.");
+
+      db.createProjectSavedPrompt(projectId, "Casual tone", "Translate casually.");
+      const prompts = db.listProjectSavedPrompts(projectId);
+      expect(prompts.map((prompt) => prompt.name)).toEqual(["Casual tone", "Formal tone"]);
+
+      db.updateProjectSavedPromptContent(created.id, "Translate with a very formal tone.");
+      db.renameProjectSavedPrompt(created.id, "Very formal tone");
+      const updated = db
+        .listProjectSavedPrompts(projectId)
+        .find((prompt) => prompt.id === created.id);
+      expect(updated?.name).toBe("Very formal tone");
+      expect(updated?.content).toBe("Translate with a very formal tone.");
+
+      db.deleteProjectSavedPrompt(created.id);
+      expect(db.listProjectSavedPrompts(projectId)).toHaveLength(1);
+    });
+
+    it("scopes saved prompts per project and cascades on project delete", () => {
+      const projectA = db.createProject("Project A", "en", "zh");
+      const projectB = db.createProject("Project B", "en", "zh");
+
+      db.createProjectSavedPrompt(projectA, "Shared name", "A content");
+      db.createProjectSavedPrompt(projectB, "Shared name", "B content");
+
+      expect(db.listProjectSavedPrompts(projectA)).toHaveLength(1);
+      expect(db.listProjectSavedPrompts(projectB)).toHaveLength(1);
+
+      db.deleteProject(projectA);
+      expect(db.listProjectSavedPrompts(projectA)).toHaveLength(0);
+      expect(db.listProjectSavedPrompts(projectB)).toHaveLength(1);
+    });
+
+    it("rejects duplicate and empty prompt names", () => {
+      const projectId = db.createProject("Prompt Project", "en", "zh");
+      const first = db.createProjectSavedPrompt(projectId, "Formal", "Content");
+      db.createProjectSavedPrompt(projectId, "Other", "Content");
+
+      expect(() => db.createProjectSavedPrompt(projectId, "formal", "Other content")).toThrow(
+        /already exists/,
+      );
+      expect(() => db.createProjectSavedPrompt(projectId, "   ", "Content")).toThrow(
+        /cannot be empty/,
+      );
+      expect(() => db.renameProjectSavedPrompt(first.id, "other")).toThrow(/already exists/);
+
+      // Renaming to its own name (case change only) is allowed.
+      db.renameProjectSavedPrompt(first.id, "FORMAL");
+      const renamed = db
+        .listProjectSavedPrompts(projectId)
+        .find((prompt) => prompt.id === first.id);
+      expect(renamed?.name).toBe("FORMAL");
+    });
+  });
+
   it("should handle cascading delete (Project -> Files -> Segments)", () => {
     // 1. Create Project
     const projectId = db.createProject("Delete Me", "en", "zh");

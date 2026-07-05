@@ -111,6 +111,26 @@ export class ProjectFileModule {
     this.projectRepo.updateProjectQASettings(projectId, qaSettings);
   }
 
+  public listProjectSavedPrompts(projectId: number) {
+    return this.projectRepo.listProjectSavedPrompts(projectId);
+  }
+
+  public createProjectSavedPrompt(projectId: number, name: string, content: string) {
+    return this.projectRepo.createProjectSavedPrompt(projectId, name, content);
+  }
+
+  public updateProjectSavedPromptContent(promptId: number, content: string) {
+    this.projectRepo.updateProjectSavedPromptContent(promptId, content);
+  }
+
+  public renameProjectSavedPrompt(promptId: number, name: string) {
+    this.projectRepo.renameProjectSavedPrompt(promptId, name);
+  }
+
+  public deleteProjectSavedPrompt(promptId: number) {
+    this.projectRepo.deleteProjectSavedPrompt(promptId);
+  }
+
   public async deleteProject(projectId: number) {
     this.projectRepo.deleteProject(projectId);
 

@@ -11,6 +11,7 @@ import type {
   MountedTBRecord as DbMountedTBRecord,
   MountedTMRecord as DbMountedTMRecord,
   ProjectFileRecord as DbProjectFileRecord,
+  ProjectSavedPromptRecord as DbProjectSavedPromptRecord,
   TBRecord as DbTBRecord,
   TMRecord as DbTMRecord,
   TMType as DbTMType,
@@ -84,6 +85,8 @@ export type ProjectWithStats = Project & {
 };
 
 export type ProjectFileRecord = DbProjectFileRecord;
+
+export type ProjectSavedPrompt = DbProjectSavedPromptRecord;
 
 export interface FileInspectResult {
   outputPath: string;
@@ -410,6 +413,15 @@ export interface DesktopApi {
     aiProviderId: ProjectAIModel | null,
   ) => Promise<void>;
   updateProjectQASettings: (projectId: number, qaSettings: ProjectQASettings) => Promise<void>;
+  listProjectSavedPrompts: (projectId: number) => Promise<ProjectSavedPrompt[]>;
+  createProjectSavedPrompt: (
+    projectId: number,
+    name: string,
+    content: string,
+  ) => Promise<ProjectSavedPrompt>;
+  updateProjectSavedPromptContent: (promptId: number, content: string) => Promise<void>;
+  renameProjectSavedPrompt: (promptId: number, name: string) => Promise<void>;
+  deleteProjectSavedPrompt: (promptId: number) => Promise<void>;
   getProjectFiles: (projectId: number) => Promise<ProjectFileRecord[]>;
   getFile: (fileId: number) => Promise<ProjectFileRecord | undefined>;
   getFilePreview: (filePath: string) => Promise<SpreadsheetPreviewData>;

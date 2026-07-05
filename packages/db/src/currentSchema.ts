@@ -111,6 +111,21 @@ const TM_STATS_PERFORMANCE_INDEX_SQL = `
 const TB_STATS_PERFORMANCE_INDEX_SQL = `
   CREATE INDEX IF NOT EXISTS idx_tb_entries_tb_updatedAt ON tb_entries(tbId, updatedAt);
 `;
+// Additive table: created lazily on existing v15 databases (not listed in
+// REQUIRED_TABLES so older databases still open before maintenance runs).
+const PROJECT_PROMPTS_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS project_prompts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    projectId INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    updatedAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    UNIQUE(projectId, name),
+    FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_project_prompts_project ON project_prompts(projectId, name);
+`;
 
 export function ensureCurrentSchema(
   db: Database.Database,
@@ -125,7 +140,7 @@ export function ensureCurrentSchema(
   assertCurrentSchemaShape(db);
 
   if (options.allowSchemaMaintenance ?? true) {
-    ensureCurrentPerformanceIndexes(db);
+    applyCurrentSchemaMaintenance(db);
   }
 }
 
@@ -285,6 +300,8 @@ function createCurrentSchema(db: Database.Database): void {
         updatedAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       );
 
+      ${PROJECT_PROMPTS_TABLE_SQL}
+
       CREATE INDEX idx_files_project ON files(projectId);
       CREATE INDEX idx_segments_file_order ON segments(fileId, orderIndex);
       CREATE INDEX idx_segments_file_srcHash ON segments(fileId, srcHash);
@@ -302,9 +319,10 @@ function createCurrentSchema(db: Database.Database): void {
   })();
 }
 
-function ensureCurrentPerformanceIndexes(db: Database.Database): void {
+function applyCurrentSchemaMaintenance(db: Database.Database): void {
   db.exec(TM_STATS_PERFORMANCE_INDEX_SQL);
   db.exec(TB_STATS_PERFORMANCE_INDEX_SQL);
+  db.exec(PROJECT_PROMPTS_TABLE_SQL);
 }
 
 function assertCurrentSchemaMarker(db: Database.Database): void {

@@ -18,6 +18,15 @@ export type ProjectFileRecord = ProjectFile & {
   segmentStatusStats: FileSegmentStatusStats;
 };
 
+export interface ProjectSavedPromptRecord {
+  id: number;
+  projectId: number;
+  name: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TMRecord {
   id: string;
   name: string;

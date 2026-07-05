@@ -4,6 +4,7 @@ import type {
   MountedTBRecord as DbMountedTBRecord,
   MountedTMRecord as DbMountedTMRecord,
   ProjectFileRecord as DbProjectFileRecord,
+  ProjectSavedPromptRecord as DbProjectSavedPromptRecord,
   TBRecord as DbTBRecord,
   TMConcordanceRecallOptions as DbTMConcordanceRecallOptions,
   TMRecord as DbTMRecord,
@@ -25,6 +26,8 @@ export type ProjectRecord = Project;
 export type ProjectListRecord = ProjectWithStats;
 
 export type ProjectFileRecord = DbProjectFileRecord;
+
+export type ProjectSavedPromptRecord = DbProjectSavedPromptRecord;
 
 export type TMRecord = DbTMRecord;
 
@@ -62,6 +65,16 @@ export interface ProjectRepository {
   ): void;
   updateProjectQASettings(projectId: number, qaSettings: ProjectQASettings): void;
   deleteProject(id: number): void;
+
+  listProjectSavedPrompts(projectId: number): ProjectSavedPromptRecord[];
+  createProjectSavedPrompt(
+    projectId: number,
+    name: string,
+    content: string,
+  ): ProjectSavedPromptRecord;
+  updateProjectSavedPromptContent(promptId: number, content: string): void;
+  renameProjectSavedPrompt(promptId: number, name: string): void;
+  deleteProjectSavedPrompt(promptId: number): void;
 
   createFile(projectId: number, name: string, importOptionsJson?: string): number;
   listFiles(projectId: number): ProjectFileRecord[];

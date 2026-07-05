@@ -3,6 +3,7 @@ import type {
   MountedTBRecord as DbMountedTBRecord,
   MountedTMRecord as DbMountedTMRecord,
   ProjectFileRecord as DbProjectFileRecord,
+  ProjectSavedPromptRecord as DbProjectSavedPromptRecord,
   TBRecord as DbTBRecord,
   TMRecord as DbTMRecord,
   TMType as DbTMType,
@@ -12,6 +13,7 @@ import type {
   MountedTB,
   MountedTM,
   ProjectFileRecord,
+  ProjectSavedPrompt,
   TBImportOptions,
   TBRecord,
   TMImportOptions,
@@ -23,6 +25,7 @@ import type {
   MountedTBRecord as PortsMountedTBRecord,
   MountedTMRecord as PortsMountedTMRecord,
   ProjectFileRecord as PortsProjectFileRecord,
+  ProjectSavedPromptRecord as PortsProjectSavedPromptRecord,
   TBRecord as PortsTBRecord,
   TMRecord as PortsTMRecord,
   TMType as PortsTMType,
@@ -38,6 +41,9 @@ describe('contract consistency', () => {
 
     expectTypeOf<ProjectFileRecord>().toEqualTypeOf<DbProjectFileRecord>();
     expectTypeOf<ProjectFileRecord>().toEqualTypeOf<PortsProjectFileRecord>();
+
+    expectTypeOf<ProjectSavedPrompt>().toEqualTypeOf<DbProjectSavedPromptRecord>();
+    expectTypeOf<ProjectSavedPrompt>().toEqualTypeOf<PortsProjectSavedPromptRecord>();
 
     expectTypeOf<TMRecord>().toEqualTypeOf<DbTMRecord>();
     expectTypeOf<TMRecord>().toEqualTypeOf<PortsTMRecord>();

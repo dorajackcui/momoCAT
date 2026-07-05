@@ -65,6 +65,7 @@ describe('ensureCurrentSchema', () => {
     db.close();
 
     expect(tables.has('app_settings')).toBe(true);
+    expect(tables.has('project_prompts')).toBe(true);
     expect(hasTmStatsIndex).toBe(true);
     expect(hasTbStatsIndex).toBe(true);
   });
@@ -168,5 +169,28 @@ describe('ensureCurrentSchema', () => {
     expect(markerAfter.version).toBe(CURRENT_SCHEMA_VERSION);
     expect(hasTmStatsIndex).toBe(true);
     expect(hasTbStatsIndex).toBe(true);
+  });
+
+  it('creates the project_prompts table on existing current databases that lack it', () => {
+    const dbPath = createTempDbPath();
+
+    const first = new CATDatabase(dbPath);
+    first.close();
+
+    // Simulate a database created before the saved-prompts feature.
+    const before = new Database(dbPath);
+    before.exec('DROP TABLE IF EXISTS project_prompts');
+    before.close();
+
+    const reopened = new CATDatabase(dbPath);
+    reopened.close();
+
+    const after = new Database(dbPath);
+    const table = after
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'project_prompts'")
+      .get();
+    after.close();
+
+    expect(table).toBeDefined();
   });
 });

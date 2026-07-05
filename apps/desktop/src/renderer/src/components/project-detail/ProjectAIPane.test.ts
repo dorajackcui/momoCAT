@@ -60,6 +60,17 @@ function createController(overrides?: Partial<ProjectAIController>): ProjectAICo
     setShowTestDetails: vi.fn(),
     hasUnsavedPromptChanges: false,
     hasTestDetails: false,
+    savedPrompts: {
+      prompts: [],
+      selectedPromptId: null,
+      managerOpen: false,
+      openManager: vi.fn(),
+      closeManager: vi.fn(),
+      applyPrompt: vi.fn(),
+      saveDraftAsNewPrompt: vi.fn().mockResolvedValue(true),
+      updatePrompt: vi.fn().mockResolvedValue(true),
+      deletePrompt: vi.fn().mockResolvedValue(true),
+    },
     savePrompt: vi.fn().mockResolvedValue(undefined),
     testPrompt: vi.fn().mockResolvedValue(undefined),
     startAITranslateFile: vi.fn().mockResolvedValue(undefined),
@@ -73,9 +84,15 @@ function createController(overrides?: Partial<ProjectAIController>): ProjectAICo
 type TestElement = React.ReactElement<Record<string, unknown>>;
 type ElementPredicate = (element: TestElement) => boolean;
 
-function renderPane(controller: ProjectAIController, projectType?: 'translation' | 'review' | 'custom') {
+function renderPane(
+  controller: ProjectAIController,
+  projectType?: 'translation' | 'review' | 'custom',
+) {
   return renderToStaticMarkup(
-    React.createElement(ProjectAIPane, { ai: controller, projectType: projectType ?? 'translation' }),
+    React.createElement(ProjectAIPane, {
+      ai: controller,
+      projectType: projectType ?? 'translation',
+    }),
   );
 }
 
@@ -226,5 +243,81 @@ describe('ProjectAIPane', () => {
       'Optional. Override the default system prompt with full custom processing instructions.',
     );
     expect(html).toContain('Saved custom prompt overrides the default system prompt.');
+  });
+
+  it('lists saved prompts in the switcher and applies the chosen prompt', () => {
+    const applyPrompt = vi.fn();
+    const controller = createController({
+      savedPrompts: {
+        prompts: [
+          {
+            id: 1,
+            projectId: 9,
+            name: 'Formal tone',
+            content: 'Formal content',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+          },
+          {
+            id: 2,
+            projectId: 9,
+            name: 'Casual tone',
+            content: 'Casual content',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+          },
+        ],
+        selectedPromptId: 2,
+        managerOpen: false,
+        openManager: vi.fn(),
+        closeManager: vi.fn(),
+        applyPrompt,
+        saveDraftAsNewPrompt: vi.fn().mockResolvedValue(true),
+        updatePrompt: vi.fn().mockResolvedValue(true),
+        deletePrompt: vi.fn().mockResolvedValue(true),
+      },
+    });
+    const html = renderPane(controller);
+
+    expect(html).toContain('Formal tone');
+    expect(html).toContain('Casual tone');
+
+    const savedPromptSelect = findElementForController(
+      controller,
+      (element) => element.type === Select && element.props.id === 'project-ai-saved-prompt',
+    );
+    expect(savedPromptSelect.props.value).toBe(2);
+    const onChange = savedPromptSelect.props.onChange as (event: {
+      target: { value: string };
+    }) => void;
+
+    onChange({ target: { value: '1' } });
+
+    expect(applyPrompt).toHaveBeenCalledWith(1);
+  });
+
+  it('opens the saved prompt manager from the manage button', () => {
+    const openManager = vi.fn();
+    const controller = createController({
+      savedPrompts: {
+        prompts: [],
+        selectedPromptId: null,
+        managerOpen: false,
+        openManager,
+        closeManager: vi.fn(),
+        applyPrompt: vi.fn(),
+        saveDraftAsNewPrompt: vi.fn().mockResolvedValue(true),
+        updatePrompt: vi.fn().mockResolvedValue(true),
+        deletePrompt: vi.fn().mockResolvedValue(true),
+      },
+    });
+    const manageButton = findElementForController(
+      controller,
+      (element) => element.type === Button && element.props.children === 'Manage',
+    );
+
+    (manageButton.props.onClick as () => void)();
+
+    expect(openManager).toHaveBeenCalledTimes(1);
   });
 });

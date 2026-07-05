@@ -5,6 +5,7 @@ import type {
   AIBatchTargetBaseline,
   AIBatchTargetScope,
   AIProviderSummary,
+  ProjectSavedPrompt,
 } from '../../../../../shared/ipc';
 import type { AIFileJob, AIFileJobTracker } from '../../aiFileJobs';
 
@@ -43,6 +44,19 @@ export interface StartAITranslateFileOptions {
   confirm?: boolean;
 }
 
+export interface ProjectSavedPromptsController {
+  prompts: ProjectSavedPrompt[];
+  /** Saved prompt whose content matches the current draft, if any. */
+  selectedPromptId: number | null;
+  managerOpen: boolean;
+  openManager: () => void;
+  closeManager: () => void;
+  applyPrompt: (promptId: number) => void;
+  saveDraftAsNewPrompt: (name: string) => Promise<boolean>;
+  updatePrompt: (promptId: number, name: string, content: string) => Promise<boolean>;
+  deletePrompt: (promptId: number) => Promise<boolean>;
+}
+
 export interface ProjectAIController {
   providerOptions: AIProviderSummary[];
   modelDraft: ProjectAIModel;
@@ -69,6 +83,7 @@ export interface ProjectAIController {
   setShowTestDetails: Dispatch<SetStateAction<boolean>>;
   hasUnsavedPromptChanges: boolean;
   hasTestDetails: boolean;
+  savedPrompts: ProjectSavedPromptsController;
   savePrompt: () => Promise<void>;
   testPrompt: () => Promise<void>;
   startAITranslateFile: (

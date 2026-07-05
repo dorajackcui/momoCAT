@@ -12,6 +12,7 @@ export type {
   ProjectAIController,
   ProjectAIFlags,
   ProjectAIFlagsInput,
+  ProjectSavedPromptsController,
   StartAITranslateFileOptions,
   TrackedAIJob,
 } from './ai/types';

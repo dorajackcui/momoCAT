@@ -19,11 +19,8 @@ import {
   normalizeProjectAIProviderPersistenceValue,
   normalizeProjectAIProviderSelection,
 } from './aiSettingsHelpers';
-import type {
-  ProjectAIController,
-  StartAITranslateFileOptions,
-  UseProjectAIParams,
-} from './types';
+import type { ProjectAIController, StartAITranslateFileOptions, UseProjectAIParams } from './types';
+import { useProjectSavedPrompts } from './useProjectSavedPrompts';
 
 export interface ResolvedAITranslateStartConfig {
   effectiveMode: AIBatchMode;
@@ -40,9 +37,7 @@ export function resolveAITranslateStartConfig(params: {
   const effectiveMode: AIBatchMode =
     projectType === 'translation' ? params.options.mode || 'default' : 'default';
   const effectiveTargetBaseline: AIBatchTargetBaseline =
-    projectType === 'translation'
-      ? resolveTargetBaseline(params.options)
-      : 'use-current-targets';
+    projectType === 'translation' ? resolveTargetBaseline(params.options) : 'use-current-targets';
   const actionLabel =
     projectType === 'review'
       ? 'review'
@@ -104,6 +99,12 @@ export function useProjectAI({
   const [testError, setTestError] = useState<string | null>(null);
   const [testRawResponse, setTestRawResponse] = useState<string | null>(null);
   const [showTestDetails, setShowTestDetails] = useState(false);
+
+  const savedPrompts = useProjectSavedPrompts({
+    projectId: project?.id ?? null,
+    promptDraft,
+    setPromptDraft,
+  });
 
   const loadProviders = useCallback(async () => {
     try {
@@ -196,10 +197,7 @@ export function useProjectAI({
 
   const savePrompt = useCallback(async () => {
     if (!project) return;
-    if (
-      normalizedPromptDraft === normalizedSavedPrompt &&
-      modelDraft === savedModelValue
-    ) {
+    if (normalizedPromptDraft === normalizedSavedPrompt && modelDraft === savedModelValue) {
       return;
     }
 
@@ -362,6 +360,7 @@ export function useProjectAI({
       setShowTestDetails,
       hasUnsavedPromptChanges,
       hasTestDetails,
+      savedPrompts,
       savePrompt,
       testPrompt,
       startAITranslateFile,
@@ -381,6 +380,7 @@ export function useProjectAI({
       effectiveSystemPromptPreview,
       promptDraft,
       promptSavedAt,
+      savedPrompts,
       savePrompt,
       savingPrompt,
       showTestDetails,

@@ -18,6 +18,7 @@ import {
   MountedTMRecord,
   ProjectFileRecord,
   ProjectListRecord,
+  ProjectSavedPromptRecord,
   ProjectTermEntryRecord,
   TBRecord,
   TMConcordanceRecallOptions,
@@ -153,6 +154,30 @@ export class CATDatabase {
 
   public deleteProject(id: number) {
     this.projectRepo.deleteProject(id);
+  }
+
+  public listProjectSavedPrompts(projectId: number): ProjectSavedPromptRecord[] {
+    return this.projectRepo.listProjectSavedPrompts(projectId);
+  }
+
+  public createProjectSavedPrompt(
+    projectId: number,
+    name: string,
+    content: string,
+  ): ProjectSavedPromptRecord {
+    return this.projectRepo.createProjectSavedPrompt(projectId, name, content);
+  }
+
+  public updateProjectSavedPromptContent(promptId: number, content: string) {
+    this.projectRepo.updateProjectSavedPromptContent(promptId, content);
+  }
+
+  public renameProjectSavedPrompt(promptId: number, name: string) {
+    this.projectRepo.renameProjectSavedPrompt(promptId, name);
+  }
+
+  public deleteProjectSavedPrompt(promptId: number) {
+    this.projectRepo.deleteProjectSavedPrompt(promptId);
   }
 
   public createFile(

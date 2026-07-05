@@ -236,6 +236,26 @@ export class ProjectService {
     this.projectModule.updateProjectQASettings(projectId, qaSettings);
   }
 
+  public listProjectSavedPrompts(projectId: number) {
+    return this.projectModule.listProjectSavedPrompts(projectId);
+  }
+
+  public createProjectSavedPrompt(projectId: number, name: string, content: string) {
+    return this.projectModule.createProjectSavedPrompt(projectId, name, content);
+  }
+
+  public updateProjectSavedPromptContent(promptId: number, content: string) {
+    this.projectModule.updateProjectSavedPromptContent(promptId, content);
+  }
+
+  public renameProjectSavedPrompt(promptId: number, name: string) {
+    this.projectModule.renameProjectSavedPrompt(promptId, name);
+  }
+
+  public deleteProjectSavedPrompt(promptId: number) {
+    this.projectModule.deleteProjectSavedPrompt(promptId);
+  }
+
   public async deleteProject(projectId: number) {
     return this.projectModule.deleteProject(projectId);
   }
