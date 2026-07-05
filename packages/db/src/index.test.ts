@@ -85,7 +85,7 @@ describe("CATDatabase", () => {
   });
 
   describe("project saved prompts", () => {
-    it("creates, lists, updates, renames and deletes saved prompts", () => {
+    it("creates, lists, updates and deletes saved prompts", () => {
       const projectId = db.createProject("Prompt Project", "en-US", "zh-CN");
 
       const created = db.createProjectSavedPrompt(
@@ -102,15 +102,19 @@ describe("CATDatabase", () => {
       const prompts = db.listProjectSavedPrompts(projectId);
       expect(prompts.map((prompt) => prompt.name)).toEqual(["Casual tone", "Formal tone"]);
 
-      db.updateProjectSavedPromptContent(created.id, "Translate with a very formal tone.");
-      db.renameProjectSavedPrompt(created.id, "Very formal tone");
+      db.updateProjectSavedPrompt(
+        projectId,
+        created.id,
+        "Very formal tone",
+        "Translate with a very formal tone.",
+      );
       const updated = db
         .listProjectSavedPrompts(projectId)
         .find((prompt) => prompt.id === created.id);
       expect(updated?.name).toBe("Very formal tone");
       expect(updated?.content).toBe("Translate with a very formal tone.");
 
-      db.deleteProjectSavedPrompt(created.id);
+      db.deleteProjectSavedPrompt(projectId, created.id);
       expect(db.listProjectSavedPrompts(projectId)).toHaveLength(1);
     });
 
@@ -129,6 +133,24 @@ describe("CATDatabase", () => {
       expect(db.listProjectSavedPrompts(projectB)).toHaveLength(1);
     });
 
+    it("rejects mutations whose promptId belongs to another project", () => {
+      const projectA = db.createProject("Project A", "en", "zh");
+      const projectB = db.createProject("Project B", "en", "zh");
+      const promptA = db.createProjectSavedPrompt(projectA, "A prompt", "A content");
+
+      expect(() =>
+        db.updateProjectSavedPrompt(projectB, promptA.id, "Hijacked", "Hijacked content"),
+      ).toThrow(/not found/);
+      expect(() => db.deleteProjectSavedPrompt(projectB, promptA.id)).toThrow(/not found/);
+
+      // The prompt is untouched.
+      const untouched = db
+        .listProjectSavedPrompts(projectA)
+        .find((prompt) => prompt.id === promptA.id);
+      expect(untouched?.name).toBe("A prompt");
+      expect(untouched?.content).toBe("A content");
+    });
+
     it("rejects duplicate and empty prompt names", () => {
       const projectId = db.createProject("Prompt Project", "en", "zh");
       const first = db.createProjectSavedPrompt(projectId, "Formal", "Content");
@@ -140,14 +162,34 @@ describe("CATDatabase", () => {
       expect(() => db.createProjectSavedPrompt(projectId, "   ", "Content")).toThrow(
         /cannot be empty/,
       );
-      expect(() => db.renameProjectSavedPrompt(first.id, "other")).toThrow(/already exists/);
+      expect(() => db.updateProjectSavedPrompt(projectId, first.id, "other", "Content")).toThrow(
+        /already exists/,
+      );
 
       // Renaming to its own name (case change only) is allowed.
-      db.renameProjectSavedPrompt(first.id, "FORMAL");
+      db.updateProjectSavedPrompt(projectId, first.id, "FORMAL", "Content");
       const renamed = db
         .listProjectSavedPrompts(projectId)
         .find((prompt) => prompt.id === first.id);
       expect(renamed?.name).toBe("FORMAL");
+    });
+
+    it("bumps the parent project's recency on prompt changes", () => {
+      const projectId = db.createProject("Prompt Project", "en", "zh");
+      const before = db.getProject(projectId)?.updatedAt;
+
+      const created = db.createProjectSavedPrompt(projectId, "Formal", "Content");
+      const afterCreate = db.getProject(projectId)?.updatedAt;
+      expect(afterCreate).toBeTruthy();
+      expect(afterCreate! >= before!).toBe(true);
+
+      db.updateProjectSavedPrompt(projectId, created.id, "Formal", "New content");
+      const afterUpdate = db.getProject(projectId)?.updatedAt;
+      expect(afterUpdate! >= afterCreate!).toBe(true);
+
+      db.deleteProjectSavedPrompt(projectId, created.id);
+      const afterDelete = db.getProject(projectId)?.updatedAt;
+      expect(afterDelete! >= afterUpdate!).toBe(true);
     });
   });
 

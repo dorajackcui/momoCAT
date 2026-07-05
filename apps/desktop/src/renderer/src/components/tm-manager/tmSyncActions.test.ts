@@ -12,6 +12,7 @@ function report(overrides: Partial<TMSyncReport> = {}): TMSyncReport {
     deleted: 1,
     unchanged: 4,
     overwrittenLocalEdits: 0,
+    deletedLocalEdits: 0,
     ...overrides,
   };
 }
@@ -41,6 +42,17 @@ describe('tmSyncReportMessage', () => {
     );
     expect(tmSyncReportMessage(report({ overwrittenLocalEdits: 5, cancelled: true }))).toContain(
       'Warning: 5 locally edited entries overwritten by the file.',
+    );
+  });
+
+  it('warns when locally edited entries were pruned because they are missing from the file', () => {
+    expect(tmSyncReportMessage(report({ deletedLocalEdits: 1 }))).toContain(
+      'Warning: 1 locally edited entry deleted because it is missing from the file.',
+    );
+    const both = tmSyncReportMessage(report({ overwrittenLocalEdits: 2, deletedLocalEdits: 3 }));
+    expect(both).toContain('Warning: 2 locally edited entries overwritten by the file.');
+    expect(both).toContain(
+      'Warning: 3 locally edited entries deleted because they are missing from the file.',
     );
   });
 });

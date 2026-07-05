@@ -60,16 +60,17 @@ export class SqliteProjectRepository implements ProjectRepository {
     return this.db.createProjectSavedPrompt(projectId, name, content);
   }
 
-  updateProjectSavedPromptContent(promptId: number, content: string): void {
-    this.db.updateProjectSavedPromptContent(promptId, content);
+  updateProjectSavedPrompt(
+    projectId: number,
+    promptId: number,
+    name: string,
+    content: string,
+  ): void {
+    this.db.updateProjectSavedPrompt(projectId, promptId, name, content);
   }
 
-  renameProjectSavedPrompt(promptId: number, name: string): void {
-    this.db.renameProjectSavedPrompt(promptId, name);
-  }
-
-  deleteProjectSavedPrompt(promptId: number): void {
-    this.db.deleteProjectSavedPrompt(promptId);
+  deleteProjectSavedPrompt(projectId: number, promptId: number): void {
+    this.db.deleteProjectSavedPrompt(projectId, promptId);
   }
 
   createFile(projectId: number, name: string, importOptionsJson?: string): number {

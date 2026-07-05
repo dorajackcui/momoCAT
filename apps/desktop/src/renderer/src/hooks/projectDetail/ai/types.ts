@@ -51,7 +51,8 @@ export interface ProjectSavedPromptsController {
   managerOpen: boolean;
   openManager: () => void;
   closeManager: () => void;
-  applyPrompt: (promptId: number) => void;
+  /** Resolves false when the user declines to overwrite an unsaved draft. */
+  applyPrompt: (promptId: number) => Promise<boolean>;
   saveDraftAsNewPrompt: (name: string) => Promise<boolean>;
   updatePrompt: (promptId: number, name: string, content: string) => Promise<boolean>;
   deletePrompt: (promptId: number) => Promise<boolean>;

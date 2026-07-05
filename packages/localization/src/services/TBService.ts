@@ -173,6 +173,10 @@ export class TBService {
           `${totalMountedEntryCount} mounted TB entries; per-segment DB fallback recall is enabled`,
       );
     }
+    // Map.set on an existing key keeps its old insertion position, so a
+    // rebuild (data-version bump) must delete first to count as a fresh use;
+    // otherwise the just-rebuilt recognizer can be evicted as the LRU entry.
+    this.englishRecognizerCache.delete(projectId);
     this.englishRecognizerCache.set(projectId, cacheEntry);
     this.evictStaleEnglishRecognizerCacheEntries();
     return cacheEntry;

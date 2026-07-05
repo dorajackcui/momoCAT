@@ -11,6 +11,8 @@ export interface ModalProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   bodyClassName?: string;
   className?: string;
+  /** Extra classes on the fixed backdrop, e.g. a z-index override to stack above other modals. */
+  backdropClassName?: string;
   children: React.ReactNode;
 }
 
@@ -30,13 +32,14 @@ export const Modal: React.FC<ModalProps> = ({
   size = 'md',
   bodyClassName,
   className,
+  backdropClassName,
   children,
 }: ModalProps) => {
   if (!open) return null;
 
   return (
     <div
-      className="modal-backdrop"
+      className={cx('modal-backdrop', backdropClassName)}
       onClick={() => {
         if (closeOnBackdrop) onClose?.();
       }}

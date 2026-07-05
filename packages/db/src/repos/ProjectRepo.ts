@@ -159,41 +159,60 @@ export class ProjectRepo {
     content: string,
   ): ProjectSavedPromptRecord {
     const trimmedName = this.normalizeSavedPromptName(name);
-    this.assertSavedPromptNameAvailable(projectId, trimmedName);
-    const result = this.db
-      .prepare('INSERT INTO project_prompts (projectId, name, content) VALUES (?, ?, ?)')
-      .run(projectId, trimmedName, content);
-    return this.db
-      .prepare('SELECT * FROM project_prompts WHERE id = ?')
-      .get(result.lastInsertRowid) as ProjectSavedPromptRecord;
+    return this.db.transaction(() => {
+      this.assertSavedPromptNameAvailable(projectId, trimmedName);
+      const result = this.db
+        .prepare('INSERT INTO project_prompts (projectId, name, content) VALUES (?, ?, ?)')
+        .run(projectId, trimmedName, content);
+      this.touchProject(projectId);
+      return this.db
+        .prepare('SELECT * FROM project_prompts WHERE id = ?')
+        .get(result.lastInsertRowid) as ProjectSavedPromptRecord;
+    })();
   }
 
-  public updateProjectSavedPromptContent(promptId: number, content: string) {
-    this.db
-      .prepare(
-        "UPDATE project_prompts SET content = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?",
-      )
-      .run(content, promptId);
-  }
-
-  public renameProjectSavedPrompt(promptId: number, name: string) {
+  // projectId scopes the mutation so a stale or cross-project prompt id cannot
+  // touch another project's prompts; name + content change atomically.
+  public updateProjectSavedPrompt(
+    projectId: number,
+    promptId: number,
+    name: string,
+    content: string,
+  ) {
     const trimmedName = this.normalizeSavedPromptName(name);
-    const existing = this.db
-      .prepare('SELECT projectId FROM project_prompts WHERE id = ?')
-      .get(promptId) as { projectId: number } | undefined;
-    if (!existing) {
-      throw new Error('Saved prompt not found.');
-    }
-    this.assertSavedPromptNameAvailable(existing.projectId, trimmedName, promptId);
-    this.db
-      .prepare(
-        "UPDATE project_prompts SET name = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?",
-      )
-      .run(trimmedName, promptId);
+    this.db.transaction(() => {
+      this.assertSavedPromptNameAvailable(projectId, trimmedName, promptId);
+      const result = this.db
+        .prepare(
+          "UPDATE project_prompts SET name = ?, content = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ? AND projectId = ?",
+        )
+        .run(trimmedName, content, promptId, projectId);
+      if (result.changes === 0) {
+        throw new Error('Saved prompt not found.');
+      }
+      this.touchProject(projectId);
+    })();
   }
 
-  public deleteProjectSavedPrompt(promptId: number) {
-    this.db.prepare('DELETE FROM project_prompts WHERE id = ?').run(promptId);
+  public deleteProjectSavedPrompt(projectId: number, promptId: number) {
+    this.db.transaction(() => {
+      const result = this.db
+        .prepare('DELETE FROM project_prompts WHERE id = ? AND projectId = ?')
+        .run(promptId, projectId);
+      if (result.changes === 0) {
+        throw new Error('Saved prompt not found.');
+      }
+      this.touchProject(projectId);
+    })();
+  }
+
+  /** Saved prompts are project configuration, so they bump project recency. */
+  private touchProject(projectId: number) {
+    this.db
+      .prepare(
+        "UPDATE projects SET updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?",
+      )
+      .run(projectId);
   }
 
   private normalizeSavedPromptName(name: string): string {

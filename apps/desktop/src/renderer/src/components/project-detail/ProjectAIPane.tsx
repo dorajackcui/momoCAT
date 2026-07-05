@@ -107,7 +107,7 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
               value={ai.savedPrompts.selectedPromptId ?? ''}
               onChange={(event) => {
                 const promptId = Number(event.target.value);
-                if (promptId) ai.savedPrompts.applyPrompt(promptId);
+                if (promptId) void ai.savedPrompts.applyPrompt(promptId);
               }}
               className="w-48 !text-xs"
               disabled={ai.savedPrompts.prompts.length === 0}

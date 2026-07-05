@@ -82,6 +82,8 @@ export interface TMSyncDiffSummary {
   changed: number;
   deleted: number;
   overwrittenLocalEdits: number;
+  /** Entries missing from the file that were edited locally after the last full sync. */
+  deletedLocalEdits: number;
 }
 
 export interface TBRecord {

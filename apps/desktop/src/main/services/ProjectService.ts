@@ -248,16 +248,17 @@ export class ProjectService {
     return this.projectModule.createProjectSavedPrompt(projectId, name, content);
   }
 
-  public updateProjectSavedPromptContent(promptId: number, content: string) {
-    this.projectModule.updateProjectSavedPromptContent(promptId, content);
+  public updateProjectSavedPrompt(
+    projectId: number,
+    promptId: number,
+    name: string,
+    content: string,
+  ) {
+    this.projectModule.updateProjectSavedPrompt(projectId, promptId, name, content);
   }
 
-  public renameProjectSavedPrompt(promptId: number, name: string) {
-    this.projectModule.renameProjectSavedPrompt(promptId, name);
-  }
-
-  public deleteProjectSavedPrompt(promptId: number) {
-    this.projectModule.deleteProjectSavedPrompt(promptId);
+  public deleteProjectSavedPrompt(projectId: number, promptId: number) {
+    this.projectModule.deleteProjectSavedPrompt(projectId, promptId);
   }
 
   public async deleteProject(projectId: number) {

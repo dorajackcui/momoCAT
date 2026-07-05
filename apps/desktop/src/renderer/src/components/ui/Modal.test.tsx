@@ -37,4 +37,14 @@ describe('Modal', () => {
     fireEvent.click(backdrop);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  test('applies backdropClassName so a confirm can stack above other modals', () => {
+    const { container } = render(
+      <Modal open={true} title="Dialog" backdropClassName="!z-[200]">
+        Body
+      </Modal>,
+    );
+    const backdrop = container.querySelector('.modal-backdrop');
+    expect(backdrop?.className).toContain('!z-[200]');
+  });
 });

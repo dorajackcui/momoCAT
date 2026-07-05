@@ -21,11 +21,21 @@ export function tmSyncReportMessage(report: TMSyncReport): string {
   const summary = report.cancelled
     ? `Sync cancelled after partial apply: ${base}${suffix}.`
     : `Sync completed: ${base}${suffix}.`;
+  const warnings: string[] = [];
   if (report.overwrittenLocalEdits > 0) {
     const noun = report.overwrittenLocalEdits === 1 ? 'entry' : 'entries';
-    return `${summary} Warning: ${report.overwrittenLocalEdits} locally edited ${noun} overwritten by the file.`;
+    warnings.push(
+      `Warning: ${report.overwrittenLocalEdits} locally edited ${noun} overwritten by the file.`,
+    );
   }
-  return summary;
+  if (report.deletedLocalEdits > 0) {
+    warnings.push(
+      report.deletedLocalEdits === 1
+        ? 'Warning: 1 locally edited entry deleted because it is missing from the file.'
+        : `Warning: ${report.deletedLocalEdits} locally edited entries deleted because they are missing from the file.`,
+    );
+  }
+  return warnings.length > 0 ? `${summary} ${warnings.join(' ')}` : summary;
 }
 
 export interface PickTMSyncSourceResult {

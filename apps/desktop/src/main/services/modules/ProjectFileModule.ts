@@ -119,16 +119,17 @@ export class ProjectFileModule {
     return this.projectRepo.createProjectSavedPrompt(projectId, name, content);
   }
 
-  public updateProjectSavedPromptContent(promptId: number, content: string) {
-    this.projectRepo.updateProjectSavedPromptContent(promptId, content);
+  public updateProjectSavedPrompt(
+    projectId: number,
+    promptId: number,
+    name: string,
+    content: string,
+  ) {
+    this.projectRepo.updateProjectSavedPrompt(projectId, promptId, name, content);
   }
 
-  public renameProjectSavedPrompt(promptId: number, name: string) {
-    this.projectRepo.renameProjectSavedPrompt(promptId, name);
-  }
-
-  public deleteProjectSavedPrompt(promptId: number) {
-    this.projectRepo.deleteProjectSavedPrompt(promptId);
+  public deleteProjectSavedPrompt(projectId: number, promptId: number) {
+    this.projectRepo.deleteProjectSavedPrompt(projectId, promptId);
   }
 
   public async deleteProject(projectId: number) {

@@ -40,13 +40,16 @@ export function FeedbackHost() {
     setActiveRequest(request);
   }, []);
 
-  const settleActiveRequest = useCallback((confirmed: boolean) => {
-    const currentRequest = activeRequestRef.current;
-    if (currentRequest) {
-      currentRequest.resolve(confirmed);
-    }
-    showRequest(queueRef.current.shift() ?? null);
-  }, [showRequest]);
+  const settleActiveRequest = useCallback(
+    (confirmed: boolean) => {
+      const currentRequest = activeRequestRef.current;
+      if (currentRequest) {
+        currentRequest.resolve(confirmed);
+      }
+      showRequest(queueRef.current.shift() ?? null);
+    },
+    [showRequest],
+  );
 
   const addToast = useCallback((message: string, tone: NotifyTone) => {
     const id = nextIdRef.current;
@@ -98,6 +101,10 @@ export function FeedbackHost() {
         onClose={() => settleActiveRequest(false)}
         closeOnBackdrop={false}
         size="sm"
+        // A confirm is an interrupt: it must stack above every other modal,
+        // including the !z-[100] wizards and the prompt manager (same-z fixed
+        // elements paint in DOM order, and FeedbackHost mounts first).
+        backdropClassName="!z-[200]"
         footer={
           <>
             <Button variant="secondary" onClick={() => settleActiveRequest(false)}>
@@ -122,7 +129,9 @@ export function FeedbackHost() {
             <label className="field-label" htmlFor="feedback-confirm-input">
               {activeRequest.requiredTextLabel ?? 'Type the required text to confirm'}
             </label>
-            <div className="text-sm font-semibold text-text break-all">{activeRequest.requiredText}</div>
+            <div className="text-sm font-semibold text-text break-all">
+              {activeRequest.requiredText}
+            </div>
             <input
               id="feedback-confirm-input"
               autoFocus
@@ -136,7 +145,7 @@ export function FeedbackHost() {
       </Modal>
 
       {toasts.length > 0 && (
-        <div className="fixed bottom-4 right-4 z-40 flex flex-col gap-2 pointer-events-none">
+        <div className="fixed bottom-4 right-4 z-[210] flex flex-col gap-2 pointer-events-none">
           {toasts.map((toast) => (
             <div
               key={toast.id}

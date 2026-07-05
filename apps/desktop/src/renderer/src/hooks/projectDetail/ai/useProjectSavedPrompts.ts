@@ -43,7 +43,9 @@ export function useProjectSavedPrompts({
         if (!cancelled) setLoadedPrompts({ projectId, prompts: next });
       })
       .catch(() => {
-        if (!cancelled) setLoadedPrompts({ projectId, prompts: [] });
+        // Keep whatever was last loaded: replacing it with [] makes a
+        // transient IPC/DB failure look like the prompts were deleted.
+        if (!cancelled) feedbackService.error('Failed to load saved prompts.');
       });
     return () => {
       cancelled = true;
@@ -65,13 +67,25 @@ export function useProjectSavedPrompts({
   );
 
   const applyPrompt = useCallback(
-    (promptId: number) => {
+    async (promptId: number) => {
       const prompt = prompts.find((item) => item.id === promptId);
-      if (prompt) {
-        setPromptDraft(prompt.content);
+      if (!prompt) return false;
+      // selectedPromptId === null means the draft is custom text that matches
+      // no saved prompt; applying would silently discard it.
+      const hasUnsavedDraftText =
+        promptDraft.trim() !== '' &&
+        selectedPromptId === null &&
+        promptDraft.trim() !== prompt.content.trim();
+      if (hasUnsavedDraftText) {
+        const confirmed = await feedbackService.confirm(
+          `Replace the current custom prompt draft with "${prompt.name}"? The unsaved draft text will be lost.`,
+        );
+        if (!confirmed) return false;
       }
+      setPromptDraft(prompt.content);
+      return true;
     },
-    [prompts, setPromptDraft],
+    [prompts, promptDraft, selectedPromptId, setPromptDraft],
   );
 
   const saveDraftAsNewPrompt = useCallback(
@@ -100,6 +114,7 @@ export function useProjectSavedPrompts({
 
   const updatePrompt = useCallback(
     async (promptId: number, name: string, content: string) => {
+      if (!projectId) return false;
       const existing = prompts.find((item) => item.id === promptId);
       if (!existing) return false;
       const trimmedName = name.trim();
@@ -111,13 +126,11 @@ export function useProjectSavedPrompts({
         feedbackService.info(`A prompt named "${trimmedName}" already exists.`);
         return false;
       }
+      if (trimmedName === existing.name && content === existing.content) {
+        return true;
+      }
       try {
-        if (trimmedName !== existing.name) {
-          await apiClient.renameProjectSavedPrompt(promptId, trimmedName);
-        }
-        if (content !== existing.content) {
-          await apiClient.updateProjectSavedPromptContent(promptId, content);
-        }
+        await apiClient.updateProjectSavedPrompt(projectId, promptId, trimmedName, content);
         refreshPrompts();
         return true;
       } catch {
@@ -125,17 +138,18 @@ export function useProjectSavedPrompts({
         return false;
       }
     },
-    [isNameTaken, refreshPrompts, prompts],
+    [isNameTaken, refreshPrompts, projectId, prompts],
   );
 
   const deletePrompt = useCallback(
     async (promptId: number) => {
+      if (!projectId) return false;
       const existing = prompts.find((item) => item.id === promptId);
       if (!existing) return false;
       const confirmed = await feedbackService.confirm(`Delete saved prompt "${existing.name}"?`);
       if (!confirmed) return false;
       try {
-        await apiClient.deleteProjectSavedPrompt(promptId);
+        await apiClient.deleteProjectSavedPrompt(projectId, promptId);
         refreshPrompts();
         return true;
       } catch {
@@ -143,7 +157,7 @@ export function useProjectSavedPrompts({
         return false;
       }
     },
-    [refreshPrompts, prompts],
+    [refreshPrompts, projectId, prompts],
   );
 
   return useMemo(

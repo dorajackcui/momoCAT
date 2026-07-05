@@ -72,9 +72,13 @@ export interface ProjectRepository {
     name: string,
     content: string,
   ): ProjectSavedPromptRecord;
-  updateProjectSavedPromptContent(promptId: number, content: string): void;
-  renameProjectSavedPrompt(promptId: number, name: string): void;
-  deleteProjectSavedPrompt(promptId: number): void;
+  updateProjectSavedPrompt(
+    projectId: number,
+    promptId: number,
+    name: string,
+    content: string,
+  ): void;
+  deleteProjectSavedPrompt(projectId: number, promptId: number): void;
 
   createFile(projectId: number, name: string, importOptionsJson?: string): number;
   listFiles(projectId: number): ProjectFileRecord[];

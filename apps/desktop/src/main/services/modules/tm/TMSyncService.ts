@@ -40,13 +40,19 @@ export class TMSyncService {
   public async setTMSyncConfig(tmId: string, input: TMSyncConfigInput): Promise<void> {
     const tm = this.tmRepo.getTM(tmId);
     if (!tm) throw new Error('Target TM not found');
+    validateTMSyncConfigInput(input);
 
     const existing = this.getTMSyncConfig(tmId);
+    // Relinking to a different file starts a new sync relationship: the old
+    // history describes the previous file, and a destructive deletePolicy
+    // must not silently carry over to the new source.
+    const sameFile = existing?.filePath === input.filePath;
     const next: TMSyncConfig = {
-      ...(existing ?? {}),
+      ...(sameFile ? (existing ?? {}) : {}),
       filePath: input.filePath,
       columns: input.columns,
-      deletePolicy: input.deletePolicy ?? existing?.deletePolicy ?? 'never',
+      deletePolicy:
+        input.deletePolicy ?? (sameFile ? existing?.deletePolicy : undefined) ?? 'never',
     };
     this.settingsRepo.setSetting(tmSyncConfigKey(tmId), JSON.stringify(next));
   }
@@ -239,4 +245,25 @@ export class TMSyncService {
 
 function tmSyncConfigKey(tmId: string): string {
   return `${TM_SYNC_CONFIG_KEY_PREFIX}${tmId}`;
+}
+
+// The renderer UI constrains these, but the config also arrives over IPC, so
+// the main process is the trust boundary. A same-column mapping would bulk
+// rewrite every target to its source text on the next sync.
+function validateTMSyncConfigInput(input: TMSyncConfigInput): void {
+  if (typeof input.filePath !== 'string' || input.filePath.trim() === '') {
+    throw new Error('A file path is required for TM sync.');
+  }
+  const { sourceCol, targetCol } = input.columns ?? { sourceCol: NaN, targetCol: NaN };
+  if (
+    !Number.isInteger(sourceCol) ||
+    sourceCol < 0 ||
+    !Number.isInteger(targetCol) ||
+    targetCol < 0
+  ) {
+    throw new Error('Source and target columns must be nonnegative integers.');
+  }
+  if (sourceCol === targetCol) {
+    throw new Error('Source and target columns must be different.');
+  }
 }

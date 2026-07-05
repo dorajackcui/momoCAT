@@ -304,21 +304,24 @@ describe('TBService', () => {
   });
 
   it('matches cjk term in sentence', async () => {
-    const service = createServiceWithEntries([
-      {
-        id: 'tb-3',
-        tbId: 'tb-b',
-        srcTerm: '设置',
-        tgtTerm: 'settings',
-        srcNorm: '设置',
-        note: null,
-        createdAt: '',
-        updatedAt: '',
-        usageCount: 1,
-        tbName: 'UI TB',
-        priority: 1,
-      },
-    ], { srcLang: 'zh-CN' });
+    const service = createServiceWithEntries(
+      [
+        {
+          id: 'tb-3',
+          tbId: 'tb-b',
+          srcTerm: '设置',
+          tgtTerm: 'settings',
+          srcNorm: '设置',
+          note: null,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 1,
+          tbName: 'UI TB',
+          priority: 1,
+        },
+      ],
+      { srcLang: 'zh-CN' },
+    );
 
     const matches = await service.findMatches(1, buildSegment('请点击设置按钮然后保存'));
     expect(matches).toHaveLength(1);
@@ -327,21 +330,24 @@ describe('TBService', () => {
   });
 
   it('matches source term across tags because TB lookup uses text-only matching', async () => {
-    const service = createServiceWithEntries([
-      {
-        id: 'tb-3b',
-        tbId: 'tb-b',
-        srcTerm: 'API key',
-        tgtTerm: 'APIキー',
-        srcNorm: 'api key',
-        note: null,
-        createdAt: '',
-        updatedAt: '',
-        usageCount: 1,
-        tbName: 'UI TB',
-        priority: 1,
-      },
-    ], { srcLang: 'zh-CN' });
+    const service = createServiceWithEntries(
+      [
+        {
+          id: 'tb-3b',
+          tbId: 'tb-b',
+          srcTerm: 'API key',
+          tgtTerm: 'APIキー',
+          srcNorm: 'api key',
+          note: null,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 1,
+          tbName: 'UI TB',
+          priority: 1,
+        },
+      ],
+      { srcLang: 'zh-CN' },
+    );
 
     const matches = await service.findMatches(
       1,
@@ -358,21 +364,24 @@ describe('TBService', () => {
   });
 
   it('matches width-normalized latin term in source text', async () => {
-    const service = createServiceWithEntries([
-      {
-        id: 'tb-3c',
-        tbId: 'tb-b',
-        srcTerm: 'API key',
-        tgtTerm: 'API key',
-        srcNorm: 'api key',
-        note: null,
-        createdAt: '',
-        updatedAt: '',
-        usageCount: 1,
-        tbName: 'UI TB',
-        priority: 1,
-      },
-    ], { srcLang: 'zh-CN' });
+    const service = createServiceWithEntries(
+      [
+        {
+          id: 'tb-3c',
+          tbId: 'tb-b',
+          srcTerm: 'API key',
+          tgtTerm: 'API key',
+          srcNorm: 'api key',
+          note: null,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 1,
+          tbName: 'UI TB',
+          priority: 1,
+        },
+      ],
+      { srcLang: 'zh-CN' },
+    );
 
     const matches = await service.findMatches(1, buildSegment('请保管好ＡＰＩ key。'));
     expect(matches).toHaveLength(1);
@@ -671,6 +680,78 @@ describe('TBService', () => {
     expect(listProjectTermEntries).toHaveBeenCalledTimes(4);
   });
 
+  it('a data-version rebuild refreshes LRU recency so the rebuilt recognizer is not evicted first', async () => {
+    const entryFor = (projectId: number) => [
+      {
+        id: `tb-lru-${projectId}`,
+        tbId: `tb-lru-base-${projectId}`,
+        srcTerm: 'Settings',
+        tgtTerm: 'settings',
+        srcNorm: 'settings',
+        note: null,
+        createdAt: '',
+        updatedAt: '',
+        usageCount: 1,
+        tbName: `LRU TB ${projectId}`,
+        priority: 1,
+      },
+    ];
+    let dataVersion = 1;
+    const listProjectTermEntries = vi.fn((projectId: number) => entryFor(projectId));
+    const dbMock = {
+      listProjectTermEntries,
+      searchProjectTermEntries: () => [],
+      getProjectMountedTermBases: (projectId: number) => [
+        {
+          id: `tb-lru-base-${projectId}`,
+          name: `LRU TB ${projectId}`,
+          srcLang: 'en-US',
+          tgtLang: 'fr-FR',
+          createdAt: '',
+          updatedAt: '',
+          priority: 1,
+          isEnabled: 1,
+        },
+      ],
+      getTBDataVersion: () => dataVersion,
+      getTermBaseStats: () => ({ entryCount: 1, maxEntryUpdatedAt: null }),
+      listTBEntries: () => entryFor(1),
+    } satisfies Pick<
+      TBRepository,
+      | 'listProjectTermEntries'
+      | 'searchProjectTermEntries'
+      | 'getProjectMountedTermBases'
+      | 'getTBDataVersion'
+      | 'getTermBaseStats'
+      | 'listTBEntries'
+    >;
+    const projectRepoMock = {
+      getProject: (id: number) => ({ id, srcLang: 'en-US', tgtLang: 'fr-FR' }),
+    } satisfies Pick<ProjectRepository, 'getProject'>;
+    const service = new TBService(projectRepoMock as ProjectRepository, dbMock as TBRepository);
+    const segment = buildSegment('Open Settings now.');
+
+    // Insertion order: [1, 2].
+    await service.findMatches(1, segment);
+    await service.findMatches(2, segment);
+    expect(listProjectTermEntries).toHaveBeenCalledTimes(2);
+
+    // A data-version bump forces project 1 to rebuild; the rebuilt entry must
+    // become the most recently used, not keep project 1's stale position.
+    dataVersion = 2;
+    await service.findMatches(1, segment);
+    expect(listProjectTermEntries).toHaveBeenCalledTimes(3);
+
+    // A third project evicts the least-recent entry: project 2, NOT the
+    // just-rebuilt project 1.
+    await service.findMatches(3, segment);
+    expect(listProjectTermEntries).toHaveBeenCalledTimes(4);
+
+    // Project 1 is still cached — no extra rebuild.
+    await service.findMatches(1, segment);
+    expect(listProjectTermEntries).toHaveBeenCalledTimes(4);
+  });
+
   it('matches both long and short blind-spot terms from repo candidates without service-level补扫', async () => {
     const service = createServiceWithEntries([], {
       srcLang: 'zh-CN',
@@ -747,36 +828,39 @@ describe('TBService', () => {
   });
 
   it('prefers the longer overlapping Chinese term over the nested shorter term', async () => {
-    const service = createServiceWithEntries([
+    const service = createServiceWithEntries(
+      [
+        {
+          id: 'tb-overlap-long',
+          tbId: 'tb-overlap',
+          srcTerm: '残宵莲烬',
+          tgtTerm: 'long-term',
+          srcNorm: '残宵莲烬',
+          note: null,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 1,
+          tbName: 'Overlap TB',
+          priority: 1,
+        },
+        {
+          id: 'tb-overlap-short',
+          tbId: 'tb-overlap',
+          srcTerm: '残宵',
+          tgtTerm: 'short-term',
+          srcNorm: '残宵',
+          note: null,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 1,
+          tbName: 'Overlap TB',
+          priority: 2,
+        },
+      ],
       {
-        id: 'tb-overlap-long',
-        tbId: 'tb-overlap',
-        srcTerm: '残宵莲烬',
-        tgtTerm: 'long-term',
-        srcNorm: '残宵莲烬',
-        note: null,
-        createdAt: '',
-        updatedAt: '',
-        usageCount: 1,
-        tbName: 'Overlap TB',
-        priority: 1,
+        srcLang: 'zh-CN',
       },
-      {
-        id: 'tb-overlap-short',
-        tbId: 'tb-overlap',
-        srcTerm: '残宵',
-        tgtTerm: 'short-term',
-        srcNorm: '残宵',
-        note: null,
-        createdAt: '',
-        updatedAt: '',
-        usageCount: 1,
-        tbName: 'Overlap TB',
-        priority: 2,
-      },
-    ], {
-      srcLang: 'zh-CN',
-    });
+    );
 
     const matches = await service.findMatches(1, buildSegment('这个技能是残宵莲烬。'));
 
@@ -785,36 +869,39 @@ describe('TBService', () => {
   });
 
   it('keeps the shorter term when it also appears outside the longer overlapping span', async () => {
-    const service = createServiceWithEntries([
+    const service = createServiceWithEntries(
+      [
+        {
+          id: 'tb-overlap-long-2',
+          tbId: 'tb-overlap-2',
+          srcTerm: '残宵莲烬',
+          tgtTerm: 'long-term',
+          srcNorm: '残宵莲烬',
+          note: null,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 1,
+          tbName: 'Overlap TB',
+          priority: 1,
+        },
+        {
+          id: 'tb-overlap-short-2',
+          tbId: 'tb-overlap-2',
+          srcTerm: '残宵',
+          tgtTerm: 'short-term',
+          srcNorm: '残宵',
+          note: null,
+          createdAt: '',
+          updatedAt: '',
+          usageCount: 1,
+          tbName: 'Overlap TB',
+          priority: 2,
+        },
+      ],
       {
-        id: 'tb-overlap-long-2',
-        tbId: 'tb-overlap-2',
-        srcTerm: '残宵莲烬',
-        tgtTerm: 'long-term',
-        srcNorm: '残宵莲烬',
-        note: null,
-        createdAt: '',
-        updatedAt: '',
-        usageCount: 1,
-        tbName: 'Overlap TB',
-        priority: 1,
+        srcLang: 'zh-CN',
       },
-      {
-        id: 'tb-overlap-short-2',
-        tbId: 'tb-overlap-2',
-        srcTerm: '残宵',
-        tgtTerm: 'short-term',
-        srcNorm: '残宵',
-        note: null,
-        createdAt: '',
-        updatedAt: '',
-        usageCount: 1,
-        tbName: 'Overlap TB',
-        priority: 2,
-      },
-    ], {
-      srcLang: 'zh-CN',
-    });
+    );
 
     const matches = await service.findMatches(
       1,

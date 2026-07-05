@@ -138,6 +138,7 @@ export function TMImportWizard({
   const copy = WIZARD_COPY[mode];
   const maxCols = previewData.length > 0 ? previewData[0].length : 0;
   const colIndexes = Array.from({ length: maxCols }, (_, i) => i);
+  const sameColumnSelected = sourceCol === targetCol;
 
   if (jobId) {
     const progress = jobProgress?.progress ?? 0;
@@ -348,7 +349,12 @@ export function TMImportWizard({
           </div>
         </div>
 
-        <div className="panel-footer px-8 py-6 flex justify-end gap-3">
+        <div className="panel-footer px-8 py-6 flex justify-end items-center gap-3">
+          {sameColumnSelected && (
+            <p className="text-xs text-danger mr-auto">
+              Source and target must be different columns.
+            </p>
+          )}
           <Button onClick={onClose} variant="secondary" size="lg">
             Cancel
           </Button>
@@ -356,6 +362,7 @@ export function TMImportWizard({
             onClick={() => {
               onConfirm({ hasHeader, sourceCol, targetCol, overwrite });
             }}
+            disabled={sameColumnSelected}
             variant="primary"
             size="lg"
             className="!px-8 shadow-md shadow-brand/20 transition-all hover:-translate-y-0.5"

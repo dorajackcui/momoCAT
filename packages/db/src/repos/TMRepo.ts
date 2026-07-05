@@ -1631,7 +1631,26 @@ export class TMRepo {
         ).count
       : 0;
 
-    return { added, changed, deleted, overwrittenLocalEdits };
+    // Entries missing from the file whose local edits postdate the last full
+    // sync: a prune-all run would silently destroy those edits, so they get
+    // their own warning count.
+    const deletedLocalEdits = lastSyncedAt
+      ? (
+          this.db
+            .prepare(`
+              SELECT COUNT(*) as count FROM tm_entries e
+              WHERE e.tmId = ?
+                AND NOT EXISTS (
+                  SELECT 1 FROM tm_sync_staging s
+                  WHERE s.syncRunId = ? AND s.srcHash = e.srcHash
+                )
+                AND e.updatedAt > ?
+            `)
+            .get(tmId, runId, lastSyncedAt) as { count: number }
+        ).count
+      : 0;
+
+    return { added, changed, deleted, overwrittenLocalEdits, deletedLocalEdits };
   }
 
   // Keyset pagination (srcHash > afterSrcHash) keeps pages stable while the

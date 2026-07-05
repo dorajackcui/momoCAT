@@ -133,8 +133,9 @@ export function ProjectPromptManagerModal({
                   <div className="flex items-center gap-1 shrink-0">
                     <Button
                       onClick={() => {
-                        savedPrompts.applyPrompt(prompt.id);
-                        onClose();
+                        void savedPrompts.applyPrompt(prompt.id).then((applied) => {
+                          if (applied) onClose();
+                        });
                       }}
                       disabled={busy}
                       size="sm"

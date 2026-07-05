@@ -13,7 +13,7 @@ function createSavedPromptsController(
     managerOpen: true,
     openManager: vi.fn(),
     closeManager: vi.fn(),
-    applyPrompt: vi.fn(),
+    applyPrompt: vi.fn().mockResolvedValue(true),
     saveDraftAsNewPrompt: vi.fn().mockResolvedValue(true),
     updatePrompt: vi.fn().mockResolvedValue(true),
     deletePrompt: vi.fn().mockResolvedValue(true),

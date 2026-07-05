@@ -87,11 +87,18 @@ describe('TMRepo external file sync primitives', () => {
     const diff = db.getTMSyncDiffSummary(RUN_ID, tmId);
     expect(diff).toMatchObject({ added: 1, changed: 1, deleted: 1 });
     expect(diff.overwrittenLocalEdits).toBe(0);
+    expect(diff.deletedLocalEdits).toBe(0);
 
-    // The seeded entry was written after this lastSyncedAt, so its pending
-    // overwrite counts as a local edit.
+    // The seeded entries were written after this lastSyncedAt, so both the
+    // pending overwrite and the pending prune delete count as local edits.
     const withBaseline = db.getTMSyncDiffSummary(RUN_ID, tmId, '2020-01-01T00:00:00.000Z');
     expect(withBaseline.overwrittenLocalEdits).toBe(1);
+    expect(withBaseline.deletedLocalEdits).toBe(1);
+
+    // With a baseline after the entries' updatedAt, nothing counts as a local edit.
+    const afterSeed = db.getTMSyncDiffSummary(RUN_ID, tmId, '2100-01-01T00:00:00.000Z');
+    expect(afterSeed.overwrittenLocalEdits).toBe(0);
+    expect(afterSeed.deletedLocalEdits).toBe(0);
   });
 
   it('applyTMSyncInserts writes entry + FTS pairs and skips conflicts idempotently', () => {

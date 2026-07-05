@@ -72,19 +72,10 @@ export function registerProjectHandlers({ ipcMain, projectService }: MainHandler
 
   registerHandle(
     { ipcMain, projectService },
-    IPC_CHANNELS.project.updateSavedPromptContent,
+    IPC_CHANNELS.project.updateSavedPrompt,
     (_event, ...args) => {
-      const [promptId, content] = args as [number, string];
-      return projectService.updateProjectSavedPromptContent(promptId, content);
-    },
-  );
-
-  registerHandle(
-    { ipcMain, projectService },
-    IPC_CHANNELS.project.renameSavedPrompt,
-    (_event, ...args) => {
-      const [promptId, name] = args as [number, string];
-      return projectService.renameProjectSavedPrompt(promptId, name);
+      const [projectId, promptId, name, content] = args as [number, number, string, string];
+      return projectService.updateProjectSavedPrompt(projectId, promptId, name, content);
     },
   );
 
@@ -92,8 +83,8 @@ export function registerProjectHandlers({ ipcMain, projectService }: MainHandler
     { ipcMain, projectService },
     IPC_CHANNELS.project.deleteSavedPrompt,
     (_event, ...args) => {
-      const [promptId] = args as [number];
-      return projectService.deleteProjectSavedPrompt(promptId);
+      const [projectId, promptId] = args as [number, number];
+      return projectService.deleteProjectSavedPrompt(projectId, promptId);
     },
   );
 

@@ -160,6 +160,7 @@ describe('tmSyncPipeline', () => {
 
     const keepReport = await runTMSyncPipeline(db, syncInput(shrunkPath));
     expect(keepReport.deleted).toBe(0);
+    expect(keepReport.deletedLocalEdits).toBe(0);
     expect(listEntries()).toHaveLength(2);
 
     const pruneReport = await runTMSyncPipeline(
@@ -169,6 +170,51 @@ describe('tmSyncPipeline', () => {
     expect(pruneReport.deleted).toBe(1);
     expect(listEntries()).toMatchObject([{ source: 'Hello world' }]);
     expect(db.searchConcordance(projectId, 'Entree historique', [tmId])).toHaveLength(0);
+  });
+
+  it('a prune run reports locally edited entries it deletes', async () => {
+    const filePath = writeWorkbook('tm.xlsx', [
+      ['source', 'target'],
+      ['Hello world', 'Bonjour le monde'],
+      ['Legacy entry', 'Entree historique'],
+    ]);
+    await runTMSyncPipeline(db, syncInput(filePath));
+
+    // Local edit after the last sync; the entry is then removed from the file.
+    const legacy = db
+      .listTMEntries(tmId, 10, 0)
+      .find(
+        (entry) => entry.sourceTokens.map((token) => token.content).join('') === 'Legacy entry',
+      );
+    db.runInTransaction(() =>
+      db.applyTMSyncUpdates(tmId, [
+        {
+          entryId: legacy!.id,
+          sourceTokensJson: JSON.stringify(legacy!.sourceTokens),
+          targetTokensJson: JSON.stringify([{ type: 'text', content: 'Edition locale' }]),
+          srcText: 'Legacy entry',
+          tgtText: 'Edition locale',
+        },
+      ]),
+    );
+
+    await unlink(filePath);
+    const shrunkPath = writeWorkbook('tm.xlsx', [
+      ['source', 'target'],
+      ['Hello world', 'Bonjour le monde'],
+    ]);
+
+    const pruneReport = await runTMSyncPipeline(
+      db,
+      syncInput(shrunkPath, {
+        deletePolicy: 'prune-all',
+        lastSyncedAt: '2020-01-01T00:00:00.000Z',
+      }),
+    );
+
+    expect(pruneReport.deleted).toBe(1);
+    expect(pruneReport.deletedLocalEdits).toBe(1);
+    expect(listEntries()).toMatchObject([{ source: 'Hello world' }]);
   });
 
   it('cancellation before apply leaves the TM untouched and reports cancelled', async () => {

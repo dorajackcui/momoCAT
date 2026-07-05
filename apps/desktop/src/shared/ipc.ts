@@ -71,6 +71,8 @@ export interface TMSyncReport {
   deleted: number;
   unchanged: number;
   overwrittenLocalEdits: number;
+  /** Locally edited entries removed by a prune-all delete pass. */
+  deletedLocalEdits: number;
   cancelled?: boolean;
 }
 
@@ -464,9 +466,13 @@ export interface DesktopApi {
     name: string,
     content: string,
   ) => Promise<ProjectSavedPrompt>;
-  updateProjectSavedPromptContent: (promptId: number, content: string) => Promise<void>;
-  renameProjectSavedPrompt: (promptId: number, name: string) => Promise<void>;
-  deleteProjectSavedPrompt: (promptId: number) => Promise<void>;
+  updateProjectSavedPrompt: (
+    projectId: number,
+    promptId: number,
+    name: string,
+    content: string,
+  ) => Promise<void>;
+  deleteProjectSavedPrompt: (projectId: number, promptId: number) => Promise<void>;
   getProjectFiles: (projectId: number) => Promise<ProjectFileRecord[]>;
   getFile: (fileId: number) => Promise<ProjectFileRecord | undefined>;
   getFilePreview: (filePath: string) => Promise<SpreadsheetPreviewData>;

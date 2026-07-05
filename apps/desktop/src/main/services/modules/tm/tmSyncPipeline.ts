@@ -29,7 +29,13 @@ export interface TMSyncDatabasePort {
     runId: string,
     tmId: string,
     lastSyncedAt?: string,
-  ): { added: number; changed: number; deleted: number; overwrittenLocalEdits: number };
+  ): {
+    added: number;
+    changed: number;
+    deleted: number;
+    overwrittenLocalEdits: number;
+    deletedLocalEdits: number;
+  };
   listTMSyncNewRows(
     runId: string,
     tmId: string,
@@ -139,6 +145,7 @@ export async function runTMSyncPipeline(
     deleted: 0,
     unchanged: 0,
     overwrittenLocalEdits: 0,
+    deletedLocalEdits: 0,
   };
 
   const tm = db.getTM(input.tmId);
@@ -208,6 +215,8 @@ export async function runTMSyncPipeline(
     report.overwrittenLocalEdits = diff.overwrittenLocalEdits;
 
     const deletesPlanned = input.deletePolicy === 'prune-all' ? diff.deleted : 0;
+    // Only a prune pass actually destroys locally edited missing entries.
+    report.deletedLocalEdits = input.deletePolicy === 'prune-all' ? diff.deletedLocalEdits : 0;
     const totalApplyWork = diff.added + diff.changed + deletesPlanned;
     let applied = 0;
     const applyProgress = (message: string) => {

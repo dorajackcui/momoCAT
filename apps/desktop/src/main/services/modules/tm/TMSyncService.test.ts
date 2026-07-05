@@ -56,7 +56,7 @@ describe('TMSyncService config management', () => {
     });
   });
 
-  it('keeps history fields and delete policy when relinking to a new file', async () => {
+  it('relinking to a new file resets the delete policy and clears old sync history', async () => {
     const { service, settingsRepo } = createService();
     settingsRepo.setSetting(
       'tm-sync-config:tm-1',
@@ -74,13 +74,74 @@ describe('TMSyncService config management', () => {
       columns: { sourceCol: 2, targetCol: 3, hasHeader: false },
     });
 
-    expect(service.getTMSyncConfig('tm-1')).toMatchObject({
+    // The old file's destructive prune policy and history must not silently
+    // apply to the new source.
+    expect(service.getTMSyncConfig('tm-1')).toEqual({
       filePath: 'C:/data/new.xlsx',
       columns: { sourceCol: 2, targetCol: 3, hasHeader: false },
+      deletePolicy: 'never',
+    });
+  });
+
+  it('re-saving the same file keeps the delete policy and sync history', async () => {
+    const { service, settingsRepo } = createService();
+    settingsRepo.setSetting(
+      'tm-sync-config:tm-1',
+      JSON.stringify({
+        filePath: 'C:/data/tm.xlsx',
+        columns: { sourceCol: 0, targetCol: 1, hasHeader: true },
+        deletePolicy: 'prune-all',
+        lastSyncedAt: '2026-07-01T00:00:00.000Z',
+        lastSyncStatus: 'success',
+      }),
+    );
+
+    await service.setTMSyncConfig('tm-1', {
+      filePath: 'C:/data/tm.xlsx',
+      columns: { sourceCol: 0, targetCol: 2, hasHeader: true },
+    });
+
+    expect(service.getTMSyncConfig('tm-1')).toMatchObject({
+      filePath: 'C:/data/tm.xlsx',
+      columns: { sourceCol: 0, targetCol: 2, hasHeader: true },
       deletePolicy: 'prune-all',
       lastSyncedAt: '2026-07-01T00:00:00.000Z',
       lastSyncStatus: 'success',
     });
+  });
+
+  it('rejects same-column and invalid column mappings', async () => {
+    const { service } = createService();
+
+    await expect(
+      service.setTMSyncConfig('tm-1', {
+        filePath: 'C:/data/tm.xlsx',
+        columns: { sourceCol: 1, targetCol: 1, hasHeader: true },
+      }),
+    ).rejects.toThrow('must be different');
+
+    await expect(
+      service.setTMSyncConfig('tm-1', {
+        filePath: 'C:/data/tm.xlsx',
+        columns: { sourceCol: -1, targetCol: 1, hasHeader: true },
+      }),
+    ).rejects.toThrow('nonnegative integers');
+
+    await expect(
+      service.setTMSyncConfig('tm-1', {
+        filePath: 'C:/data/tm.xlsx',
+        columns: { sourceCol: 0.5, targetCol: 1, hasHeader: true },
+      }),
+    ).rejects.toThrow('nonnegative integers');
+
+    await expect(
+      service.setTMSyncConfig('tm-1', {
+        filePath: '   ',
+        columns: { sourceCol: 0, targetCol: 1, hasHeader: true },
+      }),
+    ).rejects.toThrow('file path is required');
+
+    expect(service.getTMSyncConfig('tm-1')).toBeNull();
   });
 
   it('rejects configs for unknown TMs and returns null for malformed configs', async () => {
