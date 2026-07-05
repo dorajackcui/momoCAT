@@ -3,6 +3,7 @@ import type {
   ProgressEmitter,
   ProjectRepository,
   SegmentRepository,
+  SettingsRepository,
   SpreadsheetPreviewData,
   TMConcordanceRecord,
   TMRepository,
@@ -10,10 +11,17 @@ import type {
 } from '../ports';
 import { TMService } from '../TMService';
 import { SegmentService } from '../SegmentService';
-import type { TMCommitOptions, TMImportOptions } from '../../../shared/ipc';
+import type {
+  TMCommitOptions,
+  TMImportOptions,
+  TMSyncConfig,
+  TMSyncConfigInput,
+  TMSyncReport,
+} from '../../../shared/ipc';
 import { TMImportService } from './tm/TMImportService';
 import { TMBatchOpsService } from './tm/TMBatchOpsService';
 import { TMQueryService } from './tm/TMQueryService';
+import { TMSyncService } from './tm/TMSyncService';
 import type { ImportProgress, ImportProgressCallback } from './tm/types';
 
 export type { ImportProgress };
@@ -22,6 +30,7 @@ export class TMModule {
   private readonly queryService: TMQueryService;
   private readonly importService: TMImportService;
   private readonly batchOpsService: TMBatchOpsService;
+  private readonly syncService: TMSyncService;
 
   constructor(
     projectRepo: ProjectRepository,
@@ -32,10 +41,12 @@ export class TMModule {
     segmentService: SegmentService,
     dbPath: string,
     emitProgress: ProgressEmitter,
+    settingsRepo: SettingsRepository,
   ) {
     this.queryService = new TMQueryService(tmRepo, tmService);
     this.importService = new TMImportService(tmRepo, tx, dbPath, emitProgress);
     this.batchOpsService = new TMBatchOpsService(projectRepo, segmentRepo, tmRepo, segmentService);
+    this.syncService = new TMSyncService(tmRepo, settingsRepo, dbPath, emitProgress);
   }
 
   public async findMatches(projectId: number, segment: Segment) {
@@ -47,7 +58,11 @@ export class TMModule {
   }
 
   public async listTMs(type?: 'working' | 'main') {
-    return this.queryService.listTMs(type);
+    const tms = await this.queryService.listTMs(type);
+    return tms.map((tm) => ({
+      ...tm,
+      syncConfig: this.syncService.getTMSyncConfig(tm.id),
+    }));
   }
 
   public async getTMPreview(tmId: string) {
@@ -64,7 +79,8 @@ export class TMModule {
   }
 
   public async deleteTM(tmId: string) {
-    return this.queryService.deleteTM(tmId);
+    await this.queryService.deleteTM(tmId);
+    this.syncService.clearTMSyncConfig(tmId);
   }
 
   public async getProjectMountedTMs(projectId: number) {
@@ -95,6 +111,25 @@ export class TMModule {
     onProgress?: ImportProgressCallback,
   ): Promise<{ success: number; skipped: number }> {
     return this.importService.importTMEntries(tmId, filePath, options, onProgress);
+  }
+
+  public getTMSyncConfig(tmId: string): TMSyncConfig | null {
+    return this.syncService.getTMSyncConfig(tmId);
+  }
+
+  public async setTMSyncConfig(tmId: string, config: TMSyncConfigInput): Promise<void> {
+    return this.syncService.setTMSyncConfig(tmId, config);
+  }
+
+  public async syncTMEntriesFromExcel(
+    tmId: string,
+    onProgress?: ImportProgressCallback,
+  ): Promise<TMSyncReport> {
+    return this.syncService.syncTMEntriesFromExcel(tmId, onProgress);
+  }
+
+  public cancelTMSync(tmId: string): boolean {
+    return this.syncService.cancelSync(tmId);
   }
 
   public async commitToMainTM(tmId: string, fileId: number, options?: TMCommitOptions) {

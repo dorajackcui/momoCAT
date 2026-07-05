@@ -62,6 +62,28 @@ export interface TMConcordanceRecallOptions {
   profile?: 'english';
 }
 
+/** One parsed spreadsheet row staged for an incremental TM file sync. */
+export interface TMSyncStagedRow {
+  srcHash: string;
+  matchKey: string;
+  tagsSignature: string;
+  sourceTokensJson: string;
+  targetTokensJson: string;
+  srcText: string;
+  tgtText: string;
+}
+
+export interface TMSyncChangedRow extends TMSyncStagedRow {
+  entryId: string;
+}
+
+export interface TMSyncDiffSummary {
+  added: number;
+  changed: number;
+  deleted: number;
+  overwrittenLocalEdits: number;
+}
+
 export interface TBRecord {
   id: string;
   name: string;

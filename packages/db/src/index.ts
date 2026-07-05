@@ -25,6 +25,9 @@ import {
   TMEntryRow,
   TMRecord,
   TMRecallOptions,
+  TMSyncChangedRow,
+  TMSyncDiffSummary,
+  TMSyncStagedRow,
   TMType,
 } from "./types";
 
@@ -60,6 +63,10 @@ export class CATDatabase {
     // temp_store is per-connection and safe on readonly connections; keeping it
     // on avoids spilling FTS/ORDER BY temp b-trees to disk in the lookup worker.
     this.db.pragma("temp_store = MEMORY");
+    // Writers on other connections (main process vs. import/sync workers) hold
+    // the lock only for small chunked transactions; wait instead of failing
+    // with SQLITE_BUSY immediately.
+    this.db.pragma("busy_timeout = 5000");
     if (!readonly) {
       this.db.pragma("journal_mode = WAL");
       this.db.pragma("synchronous = NORMAL");
@@ -485,6 +492,85 @@ export class CATDatabase {
 
   public getTM(tmId: string): TMRecord | undefined {
     return this.tmRepo.getTM(tmId);
+  }
+
+  public clearTMSyncStagingForTM(tmId: string, exceptRunId?: string) {
+    this.tmRepo.clearTMSyncStagingForTM(tmId, exceptRunId);
+  }
+
+  public clearTMSyncStagingRun(runId: string) {
+    this.tmRepo.clearTMSyncStagingRun(runId);
+  }
+
+  public stageTMSyncRows(runId: string, tmId: string, rows: TMSyncStagedRow[]) {
+    this.tmRepo.stageTMSyncRows(runId, tmId, rows);
+  }
+
+  public countTMSyncStagedRows(runId: string): number {
+    return this.tmRepo.countTMSyncStagedRows(runId);
+  }
+
+  public getTMSyncDiffSummary(
+    runId: string,
+    tmId: string,
+    lastSyncedAt?: string,
+  ): TMSyncDiffSummary {
+    return this.tmRepo.getTMSyncDiffSummary(runId, tmId, lastSyncedAt);
+  }
+
+  public listTMSyncNewRows(
+    runId: string,
+    tmId: string,
+    afterSrcHash: string,
+    limit: number,
+  ): TMSyncStagedRow[] {
+    return this.tmRepo.listTMSyncNewRows(runId, tmId, afterSrcHash, limit);
+  }
+
+  public listTMSyncChangedRows(
+    runId: string,
+    tmId: string,
+    afterSrcHash: string,
+    limit: number,
+  ): TMSyncChangedRow[] {
+    return this.tmRepo.listTMSyncChangedRows(runId, tmId, afterSrcHash, limit);
+  }
+
+  public listTMSyncDeletedEntries(
+    runId: string,
+    tmId: string,
+    afterId: string,
+    limit: number,
+  ): Array<{ id: string }> {
+    return this.tmRepo.listTMSyncDeletedEntries(runId, tmId, afterId, limit);
+  }
+
+  public applyTMSyncInserts(
+    tmId: string,
+    rows: Array<TMSyncStagedRow & { id: string }>,
+  ): number {
+    return this.tmRepo.applyTMSyncInserts(tmId, rows);
+  }
+
+  public applyTMSyncUpdates(
+    tmId: string,
+    rows: Array<{
+      entryId: string;
+      sourceTokensJson: string;
+      targetTokensJson: string;
+      srcText: string;
+      tgtText: string;
+    }>,
+  ): number {
+    return this.tmRepo.applyTMSyncUpdates(tmId, rows);
+  }
+
+  public deleteTMEntriesWithFts(entryIds: string[]): number {
+    return this.tmRepo.deleteTMEntriesWithFts(entryIds);
+  }
+
+  public optimizeTMFts() {
+    this.tmRepo.optimizeTMFts();
   }
 
   public close() {

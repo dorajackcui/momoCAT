@@ -126,6 +126,25 @@ const PROJECT_PROMPTS_TABLE_SQL = `
   );
   CREATE INDEX IF NOT EXISTS idx_project_prompts_project ON project_prompts(projectId, name);
 `;
+// Additive table: scratch space for TM external-file sync. Deliberately a
+// regular table (not TEMP) so the ~150k staged rows spill to disk instead of
+// the temp_store=MEMORY heap. Rows are keyed by syncRunId and cleared by the
+// sync worker before/after each run; tmId scopes cleanup so concurrent syncs
+// of different TMs never clear each other's staged rows.
+const TM_SYNC_STAGING_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS tm_sync_staging (
+    tmId TEXT NOT NULL,
+    syncRunId TEXT NOT NULL,
+    srcHash TEXT NOT NULL,
+    matchKey TEXT NOT NULL,
+    tagsSignature TEXT NOT NULL,
+    sourceTokensJson TEXT NOT NULL,
+    targetTokensJson TEXT NOT NULL,
+    srcText TEXT NOT NULL,
+    tgtText TEXT NOT NULL,
+    PRIMARY KEY (syncRunId, srcHash)
+  ) WITHOUT ROWID;
+`;
 
 export function ensureCurrentSchema(
   db: Database.Database,
@@ -302,6 +321,8 @@ function createCurrentSchema(db: Database.Database): void {
 
       ${PROJECT_PROMPTS_TABLE_SQL}
 
+      ${TM_SYNC_STAGING_TABLE_SQL}
+
       CREATE INDEX idx_files_project ON files(projectId);
       CREATE INDEX idx_segments_file_order ON segments(fileId, orderIndex);
       CREATE INDEX idx_segments_file_srcHash ON segments(fileId, srcHash);
@@ -323,6 +344,15 @@ function applyCurrentSchemaMaintenance(db: Database.Database): void {
   db.exec(TM_STATS_PERFORMANCE_INDEX_SQL);
   db.exec(TB_STATS_PERFORMANCE_INDEX_SQL);
   db.exec(PROJECT_PROMPTS_TABLE_SQL);
+  // Staging holds only scratch data, so an old-shape table (pre-tmId) is
+  // simply dropped and recreated.
+  const stagingColumns = db.prepare(`PRAGMA table_info(tm_sync_staging)`).all() as Array<{
+    name: string;
+  }>;
+  if (stagingColumns.length > 0 && !stagingColumns.some((column) => column.name === 'tmId')) {
+    db.exec('DROP TABLE tm_sync_staging;');
+  }
+  db.exec(TM_SYNC_STAGING_TABLE_SQL);
 }
 
 function assertCurrentSchemaMarker(db: Database.Database): void {

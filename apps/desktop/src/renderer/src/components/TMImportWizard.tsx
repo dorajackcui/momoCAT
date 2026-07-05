@@ -7,17 +7,48 @@ import type {
   SpreadsheetPreviewData,
   StructuredJobError,
   TMImportOptions,
+  TMSyncReport,
 } from '../../../shared/ipc';
+
+export type TMWizardMode = 'import' | 'sync';
 
 interface TMImportWizardProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (options: TMImportOptions) => void;
   jobId: string | null;
-  onJobCompleted: (result: ImportExecutionResult) => void;
+  onJobCompleted: (result: ImportExecutionResult, report?: TMSyncReport) => void;
   onJobFailed: (error: StructuredJobError) => void;
   previewData: SpreadsheetPreviewData;
+  mode?: TMWizardMode;
+  onCancelSync?: () => void;
 }
+
+const WIZARD_COPY: Record<
+  TMWizardMode,
+  {
+    title: string;
+    subtitle: string;
+    confirmLabel: string;
+    progressTitle: string;
+    failCode: string;
+  }
+> = {
+  import: {
+    title: 'Import TM from File',
+    subtitle: 'Map columns and configure import filters',
+    confirmLabel: 'Start Import',
+    progressTitle: 'Importing TM...',
+    failCode: 'TM_IMPORT_FAILED',
+  },
+  sync: {
+    title: 'Sync with Excel',
+    subtitle: 'Map columns once. Each sync applies only new and changed rows from this Excel file.',
+    confirmLabel: 'Save & Sync',
+    progressTitle: 'Syncing TM...',
+    failCode: 'TM_SYNC_FAILED',
+  },
+};
 
 export function TMImportWizard({
   isOpen,
@@ -27,13 +58,19 @@ export function TMImportWizard({
   onJobCompleted,
   onJobFailed,
   previewData,
+  mode = 'import',
+  onCancelSync,
 }: TMImportWizardProps) {
   const [hasHeader, setHasHeader] = useState(true);
   const [sourceCol, setSourceCol] = useState(0);
   const [targetCol, setTargetCol] = useState(1);
   const [overwrite, setOverwrite] = useState(false);
   const [jobProgress, setJobProgress] = useState<JobProgressEvent | null>(null);
+  // Keyed by job id so a new job renders un-cancelled without an effect reset.
+  const [cancelClickedJobId, setCancelClickedJobId] = useState<string | null>(null);
   const terminalStateHandledRef = useRef(false);
+  const cancelRequested =
+    (jobId !== null && cancelClickedJobId === jobId) || jobProgress?.cancelRequested === true;
 
   useEffect(() => {
     terminalStateHandledRef.current = false;
@@ -45,19 +82,24 @@ export function TMImportWizard({
   useEffect(() => {
     if (!isOpen || !jobId) return undefined;
 
-    const unsubscribe = apiClient.onJobProgress((progress) => {
+    let active = true;
+
+    const handleProgress = (progress: JobProgressEvent) => {
       if (progress.jobId !== jobId) return;
       setJobProgress(progress);
 
       if (terminalStateHandledRef.current) return;
 
-      if (progress.status === 'completed') {
+      if (progress.status === 'completed' || progress.status === 'cancelled') {
         terminalStateHandledRef.current = true;
-        if (progress.result?.kind === 'tm-import') {
-          onJobCompleted({
-            success: progress.result.success,
-            skipped: progress.result.skipped,
-          });
+        if (progress.result?.kind === 'tm-import' || progress.result?.kind === 'tm-sync') {
+          onJobCompleted(
+            {
+              success: progress.result.success,
+              skipped: progress.result.skipped,
+            },
+            progress.result.report,
+          );
         } else {
           onJobCompleted({ success: 0, skipped: 0 });
         }
@@ -67,25 +109,40 @@ export function TMImportWizard({
         terminalStateHandledRef.current = true;
         onJobFailed(
           progress.error ?? {
-            code: 'TM_IMPORT_FAILED',
-            message: progress.message || 'TM import failed',
+            code: WIZARD_COPY[mode].failCode,
+            message: progress.message || 'TM job failed',
           },
         );
       }
+    };
+
+    const unsubscribe = apiClient.onJobProgress(handleProgress);
+
+    // A job started before this modal subscribed (e.g. "Sync now" kicks the job
+    // off, then opens the modal) may have already emitted its terminal event.
+    // Replay the last known state so the modal never sticks on "Starting...".
+    void apiClient.getJobStatus(jobId).then((snapshot) => {
+      if (active && snapshot && !terminalStateHandledRef.current) {
+        handleProgress(snapshot);
+      }
     });
 
-    return () => unsubscribe();
-  }, [isOpen, jobId, onJobCompleted, onJobFailed]);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [isOpen, jobId, mode, onJobCompleted, onJobFailed]);
 
   if (!isOpen) return null;
 
+  const copy = WIZARD_COPY[mode];
   const maxCols = previewData.length > 0 ? previewData[0].length : 0;
   const colIndexes = Array.from({ length: maxCols }, (_, i) => i);
 
   if (jobId) {
     const progress = jobProgress?.progress ?? 0;
     const clampedProgress = Math.max(0, Math.min(progress, 100));
-    const progressMessage = jobProgress?.message || 'Starting import...';
+    const progressMessage = jobProgress?.message || 'Starting...';
 
     return (
       <div className="modal-backdrop !z-[100]">
@@ -94,7 +151,7 @@ export function TMImportWizard({
             <div className="w-16 h-16 bg-brand-soft rounded-full flex items-center justify-center mx-auto mb-4">
               <Spinner size="lg" tone="brand" />
             </div>
-            <h2 className="text-xl font-bold text-text">Importing TM...</h2>
+            <h2 className="text-xl font-bold text-text">{copy.progressTitle}</h2>
             <p className="text-sm text-text-muted mt-1">{progressMessage}</p>
           </div>
 
@@ -113,6 +170,21 @@ export function TMImportWizard({
             </div>
             <p className="text-[10px] text-text-faint font-medium">Job ID: {jobId}</p>
           </div>
+
+          {mode === 'sync' && onCancelSync && (
+            <div className="mt-6">
+              <Button
+                onClick={() => {
+                  setCancelClickedJobId(jobId);
+                  onCancelSync();
+                }}
+                variant="secondary"
+                disabled={cancelRequested}
+              >
+                {cancelRequested ? 'Stopping...' : 'Cancel Sync'}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -123,8 +195,8 @@ export function TMImportWizard({
       <div className="modal-card max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
         <div className="panel-header px-8 py-6 flex justify-between items-center">
           <div>
-            <h2 className="text-xl font-bold text-text">Import TM from File</h2>
-            <p className="text-sm text-text-muted mt-1">Map columns and configure import filters</p>
+            <h2 className="text-xl font-bold text-text">{copy.title}</h2>
+            <p className="text-sm text-text-muted mt-1">{copy.subtitle}</p>
           </div>
           <IconButton onClick={onClose} tone="neutral" aria-label="Close">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -197,24 +269,26 @@ export function TMImportWizard({
               </label>
             </Card>
 
-            <Card
-              variant="subtle"
-              className="flex items-center gap-3 p-4 border-info/20 bg-info-soft/50"
-            >
-              <input
-                type="checkbox"
-                id="overwrite"
-                checked={overwrite}
-                onChange={(e) => setOverwrite(e.target.checked)}
-                className="w-4 h-4 accent-info"
-              />
-              <label
-                htmlFor="overwrite"
-                className="text-sm font-medium text-text-muted cursor-pointer select-none"
+            {mode === 'import' && (
+              <Card
+                variant="subtle"
+                className="flex items-center gap-3 p-4 border-info/20 bg-info-soft/50"
               >
-                Overwrite existing entries
-              </label>
-            </Card>
+                <input
+                  type="checkbox"
+                  id="overwrite"
+                  checked={overwrite}
+                  onChange={(e) => setOverwrite(e.target.checked)}
+                  className="w-4 h-4 accent-info"
+                />
+                <label
+                  htmlFor="overwrite"
+                  className="text-sm font-medium text-text-muted cursor-pointer select-none"
+                >
+                  Overwrite existing entries
+                </label>
+              </Card>
+            )}
           </div>
 
           <div className="space-y-3">
@@ -286,7 +360,7 @@ export function TMImportWizard({
             size="lg"
             className="!px-8 shadow-md shadow-brand/20 transition-all hover:-translate-y-0.5"
           >
-            Start Import
+            {copy.confirmLabel}
           </Button>
         </div>
       </div>

@@ -1,6 +1,14 @@
 import { randomUUID } from 'crypto';
+import { access } from 'fs/promises';
 import type { Segment } from '@cat/core/models';
-import type { StructuredJobError, TMCommitOptions, TMImportOptions, TMType } from '../../shared/ipc';
+import type {
+  StructuredJobError,
+  TMCommitOptions,
+  TMImportOptions,
+  TMSyncConfigInput,
+  TMSyncStartResult,
+  TMType,
+} from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import { registerHandle } from './registerHandle';
 import type { ReferenceBackedHandlerDeps } from './types';
@@ -187,6 +195,84 @@ export function registerTMHandlers({
         });
 
       return jobId;
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.tm.syncSetConfig,
+    (_event, ...args) => {
+      const [tmId, config] = args as [string, TMSyncConfigInput];
+      return projectService.setTMSyncConfig(tmId, config);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.tm.syncExecute,
+    async (_event, ...args): Promise<TMSyncStartResult> => {
+      const [tmId] = args as [string];
+      const config = projectService.getTMSyncConfig(tmId);
+      if (!config) {
+        throw new Error('This TM is not bound to a local Excel file.');
+      }
+
+      try {
+        await access(config.filePath);
+      } catch {
+        return { status: 'file-missing', filePath: config.filePath };
+      }
+
+      const jobId = randomUUID();
+      jobManager.startJob(jobId, 'TM sync started');
+
+      void projectService
+        .syncTMEntriesFromExcel(tmId, (data) => {
+          const progress = data.total === 0 ? 0 : Math.round((data.current / data.total) * 100);
+          jobManager.updateProgress(jobId, {
+            progress,
+            message: data.message,
+          });
+        })
+        .then((report) => {
+          jobManager.updateProgress(jobId, {
+            progress: 100,
+            status: report.cancelled ? 'cancelled' : 'completed',
+            message: report.cancelled
+              ? `TM sync cancelled: ${report.added} added, ${report.updated} updated before stopping`
+              : `TM sync completed: ${report.added} added, ${report.updated} updated, ${report.deleted} removed, ${report.unchanged} unchanged`,
+            result: {
+              kind: 'tm-sync',
+              success: report.added + report.updated + report.deleted,
+              skipped: report.skipped,
+              report,
+            },
+          });
+          // Even a cancelled run may have applied a prefix of the changes.
+          notifyReferenceDataChanged({ projectId: null, kind: 'tm', reason: 'tm-synced' });
+        })
+        .catch((error) => {
+          const structuredError = toStructuredJobError(error, 'TM_SYNC_FAILED');
+          jobManager.updateProgress(jobId, {
+            progress: 100,
+            status: 'failed',
+            message: structuredError.message,
+            error: structuredError,
+          });
+          notifyReferenceDataChanged({ projectId: null, kind: 'tm', reason: 'tm-synced' });
+        });
+
+      return { status: 'started', jobId };
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.tm.syncCancel,
+    (_event, ...args) => {
+      const [tmId, jobId] = args as [string, string];
+      jobManager.cancelJob(jobId);
+      return projectService.cancelTMSync(tmId);
     },
   );
 }

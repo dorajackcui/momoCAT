@@ -1,16 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { TMImportWizard } from './TMImportWizard';
+import { TMImportWizard, type TMWizardMode } from './TMImportWizard';
 import { AssetPreviewModal } from './AssetPreviewModal';
 import { LanguageSelect } from './LanguageSelect';
 import { apiClient } from '../services/apiClient';
 import { feedbackService } from '../services/feedbackService';
 import { DEFAULT_ASSET_SOURCE_LANG, DEFAULT_ASSET_TARGET_LANG } from './languageOptions';
+import {
+  confirmTMSyncLink,
+  pickTMSyncSource,
+  runTMSyncNow,
+  tmSyncReportMessage,
+  TM_SPREADSHEET_FILTERS,
+} from './tm-manager/tmSyncActions';
+import { TMCard } from './tm-manager/TMCard';
 import type {
   ImportExecutionResult,
   SpreadsheetPreviewData,
   StructuredJobError,
   TMAssetPreview,
   TMImportOptions,
+  TMSyncReport,
   TMWithStats,
 } from '../../../shared/ipc';
 
@@ -19,6 +28,13 @@ type ImportNotice = {
   message: string;
 };
 
+type CreateSource = 'upload' | 'sync';
+
+const CREATE_SOURCE_OPTIONS: Array<{ value: CreateSource; label: string; hint: string }> = [
+  { value: 'upload', label: 'Standard TM', hint: 'Update by uploading Excel files' },
+  { value: 'sync', label: 'Sync with Excel', hint: 'Incrementally follow a linked local file' },
+];
+
 export const TMManager: React.FC = () => {
   const [tms, setTMs] = useState<TMWithStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,8 +42,10 @@ export const TMManager: React.FC = () => {
   const [newName, setNewName] = useState('');
   const [newSrc, setNewSrc] = useState(DEFAULT_ASSET_SOURCE_LANG);
   const [newTgt, setNewTgt] = useState(DEFAULT_ASSET_TARGET_LANG);
+  const [createSource, setCreateSource] = useState<CreateSource>('upload');
 
-  // Import State
+  // Import / sync wizard state
+  const [wizardMode, setWizardMode] = useState<TMWizardMode>('import');
   const [importingTMId, setImportingTMId] = useState<string | null>(null);
   const [importPreview, setImportPreview] = useState<SpreadsheetPreviewData>([]);
   const [importFilePath, setImportFilePath] = useState<string | null>(null);
@@ -55,8 +73,8 @@ export const TMManager: React.FC = () => {
     loadTMs();
   }, []);
 
-  const selectedPreviewTM = previewTMId ? tms.find((tm) => tm.id === previewTMId) ?? null : null;
-  const selectedPreview = previewTMId ? previewCache[previewTMId] ?? null : null;
+  const selectedPreviewTM = previewTMId ? (tms.find((tm) => tm.id === previewTMId) ?? null) : null;
+  const selectedPreview = previewTMId ? (previewCache[previewTMId] ?? null) : null;
 
   const clearPreviewCache = (tmId: string) => {
     setPreviewCache((current) => {
@@ -66,16 +84,31 @@ export const TMManager: React.FC = () => {
     });
   };
 
+  const resetWizardState = () => {
+    setIsImportWizardOpen(false);
+    setImportJobId(null);
+    setImportingTMId(null);
+    setImportFilePath(null);
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName) return;
+    if (!newName.trim()) return;
+
+    let tmId: string;
     try {
-      await apiClient.createTM(newName, newSrc, newTgt, 'main');
+      tmId = await apiClient.createTM(newName.trim(), newSrc, newTgt, 'main');
       setNewName('');
       setShowCreate(false);
-      loadTMs();
+      await loadTMs();
     } catch {
       feedbackService.error('Failed to create TM');
+      return;
+    }
+
+    // A synced TM is unusable without its file binding, so link it right away.
+    if (createSource === 'sync') {
+      await handleStartLink(tmId);
     }
   };
 
@@ -122,13 +155,12 @@ export const TMManager: React.FC = () => {
 
   const handleStartImport = async (tmId: string) => {
     setImportNotice(null);
-    const filePath = await apiClient.openFileDialog([
-      { name: 'Spreadsheets', extensions: ['xlsx', 'xls', 'csv'] },
-    ]);
+    const filePath = await apiClient.openFileDialog(TM_SPREADSHEET_FILTERS);
     if (!filePath) return;
 
     try {
       const preview = await apiClient.getTMImportPreview(filePath);
+      setWizardMode('import');
       setImportingTMId(tmId);
       setImportFilePath(filePath);
       setImportPreview(preview);
@@ -138,8 +170,68 @@ export const TMManager: React.FC = () => {
     }
   };
 
+  const handleStartLink = async (tmId: string) => {
+    setImportNotice(null);
+    const picked = await pickTMSyncSource({
+      openFileDialog: apiClient.openFileDialog,
+      getTMImportPreview: apiClient.getTMImportPreview,
+      error: feedbackService.error,
+    });
+    if (!picked) return;
+
+    setWizardMode('sync');
+    setImportingTMId(tmId);
+    setImportFilePath(picked.filePath);
+    setImportPreview(picked.preview);
+    setIsImportWizardOpen(true);
+  };
+
+  const handleSyncNow = async (tm: TMWithStats) => {
+    setImportNotice(null);
+    const outcome = await runTMSyncNow(tm, {
+      syncTMWithExcel: apiClient.syncTMWithExcel,
+      confirmRelink: feedbackService.confirm,
+      error: feedbackService.error,
+    });
+
+    if (outcome.kind === 'started') {
+      setWizardMode('sync');
+      setImportingTMId(tm.id);
+      setImportFilePath(tm.syncConfig?.filePath ?? null);
+      setImportPreview([]);
+      setIsImportWizardOpen(true);
+      setImportJobId(outcome.jobId);
+    } else if (outcome.kind === 'relink-requested') {
+      await handleStartLink(tm.id);
+    }
+  };
+
+  const handleCancelSync = () => {
+    if (!importingTMId || !importJobId) return;
+    void apiClient.cancelTMSync(importingTMId, importJobId).catch(() => {
+      feedbackService.error('Failed to cancel the sync.');
+    });
+  };
+
   const handleConfirmImport = async (options: TMImportOptions) => {
     if (!importingTMId || !importFilePath) return;
+
+    if (wizardMode === 'sync') {
+      const result = await confirmTMSyncLink(importingTMId, importFilePath, options, {
+        setTMSyncConfig: apiClient.setTMSyncConfig,
+        syncTMWithExcel: apiClient.syncTMWithExcel,
+        error: feedbackService.error,
+      });
+      if (!result || result.status !== 'started') {
+        resetWizardState();
+        if (result?.status === 'file-missing') {
+          feedbackService.error(`The linked Excel file could not be read: ${result.filePath}`);
+        }
+        return;
+      }
+      setImportJobId(result.jobId);
+      return;
+    }
 
     try {
       const jobId = await apiClient.importTMEntries(importingTMId, importFilePath, options);
@@ -149,23 +241,19 @@ export const TMManager: React.FC = () => {
         tone: 'error',
         message: `Failed to start import: ${error instanceof Error ? error.message : String(error)}`,
       });
-      setIsImportWizardOpen(false);
-      setImportJobId(null);
-      setImportingTMId(null);
-      setImportFilePath(null);
+      resetWizardState();
     }
   };
 
-  const handleImportCompleted = (result: ImportExecutionResult) => {
+  const handleImportCompleted = (result: ImportExecutionResult, report?: TMSyncReport) => {
     const completedTMId = importingTMId;
     setImportNotice({
       tone: 'success',
-      message: `Import completed: ${result.success} imported, ${result.skipped} skipped.`,
+      message: report
+        ? tmSyncReportMessage(report)
+        : `Import completed: ${result.success} imported, ${result.skipped} skipped.`,
     });
-    setIsImportWizardOpen(false);
-    setImportJobId(null);
-    setImportingTMId(null);
-    setImportFilePath(null);
+    resetWizardState();
     if (completedTMId) {
       clearPreviewCache(completedTMId);
     }
@@ -175,12 +263,13 @@ export const TMManager: React.FC = () => {
   const handleImportFailed = (error: StructuredJobError) => {
     setImportNotice({
       tone: 'error',
-      message: `Import failed (${error.code}): ${error.message}`,
+      message:
+        wizardMode === 'sync'
+          ? `Sync failed (${error.code}): ${error.message}`
+          : `Import failed (${error.code}): ${error.message}`,
     });
-    setIsImportWizardOpen(false);
-    setImportJobId(null);
-    setImportingTMId(null);
-    setImportFilePath(null);
+    resetWizardState();
+    void loadTMs();
   };
 
   return (
@@ -189,11 +278,11 @@ export const TMManager: React.FC = () => {
         isOpen={isImportWizardOpen}
         previewData={importPreview}
         jobId={importJobId}
+        mode={wizardMode}
+        onCancelSync={handleCancelSync}
         onClose={() => {
           if (importJobId) return;
-          setIsImportWizardOpen(false);
-          setImportingTMId(null);
-          setImportFilePath(null);
+          resetWizardState();
         }}
         onConfirm={handleConfirmImport}
         onJobCompleted={handleImportCompleted}
@@ -248,6 +337,26 @@ export const TMManager: React.FC = () => {
         {showCreate && (
           <div className="mb-8 p-6 surface-card animate-in fade-in slide-in-from-top-4">
             <h2 className="field-label !text-[10px] mb-4">Create New Main TM</h2>
+            <div className="mb-4">
+              <label className="field-label !text-[10px]">Type</label>
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                {CREATE_SOURCE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setCreateSource(option.value)}
+                    className={`rounded-control border px-3 py-2 text-left transition-colors ${
+                      createSource === option.value
+                        ? 'border-brand bg-brand-soft text-brand'
+                        : 'border-border/60 bg-surface text-text-muted hover:border-brand/40'
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold">{option.label}</span>
+                    <span className="block text-[10px] opacity-70">{option.hint}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             <form onSubmit={handleCreate} className="grid grid-cols-4 gap-4 items-end">
               <div className="col-span-2">
                 <label className="field-label !text-[10px]">TM Name</label>
@@ -314,105 +423,14 @@ export const TMManager: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {tms.map((tm) => (
-              <div
+              <TMCard
                 key={tm.id}
-                className="surface-card p-5 hover:border-brand/40 transition-colors group"
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h3 className="font-bold text-text group-hover:text-brand transition-colors">
-                      {tm.name}
-                    </h3>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] font-semibold text-brand bg-brand-soft px-1.5 py-0.5 rounded-control uppercase tracking-wider">
-                        {tm.srcLang} → {tm.tgtLang}
-                      </span>
-                      <span className="text-[10px] font-semibold text-text-muted bg-muted px-1.5 py-0.5 rounded-control uppercase tracking-wider">
-                        Main TM
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => void handleOpenPreview(tm.id)}
-                      className="p-1.5 text-text-faint hover:text-brand hover:bg-brand-soft rounded-control transition-colors"
-                      title="Preview TM"
-                      aria-label={`Preview ${tm.name}`}
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12z"
-                        />
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 15.25A3.25 3.25 0 1012 8.75a3.25 3.25 0 000 6.5z"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => handleStartImport(tm.id)}
-                      className="p-1.5 text-text-faint hover:text-brand hover:bg-brand-soft rounded-control transition-colors"
-                      title="Import from Excel/CSV"
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => handleDelete(tm.id)}
-                      className="p-1.5 text-text-faint hover:text-danger hover:bg-danger-soft rounded-control transition-colors"
-                      title="Delete TM"
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pt-4 border-t border-border/40">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-semibold text-text-faint uppercase tracking-widest mb-0.5">
-                      Size
-                    </span>
-                    <span className="text-sm font-semibold text-text-muted">
-                      {tm.stats.entryCount} segments
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-text-faint font-medium">
-                    Last updated {new Date().toLocaleDateString()}
-                  </div>
-                </div>
-              </div>
+                tm={tm}
+                onPreview={(tmId) => void handleOpenPreview(tmId)}
+                onImport={(tmId) => void handleStartImport(tmId)}
+                onSync={(target) => void handleSyncNow(target)}
+                onDelete={(tmId) => void handleDelete(tmId)}
+              />
             ))}
           </div>
         )}

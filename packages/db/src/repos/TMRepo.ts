@@ -12,6 +12,9 @@ import type {
   TMEntryRow,
   TMRecallOptions,
   TMRecord,
+  TMSyncChangedRow,
+  TMSyncDiffSummary,
+  TMSyncStagedRow,
   TMType,
 } from '../types';
 
@@ -1516,5 +1519,272 @@ export class TMRepo {
 
   public getTM(tmId: string): TMRecord | undefined {
     return this.db.prepare('SELECT * FROM tms WHERE id = ?').get(tmId) as TMRecord | undefined;
+  }
+
+  // --- TM external-file sync (incremental diff over tm_sync_staging) ---
+  //
+  // Statements are prepared lazily: tm_sync_staging is an additive table
+  // created by schema maintenance, which readonly connections skip.
+
+  private stmtStageTMSyncRow?: Database.Statement;
+  private stmtInsertTMSyncEntry?: Database.Statement;
+  private stmtUpdateTMSyncTarget?: Database.Statement;
+
+  public clearTMSyncStagingForTM(tmId: string, exceptRunId?: string): void {
+    if (exceptRunId) {
+      this.db
+        .prepare('DELETE FROM tm_sync_staging WHERE tmId = ? AND syncRunId != ?')
+        .run(tmId, exceptRunId);
+      return;
+    }
+    this.db.prepare('DELETE FROM tm_sync_staging WHERE tmId = ?').run(tmId);
+  }
+
+  public clearTMSyncStagingRun(runId: string): void {
+    this.db.prepare('DELETE FROM tm_sync_staging WHERE syncRunId = ?').run(runId);
+  }
+
+  // Must be called inside a transaction owned by the caller. INSERT OR REPLACE
+  // on the (syncRunId, srcHash) primary key makes later file rows win when the
+  // file contains duplicate sources.
+  public stageTMSyncRows(runId: string, tmId: string, rows: TMSyncStagedRow[]): void {
+    this.stmtStageTMSyncRow ??= this.db.prepare(`
+      INSERT OR REPLACE INTO tm_sync_staging (
+        tmId, syncRunId, srcHash, matchKey, tagsSignature,
+        sourceTokensJson, targetTokensJson, srcText, tgtText
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const row of rows) {
+      this.stmtStageTMSyncRow.run(
+        tmId,
+        runId,
+        row.srcHash,
+        row.matchKey,
+        row.tagsSignature,
+        row.sourceTokensJson,
+        row.targetTokensJson,
+        row.srcText,
+        row.tgtText,
+      );
+    }
+  }
+
+  public countTMSyncStagedRows(runId: string): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) as count FROM tm_sync_staging WHERE syncRunId = ?')
+      .get(runId) as { count: number };
+    return row.count;
+  }
+
+  public getTMSyncDiffSummary(
+    runId: string,
+    tmId: string,
+    lastSyncedAt?: string,
+  ): TMSyncDiffSummary {
+    const added = (
+      this.db
+        .prepare(`
+          SELECT COUNT(*) as count FROM tm_sync_staging s
+          LEFT JOIN tm_entries e ON e.tmId = ? AND e.srcHash = s.srcHash
+          WHERE s.syncRunId = ? AND e.id IS NULL
+        `)
+        .get(tmId, runId) as { count: number }
+    ).count;
+
+    const changed = (
+      this.db
+        .prepare(`
+          SELECT COUNT(*) as count FROM tm_sync_staging s
+          JOIN tm_entries e ON e.tmId = ? AND e.srcHash = s.srcHash
+          WHERE s.syncRunId = ?
+            AND (e.targetTokensJson != s.targetTokensJson
+              OR e.sourceTokensJson != s.sourceTokensJson)
+        `)
+        .get(tmId, runId) as { count: number }
+    ).count;
+
+    const deleted = (
+      this.db
+        .prepare(`
+          SELECT COUNT(*) as count FROM tm_entries e
+          WHERE e.tmId = ?
+            AND NOT EXISTS (
+              SELECT 1 FROM tm_sync_staging s
+              WHERE s.syncRunId = ? AND s.srcHash = e.srcHash
+            )
+        `)
+        .get(tmId, runId) as { count: number }
+    ).count;
+
+    const overwrittenLocalEdits = lastSyncedAt
+      ? (
+          this.db
+            .prepare(`
+              SELECT COUNT(*) as count FROM tm_sync_staging s
+              JOIN tm_entries e ON e.tmId = ? AND e.srcHash = s.srcHash
+              WHERE s.syncRunId = ?
+                AND (e.targetTokensJson != s.targetTokensJson
+                  OR e.sourceTokensJson != s.sourceTokensJson)
+                AND e.updatedAt > ?
+            `)
+            .get(tmId, runId, lastSyncedAt) as { count: number }
+        ).count
+      : 0;
+
+    return { added, changed, deleted, overwrittenLocalEdits };
+  }
+
+  // Keyset pagination (srcHash > afterSrcHash) keeps pages stable while the
+  // caller applies earlier pages between calls: applied rows drop out of the
+  // diff, but only at keys the cursor has already passed.
+  public listTMSyncNewRows(
+    runId: string,
+    tmId: string,
+    afterSrcHash: string,
+    limit: number,
+  ): TMSyncStagedRow[] {
+    return this.db
+      .prepare(`
+        SELECT s.srcHash, s.matchKey, s.tagsSignature,
+               s.sourceTokensJson, s.targetTokensJson, s.srcText, s.tgtText
+        FROM tm_sync_staging s
+        LEFT JOIN tm_entries e ON e.tmId = ? AND e.srcHash = s.srcHash
+        WHERE s.syncRunId = ? AND s.srcHash > ? AND e.id IS NULL
+        ORDER BY s.srcHash ASC
+        LIMIT ?
+      `)
+      .all(tmId, runId, afterSrcHash, limit) as TMSyncStagedRow[];
+  }
+
+  public listTMSyncChangedRows(
+    runId: string,
+    tmId: string,
+    afterSrcHash: string,
+    limit: number,
+  ): TMSyncChangedRow[] {
+    return this.db
+      .prepare(`
+        SELECT s.srcHash, s.matchKey, s.tagsSignature,
+               s.sourceTokensJson, s.targetTokensJson, s.srcText, s.tgtText,
+               e.id AS entryId
+        FROM tm_sync_staging s
+        JOIN tm_entries e ON e.tmId = ? AND e.srcHash = s.srcHash
+        WHERE s.syncRunId = ? AND s.srcHash > ?
+          AND (e.targetTokensJson != s.targetTokensJson
+            OR e.sourceTokensJson != s.sourceTokensJson)
+        ORDER BY s.srcHash ASC
+        LIMIT ?
+      `)
+      .all(tmId, runId, afterSrcHash, limit) as TMSyncChangedRow[];
+  }
+
+  public listTMSyncDeletedEntries(
+    runId: string,
+    tmId: string,
+    afterId: string,
+    limit: number,
+  ): Array<{ id: string }> {
+    return this.db
+      .prepare(`
+        SELECT e.id FROM tm_entries e
+        WHERE e.tmId = ? AND e.id > ?
+          AND NOT EXISTS (
+            SELECT 1 FROM tm_sync_staging s
+            WHERE s.syncRunId = ? AND s.srcHash = e.srcHash
+          )
+        ORDER BY e.id ASC
+        LIMIT ?
+      `)
+      .all(tmId, afterId, runId, limit) as Array<{ id: string }>;
+  }
+
+  // Must be called inside a transaction owned by the caller. Entry and FTS
+  // rows are written as a pair so a rollback never leaves a dangling FTS row.
+  public applyTMSyncInserts(
+    tmId: string,
+    rows: Array<TMSyncStagedRow & { id: string }>,
+  ): number {
+    this.stmtInsertTMSyncEntry ??= this.db.prepare(`
+      INSERT INTO tm_entries (
+        id, tmId, srcHash, matchKey, tagsSignature,
+        sourceTokensJson, targetTokensJson, originSegmentId, usageCount
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 0)
+      ON CONFLICT(tmId, srcHash) DO NOTHING
+      RETURNING id
+    `);
+
+    let inserted = 0;
+    for (const row of rows) {
+      const result = this.stmtInsertTMSyncEntry.get(
+        row.id,
+        tmId,
+        row.srcHash,
+        row.matchKey,
+        row.tagsSignature,
+        row.sourceTokensJson,
+        row.targetTokensJson,
+      ) as { id: string } | undefined;
+      if (!result) continue;
+
+      this.stmtInsertTMFts.run(tmId, row.srcText, row.tgtText, result.id);
+      inserted += 1;
+    }
+    return inserted;
+  }
+
+  // Must be called inside a transaction owned by the caller. Sync updates
+  // refresh both sides' display tokens (srcHash-identical sources can still
+  // differ in case/whitespace) but never touch usageCount/createdAt/
+  // originSegmentId: those are usage metadata the file must not reset.
+  public applyTMSyncUpdates(
+    tmId: string,
+    rows: Array<{
+      entryId: string;
+      sourceTokensJson: string;
+      targetTokensJson: string;
+      srcText: string;
+      tgtText: string;
+    }>,
+  ): number {
+    this.stmtUpdateTMSyncTarget ??= this.db.prepare(`
+      UPDATE tm_entries
+      SET sourceTokensJson = ?, targetTokensJson = ?,
+          updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      WHERE id = ?
+    `);
+
+    let updated = 0;
+    for (const row of rows) {
+      const result = this.stmtUpdateTMSyncTarget.run(
+        row.sourceTokensJson,
+        row.targetTokensJson,
+        row.entryId,
+      );
+      if (result.changes === 0) continue;
+
+      this.stmtDeleteTMFtsByEntryId.run(row.entryId);
+      this.stmtInsertTMFts.run(tmId, row.srcText, row.tgtText, row.entryId);
+      updated += 1;
+    }
+    return updated;
+  }
+
+  // Must be called inside a transaction owned by the caller.
+  public deleteTMEntriesWithFts(entryIds: string[]): number {
+    let deleted = 0;
+    for (let index = 0; index < entryIds.length; index += TM_FTS_REPLACE_DELETE_BATCH_SIZE) {
+      const batch = entryIds.slice(index, index + TM_FTS_REPLACE_DELETE_BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      this.db.prepare(`DELETE FROM tm_fts WHERE tmEntryId IN (${placeholders})`).run(...batch);
+      const result = this.db
+        .prepare(`DELETE FROM tm_entries WHERE id IN (${placeholders})`)
+        .run(...batch);
+      deleted += result.changes;
+    }
+    return deleted;
+  }
+
+  public optimizeTMFts(): void {
+    this.db.prepare(`INSERT INTO tm_fts(tm_fts) VALUES('optimize')`).run();
   }
 }

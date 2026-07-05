@@ -46,6 +46,48 @@ export interface TMImportOptions {
   overwrite: boolean;
 }
 
+export interface TMSyncColumns {
+  sourceCol: number;
+  targetCol: number;
+  hasHeader: boolean;
+}
+
+// 'never' keeps entries missing from the file (the TM also accumulates entries
+// from confirmed segments); 'prune-all' mirrors the file exactly.
+export type TMSyncDeletePolicy = 'never' | 'prune-all';
+
+export interface TMSyncConfigInput {
+  filePath: string;
+  columns: TMSyncColumns;
+  deletePolicy?: TMSyncDeletePolicy;
+}
+
+export interface TMSyncReport {
+  fileRows: number;
+  duplicates: number;
+  skipped: number;
+  added: number;
+  updated: number;
+  deleted: number;
+  unchanged: number;
+  overwrittenLocalEdits: number;
+  cancelled?: boolean;
+}
+
+export interface TMSyncConfig extends TMSyncConfigInput {
+  /** Baseline for overwrittenLocalEdits: only advanced by a full success. */
+  lastSyncedAt?: string;
+  /** Timestamp of the latest run regardless of outcome (drives UI status). */
+  lastSyncAttemptedAt?: string;
+  lastSyncStatus?: 'success' | 'failed' | 'cancelled';
+  lastSyncError?: string;
+  lastSyncReport?: TMSyncReport;
+}
+
+export type TMSyncStartResult =
+  | { status: 'started'; jobId: string }
+  | { status: 'file-missing'; filePath: string };
+
 export interface TBImportOptions {
   sourceCol: number;
   targetCol: number;
@@ -111,6 +153,7 @@ export type TMRecord = DbTMRecord;
 
 export interface TMWithStats extends TMRecord {
   stats: { entryCount: number };
+  syncConfig?: TMSyncConfig | null;
 }
 
 export interface TMPreviewRow {
@@ -210,7 +253,8 @@ export interface ImportExecutionResult {
 }
 
 export interface ImportJobResult extends ImportExecutionResult {
-  kind: 'tm-import' | 'tb-import' | 'tb-sync';
+  kind: 'tm-import' | 'tb-import' | 'tb-sync' | 'tm-sync';
+  report?: TMSyncReport;
 }
 
 export interface StructuredJobError {
@@ -381,6 +425,7 @@ export interface ReferenceDataChangedEvent {
     | 'tm-imported'
     | 'tm-committed'
     | 'tm-batch-matched'
+    | 'tm-synced'
     | 'tb-created'
     | 'tb-deleted'
     | 'tb-mounted'
@@ -475,6 +520,9 @@ export interface DesktopApi {
   matchFileWithTM: (fileId: number, tmId: string) => Promise<TMBatchMatchResult>;
   getTMImportPreview: (filePath: string) => Promise<SpreadsheetPreviewData>;
   importTMEntries: (tmId: string, filePath: string, options: TMImportOptions) => Promise<string>;
+  setTMSyncConfig: (tmId: string, config: TMSyncConfigInput) => Promise<void>;
+  syncTMWithExcel: (tmId: string) => Promise<TMSyncStartResult>;
+  cancelTMSync: (tmId: string, jobId: string) => Promise<boolean>;
 
   listTBs: () => Promise<TBWithStats[]>;
   getTBPreview: (tbId: string) => Promise<TBAssetPreview>;

@@ -56,6 +56,9 @@ import type {
   TBSyncConfigInput,
   TMCommitOptions,
   TMImportOptions,
+  TMSyncConfig,
+  TMSyncConfigInput,
+  TMSyncReport,
 } from '../../shared/ipc';
 import type {
   AddAIProviderInput,
@@ -152,6 +155,7 @@ export class ProjectService {
         this.segmentService,
         dbPath,
         emitProgress,
+        settingsRepo,
       );
     this.tbModule =
       deps.tbModule ?? new TBModule(tbRepo, tx, tbService, emitProgress, settingsRepo);
@@ -400,6 +404,25 @@ export class ProjectService {
     onProgress?: (progress: ImportProgress) => void,
   ): Promise<{ success: number; skipped: number }> {
     return this.tmModule.importTMEntries(tmId, filePath, options, onProgress);
+  }
+
+  public getTMSyncConfig(tmId: string): TMSyncConfig | null {
+    return this.tmModule.getTMSyncConfig(tmId);
+  }
+
+  public async setTMSyncConfig(tmId: string, config: TMSyncConfigInput): Promise<void> {
+    return this.tmModule.setTMSyncConfig(tmId, config);
+  }
+
+  public async syncTMEntriesFromExcel(
+    tmId: string,
+    onProgress?: (progress: ImportProgress) => void,
+  ): Promise<TMSyncReport> {
+    return this.tmModule.syncTMEntriesFromExcel(tmId, onProgress);
+  }
+
+  public cancelTMSync(tmId: string): boolean {
+    return this.tmModule.cancelTMSync(tmId);
   }
 
   public async getTBImportPreview(filePath: string): Promise<SpreadsheetPreviewData> {

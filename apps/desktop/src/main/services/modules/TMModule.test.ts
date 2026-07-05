@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Segment, Token } from '@cat/core/models';
 import { TMModule } from './TMModule';
-import { ProjectRepository, SegmentRepository, TMRepository, TransactionManager } from '../ports';
+import {
+  ProjectRepository,
+  SegmentRepository,
+  SettingsRepository,
+  TMRepository,
+  TransactionManager,
+} from '../ports';
 import { TMService } from '../TMService';
 import { SegmentService } from '../SegmentService';
 import { CATDatabase } from '../../../../../../packages/db/src';
@@ -9,6 +15,17 @@ import { SqliteProjectRepository } from '../adapters/SqliteProjectRepository';
 import { SqliteSegmentRepository } from '../adapters/SqliteSegmentRepository';
 import { SqliteTMRepository } from '../adapters/SqliteTMRepository';
 import { SqliteTransactionManager } from '../adapters/SqliteTransactionManager';
+
+function fakeSettingsRepo(): SettingsRepository {
+  const store = new Map<string, string>();
+  return {
+    getSetting: (key) => store.get(key),
+    setSetting: (key, value) => {
+      if (value === null) store.delete(key);
+      else store.set(key, value);
+    },
+  };
+}
 
 function createSegment(
   segmentId: string,
@@ -99,6 +116,7 @@ function createCommitHarness(segments: Segment[]) {
     segmentService,
     ':memory:',
     vi.fn(),
+    fakeSettingsRepo(),
   );
 
   return { module, tmRepo };
@@ -232,6 +250,7 @@ describe('TMModule.batchMatchFileWithTM', () => {
       segmentService,
       ':memory:',
       vi.fn(),
+      fakeSettingsRepo(),
     );
 
     const result = await module.batchMatchFileWithTM(1, 'tm-1');
@@ -281,6 +300,7 @@ describe('TMModule.batchMatchFileWithTM', () => {
       segmentService,
       ':memory:',
       vi.fn(),
+      fakeSettingsRepo(),
     );
 
     await expect(module.batchMatchFileWithTM(1, 'tm-main')).rejects.toThrow(
@@ -346,6 +366,7 @@ describe('TMModule.batchMatchFileWithTM', () => {
       segmentService,
       ':memory:',
       vi.fn(),
+      fakeSettingsRepo(),
     );
 
     const result = await module.batchMatchFileWithTM(1, 'tm-large');
@@ -415,6 +436,7 @@ describe('TMModule.batchMatchFileWithTM', () => {
       segmentService,
       ':memory:',
       vi.fn(),
+      fakeSettingsRepo(),
     );
 
     const eventSpy = vi.fn();
@@ -529,6 +551,7 @@ describe('TMModule.batchMatchFileWithTM', () => {
       segmentService,
       ':memory:',
       vi.fn(),
+      fakeSettingsRepo(),
     );
 
     const eventSpy = vi.fn();
@@ -597,6 +620,7 @@ describe('TMModule.batchMatchFileWithTM', () => {
         segmentService,
         ':memory:',
         vi.fn(),
+        fakeSettingsRepo(),
       );
 
       const matches = await module.findMatches(projectId, {

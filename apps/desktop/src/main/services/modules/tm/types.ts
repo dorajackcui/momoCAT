@@ -1,3 +1,5 @@
+import type { TMSyncReport } from '../../../../shared/ipc';
+
 export interface ImportProgress {
   current: number;
   total: number;
@@ -27,3 +29,24 @@ export type TMImportWorkerMessage =
   | TMImportWorkerProgressMessage
   | TMImportWorkerDoneMessage
   | TMImportWorkerErrorMessage;
+
+export interface TMSyncWorkerProgressMessage {
+  type: 'progress';
+  percent: number;
+  message?: string;
+}
+
+export interface TMSyncWorkerDoneMessage {
+  type: 'done';
+  result: TMSyncReport;
+}
+
+export interface TMSyncWorkerErrorMessage {
+  type: 'error';
+  error?: string;
+}
+
+export type TMSyncWorkerMessage =
+  | TMSyncWorkerProgressMessage
+  | TMSyncWorkerDoneMessage
+  | TMSyncWorkerErrorMessage;

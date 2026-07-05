@@ -5,6 +5,7 @@ import { TBModule } from './TBModule';
 import type {
   ProjectRepository,
   SegmentRepository,
+  SettingsRepository,
   TBRepository,
   TMRepository,
   TransactionManager,
@@ -16,6 +17,17 @@ import { SegmentService } from '../SegmentService';
 const tx = {
   runInTransaction: <T>(fn: () => T) => fn(),
 } as TransactionManager;
+
+function fakeSettingsRepo(): SettingsRepository {
+  const store = new Map<string, string>();
+  return {
+    getSetting: (key) => store.get(key),
+    setSetting: (key, value) => {
+      if (value === null) store.delete(key);
+      else store.set(key, value);
+    },
+  };
+}
 
 function makeTMEntry(index: number): TMEntry {
   return {
@@ -64,6 +76,7 @@ describe('asset preview modules', () => {
       {} as SegmentService,
       ':memory:',
       vi.fn(),
+      fakeSettingsRepo(),
     );
 
     const preview = await module.getTMPreview('tm-1');

@@ -16,7 +16,10 @@ type TMApiKeys =
   | 'commitToMainTM'
   | 'matchFileWithTM'
   | 'getTMImportPreview'
-  | 'importTMEntries';
+  | 'importTMEntries'
+  | 'setTMSyncConfig'
+  | 'syncTMWithExcel'
+  | 'cancelTMSync';
 
 export function createTMApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<TMApiKeys> {
   return {
@@ -35,9 +38,7 @@ export function createTMApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<TMApi
     listTMs: (type) =>
       ipcRenderer.invoke(IPC_CHANNELS.tm.list, type) as ReturnType<DesktopApi['listTMs']>,
     getTMPreview: (tmId) =>
-      ipcRenderer.invoke(IPC_CHANNELS.tm.preview, tmId) as ReturnType<
-        DesktopApi['getTMPreview']
-      >,
+      ipcRenderer.invoke(IPC_CHANNELS.tm.preview, tmId) as ReturnType<DesktopApi['getTMPreview']>,
     createTM: (name, srcLang, tgtLang, type) =>
       ipcRenderer.invoke(IPC_CHANNELS.tm.create, name, srcLang, tgtLang, type) as ReturnType<
         DesktopApi['createTM']
@@ -75,6 +76,18 @@ export function createTMApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<TMApi
     importTMEntries: (tmId, filePath, options) =>
       ipcRenderer.invoke(IPC_CHANNELS.tm.importExecute, tmId, filePath, options) as ReturnType<
         DesktopApi['importTMEntries']
+      >,
+    setTMSyncConfig: (tmId, config) =>
+      ipcRenderer.invoke(IPC_CHANNELS.tm.syncSetConfig, tmId, config) as ReturnType<
+        DesktopApi['setTMSyncConfig']
+      >,
+    syncTMWithExcel: (tmId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.tm.syncExecute, tmId) as ReturnType<
+        DesktopApi['syncTMWithExcel']
+      >,
+    cancelTMSync: (tmId, jobId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.tm.syncCancel, tmId, jobId) as ReturnType<
+        DesktopApi['cancelTMSync']
       >,
   };
 }

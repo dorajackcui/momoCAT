@@ -47,6 +47,9 @@ export const IPC_CHANNELS = {
     matchFile: 'tm-match-file',
     importPreview: 'tm-import-preview',
     importExecute: 'tm-import-execute',
+    syncSetConfig: 'tm-sync-set-config',
+    syncExecute: 'tm-sync-execute',
+    syncCancel: 'tm-sync-cancel',
   },
   tb: {
     getMatches: 'tb-get-matches',
