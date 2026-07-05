@@ -2,6 +2,7 @@
 """
 Generate app icons for the desktop build pipeline.
 
+Uses apps/desktop/build/icon-source.png as the full-bleed source image.
 Outputs (under apps/desktop/build):
 - icon.png (1024x1024)
 - icon.icns (macOS)
@@ -23,6 +24,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD_DIR = ROOT / "apps" / "desktop" / "build"
+SOURCE_PNG = BUILD_DIR / "icon-source.png"
 MASTER_PNG = BUILD_DIR / "icon.png"
 ICONSET_DIR = BUILD_DIR / "icon.iconset"
 ICNS_PATH = BUILD_DIR / "icon.icns"
@@ -345,8 +347,9 @@ def main() -> None:
     if ICONSET_DIR.exists():
         shutil.rmtree(ICONSET_DIR)
     ensure_tools()
-    pixels = render_icon()
-    write_png(MASTER_PNG, SIZE, SIZE, pixels)
+    if not SOURCE_PNG.is_file():
+        raise FileNotFoundError(f"Missing icon source: {SOURCE_PNG}")
+    resize_png(SOURCE_PNG, MASTER_PNG, SIZE)
     make_icns(MASTER_PNG)
     make_ico(MASTER_PNG)
     print(f"Generated: {MASTER_PNG}")
