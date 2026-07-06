@@ -237,6 +237,49 @@ describe('ensureCurrentSchema', () => {
     expect(byId.get('entry-b')).toBe(ftsRows[1].ftsRowid);
   });
 
+  it('adds tb_entries.ftsRowid and backfills it from existing tb_fts rows', () => {
+    const dbPath = createTempDbPath();
+
+    const first = new CATDatabase(dbPath);
+    first.close();
+
+    // Simulate a database created before the ftsRowid column existed, with a
+    // duplicate FTS row for one entry and an orphan row for a deleted entry.
+    const before = new Database(dbPath);
+    before.exec(`
+      ALTER TABLE tb_entries DROP COLUMN ftsRowid;
+      INSERT INTO term_bases (id, name, srcLang, tgtLang) VALUES ('tb-1', 'TB', 'en', 'fr');
+      INSERT INTO tb_entries (id, tbId, srcTerm, tgtTerm, srcNorm)
+        VALUES
+          ('entry-a', 'tb-1', 'Alpha', 'Alpha-fr', 'alpha'),
+          ('entry-b', 'tb-1', 'Beta', 'Beta-fr', 'beta');
+      INSERT INTO tb_fts (tbId, srcText, tbEntryId) VALUES
+        ('tb-1', 'alpha', 'entry-a'),
+        ('tb-1', 'beta old', 'entry-b'),
+        ('tb-1', 'beta new', 'entry-b'),
+        ('tb-1', 'ghost', 'entry-gone');
+    `);
+    before.close();
+
+    const reopened = new CATDatabase(dbPath);
+    reopened.close();
+
+    const after = new Database(dbPath);
+    const entries = after
+      .prepare('SELECT id, ftsRowid FROM tb_entries ORDER BY id')
+      .all() as Array<{ id: string; ftsRowid: number | null }>;
+    const ftsRows = after
+      .prepare('SELECT rowid AS ftsRowid, tbEntryId, srcText FROM tb_fts ORDER BY rowid')
+      .all() as Array<{ ftsRowid: number; tbEntryId: string; srcText: string }>;
+    after.close();
+
+    // The duplicate keeps its newest row and the orphan is dropped.
+    expect(ftsRows.map((row) => row.srcText)).toEqual(['alpha', 'beta new']);
+    const byId = new Map(entries.map((entry) => [entry.id, entry.ftsRowid]));
+    expect(byId.get('entry-a')).toBe(ftsRows[0].ftsRowid);
+    expect(byId.get('entry-b')).toBe(ftsRows[1].ftsRowid);
+  });
+
   it('re-maps entries whose ftsRowid is NULL (written by an older app version)', () => {
     const dbPath = createTempDbPath();
 

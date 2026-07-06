@@ -304,6 +304,7 @@ function createCurrentSchema(db: Database.Database): void {
         createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         updatedAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         usageCount INTEGER NOT NULL DEFAULT 0,
+        ftsRowid INTEGER,
         FOREIGN KEY (tbId) REFERENCES term_bases(id) ON DELETE CASCADE
       );
 
@@ -354,52 +355,72 @@ function applyCurrentSchemaMaintenance(db: Database.Database): void {
     db.exec('DROP TABLE tm_sync_staging;');
   }
   db.exec(TM_SYNC_STAGING_TABLE_SQL);
-  ensureTMEntryFtsRowidColumn(db);
+  ensureEntryFtsRowidColumn(db, {
+    entriesTable: 'tm_entries',
+    ftsTable: 'tm_fts',
+    entryIdColumn: 'tmEntryId',
+  });
+  ensureEntryFtsRowidColumn(db, {
+    entriesTable: 'tb_entries',
+    ftsTable: 'tb_fts',
+    entryIdColumn: 'tbEntryId',
+  });
 }
 
-// tm_fts is FTS5 with tmEntryId UNINDEXED, so DELETE ... WHERE tmEntryId = ?
-// scans the whole index. tm_entries.ftsRowid (additive column, not in
-// REQUIRED_COLUMNS so pre-maintenance databases still open) remembers each
-// entry's FTS rowid so writers can delete by rowid instead. The backfill maps
-// existing FTS rows once, and runs again whenever unmapped entries appear
-// (e.g. rows written by an app version that predates the column).
-function ensureTMEntryFtsRowidColumn(db: Database.Database): void {
-  const entryColumns = db.prepare(`PRAGMA table_info(tm_entries)`).all() as Array<{
+// The FTS5 tables mark their entry-id column UNINDEXED, so DELETE ... WHERE
+// <entryId> = ? scans the whole index. <entriesTable>.ftsRowid (additive
+// column, not in REQUIRED_COLUMNS so pre-maintenance databases still open)
+// remembers each entry's FTS rowid so writers can delete by rowid instead.
+// The backfill maps existing FTS rows once, and runs again whenever unmapped
+// entries appear (e.g. rows written by an app version that predates the
+// column).
+function ensureEntryFtsRowidColumn(
+  db: Database.Database,
+  target: {
+    entriesTable: 'tm_entries' | 'tb_entries';
+    ftsTable: 'tm_fts' | 'tb_fts';
+    entryIdColumn: 'tmEntryId' | 'tbEntryId';
+  },
+): void {
+  const { entriesTable, ftsTable, entryIdColumn } = target;
+  const entryColumns = db.prepare(`PRAGMA table_info(${entriesTable})`).all() as Array<{
     name: string;
   }>;
   if (!entryColumns.some((column) => column.name === 'ftsRowid')) {
-    db.exec('ALTER TABLE tm_entries ADD COLUMN ftsRowid INTEGER');
+    db.exec(`ALTER TABLE ${entriesTable} ADD COLUMN ftsRowid INTEGER`);
   }
 
-  const unmapped = db.prepare('SELECT 1 FROM tm_entries WHERE ftsRowid IS NULL LIMIT 1').get();
+  const unmapped = db
+    .prepare(`SELECT 1 FROM ${entriesTable} WHERE ftsRowid IS NULL LIMIT 1`)
+    .get();
   if (!unmapped) return;
 
   db.transaction(() => {
-    const setRowid = db.prepare('UPDATE tm_entries SET ftsRowid = ? WHERE id = ?');
-    const deleteFtsRow = db.prepare('DELETE FROM tm_fts WHERE rowid = ?');
+    const setRowid = db.prepare(`UPDATE ${entriesTable} SET ftsRowid = ? WHERE id = ?`);
+    const deleteFtsRow = db.prepare(`DELETE FROM ${ftsTable} WHERE rowid = ?`);
     const seen = new Map<string, number>();
     const ftsRows = db
-      .prepare('SELECT rowid AS ftsRowid, tmEntryId FROM tm_fts ORDER BY rowid ASC')
-      .all() as Array<{ ftsRowid: number; tmEntryId: string }>;
+      .prepare(`SELECT rowid AS ftsRowid, ${entryIdColumn} AS entryId FROM ${ftsTable} ORDER BY rowid ASC`)
+      .all() as Array<{ ftsRowid: number; entryId: string }>;
 
     for (const row of ftsRows) {
-      const previous = seen.get(row.tmEntryId);
+      const previous = seen.get(row.entryId);
       if (previous !== undefined) {
         // Duplicate FTS rows for one entry: keep the newest.
         deleteFtsRow.run(previous);
       }
-      const result = setRowid.run(row.ftsRowid, row.tmEntryId);
+      const result = setRowid.run(row.ftsRowid, row.entryId);
       if (result.changes === 0) {
         // Orphan FTS row whose entry no longer exists.
         deleteFtsRow.run(row.ftsRowid);
         continue;
       }
-      seen.set(row.tmEntryId, row.ftsRowid);
+      seen.set(row.entryId, row.ftsRowid);
     }
 
     // 0 marks "mapping known, no FTS row" so entries that legitimately have
     // no FTS row don't retrigger this backfill on every open.
-    db.prepare('UPDATE tm_entries SET ftsRowid = 0 WHERE ftsRowid IS NULL').run();
+    db.prepare(`UPDATE ${entriesTable} SET ftsRowid = 0 WHERE ftsRowid IS NULL`).run();
   })();
 }
 

@@ -21,6 +21,9 @@ export class TBRepo {
   private stmtDeleteTbFtsByEntryId: Database.Statement;
   private stmtDeleteTbFtsByTbId: Database.Statement;
   private stmtInsertTbFts: Database.Statement;
+  private stmtTouchTermBase: Database.Statement;
+  private stmtInsertTBEntryIfAbsent?: Database.Statement;
+  private stmtUpsertTBEntryBySrcNorm?: Database.Statement;
   private tbDataVersion = 0;
 
   constructor(private readonly db: Database.Database) {
@@ -29,6 +32,45 @@ export class TBRepo {
     this.stmtInsertTbFts = this.db.prepare(
       'INSERT INTO tb_fts (tbId, srcText, tbEntryId) VALUES (?, ?, ?)',
     );
+    this.stmtTouchTermBase = this.db.prepare(`
+      UPDATE term_bases
+      SET updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      WHERE id = ?
+    `);
+  }
+
+  // --- tb_fts row bookkeeping ---
+  //
+  // tbEntryId is UNINDEXED in the FTS5 table, so deleting by it scans every
+  // document. tb_entries.ftsRowid remembers each entry's FTS rowid so
+  // replace/delete paths are O(log n) instead. Prepared lazily: ftsRowid is an
+  // additive column created by schema maintenance, which readonly connections
+  // skip.
+
+  private stmtGetTbEntryFtsRowid?: Database.Statement;
+  private stmtSetTbEntryFtsRowid?: Database.Statement;
+  private stmtDeleteTbFtsByRowid?: Database.Statement;
+
+  private deleteTbFtsForEntry(tbEntryId: string): void {
+    this.stmtGetTbEntryFtsRowid ??= this.db.prepare(
+      'SELECT ftsRowid FROM tb_entries WHERE id = ?',
+    );
+    const row = this.stmtGetTbEntryFtsRowid.get(tbEntryId) as
+      | { ftsRowid: number | null }
+      | undefined;
+    // NULL/0: no FTS row recorded for this entry (fresh insert, or an entry
+    // that never had one) — nothing to delete.
+    if (!row?.ftsRowid) return;
+
+    this.stmtDeleteTbFtsByRowid ??= this.db.prepare(
+      'DELETE FROM tb_fts WHERE rowid = ? AND tbEntryId = ?',
+    );
+    const result = this.stmtDeleteTbFtsByRowid.run(row.ftsRowid, tbEntryId);
+    if (result.changes === 0) {
+      // Stale mapping (e.g. the row was rewritten by an app version that
+      // predates ftsRowid): fall back to the full-scan delete.
+      this.stmtDeleteTbFtsByEntryId.run(tbEntryId);
+    }
   }
 
   public listTermBases(): TBRecord[] {
@@ -211,31 +253,24 @@ export class TBRepo {
     usageCount?: number;
   }): string | undefined {
     const srcNorm = this.normalizeTerm(params.srcTerm, params.srcLang);
-    const row = this.db
-      .prepare(`
+    this.stmtInsertTBEntryIfAbsent ??= this.db.prepare(`
       INSERT INTO tb_entries (id, tbId, srcTerm, tgtTerm, srcNorm, note, usageCount)
       VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(tbId, srcNorm) DO NOTHING
       RETURNING id
-    `)
-      .get(
-        params.id,
-        params.tbId,
-        params.srcTerm.trim(),
-        params.tgtTerm.trim(),
-        srcNorm,
-        params.note ?? null,
-        params.usageCount ?? 0
-      ) as { id: string } | undefined;
+    `);
+    const row = this.stmtInsertTBEntryIfAbsent.get(
+      params.id,
+      params.tbId,
+      params.srcTerm.trim(),
+      params.tgtTerm.trim(),
+      srcNorm,
+      params.note ?? null,
+      params.usageCount ?? 0
+    ) as { id: string } | undefined;
 
     if (row?.id) {
-      this.db
-        .prepare(`
-        UPDATE term_bases
-        SET updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-        WHERE id = ?
-      `)
-        .run(params.tbId);
+      this.stmtTouchTermBase.run(params.tbId);
       this.replaceTbFts(params.tbId, row.id, srcNorm);
       this.bumpTBDataVersion();
     }
@@ -253,8 +288,7 @@ export class TBRepo {
     usageCount?: number;
   }): string {
     const srcNorm = this.normalizeTerm(params.srcTerm, params.srcLang);
-    const row = this.db
-      .prepare(`
+    this.stmtUpsertTBEntryBySrcNorm ??= this.db.prepare(`
       INSERT INTO tb_entries (id, tbId, srcTerm, tgtTerm, srcNorm, note, usageCount)
       VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(tbId, srcNorm) DO UPDATE SET
@@ -264,28 +298,22 @@ export class TBRepo {
         updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         usageCount = tb_entries.usageCount + 1
       RETURNING id
-    `)
-      .get(
-        params.id,
-        params.tbId,
-        params.srcTerm.trim(),
-        params.tgtTerm.trim(),
-        srcNorm,
-        params.note ?? null,
-        params.usageCount ?? 0
-      ) as { id: string } | undefined;
+    `);
+    const row = this.stmtUpsertTBEntryBySrcNorm.get(
+      params.id,
+      params.tbId,
+      params.srcTerm.trim(),
+      params.tgtTerm.trim(),
+      srcNorm,
+      params.note ?? null,
+      params.usageCount ?? 0
+    ) as { id: string } | undefined;
 
     if (!row?.id) {
       throw new Error('Failed to upsert TB entry');
     }
 
-    this.db
-      .prepare(`
-      UPDATE term_bases
-      SET updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-      WHERE id = ?
-    `)
-      .run(params.tbId);
+    this.stmtTouchTermBase.run(params.tbId);
     this.replaceTbFts(params.tbId, row.id, srcNorm);
     this.bumpTBDataVersion();
 
@@ -306,8 +334,12 @@ export class TBRepo {
   }
 
   private replaceTbFts(tbId: string, tbEntryId: string, srcText: string) {
-    this.stmtDeleteTbFtsByEntryId.run(tbEntryId);
-    this.stmtInsertTbFts.run(tbId, srcText, tbEntryId);
+    this.deleteTbFtsForEntry(tbEntryId);
+    const info = this.stmtInsertTbFts.run(tbId, srcText, tbEntryId);
+    this.stmtSetTbEntryFtsRowid ??= this.db.prepare(
+      'UPDATE tb_entries SET ftsRowid = ? WHERE id = ?',
+    );
+    this.stmtSetTbEntryFtsRowid.run(info.lastInsertRowid, tbEntryId);
   }
 
   private normalizeTerm(value: string, locale?: string): string {
