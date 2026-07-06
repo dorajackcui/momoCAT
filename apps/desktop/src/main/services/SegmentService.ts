@@ -22,6 +22,10 @@ interface SegmentUpdateInput {
   clientRequestId?: string;
 }
 
+interface SegmentUpdateOptions {
+  commitToWorkingTM?: boolean;
+}
+
 interface SegmentUpdateEventPayload extends SegmentUpdateInput {
   fileId: number;
   propagatedIds: string[];
@@ -78,6 +82,7 @@ export class SegmentService extends EventEmitter {
    */
   public async updateSegmentsAtomically(
     updates: SegmentUpdateInput[],
+    options: SegmentUpdateOptions = {},
   ): Promise<SegmentUpdateEventPayload[]> {
     if (updates.length === 0) return [];
 
@@ -87,6 +92,7 @@ export class SegmentService extends EventEmitter {
           update.segmentId,
           update.targetTokens,
           update.status,
+          options,
         );
         return {
           ...update,
@@ -108,6 +114,7 @@ export class SegmentService extends EventEmitter {
     segmentId: string,
     targetTokens: Token[],
     status: SegmentStatus,
+    options: SegmentUpdateOptions = {},
   ): { fileId: number; propagatedIds: string[] } {
     const existingSegment = this.db.getSegment(segmentId);
     if (!existingSegment) {
@@ -128,7 +135,9 @@ export class SegmentService extends EventEmitter {
 
       const projectId = this.db.getProjectIdByFileId(segment.fileId);
       if (projectId !== undefined) {
-        this.tmService.upsertFromConfirmedSegment(projectId, segment);
+        if (options.commitToWorkingTM !== false) {
+          this.tmService.upsertFromConfirmedSegment(projectId, segment);
+        }
         propagatedIds = this.propagate(projectId, segment);
       }
     }

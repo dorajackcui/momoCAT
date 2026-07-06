@@ -113,6 +113,85 @@ describe('TMRepo FTS replacement', () => {
     expect(db.searchConcordance(projectId, 'NewNeedle', [tmId])).toHaveLength(0);
   });
 
+  it('keeps exactly one FTS row per entry and tracks its rowid across rewrites', () => {
+    const projectId = db.createProject('Rowid Project', 'en', 'fr');
+    const tmId = db.createTM('Main TM', 'en', 'fr', 'main');
+    db.mountTMToProject(projectId, tmId, 10, 'read');
+    const now = '2026-06-15T00:00:00.000Z';
+    const entry = {
+      id: 'entry-rowid',
+      tmId,
+      projectId: 0,
+      srcLang: 'en',
+      tgtLang: 'fr',
+      srcHash: 'hash-rowid',
+      matchKey: 'rowid',
+      tagsSignature: '',
+      sourceTokens: [{ type: 'text', content: 'RowidSource' }],
+      targetTokens: [{ type: 'text', content: 'FirstTarget' }],
+      createdAt: now,
+      updatedAt: now,
+      usageCount: 1,
+    };
+    db.upsertTMEntry(entry);
+    db.upsertTMEntry({ ...entry, targetTokens: [{ type: 'text', content: 'SecondTarget' }] });
+
+    const raw = (db as unknown as {
+      db: {
+        prepare(sql: string): { get(...args: unknown[]): unknown; all(...args: unknown[]): unknown[] };
+      };
+    }).db;
+    const ftsRows = raw
+      .prepare('SELECT rowid AS ftsRowid, tgtText FROM tm_fts WHERE tmEntryId = ?')
+      .all('entry-rowid') as Array<{ ftsRowid: number; tgtText: string }>;
+    expect(ftsRows).toHaveLength(1);
+    expect(ftsRows[0].tgtText).toBe('SecondTarget');
+
+    const mapped = raw
+      .prepare('SELECT ftsRowid FROM tm_entries WHERE id = ?')
+      .get('entry-rowid') as { ftsRowid: number };
+    expect(mapped.ftsRowid).toBe(ftsRows[0].ftsRowid);
+  });
+
+  it('falls back to a full-scan FTS delete when the stored rowid is stale', () => {
+    const projectId = db.createProject('Stale Rowid Project', 'en', 'fr');
+    const tmId = db.createTM('Main TM', 'en', 'fr', 'main');
+    db.mountTMToProject(projectId, tmId, 10, 'read');
+    const now = '2026-06-15T00:00:00.000Z';
+    const entryId = db.upsertTMEntryBySrcHash({
+      id: 'entry-stale',
+      tmId,
+      projectId: 0,
+      srcLang: 'en',
+      tgtLang: 'fr',
+      srcHash: 'hash-stale',
+      matchKey: 'stale',
+      tagsSignature: '',
+      sourceTokens: [{ type: 'text', content: 'StaleSource' }],
+      targetTokens: [{ type: 'text', content: 'OldMeadow' }],
+      createdAt: now,
+      updatedAt: now,
+      usageCount: 1,
+    });
+    db.insertTMFts(tmId, 'StaleSource', 'OldMeadow', entryId);
+
+    const raw = (db as unknown as {
+      db: { prepare(sql: string): { run(...args: unknown[]): unknown; all(...args: unknown[]): unknown[] } };
+    }).db;
+    // Simulate a mapping corrupted by an app version that predates ftsRowid.
+    raw.prepare('UPDATE tm_entries SET ftsRowid = 999999 WHERE id = ?').run(entryId);
+
+    db.replaceTMFts(tmId, 'StaleSource', 'NewMeadow', entryId);
+
+    const ftsRows = raw
+      .prepare('SELECT tgtText FROM tm_fts WHERE tmEntryId = ?')
+      .all(entryId) as Array<{ tgtText: string }>;
+    expect(ftsRows).toHaveLength(1);
+    expect(ftsRows[0].tgtText).toBe('NewMeadow');
+    expect(db.searchConcordance(projectId, 'OldMeadow', [tmId])).toHaveLength(0);
+    expect(db.searchConcordance(projectId, 'NewMeadow', [tmId])).toHaveLength(1);
+  });
+
   it('deletes FTS rows when deleting a TM', () => {
     const tmId = db.createTM('Delete TM', 'en', 'fr', 'main');
     const now = '2026-06-15T00:00:00.000Z';

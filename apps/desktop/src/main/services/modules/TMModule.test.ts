@@ -263,9 +263,10 @@ describe('TMModule.batchMatchFileWithTM', () => {
     });
 
     expect(segmentService.updateSegmentsAtomically).toHaveBeenCalledTimes(1);
-    expect(segmentService.updateSegmentsAtomically).toHaveBeenCalledWith([
-      { segmentId: 'seg-1', targetTokens: matchedTokens, status: 'confirmed' },
-    ]);
+    expect(segmentService.updateSegmentsAtomically).toHaveBeenCalledWith(
+      [{ segmentId: 'seg-1', targetTokens: matchedTokens, status: 'confirmed' }],
+      { commitToWorkingTM: false },
+    );
     expect(segmentRepo.updateSegmentTarget).not.toHaveBeenCalled();
   });
 
@@ -379,13 +380,16 @@ describe('TMModule.batchMatchFileWithTM', () => {
     });
 
     expect(segmentRepo.getSegmentsPage).toHaveBeenCalledTimes(2);
-    expect(segmentService.updateSegmentsAtomically).toHaveBeenCalledWith([
-      { segmentId: 'seg-0', targetTokens: matchedTokens, status: 'confirmed' },
-      { segmentId: 'seg-last', targetTokens: matchedTokens, status: 'confirmed' },
-    ]);
+    expect(segmentService.updateSegmentsAtomically).toHaveBeenCalledWith(
+      [
+        { segmentId: 'seg-0', targetTokens: matchedTokens, status: 'confirmed' },
+        { segmentId: 'seg-last', targetTokens: matchedTokens, status: 'confirmed' },
+      ],
+      { commitToWorkingTM: false },
+    );
   });
 
-  it('keeps propagation, Working TM updates, and events consistent with manual confirmations', async () => {
+  it('keeps propagation and events but does not commit TM matches to Working TM', async () => {
     db = new CATDatabase(':memory:');
     const projectId = db.createProject('Batch Match', 'en', 'zh');
     const fileId = db.createFile(projectId, 'batch.xlsx');
@@ -465,8 +469,7 @@ describe('TMModule.batchMatchFileWithTM', () => {
     if (!workingTM) {
       throw new Error('Expected working TM to exist');
     }
-    const workingEntry = db.findTMEntryByHash(workingTM.id, srcHash);
-    expect(workingEntry?.targetTokens).toEqual(matchedTokens);
+    expect(db.findTMEntryByHash(workingTM.id, srcHash)).toBeUndefined();
 
     expect(eventSpy).toHaveBeenCalledTimes(2);
     const firstEvent = eventSpy.mock.calls[0][0];

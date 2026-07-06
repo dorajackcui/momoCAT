@@ -193,4 +193,79 @@ describe('ensureCurrentSchema', () => {
 
     expect(table).toBeDefined();
   });
+
+  it('adds tm_entries.ftsRowid and backfills it from existing tm_fts rows', () => {
+    const dbPath = createTempDbPath();
+
+    const first = new CATDatabase(dbPath);
+    first.close();
+
+    // Simulate a database created before the ftsRowid column existed, with a
+    // duplicate FTS row for one entry and an orphan row for a deleted entry.
+    const before = new Database(dbPath);
+    before.exec(`
+      ALTER TABLE tm_entries DROP COLUMN ftsRowid;
+      INSERT INTO tms (id, name, srcLang, tgtLang, type) VALUES ('tm-1', 'TM', 'en', 'fr', 'main');
+      INSERT INTO tm_entries (id, tmId, srcHash, matchKey, tagsSignature, sourceTokensJson, targetTokensJson)
+        VALUES
+          ('entry-a', 'tm-1', 'hash-a', 'a', '', '[]', '[]'),
+          ('entry-b', 'tm-1', 'hash-b', 'b', '', '[]', '[]');
+      INSERT INTO tm_fts (tmId, srcText, tgtText, tmEntryId) VALUES
+        ('tm-1', 'alpha', 'alpha-fr', 'entry-a'),
+        ('tm-1', 'beta old', 'beta-old-fr', 'entry-b'),
+        ('tm-1', 'beta new', 'beta-new-fr', 'entry-b'),
+        ('tm-1', 'ghost', 'ghost-fr', 'entry-gone');
+    `);
+    before.close();
+
+    const reopened = new CATDatabase(dbPath);
+    reopened.close();
+
+    const after = new Database(dbPath);
+    const entries = after
+      .prepare('SELECT id, ftsRowid FROM tm_entries ORDER BY id')
+      .all() as Array<{ id: string; ftsRowid: number | null }>;
+    const ftsRows = after
+      .prepare('SELECT rowid AS ftsRowid, tmEntryId, srcText FROM tm_fts ORDER BY rowid')
+      .all() as Array<{ ftsRowid: number; tmEntryId: string; srcText: string }>;
+    after.close();
+
+    // The duplicate keeps its newest row and the orphan is dropped.
+    expect(ftsRows.map((row) => row.srcText)).toEqual(['alpha', 'beta new']);
+    const byId = new Map(entries.map((entry) => [entry.id, entry.ftsRowid]));
+    expect(byId.get('entry-a')).toBe(ftsRows[0].ftsRowid);
+    expect(byId.get('entry-b')).toBe(ftsRows[1].ftsRowid);
+  });
+
+  it('re-maps entries whose ftsRowid is NULL (written by an older app version)', () => {
+    const dbPath = createTempDbPath();
+
+    const first = new CATDatabase(dbPath);
+    first.close();
+
+    // An older binary inserts entry + FTS row without knowing about ftsRowid.
+    const before = new Database(dbPath);
+    before.exec(`
+      INSERT INTO tms (id, name, srcLang, tgtLang, type) VALUES ('tm-1', 'TM', 'en', 'fr', 'main');
+      INSERT INTO tm_entries (id, tmId, srcHash, matchKey, tagsSignature, sourceTokensJson, targetTokensJson)
+        VALUES ('entry-legacy', 'tm-1', 'hash-l', 'l', '', '[]', '[]');
+      INSERT INTO tm_fts (tmId, srcText, tgtText, tmEntryId)
+        VALUES ('tm-1', 'legacy', 'legacy-fr', 'entry-legacy');
+    `);
+    before.close();
+
+    const reopened = new CATDatabase(dbPath);
+    reopened.close();
+
+    const after = new Database(dbPath);
+    const entry = after
+      .prepare("SELECT ftsRowid FROM tm_entries WHERE id = 'entry-legacy'")
+      .get() as { ftsRowid: number | null };
+    const fts = after
+      .prepare("SELECT rowid AS ftsRowid FROM tm_fts WHERE tmEntryId = 'entry-legacy'")
+      .get() as { ftsRowid: number };
+    after.close();
+
+    expect(entry.ftsRowid).toBe(fts.ftsRowid);
+  });
 });

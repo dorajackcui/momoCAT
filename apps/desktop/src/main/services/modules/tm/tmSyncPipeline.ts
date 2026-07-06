@@ -248,6 +248,9 @@ export async function runTMSyncPipeline(
     }
 
     cursor = '';
+    if (diff.changed > 0 && !isCancelled()) {
+      applyProgress(`Updating ${diff.changed} changed entries...`);
+    }
     while (!isCancelled()) {
       const page = db.listTMSyncChangedRows(input.syncRunId, input.tmId, cursor, APPLY_CHUNK_SIZE);
       if (page.length === 0) break;
@@ -272,6 +275,9 @@ export async function runTMSyncPipeline(
 
     if (input.deletePolicy === 'prune-all') {
       cursor = '';
+      if (deletesPlanned > 0 && !isCancelled()) {
+        applyProgress(`Removing ${deletesPlanned} entries missing from the file...`);
+      }
       while (!isCancelled()) {
         const page = db.listTMSyncDeletedEntries(
           input.syncRunId,

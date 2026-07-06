@@ -31,6 +31,10 @@ ICNS_PATH = BUILD_DIR / "icon.icns"
 ICO_PATH = BUILD_DIR / "icon.ico"
 
 SIZE = 1024
+WINDOWS_ICON_CORNER_RADIUS_RATIO = 0.14
+WINDOWS_ICON_ALPHA_SAMPLES = 4
+WINDOWS_ICON_ALPHA_CUTOFF = 64
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
 def blend(dst: tuple[int, int, int, int], src: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
@@ -69,6 +73,133 @@ def write_png(path: Path, width: int, height: int, pixels: bytearray) -> None:
     png += chunk(b"IDAT", compressed)
     png += chunk(b"IEND", b"")
     path.write_bytes(png)
+
+
+def paeth_predictor(left: int, up: int, upper_left: int) -> int:
+    p = left + up - upper_left
+    pa = abs(p - left)
+    pb = abs(p - up)
+    pc = abs(p - upper_left)
+    if pa <= pb and pa <= pc:
+        return left
+    if pb <= pc:
+        return up
+    return upper_left
+
+
+def read_png_rgba(path: Path) -> tuple[int, int, bytearray]:
+    data = path.read_bytes()
+    if data[:8] != PNG_SIGNATURE:
+        raise RuntimeError(f"Expected PNG data: {path}")
+
+    offset = 8
+    width = 0
+    height = 0
+    bit_depth = 0
+    color_type = 0
+    idat_chunks: list[bytes] = []
+
+    while offset < len(data):
+        chunk_len = struct.unpack(">I", data[offset : offset + 4])[0]
+        chunk_type = data[offset + 4 : offset + 8]
+        chunk_data = data[offset + 8 : offset + 8 + chunk_len]
+        offset += 12 + chunk_len
+
+        if chunk_type == b"IHDR":
+            width, height, bit_depth, color_type, compression, filter_method, interlace = struct.unpack(
+                ">IIBBBBB",
+                chunk_data,
+            )
+            if bit_depth != 8:
+                raise RuntimeError(f"Unsupported PNG bit depth {bit_depth}: {path}")
+            if color_type not in (2, 6):
+                raise RuntimeError(f"Unsupported PNG color type {color_type}: {path}")
+            if compression != 0 or filter_method != 0 or interlace != 0:
+                raise RuntimeError(f"Unsupported PNG encoding: {path}")
+        elif chunk_type == b"IDAT":
+            idat_chunks.append(chunk_data)
+        elif chunk_type == b"IEND":
+            break
+
+    if width <= 0 or height <= 0:
+        raise RuntimeError(f"Missing PNG IHDR: {path}")
+
+    channels = 4 if color_type == 6 else 3
+    stride = width * channels
+    raw = zlib.decompress(b"".join(idat_chunks))
+    pixels = bytearray(width * height * 4)
+    previous = bytearray(stride)
+    raw_offset = 0
+
+    for y in range(height):
+        filter_type = raw[raw_offset]
+        raw_offset += 1
+        row = bytearray(raw[raw_offset : raw_offset + stride])
+        raw_offset += stride
+
+        for x in range(stride):
+            left = row[x - channels] if x >= channels else 0
+            up = previous[x]
+            upper_left = previous[x - channels] if x >= channels else 0
+
+            if filter_type == 0:
+                value = row[x]
+            elif filter_type == 1:
+                value = (row[x] + left) & 0xFF
+            elif filter_type == 2:
+                value = (row[x] + up) & 0xFF
+            elif filter_type == 3:
+                value = (row[x] + ((left + up) // 2)) & 0xFF
+            elif filter_type == 4:
+                value = (row[x] + paeth_predictor(left, up, upper_left)) & 0xFF
+            else:
+                raise RuntimeError(f"Unsupported PNG filter {filter_type}: {path}")
+
+            row[x] = value
+
+        for x in range(width):
+            src = x * channels
+            dst = (y * width + x) * 4
+            pixels[dst] = row[src]
+            pixels[dst + 1] = row[src + 1]
+            pixels[dst + 2] = row[src + 2]
+            pixels[dst + 3] = row[src + 3] if channels == 4 else 255
+
+        previous = row
+
+    return width, height, pixels
+
+
+def rounded_rect_alpha(x: int, y: int, width: int, height: int, radius: float) -> int:
+    inside = 0
+    total = WINDOWS_ICON_ALPHA_SAMPLES * WINDOWS_ICON_ALPHA_SAMPLES
+
+    for sample_y in range(WINDOWS_ICON_ALPHA_SAMPLES):
+        py = y + (sample_y + 0.5) / WINDOWS_ICON_ALPHA_SAMPLES
+        nearest_y = min(max(py, radius), height - radius)
+        for sample_x in range(WINDOWS_ICON_ALPHA_SAMPLES):
+            px = x + (sample_x + 0.5) / WINDOWS_ICON_ALPHA_SAMPLES
+            nearest_x = min(max(px, radius), width - radius)
+            dx = px - nearest_x
+            dy = py - nearest_y
+            if dx * dx + dy * dy <= radius * radius:
+                inside += 1
+
+    alpha = (inside * 255 + total // 2) // total
+    return 0 if alpha <= WINDOWS_ICON_ALPHA_CUTOFF else alpha
+
+
+def apply_windows_rounded_alpha(path: Path) -> None:
+    width, height, pixels = read_png_rgba(path)
+    radius = min(width, height) * WINDOWS_ICON_CORNER_RADIUS_RATIO
+
+    for y in range(height):
+        for x in range(width):
+            mask_alpha = rounded_rect_alpha(x, y, width, height, radius)
+            i = (y * width + x) * 4
+            pixels[i + 3] = (pixels[i + 3] * mask_alpha + 127) // 255
+
+    write_png(path, width, height, pixels)
 
 
 def color_lerp(a: tuple[int, int, int], b: tuple[int, int, int], t: float) -> tuple[int, int, int]:
@@ -328,6 +459,7 @@ def make_ico(master: Path) -> None:
         for s in sizes:
             out = tmpdir / f"{s}.png"
             resize_png(master, out, s)
+            apply_windows_rounded_alpha(out)
             png_bytes.append(out.read_bytes())
 
     count = len(sizes)

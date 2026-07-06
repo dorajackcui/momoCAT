@@ -150,6 +150,53 @@ export class TMRepo {
     );
   }
 
+  // --- tm_fts row bookkeeping ---
+  //
+  // tmEntryId is UNINDEXED in the FTS5 table, so deleting by it scans every
+  // document. tm_entries.ftsRowid remembers each entry's FTS rowid so
+  // replace/delete paths are O(log n) instead. Prepared lazily: ftsRowid is an
+  // additive column created by schema maintenance, which readonly connections
+  // skip.
+
+  private stmtGetTMEntryFtsRowid?: Database.Statement;
+  private stmtSetTMEntryFtsRowid?: Database.Statement;
+  private stmtDeleteTMFtsByRowid?: Database.Statement;
+
+  private insertTMFtsForEntry(
+    tmId: string,
+    srcText: string,
+    tgtText: string,
+    tmEntryId: string,
+  ): void {
+    const info = this.stmtInsertTMFts.run(tmId, srcText, tgtText, tmEntryId);
+    this.stmtSetTMEntryFtsRowid ??= this.db.prepare(
+      'UPDATE tm_entries SET ftsRowid = ? WHERE id = ?',
+    );
+    this.stmtSetTMEntryFtsRowid.run(info.lastInsertRowid, tmEntryId);
+  }
+
+  private deleteTMFtsForEntry(tmEntryId: string): void {
+    this.stmtGetTMEntryFtsRowid ??= this.db.prepare(
+      'SELECT ftsRowid FROM tm_entries WHERE id = ?',
+    );
+    const row = this.stmtGetTMEntryFtsRowid.get(tmEntryId) as
+      | { ftsRowid: number | null }
+      | undefined;
+    // NULL/0: no FTS row recorded for this entry (fresh insert, or an entry
+    // that never had one) — nothing to delete.
+    if (!row?.ftsRowid) return;
+
+    this.stmtDeleteTMFtsByRowid ??= this.db.prepare(
+      'DELETE FROM tm_fts WHERE rowid = ? AND tmEntryId = ?',
+    );
+    const result = this.stmtDeleteTMFtsByRowid.run(row.ftsRowid, tmEntryId);
+    if (result.changes === 0) {
+      // Stale mapping (e.g. the row was rewritten by an app version that
+      // predates ftsRowid): fall back to the full-scan delete.
+      this.stmtDeleteTMFtsByEntryId.run(tmEntryId);
+    }
+  }
+
   public upsertTMEntry(entry: TMEntry & { tmId: string }) {
     this.stmtUpsertTMEntry.run(
       entry.id,
@@ -166,8 +213,8 @@ export class TMRepo {
     const srcText = entry.sourceTokens.map((token: Token) => token.content).join('');
     const tgtText = entry.targetTokens.map((token: Token) => token.content).join('');
 
-    this.stmtDeleteTMFtsByEntryId.run(entry.id);
-    this.stmtInsertTMFts.run(entry.tmId, srcText, tgtText, entry.id);
+    this.deleteTMFtsForEntry(entry.id);
+    this.insertTMFtsForEntry(entry.tmId, srcText, tgtText, entry.id);
   }
 
   public insertTMEntryIfAbsentBySrcHash(entry: TMEntry & { tmId: string }): string | undefined {
@@ -207,12 +254,12 @@ export class TMRepo {
   }
 
   public insertTMFts(tmId: string, srcText: string, tgtText: string, tmEntryId: string) {
-    this.stmtInsertTMFts.run(tmId, srcText, tgtText, tmEntryId);
+    this.insertTMFtsForEntry(tmId, srcText, tgtText, tmEntryId);
   }
 
   public replaceTMFts(tmId: string, srcText: string, tgtText: string, tmEntryId: string) {
-    this.stmtDeleteTMFtsByEntryId.run(tmEntryId);
-    this.stmtInsertTMFts.run(tmId, srcText, tgtText, tmEntryId);
+    this.deleteTMFtsForEntry(tmEntryId);
+    this.insertTMFtsForEntry(tmId, srcText, tgtText, tmEntryId);
   }
 
   public replaceTMFtsBatch(rows: TMFtsReplacementRow[]) {
@@ -220,20 +267,9 @@ export class TMRepo {
     if (replacements.length === 0) return;
 
     const replaceRows = () => {
-      for (
-        let index = 0;
-        index < replacements.length;
-        index += TM_FTS_REPLACE_DELETE_BATCH_SIZE
-      ) {
-        const batch = replacements.slice(index, index + TM_FTS_REPLACE_DELETE_BATCH_SIZE);
-        const placeholders = batch.map(() => '?').join(',');
-        this.db
-          .prepare(`DELETE FROM tm_fts WHERE tmEntryId IN (${placeholders})`)
-          .run(...batch.map((row) => row.tmEntryId));
-      }
-
       for (const row of replacements) {
-        this.stmtInsertTMFts.run(row.tmId, row.srcText, row.tgtText, row.tmEntryId);
+        this.deleteTMFtsForEntry(row.tmEntryId);
+        this.insertTMFtsForEntry(row.tmId, row.srcText, row.tgtText, row.tmEntryId);
       }
     };
 
@@ -1745,7 +1781,7 @@ export class TMRepo {
       ) as { id: string } | undefined;
       if (!result) continue;
 
-      this.stmtInsertTMFts.run(tmId, row.srcText, row.tgtText, result.id);
+      this.insertTMFtsForEntry(tmId, row.srcText, row.tgtText, result.id);
       inserted += 1;
     }
     return inserted;
@@ -1781,20 +1817,23 @@ export class TMRepo {
       );
       if (result.changes === 0) continue;
 
-      this.stmtDeleteTMFtsByEntryId.run(row.entryId);
-      this.stmtInsertTMFts.run(tmId, row.srcText, row.tgtText, row.entryId);
+      this.deleteTMFtsForEntry(row.entryId);
+      this.insertTMFtsForEntry(tmId, row.srcText, row.tgtText, row.entryId);
       updated += 1;
     }
     return updated;
   }
 
-  // Must be called inside a transaction owned by the caller.
+  // Must be called inside a transaction owned by the caller. The FTS rows go
+  // first: deleteTMFtsForEntry reads ftsRowid from the entry row.
   public deleteTMEntriesWithFts(entryIds: string[]): number {
     let deleted = 0;
     for (let index = 0; index < entryIds.length; index += TM_FTS_REPLACE_DELETE_BATCH_SIZE) {
       const batch = entryIds.slice(index, index + TM_FTS_REPLACE_DELETE_BATCH_SIZE);
+      for (const entryId of batch) {
+        this.deleteTMFtsForEntry(entryId);
+      }
       const placeholders = batch.map(() => '?').join(',');
-      this.db.prepare(`DELETE FROM tm_fts WHERE tmEntryId IN (${placeholders})`).run(...batch);
       const result = this.db
         .prepare(`DELETE FROM tm_entries WHERE id IN (${placeholders})`)
         .run(...batch);

@@ -100,7 +100,9 @@ export class TMBatchOpsService {
     });
 
     if (updates.length > 0) {
-      await this.segmentService.updateSegmentsAtomically(updates);
+      await this.segmentService.updateSegmentsAtomically(updates, {
+        commitToWorkingTM: false,
+      });
     }
 
     return {
