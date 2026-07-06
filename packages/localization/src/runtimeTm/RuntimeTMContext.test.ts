@@ -55,7 +55,7 @@ describe('RuntimeTMContext', () => {
     }
   });
 
-  it('keeps summary counters for processed results when a later append throws', () => {
+  it('degrades to disabled instead of throwing when an append fails', () => {
     const runtime = RuntimeTMContext.create({ srcLang: 'en', tgtLang: 'fr' });
     try {
       let calls = 0;
@@ -70,21 +70,91 @@ describe('RuntimeTMContext', () => {
         }
       });
 
-      expect(() =>
-        runtime.commitResults([
-          result({ unitId: 'skip-1', source: 'Empty target', target: '' }),
-          result({ unitId: 'commit-1', source: 'Save file', target: 'Enregistrer le fichier' }),
-          result({ unitId: 'commit-2', source: 'Open file', target: 'Ouvrir le fichier' }),
-        ]),
-      ).toThrow('append failed');
+      const failing = runtime.commitResults([
+        result({ unitId: 'skip-1', source: 'Empty target', target: '' }),
+        result({ unitId: 'commit-1', source: 'Save file', target: 'Enregistrer le fichier' }),
+        result({ unitId: 'commit-2', source: 'Open file', target: 'Ouvrir le fichier' }),
+        result({ unitId: 'commit-3', source: 'Close file', target: 'Fermer le fichier' }),
+      ]);
 
+      // The failing result and everything after it are skipped, not thrown.
+      expect(failing).toEqual({ appended: 1, skipped: 3, disabled: true });
       expect(runtime.summary()).toMatchObject({
+        enabled: false,
         seeded: 0,
         appended: 1,
-        skipped: 1,
+        skipped: 3,
         entryCount: 1,
         capped: false,
       });
+
+      // A degraded runtime TM stops serving references and accepting commits.
+      expect(runtime.hasEntries()).toBe(false);
+      expect(
+        runtime.commitResults([result({ unitId: 'late-1', source: 'Late', target: 'Tard' })]),
+      ).toEqual({ appended: 0, skipped: 1, disabled: true });
+    } finally {
+      vi.restoreAllMocks();
+      runtime.dispose();
+    }
+  });
+
+  it('counts repeated sources as one entry and keeps the latest translation', async () => {
+    const runtime = RuntimeTMContext.create({ srcLang: 'en', tgtLang: 'fr', maxEntries: 1 });
+    try {
+      const first = runtime.commitResults([
+        result({ unitId: 'u1', source: 'Save file', target: 'AncienneVersion' }),
+      ]);
+      // Same source again: an upsert into the existing entry, allowed even at
+      // the cap because it does not grow the runtime TM.
+      const second = runtime.commitResults([
+        result({ unitId: 'u2', source: 'Save file', target: 'VersionFinale' }),
+      ]);
+
+      expect(first).toEqual({ appended: 1, skipped: 0, disabled: false });
+      expect(second).toEqual({ appended: 1, skipped: 0, disabled: false });
+      expect(runtime.summary()).toMatchObject({
+        appended: 2,
+        entryCount: 1,
+        capped: false,
+      });
+
+      const artifact = await runtime.inspect(
+        createTransientSegment({ id: 'query', source: 'Save file' }, 0),
+      );
+      expect(artifact.rawMatches).toHaveLength(1);
+      expect(artifact.rawMatches[0]).toMatchObject({
+        kind: 'tm',
+        similarity: 100,
+        targetTokens: [{ type: 'text', content: 'VersionFinale' }],
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  it('returns an empty artifact instead of throwing when a lookup fails', async () => {
+    const runtime = RuntimeTMContext.create({ srcLang: 'en', tgtLang: 'fr' });
+    try {
+      runtime.commitResults([
+        result({ unitId: 'u1', source: 'Save file', target: 'Enregistrer le fichier' }),
+      ]);
+      vi.spyOn(
+        (runtime as unknown as { tmModule: { inspect: () => Promise<unknown> } }).tmModule,
+        'inspect',
+      ).mockRejectedValue(new Error('lookup failed'));
+
+      const artifact = await runtime.inspect(
+        createTransientSegment({ id: 'query', source: 'Save file' }, 0),
+      );
+
+      expect(artifact.rawMatches).toEqual([]);
+      expect(artifact.selectedReferences).toEqual({
+        tmReferences: [],
+        concordanceReferences: [],
+      });
+      // A single failed lookup does not disable the runtime TM.
+      expect(runtime.hasEntries()).toBe(true);
     } finally {
       vi.restoreAllMocks();
       runtime.dispose();

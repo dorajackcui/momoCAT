@@ -710,7 +710,8 @@ describe('LocalizationEngine.translateFile job mode', () => {
         seeded: 0,
         appended: 6,
         skipped: 0,
-        entryCount: 6,
+        // 6 appends but 'Install package' repeats: 5 distinct entries.
+        entryCount: 5,
         inspectCalls: expect.any(Number),
         hitUnits: expect.any(Number),
         tmHits: expect.any(Number),
@@ -1540,7 +1541,8 @@ describe('LocalizationEngine.translateProjectSegments', () => {
         seeded: 0,
         appended: 6,
         skipped: 0,
-        entryCount: 6,
+        // 6 appends but 'Install package' repeats: 5 distinct entries.
+        entryCount: 5,
         inspectCalls: expect.any(Number),
         hitUnits: expect.any(Number),
         tmHits: expect.any(Number),
