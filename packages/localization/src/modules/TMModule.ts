@@ -7,8 +7,8 @@ import type { EngineTMReference } from '../types';
 import type { MountedTMArtifact, TMArtifact } from '../artifacts';
 
 export const MAX_TM_PROMPT_REFERENCES = 3;
-export const MAX_CONCORDANCE_PROMPT_REFERENCES = 3;
-export const MAX_ENGINE_TM_REFERENCES = 10;
+export const MAX_CONCORDANCE_PROMPT_REFERENCES = 7;
+export const MAX_ENGINE_TM_REFERENCES = 20;
 
 export interface TMPromptReferenceLimits {
   maxTmReferences: number;

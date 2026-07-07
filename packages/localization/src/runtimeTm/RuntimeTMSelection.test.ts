@@ -32,7 +32,7 @@ describe('mergeRuntimeTMArtifact', () => {
     ]);
     expect(merged.selectionPolicy).toEqual({
       maxTmReferences: 6,
-      maxConcordanceReferences: 6,
+      maxConcordanceReferences: 14,
     });
   });
 
@@ -42,12 +42,20 @@ describe('mergeRuntimeTMArtifact', () => {
       cc('pc-89', 89, 'Persistent concordance 89', 'PC89'),
       cc('pc-88', 88, 'Persistent concordance 88', 'PC88'),
       cc('pc-87', 87, 'Persistent concordance 87', 'PC87'),
+      cc('pc-86', 86, 'Persistent concordance 86', 'PC86'),
+      cc('pc-85', 85, 'Persistent concordance 85', 'PC85'),
+      cc('pc-84', 84, 'Persistent concordance 84', 'PC84'),
+      cc('pc-83', 83, 'Persistent concordance 83', 'PC83'),
     ]);
     const runtime = artifact('unit-1', [
       cc('rc-91', 91, 'Runtime concordance 91', 'RC91', 'Runtime TM'),
-      cc('rc-86', 86, 'Runtime concordance 86', 'RC86', 'Runtime TM'),
-      cc('rc-85', 85, 'Runtime concordance 85', 'RC85', 'Runtime TM'),
-      cc('rc-84', 84, 'Runtime concordance 84', 'RC84', 'Runtime TM'),
+      cc('rc-82', 82, 'Runtime concordance 82', 'RC82', 'Runtime TM'),
+      cc('rc-81', 81, 'Runtime concordance 81', 'RC81', 'Runtime TM'),
+      cc('rc-80', 80, 'Runtime concordance 80', 'RC80', 'Runtime TM'),
+      cc('rc-79', 79, 'Runtime concordance 79', 'RC79', 'Runtime TM'),
+      cc('rc-78', 78, 'Runtime concordance 78', 'RC78', 'Runtime TM'),
+      cc('rc-77', 77, 'Runtime concordance 77', 'RC77', 'Runtime TM'),
+      cc('rc-76', 76, 'Runtime concordance 76', 'RC76', 'Runtime TM'),
     ]);
 
     const merged = mergeRuntimeTMArtifact({ persistent, runtime });
@@ -57,8 +65,33 @@ describe('mergeRuntimeTMArtifact', () => {
       'Persistent concordance 90',
       'Persistent concordance 89',
       'Persistent concordance 88',
-      'Runtime concordance 86',
-      'Runtime concordance 85',
+      'Persistent concordance 87',
+      'Persistent concordance 86',
+      'Persistent concordance 85',
+      'Persistent concordance 84',
+      'Runtime concordance 82',
+      'Runtime concordance 81',
+      'Runtime concordance 80',
+      'Runtime concordance 79',
+      'Runtime concordance 78',
+      'Runtime concordance 77',
+    ]);
+  });
+
+  it('drops runtime matches that duplicate persistent selections', () => {
+    const persistent = artifact('unit-1', [tm('shared', 100, 'Shared source', 'Shared target')]);
+    const runtime = artifact('unit-1', [
+      tm('shared', 99, 'Shared source', 'Shared target', 'Runtime TM'),
+      tm('r-98', 98, 'Runtime 98', 'R98', 'Runtime TM'),
+    ]);
+
+    const merged = mergeRuntimeTMArtifact({ persistent, runtime });
+
+    expect(
+      merged.selectedReferences.tmReferences.map((ref) => [ref.tmName, ref.sourceText]),
+    ).toEqual([
+      ['Persistent TM', 'Shared source'],
+      ['Runtime TM', 'Runtime 98'],
     ]);
   });
 });

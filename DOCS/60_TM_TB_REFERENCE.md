@@ -18,7 +18,10 @@ references are selected for MT prompts.
 - Exact matches use source hash and tag structure; fuzzy recall and
   source-side concordance recall provide additional candidates.
 - Concordance candidates are scored and classified with local-overlap evidence,
-  then final results are capped and diversified before prompt selection.
+  then final results are capped and diversified before prompt selection: per
+  segment the active TM match flow returns at most 3 TM (exact plus fuzzy,
+  ordered by similarity) and 7 concordance matches, 10 deduplicated matches
+  total.
 - Selected TM and concordance references are passed to localization prompt
   composition as structured artifacts.
 
@@ -88,7 +91,10 @@ targets and existing target text observed earlier in the same file job.
 Runtime TM must not write to Working TM, Main TM, or the persistent project
 database, and it must not appear as a user-managed TM resource. File jobs do
 not currently pass a global append cap; prompt selection remains capped by
-the independent 3 TM plus 3 concordance runtime reference slots.
+independent reference slots: 3 TM plus 7 concordance from the persistent TMs
+and 3 TM plus 7 concordance from the runtime TM. Runtime matches that duplicate
+a selected persistent match (same source hash and target text) are dropped, so
+the merged prompt references stay deduplicated with at most 20 entries.
 
 ## Key Code Entry Points
 

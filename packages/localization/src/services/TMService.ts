@@ -45,7 +45,8 @@ interface RankedTMMatch {
 }
 
 export class TMService {
-  private static readonly TM_MATCH_RESULT_LIMIT = 10;
+  private static readonly TM_MATCH_RESULT_LIMIT = 3;
+  private static readonly CONCORDANCE_MATCH_RESULT_LIMIT = 7;
   private static readonly MIN_SIMILARITY = 50;
   private static readonly LEVENSHTEIN_WEIGHT = 0.75;
   private static readonly DICE_WEIGHT = 0.25;
@@ -352,9 +353,28 @@ export class TMService {
         return b.match.usageCount - a.match.usageCount;
       });
 
-    return this.diversifyRankedMatches(sortedResults)
-      .slice(0, TMService.TM_MATCH_RESULT_LIMIT)
-      .map((result) => result.match);
+    return this.selectMatchesByKindLimits(this.diversifyRankedMatches(sortedResults)).map(
+      (result) => result.match,
+    );
+  }
+
+  private selectMatchesByKindLimits(results: RankedTMMatch[]): RankedTMMatch[] {
+    const selected: RankedTMMatch[] = [];
+    let tmCount = 0;
+    let concordanceCount = 0;
+
+    for (const result of results) {
+      if (result.match.kind === 'tm') {
+        if (tmCount >= TMService.TM_MATCH_RESULT_LIMIT) continue;
+        tmCount += 1;
+      } else {
+        if (concordanceCount >= TMService.CONCORDANCE_MATCH_RESULT_LIMIT) continue;
+        concordanceCount += 1;
+      }
+      selected.push(result);
+    }
+
+    return selected;
   }
 
   private normalizeForSimilarity(text: string): string {

@@ -132,7 +132,7 @@ describe('TMModule', () => {
     expect(artifact.selectedReferences.tmReferences).toEqual([]);
   });
 
-  it('caps selected TM and concordance references at 3 each', async () => {
+  it('caps selected TM references at 3 and concordance references at 7', async () => {
     const segment = createTransientSegment({ id: 'unit-cap', source: 'source' }, 0);
     const matches: TMMatch[] = [
       ...Array.from({ length: 5 }, (_, index) =>
@@ -144,7 +144,7 @@ describe('TMModule', () => {
           similarity: 100 - index,
         }),
       ),
-      ...Array.from({ length: 5 }, (_, index) =>
+      ...Array.from({ length: 9 }, (_, index) =>
         createTMMatch({
           kind: 'concordance',
           id: `concordance-${index}`,
@@ -173,7 +173,15 @@ describe('TMModule', () => {
       artifact.selectedReferences.concordanceReferences.map(
         (reference) => reference.matchedSourceText,
       ),
-    ).toEqual(['matched 0', 'matched 1', 'matched 2']);
+    ).toEqual([
+      'matched 0',
+      'matched 1',
+      'matched 2',
+      'matched 3',
+      'matched 4',
+      'matched 5',
+      'matched 6',
+    ]);
   });
 
   it('builds TM prompt references with caller-provided caps', () => {

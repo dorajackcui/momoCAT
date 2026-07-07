@@ -125,7 +125,7 @@ function createService(params: {
 }
 
 describe('TMService.findMatches', () => {
-  it('returns at most top 10 matches', async () => {
+  it('returns at most top 3 TM matches', async () => {
     const source = '这是一个用于测试TM匹配结果截断的示例句子';
     const service = createService({
       mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
@@ -139,7 +139,38 @@ describe('TMService.findMatches', () => {
     });
 
     const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
-    expect(matches.length).toBe(10);
+    expect(matches.every((match) => match.kind === 'tm')).toBe(true);
+    expect(matches.length).toBe(3);
+  });
+
+  it('returns at most 7 concordance matches', async () => {
+    const phrases = [
+      '风荷立柱',
+      '龙门吊架',
+      '青石板路',
+      '琉璃瓦顶',
+      '飞檐斗拱',
+      '雕梁画栋',
+      '亭台楼阁',
+      '曲径回廊',
+      '假山流水',
+    ];
+    const source = phrases.join('');
+    const service = createService({
+      mountedTMs: [{ id: 'tm-main', name: 'Main TM', type: 'main' }],
+      concordanceEntries: phrases.map((phrase, index) =>
+        createConcordanceEntry('tm-main', {
+          srcHash: `phrase-${index}`,
+          sourceText: phrase,
+          usageCount: phrases.length - index,
+        }),
+      ),
+    });
+
+    const matches = await service.findMatches(1, createSegment(source, 'source-hash'));
+
+    expect(matches.every((match) => match.kind === 'concordance')).toBe(true);
+    expect(matches.length).toBe(7);
   });
 
   it('uses source-scoped recall candidates for fuzzy matching', async () => {
