@@ -170,7 +170,7 @@ function App(): JSX.Element {
             C
           </div>
           <h1 className="text-xl font-bold tracking-tight text-text">
-            MomoCAT<span className="text-xs font-medium text-brand ml-1">v1.0.6</span>
+            MomoCAT<span className="text-xs font-medium text-brand ml-1">v1.0.7</span>
           </h1>
         </div>
         <nav className="flex gap-2 items-center">
