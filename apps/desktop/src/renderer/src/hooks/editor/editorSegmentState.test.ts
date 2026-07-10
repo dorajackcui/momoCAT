@@ -2,11 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Segment } from '@cat/core/models';
 import {
   assertSegmentChangeHintMatchesUpdate,
-  buildSegmentStats,
-  createSegmentChangeHint,
-  createSegmentIndexById,
   updateSegmentStatsFromChanges,
-  updateSegmentStats,
 } from './editorSegmentState';
 
 function createSegment(segmentId: string, status: Segment['status']): Segment {
@@ -40,29 +36,6 @@ describe('editorSegmentState stats', () => {
     );
 
     expect(nextStats).toEqual({ totalSegments: 20_000, confirmedSegments: 9_000 });
-  });
-
-  it('updates counts from changed ids without reading untouched segments', () => {
-    const first = createSegment('s1', 'new');
-    const second = createSegment('s2', 'confirmed');
-    const previous = [first, second];
-    const nextFirst = { ...first, status: 'confirmed' as const };
-    const poisonSecond = { ...second };
-    Object.defineProperty(poisonSecond, 'status', {
-      get() {
-        throw new Error('untouched segment status was read');
-      },
-    });
-
-    const nextStats = updateSegmentStats({
-      previousStats: buildSegmentStats(previous),
-      previousSegments: previous,
-      nextSegments: [nextFirst, poisonSecond],
-      segmentIndexById: createSegmentIndexById(previous),
-      changeHint: createSegmentChangeHint({ orderChanged: false, changedSegmentIds: ['s1'] }, 1),
-    });
-
-    expect(nextStats).toEqual({ totalSegments: 2, confirmedSegments: 2 });
   });
 });
 

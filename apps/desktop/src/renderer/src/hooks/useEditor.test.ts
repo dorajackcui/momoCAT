@@ -7,15 +7,11 @@ vi.mock('../services/apiClient', () => ({
 
 import {
   applyAISegmentTranslateResultToStore,
-  applyAISegmentTranslateResultToSegments,
   createSegmentPersistor,
   useEditor,
 } from './useEditor';
 import { createEditorSegmentStore } from './editor/editorSegmentStore';
-import {
-  buildOptimisticSegmentUpdate,
-  resolveSegmentStateUpdate,
-} from './editor/useSegmentPersistence';
+import { resolveSegmentStateUpdate } from './editor/useSegmentPersistence';
 
 function createSegment(segmentId: string, targetText: string): Segment {
   return {
@@ -304,42 +300,6 @@ describe('createSegmentPersistor', () => {
     expect(typeof reload).toBe('function');
   });
 
-  it('applies AI segment translate result to the current segment list immediately', () => {
-    const unchangedConfirmed = createSegment('seg-confirmed', 'keep qa');
-    unchangedConfirmed.status = 'confirmed';
-    unchangedConfirmed.qaIssues = [
-      { severity: 'warning', message: 'existing', ruleId: 'terminology' },
-    ];
-
-    const segments = [createSegment('seg-6', ''), createSegment('seg-7', ''), unchangedConfirmed];
-
-    const result = applyAISegmentTranslateResultToSegments(segments, {
-      fileId: 1,
-      segmentId: 'seg-6',
-      targetTokens: [{ type: 'text', content: 'AI target' }],
-      status: 'translated',
-      propagatedIds: ['seg-7'],
-      serverAppliedAt: '2026-06-12T00:00:00.000Z',
-    });
-
-    expect(result).not.toBe(segments);
-    expect(result.find((segment) => segment.segmentId === 'seg-6')).toMatchObject({
-      targetTokens: [{ type: 'text', content: 'AI target' }],
-      status: 'translated',
-      qaIssues: undefined,
-      autoFixSuggestions: undefined,
-    });
-    expect(result.find((segment) => segment.segmentId === 'seg-7')).toMatchObject({
-      targetTokens: [{ type: 'text', content: 'AI target' }],
-      status: 'draft',
-      qaIssues: undefined,
-      autoFixSuggestions: undefined,
-    });
-    expect(result.find((segment) => segment.segmentId === 'seg-confirmed')).toBe(
-      unchangedConfirmed,
-    );
-  });
-
   it('applies AI results to the store without replacing the ordered segment array', () => {
     const first = createSegment('seg-store-ai', '');
     const propagated = createSegment('seg-store-propagated', '');
@@ -372,37 +332,6 @@ describe('createSegmentPersistor', () => {
   });
 });
 
-describe('buildOptimisticSegmentUpdate', () => {
-  it('returns updated segments and a save payload synchronously', () => {
-    const original = createSegment('seg-optimistic', '');
-
-    const result = buildOptimisticSegmentUpdate([original], 'seg-optimistic', (segment) => ({
-      ...segment,
-      targetTokens: [{ type: 'text', content: 'Matched target' }],
-      status: 'draft',
-    }));
-
-    expect(result.updatedSegment).toMatchObject({
-      segmentId: 'seg-optimistic',
-      targetTokens: [{ type: 'text', content: 'Matched target' }],
-      status: 'draft',
-    });
-    expect(result.segments[0]).toBe(result.updatedSegment);
-  });
-
-  it('leaves state unchanged when the segment is missing', () => {
-    const original = [createSegment('seg-existing', '')];
-
-    const result = buildOptimisticSegmentUpdate(original, 'seg-missing', (segment) => ({
-      ...segment,
-      targetTokens: [{ type: 'text', content: 'Should not apply' }],
-    }));
-
-    expect(result.segments).toBe(original);
-    expect(result.updatedSegment).toBeUndefined();
-  });
-});
-
 describe('resolveSegmentStateUpdate', () => {
   it('composes queued functional updates before building the next optimistic edit', () => {
     const first = createSegment('seg-first', '');
@@ -410,26 +339,33 @@ describe('resolveSegmentStateUpdate', () => {
     const current = [first, aiTarget];
 
     const afterAI = resolveSegmentStateUpdate(current, (prev) =>
-      applyAISegmentTranslateResultToSegments(prev, {
-        fileId: 1,
-        segmentId: 'seg-ai',
-        targetTokens: [{ type: 'text', content: 'AI target' }],
-        status: 'translated',
-        propagatedIds: [],
-        serverAppliedAt: '2026-06-24T00:00:00.000Z',
-      }),
+      prev.map((segment) =>
+        segment.segmentId === 'seg-ai'
+          ? {
+              ...segment,
+              targetTokens: [{ type: 'text', content: 'AI target' }],
+              status: 'translated' as const,
+            }
+          : segment,
+      ),
     );
-    const afterEdit = buildOptimisticSegmentUpdate(afterAI, 'seg-first', (segment) => ({
-      ...segment,
-      targetTokens: [{ type: 'text', content: 'Manual edit' }],
-      status: 'draft',
-    }));
+    const afterEdit = resolveSegmentStateUpdate(afterAI, (prev) =>
+      prev.map((segment) =>
+        segment.segmentId === 'seg-first'
+          ? {
+              ...segment,
+              targetTokens: [{ type: 'text', content: 'Manual edit' }],
+              status: 'draft' as const,
+            }
+          : segment,
+      ),
+    );
 
-    expect(afterEdit.segments.find((segment) => segment.segmentId === 'seg-first')).toMatchObject({
+    expect(afterEdit.find((segment) => segment.segmentId === 'seg-first')).toMatchObject({
       targetTokens: [{ type: 'text', content: 'Manual edit' }],
       status: 'draft',
     });
-    expect(afterEdit.segments.find((segment) => segment.segmentId === 'seg-ai')).toMatchObject({
+    expect(afterEdit.find((segment) => segment.segmentId === 'seg-ai')).toMatchObject({
       targetTokens: [{ type: 'text', content: 'AI target' }],
       status: 'translated',
     });

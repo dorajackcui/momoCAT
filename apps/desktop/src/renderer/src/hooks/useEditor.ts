@@ -49,42 +49,6 @@ const VALID_SEGMENT_STATUSES: Set<SegmentStatus> = new Set([
 
 export { createSegmentPersistor };
 
-export function applyAISegmentTranslateResultToSegments(
-  segments: Segment[],
-  result: AISegmentTranslateResult,
-): Segment[] {
-  const propagatedIds = new Set(result.propagatedIds ?? []);
-  let changed = false;
-
-  const nextSegments = segments.map((segment): Segment => {
-    if (segment.segmentId === result.segmentId) {
-      changed = true;
-      return {
-        ...segment,
-        targetTokens: result.targetTokens,
-        status: result.status,
-        qaIssues: result.status === 'confirmed' ? segment.qaIssues : undefined,
-        autoFixSuggestions: result.status === 'confirmed' ? segment.autoFixSuggestions : undefined,
-      };
-    }
-
-    if (propagatedIds.has(segment.segmentId)) {
-      changed = true;
-      return {
-        ...segment,
-        targetTokens: result.targetTokens,
-        status: 'draft',
-        qaIssues: undefined,
-        autoFixSuggestions: undefined,
-      };
-    }
-
-    return segment;
-  });
-
-  return changed ? nextSegments : segments;
-}
-
 export function applyAISegmentTranslateResultToStore(
   store: EditorSegmentStore,
   result: AISegmentTranslateResult,

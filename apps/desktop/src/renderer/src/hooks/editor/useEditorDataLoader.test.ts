@@ -3,9 +3,7 @@ import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import type { SegmentsUpdatedEvent } from '../../../../shared/ipc';
 import {
   applyBatchSegmentUpdatesToStore,
-  applyBatchSegmentUpdatesToSegments,
   buildBatchFinalState,
-  buildSegmentIndex,
   drainQueuedSegmentsUpdatedEvents,
   handleIncomingSegmentsUpdatedBatch,
   handleIncomingSegmentsUpdatedEvent,
@@ -234,108 +232,6 @@ describe('drainQueuedSegmentsUpdatedEvents', () => {
     expect(result).toEqual({ appliedCount: 0, droppedStaleCount: 0 });
     expect(handlers.applySegmentsUpdatedBatch).not.toHaveBeenCalled();
     expect(handlers.queuedRemoteUpdates.has('seg-1')).toBe(true);
-  });
-});
-
-describe('applyBatchSegmentUpdatesToSegments', () => {
-  const normalizeTokens = (tokens: unknown): Token[] =>
-    Array.isArray(tokens) ? (tokens as Token[]) : [];
-  const normalizeStatus = (status: unknown, targetTokens: Token[]): SegmentStatus =>
-    typeof status === 'string' && targetTokens.length > 0 ? (status as SegmentStatus) : 'new';
-
-  it('updates only indexed direct and propagated segments while preserving untouched references', () => {
-    const first = createSegment('seg-1');
-    const second = createSegment('seg-2');
-    const third = createSegment('seg-3');
-    const segments = [first, second, third];
-    const batch = [
-      {
-        ...createEvent('seg-1'),
-        targetTokens: [{ type: 'text', content: 'direct target' }],
-        status: 'translated' as SegmentStatus,
-      },
-      {
-        ...createEvent('seg-3'),
-        targetTokens: [{ type: 'text', content: 'propagated target' }],
-        status: 'confirmed' as SegmentStatus,
-        propagatedIds: ['seg-2'],
-      },
-    ];
-
-    const result = applyBatchSegmentUpdatesToSegments({
-      segments,
-      segmentIndex: buildSegmentIndex(segments),
-      finalState: buildBatchFinalState(batch),
-      normalizeTokens,
-      normalizeStatus,
-      directContext: 'batch-update',
-      propagationContext: 'batch-propagation',
-    });
-
-    expect(result).not.toBe(segments);
-    expect(result[0]).toMatchObject({
-      segmentId: 'seg-1',
-      targetTokens: [{ type: 'text', content: 'direct target' }],
-      status: 'translated',
-    });
-    expect(result[1]).toMatchObject({
-      segmentId: 'seg-2',
-      targetTokens: [{ type: 'text', content: 'propagated target' }],
-      status: 'draft',
-    });
-    expect(result[2]).toMatchObject({
-      segmentId: 'seg-3',
-      targetTokens: [{ type: 'text', content: 'propagated target' }],
-      status: 'confirmed',
-    });
-    expect(first.targetTokens).toEqual([]);
-    expect(second.targetTokens).toEqual([]);
-  });
-
-  it('returns the original array when indexed batch entries do not match any segment', () => {
-    const segments = [createSegment('seg-1'), createSegment('seg-2')];
-    const normalizeSpy = vi.fn(normalizeTokens);
-
-    const result = applyBatchSegmentUpdatesToSegments({
-      segments,
-      segmentIndex: buildSegmentIndex(segments),
-      finalState: buildBatchFinalState([createEvent('seg-missing')]),
-      normalizeTokens: normalizeSpy,
-      normalizeStatus,
-      directContext: 'batch-update',
-      propagationContext: 'batch-propagation',
-    });
-
-    expect(result).toBe(segments);
-    expect(normalizeSpy).not.toHaveBeenCalled();
-  });
-
-  it('does not read untouched segment ids when the index is current', () => {
-    const target = createSegment('seg-target');
-    const poison = createSegment('seg-poison');
-    Object.defineProperty(poison, 'segmentId', {
-      get() {
-        throw new Error('untouched segment was scanned');
-      },
-    });
-    const segments = [target, poison];
-    const segmentIndex = new Map<string, number>([['seg-target', 0]]);
-
-    const result = applyBatchSegmentUpdatesToSegments({
-      segments,
-      segmentIndex,
-      finalState: buildBatchFinalState([createEvent('seg-target')]),
-      normalizeTokens,
-      normalizeStatus,
-      directContext: 'batch-update',
-      propagationContext: 'batch-propagation',
-    });
-
-    expect(result[0]).toMatchObject({
-      segmentId: 'seg-target',
-      targetTokens: [{ type: 'text', content: 'target-seg-target' }],
-    });
-    expect(result[1]).toBe(poison);
   });
 });
 

@@ -251,28 +251,6 @@ interface UseSegmentPersistenceParams {
   clearSegmentSaveError: (segmentId: string) => void;
 }
 
-export function buildOptimisticSegmentUpdate(
-  segments: Segment[],
-  segmentId: string,
-  updater: (segment: Segment) => Segment,
-): { segments: Segment[]; updatedSegment?: Segment } {
-  let updatedSegment: Segment | undefined;
-  let found = false;
-
-  const nextSegments = segments.map((segment): Segment => {
-    if (segment.segmentId !== segmentId) return segment;
-    found = true;
-    updatedSegment = updater(segment);
-    return updatedSegment;
-  });
-
-  if (!found) {
-    return { segments };
-  }
-
-  return { segments: nextSegments, updatedSegment };
-}
-
 export function resolveSegmentStateUpdate(
   current: Segment[],
   update: SetStateAction<Segment[]>,

@@ -27,65 +27,12 @@ export function buildBatchFinalState(
   return finalState;
 }
 
-export function buildSegmentIndex(segments: readonly Segment[]): Map<string, number> {
-  const index = new Map<string, number>();
-  segments.forEach((segment, position) => {
-    index.set(segment.segmentId, position);
-  });
-  return index;
-}
-
 interface ApplyBatchSegmentUpdatesParams {
-  segments: Segment[];
-  segmentIndex: Map<string, number>;
   finalState: Map<string, BatchSegmentAction>;
   normalizeTokens: (tokens: unknown, context: string) => Token[];
   normalizeStatus: (status: unknown, targetTokens: Token[]) => SegmentStatus;
   directContext: string;
   propagationContext: string;
-}
-
-export function applyBatchSegmentUpdatesToSegments({
-  segments,
-  segmentIndex,
-  finalState,
-  normalizeTokens,
-  normalizeStatus,
-  directContext,
-  propagationContext,
-}: ApplyBatchSegmentUpdatesParams): Segment[] {
-  let nextSegments: Segment[] | null = null;
-
-  for (const [segmentId, entry] of finalState) {
-    const index = resolveSegmentIndex(segments, segmentIndex, segmentId);
-    if (index === null) continue;
-
-    const segment = segments[index];
-    if (!segment) continue;
-
-    const nextSegment =
-      entry.type === 'direct'
-        ? applyDirectSegmentUpdate({
-            segment,
-            event: entry.event,
-            normalizeTokens,
-            normalizeStatus,
-            context: directContext,
-          })
-        : applyPropagatedSegmentUpdate({
-            segment,
-            event: entry.event,
-            normalizeTokens,
-            context: propagationContext,
-          });
-
-    if (nextSegments === null) {
-      nextSegments = segments.slice();
-    }
-    nextSegments[index] = nextSegment;
-  }
-
-  return nextSegments ?? segments;
 }
 
 export function applyBatchSegmentUpdatesToStore({
@@ -95,7 +42,7 @@ export function applyBatchSegmentUpdatesToStore({
   normalizeStatus,
   directContext,
   propagationContext,
-}: Omit<ApplyBatchSegmentUpdatesParams, 'segments' | 'segmentIndex'> & {
+}: ApplyBatchSegmentUpdatesParams & {
   store: EditorSegmentStore;
 }): EditorSegmentChange[] {
   const updates = new Map<string, Segment>();
@@ -123,27 +70,6 @@ export function applyBatchSegmentUpdatesToStore({
   }
 
   return store.applyUpdates(updates);
-}
-
-function resolveSegmentIndex(
-  segments: Segment[],
-  segmentIndex: Map<string, number>,
-  segmentId: string,
-): number | null {
-  const indexed = segmentIndex.get(segmentId);
-  if (indexed !== undefined && segments[indexed]?.segmentId === segmentId) {
-    return indexed;
-  }
-
-  for (let index = 0; index < segments.length; index += 1) {
-    if (segments[index]?.segmentId === segmentId) {
-      segmentIndex.set(segmentId, index);
-      return index;
-    }
-  }
-
-  segmentIndex.delete(segmentId);
-  return null;
 }
 
 function applyDirectSegmentUpdate(params: {
