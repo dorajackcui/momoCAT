@@ -1,6 +1,6 @@
 import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EditorMatchMode } from '../editorFilterUtils';
-import { EditorShortcutAction } from '../editor-engine/types';
+import { EditorEngineAdapter, EditorShortcutAction } from '../editor-engine/types';
 import { useEditorEngineBridge } from '../../hooks/editor/useEditorEngineBridge';
 import { shouldSyncDraftFromExternalTarget } from './editorRowUtils';
 
@@ -24,17 +24,68 @@ interface EditorRowDraftControllerResult {
   emitTranslationChange: (nextText: string) => void;
   setShortcutActionHandler: (handler: (action: EditorShortcutAction) => void) => void;
   editorController: {
-    getSnapshot: () =>
-      | {
-          text: string;
-          selectionFrom: number;
-          selectionTo: number;
-        }
-      | null;
+    getSnapshot: () => {
+      text: string;
+      selectionFrom: number;
+      selectionTo: number;
+    } | null;
     setText: (nextText: string, preserveSelection?: boolean) => void;
     replaceSelection: (insertText: string) => void;
     focus: () => void;
   };
+}
+
+interface SetEditorTextSilentlyParams {
+  adapter: Pick<EditorEngineAdapter, 'setText'> | null;
+  nextText: string;
+  preserveSelection: boolean;
+  suppressNextChange: { current: boolean };
+}
+
+interface ShouldFinalizeEditorOnDeactivateParams {
+  wasActive: boolean;
+  isActive: boolean;
+  wasFocused: boolean;
+}
+
+interface ShouldCompleteEditorBlurParams {
+  blurEpoch: number;
+  currentFocusEpoch: number;
+  isFocused: boolean;
+  isMounted: boolean;
+}
+
+export function setEditorTextSilently({
+  adapter,
+  nextText,
+  preserveSelection,
+  suppressNextChange,
+}: SetEditorTextSilentlyParams): void {
+  suppressNextChange.current = true;
+  try {
+    adapter?.setText(nextText, preserveSelection);
+  } finally {
+    // CodeMirror dispatches update listeners synchronously. Reset here as
+    // well so a missing/suspended adapter cannot swallow the next real edit.
+    suppressNextChange.current = false;
+  }
+}
+
+export function shouldFinalizeEditorOnDeactivate({
+  wasActive,
+  isActive,
+  wasFocused,
+}: ShouldFinalizeEditorOnDeactivateParams): boolean {
+  return wasActive && !isActive && wasFocused;
+}
+
+export function shouldCompleteEditorBlur({
+  blurEpoch,
+  currentFocusEpoch,
+  isFocused,
+  isMounted,
+}: ShouldCompleteEditorBlurParams): boolean {
+  return isMounted && blurEpoch === currentFocusEpoch && !isFocused;
 }
 
 export function useEditorRowDraftController({
@@ -55,9 +106,12 @@ export function useEditorRowDraftController({
   const [draftText, setDraftText] = useState(targetEditorText);
   const [isDraftSyncSuspended, setIsDraftSyncSuspended] = useState(false);
   const suppressNextEngineChangeRef = useRef(false);
+  const editorFocusedRef = useRef(false);
+  const focusEpochRef = useRef(0);
   const shortcutActionHandlerRef = useRef<((action: EditorShortcutAction) => void) | null>(null);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
     };
@@ -73,14 +127,20 @@ export function useEditorRowDraftController({
 
   const handleEngineFocusChange = useCallback(
     (focused: boolean) => {
+      const focusEpoch = focusEpochRef.current + 1;
+      focusEpochRef.current = focusEpoch;
+      editorFocusedRef.current = focused;
       if (focused) {
         setIsDraftSyncSuspended(false);
         onEditStateChange?.(segmentId, true);
         return;
       }
 
+      // Pending/in-flight persistence already blocks remote application. Clear
+      // the focus-only editing flag immediately so a stale blur completion can
+      // never mark a newly focused session as inactive.
+      onEditStateChange?.(segmentId, false);
       if (!onBlur) {
-        onEditStateChange?.(segmentId, false);
         return;
       }
 
@@ -90,9 +150,17 @@ export function useEditorRowDraftController({
           // Error state is handled by persistence layer.
         })
         .finally(() => {
-          if (!isMountedRef.current) return;
+          if (
+            !shouldCompleteEditorBlur({
+              blurEpoch: focusEpoch,
+              currentFocusEpoch: focusEpochRef.current,
+              isFocused: editorFocusedRef.current,
+              isMounted: isMountedRef.current,
+            })
+          ) {
+            return;
+          }
           setIsDraftSyncSuspended(false);
-          onEditStateChange?.(segmentId, false);
         });
     },
     [onBlur, onEditStateChange, segmentId],
@@ -110,6 +178,7 @@ export function useEditorRowDraftController({
 
   const { editorHostRef, adapterRef } = useEditorEngineBridge({
     initialText: targetEditorText,
+    enabled: isActive,
     options: engineOptions,
     callbacks: {
       onTextChange: (nextText) => {
@@ -137,30 +206,53 @@ export function useEditorRowDraftController({
     ) {
       return;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Mirror an external store update into the row-local draft and editor session.
     setDraftText(targetEditorText);
-    suppressNextEngineChangeRef.current = true;
-    adapterRef.current?.setText(targetEditorText, true);
+    setEditorTextSilently({
+      adapter: adapterRef.current,
+      nextText: targetEditorText,
+      preserveSelection: true,
+      suppressNextChange: suppressNextEngineChangeRef,
+    });
   }, [adapterRef, draftText, isActive, isDraftSyncSuspended, targetEditorText]);
 
   useEffect(() => {
     const becameActive = isActive && !wasActiveRef.current;
+    const shouldFinalize = shouldFinalizeEditorOnDeactivate({
+      wasActive: wasActiveRef.current,
+      isActive,
+      wasFocused: editorFocusedRef.current,
+    });
+    if (shouldFinalize) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Deactivation is an external editor lifecycle event that must synchronously begin its flush.
+      handleEngineFocusChange(false);
+    }
     if (becameActive && !disableAutoFocus) {
       adapterRef.current?.focus();
       onAutoFocus?.(segmentId);
     }
     wasActiveRef.current = isActive;
-  }, [adapterRef, disableAutoFocus, isActive, onAutoFocus, segmentId]);
+  }, [adapterRef, disableAutoFocus, handleEngineFocusChange, isActive, onAutoFocus, segmentId]);
 
   useEffect(
     () => () => {
+      if (editorFocusedRef.current && onBlur) {
+        void onBlur(segmentId).catch(() => {
+          // Error state is handled by persistence layer.
+        });
+      }
+      editorFocusedRef.current = false;
       onEditStateChange?.(segmentId, false);
     },
-    [onEditStateChange, segmentId],
+    [onBlur, onEditStateChange, segmentId],
   );
 
-  const setShortcutActionHandler = useCallback((handler: (action: EditorShortcutAction) => void) => {
-    shortcutActionHandlerRef.current = handler;
-  }, []);
+  const setShortcutActionHandler = useCallback(
+    (handler: (action: EditorShortcutAction) => void) => {
+      shortcutActionHandlerRef.current = handler;
+    },
+    [],
+  );
 
   const editorController = useMemo(
     () => ({
@@ -176,8 +268,12 @@ export function useEditorRowDraftController({
       },
       setText: (nextText: string, preserveSelection: boolean = false) => {
         setDraftText(nextText);
-        suppressNextEngineChangeRef.current = true;
-        adapterRef.current?.setText(nextText, preserveSelection);
+        setEditorTextSilently({
+          adapter: adapterRef.current,
+          nextText,
+          preserveSelection,
+          suppressNextChange: suppressNextEngineChangeRef,
+        });
         onChange(segmentId, nextText);
       },
       replaceSelection: (insertText: string) => {

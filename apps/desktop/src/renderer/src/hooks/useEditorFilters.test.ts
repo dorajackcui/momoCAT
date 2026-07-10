@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Segment } from '@cat/core/models';
+import { createDefaultEditorFilterCriteria } from '../components/editorFilterUtils';
 import {
   buildEditorFilterStorageKey,
   buildSearchableEditorSegments,
   buildSearchableEditorSegmentsIncrementally,
   buildSearchableEditorSegmentsWithWeakCache,
+  canReuseEditorSegmentListWithoutRefreshingSearchText,
+  createEditorSearchableListCache,
   resolveActiveSegmentIdForFilteredList,
   resolveActiveFilteredSegmentIndex,
   sanitizePersistedEditorFilterState,
@@ -39,6 +42,78 @@ function createSegment(params: {
 }
 
 describe('useEditorFilters helpers', () => {
+  it('reuses stale search text only when list membership and order ignore segment content', () => {
+    const defaults = createDefaultEditorFilterCriteria();
+
+    expect(canReuseEditorSegmentListWithoutRefreshingSearchText(defaults)).toBe(true);
+    expect(
+      canReuseEditorSegmentListWithoutRefreshingSearchText({
+        ...defaults,
+        targetQuery: 'translated',
+      }),
+    ).toBe(false);
+    expect(
+      canReuseEditorSegmentListWithoutRefreshingSearchText({
+        ...defaults,
+        status: 'confirmed',
+      }),
+    ).toBe(false);
+    expect(
+      canReuseEditorSegmentListWithoutRefreshingSearchText({
+        ...defaults,
+        sortBy: 'target_length',
+      }),
+    ).toBe(false);
+  });
+
+  it('defers searchable text work on the default list and catches up when a filter activates', () => {
+    const first = createSegment({ id: 's1', target: 'before' });
+    const second = createSegment({ id: 's2', target: 'untouched' });
+    const segments = [first, second];
+    const cache = createEditorSearchableListCache();
+    const initial = cache.resolve({
+      segments,
+      segmentSaveErrors: {},
+      orderChanged: true,
+      contentIndependent: true,
+      segmentIndexById: new Map([
+        ['s1', 0],
+        ['s2', 1],
+      ]),
+    });
+
+    segments[0] = {
+      ...first,
+      targetTokens: [{ type: 'text', content: 'after' }],
+    };
+    const defaultList = cache.resolve({
+      segments,
+      segmentSaveErrors: {},
+      orderChanged: false,
+      changedSegmentIds: new Set(['s1']),
+      contentIndependent: true,
+      segmentIndexById: new Map([
+        ['s1', 0],
+        ['s2', 1],
+      ]),
+    });
+    const filteredList = cache.resolve({
+      segments,
+      segmentSaveErrors: {},
+      orderChanged: false,
+      changedSegmentIds: new Set(['s1']),
+      contentIndependent: false,
+      segmentIndexById: new Map([
+        ['s1', 0],
+        ['s2', 1],
+      ]),
+    });
+
+    expect(defaultList).toBe(initial);
+    expect(filteredList).not.toBe(initial);
+    expect(filteredList[0].targetText).toBe('after');
+  });
+
   it('builds stable storage key', () => {
     expect(buildEditorFilterStorageKey(12)).toBe('editor-filter-state:v1:file:12');
   });

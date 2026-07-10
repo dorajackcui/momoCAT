@@ -6,10 +6,12 @@ vi.mock('../services/apiClient', () => ({
 }));
 
 import {
+  applyAISegmentTranslateResultToStore,
   applyAISegmentTranslateResultToSegments,
   createSegmentPersistor,
   useEditor,
 } from './useEditor';
+import { createEditorSegmentStore } from './editor/editorSegmentStore';
 import {
   buildOptimisticSegmentUpdate,
   resolveSegmentStateUpdate,
@@ -249,8 +251,18 @@ describe('createSegmentPersistor', () => {
     });
 
     await expect(persistor.flushAll()).rejects.toThrow();
-    expect(updateSegment).toHaveBeenCalledWith('seg-fail', expect.anything(), 'draft', expect.any(String));
-    expect(updateSegment).toHaveBeenCalledWith('seg-ok', expect.anything(), 'draft', expect.any(String));
+    expect(updateSegment).toHaveBeenCalledWith(
+      'seg-fail',
+      expect.anything(),
+      'draft',
+      expect.any(String),
+    );
+    expect(updateSegment).toHaveBeenCalledWith(
+      'seg-ok',
+      expect.anything(),
+      'draft',
+      expect.any(String),
+    );
   });
 
   it('debounce-triggered persist records error without unhandled rejection', async () => {
@@ -326,6 +338,32 @@ describe('createSegmentPersistor', () => {
     expect(result.find((segment) => segment.segmentId === 'seg-confirmed')).toBe(
       unchangedConfirmed,
     );
+  });
+
+  it('applies AI results to the store without replacing the ordered segment array', () => {
+    const first = createSegment('seg-store-ai', '');
+    const propagated = createSegment('seg-store-propagated', '');
+    const untouched = createSegment('seg-store-untouched', 'keep');
+    const store = createEditorSegmentStore([first, propagated, untouched]);
+    const ordered = store.getSegments();
+
+    const changes = applyAISegmentTranslateResultToStore(store, {
+      fileId: 1,
+      segmentId: first.segmentId,
+      targetTokens: [{ type: 'text', content: 'AI target' }],
+      status: 'translated',
+      propagatedIds: [propagated.segmentId],
+      serverAppliedAt: '2026-07-10T00:00:00.000Z',
+    });
+
+    expect(store.getSegments()).toBe(ordered);
+    expect(changes.map((change) => change.segmentId)).toEqual([
+      first.segmentId,
+      propagated.segmentId,
+    ]);
+    expect(store.getSegment(first.segmentId)).toMatchObject({ status: 'translated' });
+    expect(store.getSegment(propagated.segmentId)).toMatchObject({ status: 'draft' });
+    expect(store.getSegment(untouched.segmentId)).toBe(untouched);
   });
 
   it('keeps helper segment builder valid', () => {

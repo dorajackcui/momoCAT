@@ -34,6 +34,7 @@ export interface EditorEngineCallbacks {
 
 export interface EditorEngineAdapter {
   mount(container: HTMLElement, initialText: string): void;
+  unmount(): void;
   setText(nextText: string, preserveSelection: boolean): void;
   setEditable(editable: boolean): void;
   setOptions(options: Partial<EditorEngineOptions>): void;

@@ -1,4 +1,4 @@
-import { EditorState, Compartment, Extension, RangeSetBuilder } from '@codemirror/state';
+import { EditorState, Compartment, Extension, Prec, RangeSetBuilder } from '@codemirror/state';
 import {
   Decoration,
   DecorationSet,
@@ -124,7 +124,10 @@ function buildWhitespaceDecorations(view: EditorView): DecorationSet {
       }
     }
 
-    if (line.to < view.state.doc.length && view.state.doc.sliceString(line.to, line.to + 1) === '\n') {
+    if (
+      line.to < view.state.doc.length &&
+      view.state.doc.sliceString(line.to, line.to + 1) === '\n'
+    ) {
       builder.add(
         line.to,
         line.to,
@@ -233,84 +236,103 @@ export function createCodeMirrorAdapter({
     ...initialOptions,
   };
   let view: EditorView | null = null;
+  let retainedState: EditorState | null = null;
 
   const editableCompartment = new Compartment();
   const nonPrintingCompartment = new Compartment();
   const highlightCompartment = new Compartment();
 
-  const shortcutExtension = EditorView.domEventHandlers({
-    keydown: (event) => {
-      const action = resolveEditorShortcutAction({
-        key: event.key,
-        ctrlKey: event.ctrlKey,
-        metaKey: event.metaKey,
-        shiftKey: event.shiftKey,
-      });
-      if (!action) return false;
-      event.preventDefault();
-      callbacks.onShortcutAction(action);
-      return true;
-    },
-  });
+  const shortcutExtension = Prec.highest(
+    EditorView.domEventHandlers({
+      keydown: (event) => {
+        const action = resolveEditorShortcutAction({
+          key: event.key,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          shiftKey: event.shiftKey,
+        });
+        if (!action) return false;
+        event.preventDefault();
+        callbacks.onShortcutAction(action);
+        return true;
+      },
+    }),
+  );
+
+  const buildOptionEffects = () => [
+    editableCompartment.reconfigure(editableExtension(options.editable)),
+    nonPrintingCompartment.reconfigure(nonPrintingExtension(options.showNonPrintingSymbols)),
+    highlightCompartment.reconfigure(
+      highlightExtension(options.highlightQuery, options.highlightMode),
+    ),
+  ];
 
   const applyOptions = (next: Partial<EditorEngineOptions>): void => {
     options = {
       ...options,
       ...next,
     };
-    if (!view) return;
-
-    view.dispatch({
-      effects: [
-        editableCompartment.reconfigure(editableExtension(options.editable)),
-        nonPrintingCompartment.reconfigure(nonPrintingExtension(options.showNonPrintingSymbols)),
-        highlightCompartment.reconfigure(
-          highlightExtension(options.highlightQuery, options.highlightMode),
-        ),
-      ],
-    });
+    const effects = buildOptionEffects();
+    if (view) {
+      view.dispatch({ effects });
+    } else if (retainedState) {
+      retainedState = retainedState.update({ effects }).state;
+    }
   };
 
   return {
     mount: (container, initialText) => {
       if (view) return;
-      const state = EditorState.create({
-        doc: initialText,
-        extensions: [
-          editorThemeExtension,
-          history(),
-          EditorView.lineWrapping,
-          keymap.of([...defaultKeymap, ...historyKeymap]),
-          shortcutExtension,
-          EditorView.updateListener.of((update) => {
-            if (update.docChanged) {
-              callbacks.onTextChange(update.state.doc.toString());
-            }
-            if (update.focusChanged) {
-              callbacks.onFocusChange(update.view.hasFocus);
-            }
-          }),
-          editableCompartment.of(editableExtension(options.editable)),
-          nonPrintingCompartment.of(nonPrintingExtension(options.showNonPrintingSymbols)),
-          highlightCompartment.of(highlightExtension(options.highlightQuery, options.highlightMode)),
-        ],
-      });
+      const state =
+        retainedState ??
+        EditorState.create({
+          doc: initialText,
+          extensions: [
+            editorThemeExtension,
+            history(),
+            EditorView.lineWrapping,
+            keymap.of([...defaultKeymap, ...historyKeymap]),
+            shortcutExtension,
+            EditorView.updateListener.of((update) => {
+              if (update.docChanged) {
+                callbacks.onTextChange(update.state.doc.toString());
+              }
+              if (update.focusChanged) {
+                callbacks.onFocusChange(update.view.hasFocus);
+              }
+            }),
+            editableCompartment.of(editableExtension(options.editable)),
+            nonPrintingCompartment.of(nonPrintingExtension(options.showNonPrintingSymbols)),
+            highlightCompartment.of(
+              highlightExtension(options.highlightQuery, options.highlightMode),
+            ),
+          ],
+        });
+      retainedState = null;
       view = new EditorView({
         state,
         parent: container,
       });
     },
 
-    setText: (nextText, preserveSelection) => {
+    unmount: () => {
       if (!view) return;
-      const prevText = view.state.doc.toString();
+      retainedState = view.state;
+      view.destroy();
+      view = null;
+    },
+
+    setText: (nextText, preserveSelection) => {
+      const state = view?.state ?? retainedState;
+      if (!state) return;
+      const prevText = state.doc.toString();
       if (prevText === nextText) return;
 
-      const selection = view.state.selection.main;
+      const selection = state.selection.main;
       const nextSelectionFrom = preserveSelection ? Math.min(selection.from, nextText.length) : 0;
       const nextSelectionTo = preserveSelection ? Math.min(selection.to, nextText.length) : 0;
 
-      view.dispatch({
+      const transactionSpec = {
         changes: {
           from: 0,
           to: prevText.length,
@@ -320,7 +342,12 @@ export function createCodeMirrorAdapter({
           anchor: nextSelectionFrom,
           head: nextSelectionTo,
         },
-      });
+      };
+      if (view) {
+        view.dispatch(transactionSpec);
+      } else {
+        retainedState = state.update(transactionSpec).state;
+      }
     },
 
     setEditable: (editable) => {
@@ -371,7 +398,8 @@ export function createCodeMirrorAdapter({
     },
 
     getSnapshot: () => {
-      if (!view) {
+      const state = view?.state ?? retainedState;
+      if (!state) {
         return {
           text: '',
           selectionFrom: 0,
@@ -379,19 +407,19 @@ export function createCodeMirrorAdapter({
           focused: false,
         };
       }
-      const selection = view.state.selection.main;
+      const selection = state.selection.main;
       return {
-        text: view.state.doc.toString(),
+        text: state.doc.toString(),
         selectionFrom: selection.from,
         selectionTo: selection.to,
-        focused: view.hasFocus,
+        focused: view?.hasFocus ?? false,
       };
     },
 
     destroy: () => {
-      if (!view) return;
-      view.destroy();
+      view?.destroy();
       view = null;
+      retainedState = null;
     },
   };
 }

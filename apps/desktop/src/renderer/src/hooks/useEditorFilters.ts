@@ -5,7 +5,6 @@ import {
   EditorMatchMode,
   EditorQualityFilter,
   EditorQuickPreset,
-  SearchableEditorSegment,
   EditorSortBy,
   EditorSortDirection,
   EditorStatusFilter,
@@ -25,6 +24,7 @@ import {
   buildSearchableEditorSegments,
   buildSearchableEditorSegmentsIncrementally,
   buildSearchableEditorSegmentsWithWeakCache,
+  createEditorSearchableListCache,
   resolveActiveFilteredSegmentIndex,
   resolveActiveSegmentIdForFilteredList,
 } from './editor/editorSearchableSegments';
@@ -93,6 +93,7 @@ export {
   buildSearchableEditorSegments,
   buildSearchableEditorSegmentsIncrementally,
   buildSearchableEditorSegmentsWithWeakCache,
+  createEditorSearchableListCache,
   resolveActiveFilteredSegmentIndex,
   resolveActiveSegmentIdForFilteredList,
 };
@@ -115,6 +116,19 @@ export function sanitizePersistedEditorFilterState(raw: unknown): EditorFilterCr
   });
 }
 
+export function canReuseEditorSegmentListWithoutRefreshingSearchText(
+  criteria: EditorFilterCriteria,
+): boolean {
+  return (
+    criteria.status === 'all' &&
+    criteria.qualityFilters.length === 0 &&
+    criteria.quickPreset === 'none' &&
+    criteria.sourceQuery.trim().length === 0 &&
+    criteria.targetQuery.trim().length === 0 &&
+    criteria.sortBy === 'default'
+  );
+}
+
 export function useEditorFilters({
   fileId,
   segments,
@@ -130,12 +144,7 @@ export function useEditorFilters({
   const [debouncedSourceQuery, setDebouncedSourceQuery] = useState('');
   const [debouncedTargetQuery, setDebouncedTargetQuery] = useState('');
   const filterStateHydratedRef = useRef(false);
-  const searchableSegmentCache = useMemo<WeakMap<Segment, SearchableEditorSegment>>(
-    () => new WeakMap(),
-    [],
-  );
-  const searchableSegmentsRef = useRef<SearchableEditorSegment[] | null>(null);
-  const previousSegmentSaveErrorsRef = useRef<Record<string, string> | null>(null);
+  const searchableListCache = useMemo(() => createEditorSearchableListCache(), []);
 
   const menus = useEditorFilterMenus();
   const {
@@ -149,22 +158,6 @@ export function useEditorFilters({
     setIsSortMenuOpen,
   } = menus;
 
-  const searchableSegments = useMemo(() => {
-    const saveErrorsChanged = previousSegmentSaveErrorsRef.current !== segmentSaveErrors;
-    const nextSearchableSegments = buildSearchableEditorSegmentsIncrementally({
-      segments,
-      segmentSaveErrors,
-      cache: searchableSegmentCache,
-      previous: searchableSegmentsRef.current,
-      changedSegmentIds: saveErrorsChanged ? undefined : segmentChangeHint?.changedSegmentIds,
-      segmentIndexById,
-      orderChanged: saveErrorsChanged ? true : (segmentChangeHint?.orderChanged ?? true),
-    });
-    searchableSegmentsRef.current = nextSearchableSegments;
-    previousSegmentSaveErrorsRef.current = segmentSaveErrors;
-    return nextSearchableSegments;
-  }, [searchableSegmentCache, segments, segmentChangeHint, segmentIndexById, segmentSaveErrors]);
-
   const effectiveCriteria = useMemo(
     () => ({
       ...filterState,
@@ -173,6 +166,26 @@ export function useEditorFilters({
     }),
     [filterState, debouncedSourceQuery, debouncedTargetQuery],
   );
+  const canReuseSearchableList =
+    canReuseEditorSegmentListWithoutRefreshingSearchText(effectiveCriteria);
+
+  const searchableSegments = useMemo(() => {
+    return searchableListCache.resolve({
+      segments,
+      segmentSaveErrors,
+      changedSegmentIds: segmentChangeHint?.changedSegmentIds,
+      segmentIndexById,
+      orderChanged: segmentChangeHint?.orderChanged ?? true,
+      contentIndependent: canReuseSearchableList,
+    });
+  }, [
+    canReuseSearchableList,
+    searchableListCache,
+    segments,
+    segmentChangeHint,
+    segmentIndexById,
+    segmentSaveErrors,
+  ]);
 
   const matchedSegments = useMemo(
     () => filterSearchableSegments(searchableSegments, effectiveCriteria),

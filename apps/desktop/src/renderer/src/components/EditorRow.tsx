@@ -91,24 +91,20 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
     [segment.targetTokens, segment.sourceTokens],
   );
 
-  const {
-    editorHostRef,
-    draftText,
-    setShortcutActionHandler,
-    editorController,
-  } = useEditorRowDraftController({
-    segmentId: segment.segmentId,
-    targetEditorText,
-    targetHighlightQuery,
-    highlightMode,
-    isActive,
-    disableAutoFocus,
-    showNonPrintingSymbols,
-    onAutoFocus,
-    onChange,
-    onBlur,
-    onEditStateChange,
-  });
+  const { editorHostRef, draftText, setShortcutActionHandler, editorController } =
+    useEditorRowDraftController({
+      segmentId: segment.segmentId,
+      targetEditorText,
+      targetHighlightQuery,
+      highlightMode,
+      isActive,
+      disableAutoFocus,
+      showNonPrintingSymbols,
+      onAutoFocus,
+      onChange,
+      onBlur,
+      onEditStateChange,
+    });
 
   const {
     aiRefineInputRef,
@@ -209,6 +205,10 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
         <EditorRowTargetCell
           editorHostRef={editorHostRef as React.Ref<HTMLDivElement>}
           isActive={isActive}
+          previewText={targetEditorText}
+          highlightQuery={targetHighlightQuery}
+          highlightMode={highlightMode}
+          showNonPrintingSymbols={showNonPrintingSymbols}
         />
 
         <EditorRowTargetActions

@@ -141,6 +141,59 @@ export function buildSearchableEditorSegmentsIncrementally(params: {
   return next ?? previous;
 }
 
+interface ResolveEditorSearchableListParams {
+  segments: Segment[];
+  segmentSaveErrors: Record<string, string>;
+  changedSegmentIds?: ReadonlySet<string>;
+  segmentIndexById?: ReadonlyMap<string, number>;
+  orderChanged: boolean;
+  contentIndependent: boolean;
+}
+
+export interface EditorSearchableListCache {
+  resolve(params: ResolveEditorSearchableListParams): SearchableEditorSegment[];
+}
+
+export function createEditorSearchableListCache(): EditorSearchableListCache {
+  const itemCache = new WeakMap<Segment, SearchableEditorSegment>();
+  let previous: SearchableEditorSegment[] | null = null;
+  let previousSegmentSaveErrors: Record<string, string> | null = null;
+  let contentDirty = false;
+
+  return {
+    resolve: (params) => {
+      const saveErrorsChanged = previousSegmentSaveErrors !== params.segmentSaveErrors;
+
+      if (
+        params.contentIndependent &&
+        previous &&
+        !params.orderChanged &&
+        previous.length === params.segments.length
+      ) {
+        if (saveErrorsChanged || (params.changedSegmentIds?.size ?? 0) > 0) {
+          contentDirty = true;
+        }
+        previousSegmentSaveErrors = params.segmentSaveErrors;
+        return previous;
+      }
+
+      const requiresFullRefresh = contentDirty || saveErrorsChanged;
+      previous = buildSearchableEditorSegmentsIncrementally({
+        segments: params.segments,
+        segmentSaveErrors: params.segmentSaveErrors,
+        cache: itemCache,
+        previous,
+        changedSegmentIds: requiresFullRefresh ? undefined : params.changedSegmentIds,
+        segmentIndexById: params.segmentIndexById,
+        orderChanged: requiresFullRefresh ? true : params.orderChanged,
+      });
+      contentDirty = false;
+      previousSegmentSaveErrors = params.segmentSaveErrors;
+      return previous;
+    },
+  };
+}
+
 export function resolveActiveSegmentIdForFilteredList(params: {
   activeSegmentId: string | null;
   segments: Segment[];
@@ -175,10 +228,7 @@ export function resolveActiveFilteredSegmentIndex(params: {
 
   if (canUseSegmentIndex && segmentIndexById) {
     const indexed = segmentIndexById.get(activeSegmentId);
-    if (
-      indexed !== undefined &&
-      filteredSegments[indexed]?.segment.segmentId === activeSegmentId
-    ) {
+    if (indexed !== undefined && filteredSegments[indexed]?.segment.segmentId === activeSegmentId) {
       return indexed;
     }
   }

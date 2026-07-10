@@ -10,6 +10,7 @@ interface UseEditorEngineBridgeParams {
   initialText: string;
   options: EditorEngineOptions;
   callbacks: EditorEngineCallbacks;
+  enabled?: boolean;
 }
 
 interface UseEditorEngineBridgeResult {
@@ -21,6 +22,7 @@ export function useEditorEngineBridge({
   initialText,
   options,
   callbacks,
+  enabled = true,
 }: UseEditorEngineBridgeParams): UseEditorEngineBridgeResult {
   const editorHostRef = useRef<HTMLDivElement>(null);
   const adapterRef = useRef<EditorEngineAdapter | null>(null);
@@ -29,28 +31,44 @@ export function useEditorEngineBridge({
   const callbackRef = useRef(callbacks);
 
   useEffect(() => {
+    initialTextRef.current = initialText;
+    initialOptionsRef.current = options;
+  }, [initialText, options]);
+
+  useEffect(() => {
     callbackRef.current = callbacks;
   }, [callbacks]);
 
   useEffect(() => {
+    if (!enabled) return;
     const host = editorHostRef.current;
     if (!host) return;
 
-    const adapter = createCodeMirrorAdapter({
-      callbacks: {
-        onTextChange: (nextText) => callbackRef.current.onTextChange(nextText),
-        onFocusChange: (focused) => callbackRef.current.onFocusChange(focused),
-        onShortcutAction: (action) => callbackRef.current.onShortcutAction(action),
-      },
-      initialOptions: initialOptionsRef.current,
-    });
-    adapterRef.current = adapter;
+    const adapter =
+      adapterRef.current ??
+      createCodeMirrorAdapter({
+        callbacks: {
+          onTextChange: (nextText) => callbackRef.current.onTextChange(nextText),
+          onFocusChange: (focused) => callbackRef.current.onFocusChange(focused),
+          onShortcutAction: (action) => callbackRef.current.onShortcutAction(action),
+        },
+        initialOptions: initialOptionsRef.current,
+      });
+    adapterRef.current ??= adapter;
+    adapter.setOptions(initialOptionsRef.current);
     adapter.mount(host, initialTextRef.current);
     return () => {
-      adapter.destroy();
-      adapterRef.current = null;
+      adapter.unmount();
     };
-  }, []);
+  }, [enabled]);
+
+  useEffect(
+    () => () => {
+      adapterRef.current?.destroy();
+      adapterRef.current = null;
+    },
+    [],
+  );
 
   useEffect(() => {
     adapterRef.current?.setOptions({

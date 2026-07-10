@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import type { SegmentsUpdatedEvent } from '../../../../shared/ipc';
 import {
+  applyBatchSegmentUpdatesToStore,
   applyBatchSegmentUpdatesToSegments,
   buildBatchFinalState,
   buildSegmentIndex,
@@ -9,6 +10,7 @@ import {
   handleIncomingSegmentsUpdatedBatch,
   handleIncomingSegmentsUpdatedEvent,
 } from './useEditorDataLoader';
+import { createEditorSegmentStore } from './editorSegmentStore';
 
 vi.mock('../../services/apiClient', () => ({
   apiClient: {},
@@ -177,10 +179,7 @@ describe('handleIncomingSegmentsUpdatedBatch', () => {
     const currentFileEvent = createEventForFile('seg-current-file', 10);
     const otherFileEvent = createEventForFile('seg-other-file', 20);
 
-    const result = handleIncomingSegmentsUpdatedBatch(
-      [otherFileEvent, currentFileEvent],
-      handlers,
-    );
+    const result = handleIncomingSegmentsUpdatedBatch([otherFileEvent, currentFileEvent], handlers);
 
     expect(result).toEqual({ applied: 1, queued: 0, stale: 0 });
     expect(handlers.applySegmentsUpdatedBatch).toHaveBeenCalledTimes(1);
@@ -239,7 +238,8 @@ describe('drainQueuedSegmentsUpdatedEvents', () => {
 });
 
 describe('applyBatchSegmentUpdatesToSegments', () => {
-  const normalizeTokens = (tokens: unknown): Token[] => (Array.isArray(tokens) ? (tokens as Token[]) : []);
+  const normalizeTokens = (tokens: unknown): Token[] =>
+    Array.isArray(tokens) ? (tokens as Token[]) : [];
   const normalizeStatus = (status: unknown, targetTokens: Token[]): SegmentStatus =>
     typeof status === 'string' && targetTokens.length > 0 ? (status as SegmentStatus) : 'new';
 
@@ -336,6 +336,51 @@ describe('applyBatchSegmentUpdatesToSegments', () => {
       targetTokens: [{ type: 'text', content: 'target-seg-target' }],
     });
     expect(result[1]).toBe(poison);
+  });
+});
+
+describe('applyBatchSegmentUpdatesToStore', () => {
+  const normalizeTokens = (tokens: unknown): Token[] =>
+    Array.isArray(tokens) ? (tokens as Token[]) : [];
+  const normalizeStatus = (status: unknown, targetTokens: Token[]): SegmentStatus =>
+    typeof status === 'string' && targetTokens.length > 0 ? (status as SegmentStatus) : 'new';
+
+  it('patches only changed ids while preserving the ordered segment array', () => {
+    const first = createSegment('seg-1');
+    const second = createSegment('seg-2');
+    const third = createSegment('seg-3');
+    const store = createEditorSegmentStore([first, second, third]);
+    const orderedBefore = store.getSegments();
+    const firstListener = vi.fn();
+    const secondListener = vi.fn();
+    store.subscribeSegment('seg-1', firstListener);
+    store.subscribeSegment('seg-2', secondListener);
+
+    const changes = applyBatchSegmentUpdatesToStore({
+      store,
+      finalState: buildBatchFinalState([
+        {
+          ...createEvent('seg-2'),
+          targetTokens: [{ type: 'text', content: 'translated target' }],
+          status: 'translated',
+        },
+      ]),
+      normalizeTokens,
+      normalizeStatus,
+      directContext: 'store-batch-update',
+      propagationContext: 'store-batch-propagation',
+    });
+
+    expect(store.getSegments()).toBe(orderedBefore);
+    expect(store.getSegment('seg-1')).toBe(first);
+    expect(store.getSegment('seg-3')).toBe(third);
+    expect(store.getSegment('seg-2')).toMatchObject({
+      targetTokens: [{ type: 'text', content: 'translated target' }],
+      status: 'translated',
+    });
+    expect(changes.map((change) => change.segmentId)).toEqual(['seg-2']);
+    expect(firstListener).not.toHaveBeenCalled();
+    expect(secondListener).toHaveBeenCalledTimes(1);
   });
 });
 

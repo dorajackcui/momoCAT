@@ -108,6 +108,21 @@ test.describe('CodeMirror editor engine smoke', () => {
       await page.keyboard.press('Enter');
       await page.keyboard.type('D');
 
+      // Temporarily unmount the active EditorView, then verify the retained
+      // state restores both selection and pre-switch undo history.
+      await rowLocator.nth(1).click();
+      await rowLocator.nth(0).click();
+      await firstEditorContent.focus();
+      await expect(firstEditorContent).toBeFocused();
+      await page.keyboard.insertText('X');
+      await expect(firstEditorContent).toContainText('DX');
+      await page.keyboard.press('Control+z');
+      await expect(firstEditorContent).not.toContainText('DX');
+      await page.keyboard.press('Control+z');
+      await expect(firstEditorContent).not.toContainText('D');
+      await page.keyboard.press('Control+a');
+      await page.keyboard.insertText('A B\tC\nD');
+
       const firstEditor = page.locator('.editor-target-editor-host .cm-editor').first();
       await expect(firstEditor.locator('.cm-np-space').first()).toBeVisible();
       await expect(firstEditor.locator('.cm-np-tab').first()).toBeVisible();
@@ -120,7 +135,7 @@ test.describe('CodeMirror editor engine smoke', () => {
       const targetFilter = page.getByPlaceholder('Filter target text');
       await targetFilter.fill('Needle target');
       await expect.poll(() => rowLocator.count()).toBe(1);
-      await expect(page.locator('.editor-target-editor-host .cm-target-highlight').first()).toBeVisible();
+      await expect(page.locator('.cm-target-highlight').first()).toBeVisible();
       await page.waitForTimeout(400);
       await expect(rowLocator).toHaveCount(1);
 
@@ -151,7 +166,7 @@ test.describe('CodeMirror editor engine smoke', () => {
       await expect(firstEditorContent).toContainText('TM pushed content');
       await targetFilter.fill('pushed');
       await expect.poll(() => rowLocator.count()).toBe(1);
-      await expect(page.locator('.editor-target-editor-host .cm-target-highlight').first()).toBeVisible();
+      await expect(page.locator('.cm-target-highlight').first()).toBeVisible();
       await targetFilter.fill('');
 
       const insertAllTagsShortcut =
@@ -183,6 +198,46 @@ test.describe('CodeMirror editor engine smoke', () => {
           },
         )
         .toBe('confirmed');
+
+      // Programmatic activation changes must finalize the previous editing
+      // session so its later IPC update can drain while the row is inactive.
+      await page.evaluate(
+        async ({ nextSegmentId }) => {
+          const api = (window as unknown as { api: any }).api;
+          await api.updateSegment(
+            nextSegmentId,
+            [{ type: 'text', content: 'post-confirm remote' }],
+            'translated',
+          );
+        },
+        { nextSegmentId: firstSegmentId },
+      );
+      await expect(rowLocator.nth(0)).toContainText('post-confirm remote');
+
+      // An inactive external sync must not leave a suppression guard that
+      // swallows the first real edit after reactivation.
+      await rowLocator.nth(0).click();
+      await firstEditorContent.focus();
+      await page.keyboard.insertText('Z');
+      await expect
+        .poll(
+          () =>
+            page.evaluate(
+              async ({ nextFileId, nextSegmentId }) => {
+                const api = (window as unknown as { api: any }).api;
+                const segments = await api.getSegments(nextFileId, 0, 20);
+                const segment = segments.find(
+                  (item: { segmentId: string }) => item.segmentId === nextSegmentId,
+                );
+                return (segment?.targetTokens ?? [])
+                  .map((token: { content: string }) => token.content)
+                  .join('');
+              },
+              { nextFileId: fileId, nextSegmentId: firstSegmentId },
+            ),
+          { timeout: 10_000 },
+        )
+        .toContain('Z');
     } finally {
       await closeSmokeSession(session);
     }

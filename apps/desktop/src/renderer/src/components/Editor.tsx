@@ -59,6 +59,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
 
   const {
     segments,
+    segmentStore,
     activeSegmentId,
     activeMatches,
     activeTerms,
@@ -132,11 +133,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
     flushPendingSegmentUpdates,
     aiFileJobTracker,
   });
-  const {
-    handleExport: handleBatchExport,
-    handleBatchQA,
-    handleBatchAITranslate,
-  } = batchActions;
+  const { handleExport: handleBatchExport, handleBatchQA, handleBatchAITranslate } = batchActions;
   const activeBatchAIJob = batchActions.activeBatchAIJob;
   const activeBatchAIProgress = activeBatchAIJob
     ? clampJobProgress(activeBatchAIJob.progress || 0)
@@ -341,6 +338,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
               scrollParentRef={listScrollRef}
               virtualized={isVirtualizedListEnabled}
               filteredSegments={filteredSegments}
+              segmentStore={segmentStore}
               activeFilteredIndex={activeFilteredIndex}
               activeSegmentId={activeSegmentId}
               manualActivationSegmentId={manualActivationSegmentId}

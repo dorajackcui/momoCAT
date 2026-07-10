@@ -8,6 +8,7 @@ import type { SegmentsUpdatedEvent } from '../../../../shared/ipc';
 import { resolveFileTagPolicy } from '../../../../shared/fileTagPolicy';
 import { apiClient } from '../../services/apiClient';
 import type { SetSegmentsWithChangeHint } from './editorSegmentState';
+import type { EditorSegmentChange, EditorSegmentStore } from './editorSegmentStore';
 
 export type BatchSegmentAction =
   | { type: 'direct'; event: SegmentsUpdatedEvent }
@@ -87,6 +88,43 @@ export function applyBatchSegmentUpdatesToSegments({
   return nextSegments ?? segments;
 }
 
+export function applyBatchSegmentUpdatesToStore({
+  store,
+  finalState,
+  normalizeTokens,
+  normalizeStatus,
+  directContext,
+  propagationContext,
+}: Omit<ApplyBatchSegmentUpdatesParams, 'segments' | 'segmentIndex'> & {
+  store: EditorSegmentStore;
+}): EditorSegmentChange[] {
+  const updates = new Map<string, Segment>();
+
+  for (const [segmentId, entry] of finalState) {
+    const segment = store.getSegment(segmentId);
+    if (!segment) continue;
+
+    const nextSegment =
+      entry.type === 'direct'
+        ? applyDirectSegmentUpdate({
+            segment,
+            event: entry.event,
+            normalizeTokens,
+            normalizeStatus,
+            context: directContext,
+          })
+        : applyPropagatedSegmentUpdate({
+            segment,
+            event: entry.event,
+            normalizeTokens,
+            context: propagationContext,
+          });
+    updates.set(segmentId, nextSegment);
+  }
+
+  return store.applyUpdates(updates);
+}
+
 function resolveSegmentIndex(
   segments: Segment[],
   segmentIndex: Map<string, number>,
@@ -125,8 +163,7 @@ function applyDirectSegmentUpdate(params: {
     targetTokens,
     status: nextStatus,
     qaIssues: nextStatus === 'confirmed' ? params.segment.qaIssues : undefined,
-    autoFixSuggestions:
-      nextStatus === 'confirmed' ? params.segment.autoFixSuggestions : undefined,
+    autoFixSuggestions: nextStatus === 'confirmed' ? params.segment.autoFixSuggestions : undefined,
   };
 }
 
@@ -155,7 +192,8 @@ interface UseEditorDataLoaderParams {
   activeFileId: number | null;
   normalizeTokens: (tokens: unknown, context: string) => Token[];
   normalizeStatus: (status: unknown, targetTokens: Token[]) => SegmentStatus;
-  getSegmentIndexById: () => Map<string, number>;
+  segmentStore: EditorSegmentStore;
+  onSegmentsChanged: (changes: readonly EditorSegmentChange[]) => void;
   setSegments: SetSegmentsWithChangeHint;
   setProjectId: Dispatch<SetStateAction<number | null>>;
   setProjectTgtLang: Dispatch<SetStateAction<string | null>>;
@@ -282,7 +320,8 @@ export function useEditorDataLoader({
   activeFileId,
   normalizeTokens,
   normalizeStatus,
-  getSegmentIndexById,
+  segmentStore,
+  onSegmentsChanged,
   setSegments,
   setProjectId,
   setProjectTgtLang,
@@ -316,22 +355,17 @@ export function useEditorDataLoader({
         return changed ? next : prev;
       });
 
-      setSegments(
-        (prev) => {
-          return applyBatchSegmentUpdatesToSegments({
-            segments: prev,
-            segmentIndex: getSegmentIndexById(),
-            finalState,
-            normalizeTokens,
-            normalizeStatus,
-            directContext: 'update',
-            propagationContext: 'propagation',
-          });
-        },
-        { orderChanged: false, changedSegmentIds: finalState.keys() },
-      );
+      const changes = applyBatchSegmentUpdatesToStore({
+        store: segmentStore,
+        finalState,
+        normalizeTokens,
+        normalizeStatus,
+        directContext: 'update',
+        propagationContext: 'propagation',
+      });
+      onSegmentsChanged(changes);
     },
-    [getSegmentIndexById, normalizeStatus, normalizeTokens, setSegmentSaveErrors, setSegments],
+    [normalizeStatus, normalizeTokens, onSegmentsChanged, segmentStore, setSegmentSaveErrors],
   );
 
   const applySegmentsUpdatedBatch = useCallback(
@@ -350,22 +384,17 @@ export function useEditorDataLoader({
         return changed ? next : prev;
       });
 
-      setSegments(
-        (prev) => {
-          return applyBatchSegmentUpdatesToSegments({
-            segments: prev,
-            segmentIndex: getSegmentIndexById(),
-            finalState,
-            normalizeTokens,
-            normalizeStatus,
-            directContext: 'batch-update',
-            propagationContext: 'batch-propagation',
-          });
-        },
-        { orderChanged: false, changedSegmentIds: finalState.keys() },
-      );
+      const changes = applyBatchSegmentUpdatesToStore({
+        store: segmentStore,
+        finalState,
+        normalizeTokens,
+        normalizeStatus,
+        directContext: 'batch-update',
+        propagationContext: 'batch-propagation',
+      });
+      onSegmentsChanged(changes);
     },
-    [getSegmentIndexById, normalizeStatus, normalizeTokens, setSegmentSaveErrors, setSegments],
+    [normalizeStatus, normalizeTokens, onSegmentsChanged, segmentStore, setSegmentSaveErrors],
   );
 
   const loadEditorData = useCallback(async () => {

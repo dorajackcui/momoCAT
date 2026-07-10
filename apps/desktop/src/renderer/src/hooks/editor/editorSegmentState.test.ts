@@ -5,6 +5,7 @@ import {
   buildSegmentStats,
   createSegmentChangeHint,
   createSegmentIndexById,
+  updateSegmentStatsFromChanges,
   updateSegmentStats,
 } from './editorSegmentState';
 
@@ -24,6 +25,23 @@ function createSegment(segmentId: string, status: Segment['status']): Segment {
 }
 
 describe('editorSegmentState stats', () => {
+  it('updates counts from concrete store changes without scanning untouched segments', () => {
+    const first = createSegment('s1', 'new');
+    const nextFirst = { ...first, status: 'confirmed' as const };
+    const second = createSegment('s2', 'confirmed');
+    const nextSecond = { ...second, status: 'draft' as const };
+
+    const nextStats = updateSegmentStatsFromChanges(
+      { totalSegments: 20_000, confirmedSegments: 9_000 },
+      [
+        { segmentId: first.segmentId, previous: first, next: nextFirst },
+        { segmentId: second.segmentId, previous: second, next: nextSecond },
+      ],
+    );
+
+    expect(nextStats).toEqual({ totalSegments: 20_000, confirmedSegments: 9_000 });
+  });
+
   it('updates counts from changed ids without reading untouched segments', () => {
     const first = createSegment('s1', 'new');
     const second = createSegment('s2', 'confirmed');
@@ -41,10 +59,7 @@ describe('editorSegmentState stats', () => {
       previousSegments: previous,
       nextSegments: [nextFirst, poisonSecond],
       segmentIndexById: createSegmentIndexById(previous),
-      changeHint: createSegmentChangeHint(
-        { orderChanged: false, changedSegmentIds: ['s1'] },
-        1,
-      ),
+      changeHint: createSegmentChangeHint({ orderChanged: false, changedSegmentIds: ['s1'] }, 1),
     });
 
     expect(nextStats).toEqual({ totalSegments: 2, confirmedSegments: 2 });

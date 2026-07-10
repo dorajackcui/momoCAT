@@ -19,14 +19,17 @@ import {
 import {
   assertSegmentChangeHintMatchesUpdate,
   createSegmentChangeHint,
-  createSegmentIndexById,
-  getIndexedSegment,
   buildSegmentStats,
-  updateSegmentStats,
+  updateSegmentStatsFromChanges,
   type SegmentChangeHint,
   type SegmentChangeHintInput,
   type SegmentStats,
 } from './editor/editorSegmentState';
+import {
+  createEditorSegmentStore,
+  type EditorSegmentChange,
+  type EditorSegmentStore,
+} from './editor/editorSegmentStore';
 import { useEditorDataLoader } from './editor/useEditorDataLoader';
 import { useSegmentQaWorkflow } from './editor/useSegmentQaWorkflow';
 import { apiClient } from '../services/apiClient';
@@ -82,12 +85,51 @@ export function applyAISegmentTranslateResultToSegments(
   return changed ? nextSegments : segments;
 }
 
+export function applyAISegmentTranslateResultToStore(
+  store: EditorSegmentStore,
+  result: AISegmentTranslateResult,
+): EditorSegmentChange[] {
+  const updates = new Map<string, Segment>();
+  const translatedSegment = store.getSegment(result.segmentId);
+  if (translatedSegment) {
+    updates.set(result.segmentId, {
+      ...translatedSegment,
+      targetTokens: result.targetTokens,
+      status: result.status,
+      qaIssues: result.status === 'confirmed' ? translatedSegment.qaIssues : undefined,
+      autoFixSuggestions:
+        result.status === 'confirmed' ? translatedSegment.autoFixSuggestions : undefined,
+    });
+  }
+
+  for (const propagatedId of result.propagatedIds ?? []) {
+    if (propagatedId === result.segmentId) continue;
+    const propagatedSegment = store.getSegment(propagatedId);
+    if (!propagatedSegment) continue;
+    updates.set(propagatedId, {
+      ...propagatedSegment,
+      targetTokens: result.targetTokens,
+      status: 'draft',
+      qaIssues: undefined,
+      autoFixSuggestions: undefined,
+    });
+  }
+
+  return store.applyUpdates(updates);
+}
+
 export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
-  const [segments, setSegmentsState] = useState<Segment[]>([]);
+  const segmentStoreRef = useRef<EditorSegmentStore | null>(null);
+  if (!segmentStoreRef.current) {
+    segmentStoreRef.current = createEditorSegmentStore();
+  }
+  const segmentStore = segmentStoreRef.current;
+  const [segments, setSegmentsState] = useState<Segment[]>(() => segmentStore.getSegments());
   const [segmentChangeHint, setSegmentChangeHint] = useState<SegmentChangeHint>(() =>
     createSegmentChangeHint({ orderChanged: true }, 0),
   );
   const [segmentStats, setSegmentStats] = useState<SegmentStats>(() => buildSegmentStats([]));
+  const segmentStatsRef = useRef(segmentStats);
   const [projectId, setProjectId] = useState<number | null>(null);
   const [projectTgtLang, setProjectTgtLang] = useState<string | null>(null);
   const [enabledQaRuleIds, setEnabledQaRuleIds] = useState<SegmentQaRuleId[]>(
@@ -107,53 +149,70 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
 
   // Keep latest values readable from stable callbacks so per-row handlers
   // (and therefore EditorRow memo bailouts) survive segment updates.
-  const segmentsRef = useRef(segments);
-  const segmentIndexByIdRef = useRef<Map<string, number>>(new Map());
   const segmentChangeRevisionRef = useRef(0);
+  const publishSegmentChanges = useCallback((changes: readonly EditorSegmentChange[]) => {
+    if (changes.length === 0) return;
+    const nextStats = updateSegmentStatsFromChanges(segmentStatsRef.current, changes);
+    segmentStatsRef.current = nextStats;
+    segmentChangeRevisionRef.current += 1;
+    setSegmentChangeHint(
+      createSegmentChangeHint(
+        {
+          orderChanged: false,
+          changedSegmentIds: changes.map((change) => change.segmentId),
+        },
+        segmentChangeRevisionRef.current,
+      ),
+    );
+    setSegmentStats(nextStats);
+  }, []);
   const setSegments = useCallback(
     (update: SetStateAction<Segment[]>, hint?: SegmentChangeHintInput) => {
-      const currentSegments = segmentsRef.current;
+      const currentSegments = segmentStore.getSegments();
       const nextSegments = resolveSegmentStateUpdate(currentSegments, update);
       if (nextSegments === currentSegments) return;
       assertSegmentChangeHintMatchesUpdate(currentSegments, nextSegments, hint);
 
       const orderChanged = hint?.orderChanged ?? true;
-      const currentIndexById = segmentIndexByIdRef.current;
-
-      segmentsRef.current = nextSegments;
-      segmentChangeRevisionRef.current += 1;
-      const nextChangeHint = createSegmentChangeHint(
-        {
-          orderChanged,
-          changedSegmentIds: hint?.changedSegmentIds,
-        },
-        segmentChangeRevisionRef.current,
-      );
-      setSegmentChangeHint(nextChangeHint);
-      setSegmentStats((previousStats) =>
-        updateSegmentStats({
-          previousStats,
-          previousSegments: currentSegments,
-          nextSegments,
-          segmentIndexById: currentIndexById,
-          changeHint: nextChangeHint,
-        }),
-      );
-      if (orderChanged || segmentIndexByIdRef.current.size === 0) {
-        segmentIndexByIdRef.current = createSegmentIndexById(nextSegments);
+      if (!orderChanged) {
+        const changedSegmentIds =
+          hint?.changedSegmentIds ??
+          nextSegments
+            .filter((segment, index) => segment !== currentSegments[index])
+            .map((segment) => segment.segmentId);
+        const changes = segmentStore.applySameOrderSegments(nextSegments, changedSegmentIds);
+        publishSegmentChanges(changes);
+        return;
       }
-      setSegmentsState(nextSegments);
+
+      segmentStore.replaceAll(nextSegments);
+      const storedSegments = segmentStore.getSegments();
+      const nextStats = buildSegmentStats(storedSegments);
+      segmentStatsRef.current = nextStats;
+      segmentChangeRevisionRef.current += 1;
+      setSegmentChangeHint(
+        createSegmentChangeHint(
+          { orderChanged: true, changedSegmentIds: hint?.changedSegmentIds },
+          segmentChangeRevisionRef.current,
+        ),
+      );
+      setSegmentStats(nextStats);
+      setSegmentsState(storedSegments);
     },
-    [],
+    [publishSegmentChanges, segmentStore],
   );
   const getSegmentById = useCallback(
-    (segmentId: string): Segment | undefined =>
-      getIndexedSegment(segmentsRef.current, segmentIndexByIdRef.current, segmentId),
-    [],
+    (segmentId: string): Segment | undefined => segmentStore.getSegment(segmentId),
+    [segmentStore],
   );
-  const getSegmentIndexById = useCallback(
-    (): Map<string, number> => segmentIndexByIdRef.current,
-    [],
+  const updateSegmentState = useCallback(
+    (segmentId: string, updater: (segment: Segment) => Segment): Segment | undefined => {
+      const change = segmentStore.updateSegment(segmentId, updater);
+      if (!change) return undefined;
+      publishSegmentChanges([change]);
+      return change.next;
+    },
+    [publishSegmentChanges, segmentStore],
   );
   const aiTranslatingSegmentIdsRef = useRef(aiTranslatingSegmentIds);
   useEffect(() => {
@@ -218,7 +277,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     syncStateVersion,
     clearPersistQueue,
   } = useSegmentPersistence({
-    setSegments,
+    updateSegmentState,
     setSegmentSaveError,
     clearSegmentSaveError,
   });
@@ -227,7 +286,8 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     activeFileId,
     normalizeTokens,
     normalizeStatus,
-    getSegmentIndexById,
+    segmentStore,
+    onSegmentsChanged: publishSegmentChanges,
     setSegments,
     setProjectId,
     setProjectTgtLang,
@@ -244,11 +304,9 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     setLoading,
   });
 
-  const activeSegmentSourceHash = useMemo(() => {
-    if (!activeSegmentId) return null;
-    const segment = getIndexedSegment(segments, segmentIndexByIdRef.current, activeSegmentId);
-    return segment?.srcHash ?? null;
-  }, [activeSegmentId, segmentChangeHint, segments]);
+  const activeSegmentSourceHash = activeSegmentId
+    ? (segmentStore.getSegment(activeSegmentId)?.srcHash ?? null)
+    : null;
 
   const { activeMatches, activeTerms, referenceLoading } = useReferenceLookupController({
     enabled: activeTab === 'tm',
@@ -379,9 +437,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
   );
 
   const getActiveSegment = () =>
-    activeSegmentId
-      ? getIndexedSegment(segments, segmentIndexByIdRef.current, activeSegmentId)
-      : undefined;
+    activeSegmentId ? segmentStore.getSegment(activeSegmentId) : undefined;
 
   const translateSegmentWithAI = useCallback(
     async (segmentId: string) => {
@@ -409,10 +465,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
 
       try {
         const result = await apiClient.aiTranslateSegment(segmentId);
-        setSegments((prev) => applyAISegmentTranslateResultToSegments(prev, result), {
-          orderChanged: false,
-          changedSegmentIds: [result.segmentId, ...(result.propagatedIds ?? [])],
-        });
+        publishSegmentChanges(applyAISegmentTranslateResultToStore(segmentStore, result));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setSegmentSaveError(segmentId, `AI 翻译失败：${message}`);
@@ -425,7 +478,13 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
         });
       }
     },
-    [clearSegmentSaveError, getSegmentById, setSegmentSaveError, setSegments],
+    [
+      clearSegmentSaveError,
+      getSegmentById,
+      publishSegmentChanges,
+      segmentStore,
+      setSegmentSaveError,
+    ],
   );
 
   const refineSegmentWithAI = useCallback(
@@ -460,10 +519,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
 
       try {
         const result = await apiClient.aiRefineSegment(segmentId, refinementInstruction);
-        setSegments((prev) => applyAISegmentTranslateResultToSegments(prev, result), {
-          orderChanged: false,
-          changedSegmentIds: [result.segmentId, ...(result.propagatedIds ?? [])],
-        });
+        publishSegmentChanges(applyAISegmentTranslateResultToStore(segmentStore, result));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setSegmentSaveError(segmentId, `AI 微调失败：${message}`);
@@ -476,13 +532,20 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
         });
       }
     },
-    [clearSegmentSaveError, getSegmentById, setSegmentSaveError, setSegments],
+    [
+      clearSegmentSaveError,
+      getSegmentById,
+      publishSegmentChanges,
+      segmentStore,
+      setSegmentSaveError,
+    ],
   );
 
   return {
     segments,
+    segmentStore,
     segmentChangeHint,
-    segmentIndexById: segmentIndexByIdRef.current,
+    segmentIndexById: segmentStore.getIndexById(),
     segmentStats,
     projectId,
     activeSegmentId,

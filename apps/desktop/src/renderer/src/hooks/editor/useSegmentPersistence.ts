@@ -1,8 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import type { SetStateAction } from 'react';
 import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import { apiClient } from '../../services/apiClient';
-import type { SetSegmentsWithChangeHint } from './editorSegmentState';
 
 const DEFAULT_PERSIST_DEBOUNCE_MS = 350;
 
@@ -192,9 +191,7 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
           }
         }),
       );
-      const failures = results.filter(
-        (r): r is PromiseRejectedResult => r.status === 'rejected',
-      );
+      const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
       if (failures.length > 0) {
         throw new Error(`${failures.length} segment(s) failed to save`);
       }
@@ -246,7 +243,10 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
 }
 
 interface UseSegmentPersistenceParams {
-  setSegments: SetSegmentsWithChangeHint;
+  updateSegmentState: (
+    segmentId: string,
+    updater: (segment: Segment) => Segment,
+  ) => Segment | undefined;
   setSegmentSaveError: (segmentId: string, message: string) => void;
   clearSegmentSaveError: (segmentId: string) => void;
 }
@@ -283,7 +283,7 @@ export function resolveSegmentStateUpdate(
 }
 
 export function useSegmentPersistence({
-  setSegments,
+  updateSegmentState,
   setSegmentSaveError,
   clearSegmentSaveError,
 }: UseSegmentPersistenceParams) {
@@ -306,16 +306,7 @@ export function useSegmentPersistence({
 
   const applyOptimisticSegmentUpdate = useCallback(
     (segmentId: string, updater: (segment: Segment) => Segment) => {
-      let updatedSegment: Segment | undefined;
-
-      setSegments(
-        (prev) => {
-          const result = buildOptimisticSegmentUpdate(prev, segmentId, updater);
-          updatedSegment = result.updatedSegment;
-          return result.updatedSegment ? result.segments : prev;
-        },
-        { orderChanged: false, changedSegmentIds: [segmentId] },
-      );
+      const updatedSegment = updateSegmentState(segmentId, updater);
 
       if (!updatedSegment) {
         return;
@@ -327,7 +318,7 @@ export function useSegmentPersistence({
         status: updatedSegment.status,
       });
     },
-    [persistor, setSegments],
+    [persistor, updateSegmentState],
   );
 
   const setSegmentEditingState = useCallback(

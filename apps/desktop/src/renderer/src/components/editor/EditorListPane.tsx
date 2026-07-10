@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { SearchableEditorSegment } from '../editorFilterUtils';
 import { EditorRow } from '../EditorRow';
 import type { EditorMatchMode } from '../editorFilterUtils';
+import type { EditorSegmentStore } from '../../hooks/editor/editorSegmentStore';
 import {
   ESTIMATED_EDITOR_ROW_HEIGHT,
   getEditorVirtualizerInitialRect,
@@ -12,6 +13,7 @@ interface EditorListPaneProps {
   scrollParentRef: React.RefObject<HTMLDivElement | null>;
   virtualized: boolean;
   filteredSegments: SearchableEditorSegment[];
+  segmentStore: EditorSegmentStore;
   activeFilteredIndex: number;
   activeSegmentId: string | null;
   manualActivationSegmentId: string | null;
@@ -33,10 +35,46 @@ interface EditorListPaneProps {
   showNonPrintingSymbols: boolean;
 }
 
+type StoreBackedEditorRowProps = Omit<
+  React.ComponentProps<typeof EditorRow>,
+  'segment' | 'rowNumber'
+> & {
+  segmentId: string;
+  originalIndex: number;
+  segmentStore: EditorSegmentStore;
+};
+
+const StoreBackedEditorRow = React.memo(function StoreBackedEditorRow({
+  segmentId,
+  originalIndex,
+  segmentStore,
+  ...rowProps
+}: StoreBackedEditorRowProps) {
+  const subscribe = useCallback(
+    (listener: () => void) => segmentStore.subscribeSegment(segmentId, listener),
+    [segmentId, segmentStore],
+  );
+  const getSnapshot = useCallback(
+    () => segmentStore.getSegment(segmentId),
+    [segmentId, segmentStore],
+  );
+  const segment = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  if (!segment) return null;
+
+  return (
+    <EditorRow
+      {...rowProps}
+      segment={segment}
+      rowNumber={segment.meta?.rowRef || originalIndex + 1}
+    />
+  );
+});
+
 const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
   scrollParentRef,
   virtualized,
   filteredSegments,
+  segmentStore,
   activeFilteredIndex,
   activeSegmentId,
   manualActivationSegmentId,
@@ -66,10 +104,11 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
   );
   const renderRow = useCallback(
     (item: SearchableEditorSegment) => (
-      <EditorRow
+      <StoreBackedEditorRow
         key={item.segment.segmentId}
-        segment={item.segment}
-        rowNumber={item.segment.meta?.rowRef || item.originalIndex + 1}
+        segmentId={item.segment.segmentId}
+        originalIndex={item.originalIndex}
+        segmentStore={segmentStore}
         isActive={item.segment.segmentId === activeSegmentId}
         disableAutoFocus={
           (isSearchInputFocused && manualActivationSegmentId !== item.segment.segmentId) ||
@@ -107,6 +146,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
       onTranslationBlur,
       onTranslationChange,
       segmentSaveErrors,
+      segmentStore,
       showNonPrintingSymbols,
       sourceHighlightQuery,
       suppressAutoFocusSegmentId,
