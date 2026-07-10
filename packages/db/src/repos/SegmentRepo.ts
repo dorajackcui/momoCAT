@@ -60,8 +60,8 @@ export class SegmentRepo {
 
     transaction(segments);
 
-    if (segments.length > 0) {
-      this.updateFileStats(segments[0].fileId);
+    for (const fileId of new Set(segments.map((segment) => segment.fileId))) {
+      this.updateFileStats(fileId);
     }
   }
 
@@ -123,14 +123,6 @@ export class SegmentRepo {
         "UPDATE segments SET targetTokensJson = ?, status = ?, qaIssuesJson = NULL, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE segmentId = ?",
       )
       .run(JSON.stringify(targetTokens), normalizedStatus, segmentId);
-
-    const row = this.db
-      .prepare("SELECT fileId FROM segments WHERE segmentId = ?")
-      .get(segmentId) as { fileId: number } | undefined;
-
-    if (row) {
-      this.updateFileStats(row.fileId);
-    }
   }
 
   public updateSegmentQaIssues(segmentId: string, qaIssues: QaIssue[]) {

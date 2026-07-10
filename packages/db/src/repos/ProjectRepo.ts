@@ -11,6 +11,8 @@ import { randomUUID } from 'crypto';
 import type { FileSegmentStatusStats, ProjectFileRecord, ProjectSavedPromptRecord } from '../types';
 
 interface FileWithSegmentStatsRow extends Omit<ProjectFileRecord, 'segmentStatusStats'> {
+  derivedTotalSegments?: number | null;
+  derivedConfirmedSegments?: number | null;
   qaProblemSegments?: number | null;
   confirmedSegmentsForBar?: number | null;
   inProgressSegments?: number | null;
@@ -20,6 +22,11 @@ export class ProjectRepo {
   constructor(private readonly db: Database.Database) {}
 
   private static readonly FILE_SEGMENT_STATS_SELECT = `
+    COUNT(s.segmentId) as derivedTotalSegments,
+    COALESCE(
+      SUM(CASE WHEN s.status = 'confirmed' THEN 1 ELSE 0 END),
+      0
+    ) as derivedConfirmedSegments,
     COALESCE(
       SUM(CASE WHEN s.qaIssuesJson IS NOT NULL AND s.qaIssuesJson <> '' AND s.qaIssuesJson <> '[]' THEN 1 ELSE 0 END),
       0
@@ -290,7 +297,7 @@ export class ProjectRepo {
       .prepare(`
       SELECT
         COUNT(*) as total,
-        SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) as confirmed
+        COALESCE(SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END), 0) as confirmed
       FROM segments
       WHERE fileId = ?
     `)
@@ -326,7 +333,8 @@ export class ProjectRepo {
   }
 
   private toProjectFileRecord(row: FileWithSegmentStatsRow): ProjectFileRecord {
-    const totalSegments = Math.max(0, Number(row.totalSegments));
+    const totalSegments = Math.max(0, Number(row.derivedTotalSegments ?? 0));
+    const confirmedSegments = Math.max(0, Number(row.derivedConfirmedSegments ?? 0));
     const qaProblemSegments = Math.max(0, Number(row.qaProblemSegments ?? 0));
     const confirmedSegmentsForBar = Math.max(0, Number(row.confirmedSegmentsForBar ?? 0));
     const inProgressSegments = Math.max(0, Number(row.inProgressSegments ?? 0));
@@ -348,7 +356,7 @@ export class ProjectRepo {
       projectId: row.projectId,
       name: row.name,
       totalSegments,
-      confirmedSegments: row.confirmedSegments,
+      confirmedSegments,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       importOptionsJson: row.importOptionsJson ?? null,

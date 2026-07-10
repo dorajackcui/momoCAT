@@ -277,6 +277,83 @@ describe("CATDatabase", () => {
     expect(file?.confirmedSegments).toBe(1);
     expect(file?.segmentStatusStats.totalSegments).toBe(2);
     expect(file?.segmentStatusStats.confirmedSegmentsForBar).toBe(1);
+
+    // File reads derive confirmation stats from segments, so repeated updates
+    // cannot double-count and moving back to draft is reflected immediately.
+    db.updateSegmentTarget(
+      "s1",
+      [{ type: "text", content: "updated" }],
+      "confirmed",
+    );
+    expect(db.getFile(fileId)?.confirmedSegments).toBe(1);
+
+    db.updateSegmentTarget(
+      "s1",
+      [{ type: "text", content: "draft" }],
+      "draft",
+    );
+    file = db.getFile(fileId);
+    expect(file?.confirmedSegments).toBe(0);
+    expect(file?.segmentStatusStats.totalSegments).toBe(2);
+    expect(file?.segmentStatusStats.inProgressSegments).toBe(1);
+  });
+
+  it("should derive zero stats for an empty file", () => {
+    const projectId = db.createProject("Empty Stats Project", "en", "zh");
+    const fileId = db.createFile(projectId, "empty.xlsx");
+
+    const file = db.getFile(fileId);
+    expect(file?.totalSegments).toBe(0);
+    expect(file?.confirmedSegments).toBe(0);
+    expect(file?.segmentStatusStats).toEqual({
+      totalSegments: 0,
+      qaProblemSegments: 0,
+      confirmedSegmentsForBar: 0,
+      inProgressSegments: 0,
+      newSegments: 0,
+    });
+  });
+
+  it("should maintain stats for every file in a cross-file bulk insert", () => {
+    const projectId = db.createProject("Cross-file Stats Project", "en", "zh");
+    const firstFileId = db.createFile(projectId, "first.xlsx");
+    const secondFileId = db.createFile(projectId, "second.xlsx");
+
+    db.bulkInsertSegments([
+      {
+        segmentId: "cross-file-1",
+        fileId: firstFileId,
+        orderIndex: 0,
+        sourceTokens: [{ type: "text", content: "First" }],
+        targetTokens: [],
+        status: "new",
+        tagsSignature: "",
+        matchKey: "first",
+        srcHash: "cross-file-hash-1",
+        meta: { updatedAt: "" },
+      },
+      {
+        segmentId: "cross-file-2",
+        fileId: secondFileId,
+        orderIndex: 0,
+        sourceTokens: [{ type: "text", content: "Second" }],
+        targetTokens: [{ type: "text", content: "Second translated" }],
+        status: "confirmed",
+        tagsSignature: "",
+        matchKey: "second",
+        srcHash: "cross-file-hash-2",
+        meta: { updatedAt: "" },
+      },
+    ]);
+
+    expect(db.getFile(firstFileId)).toMatchObject({
+      totalSegments: 1,
+      confirmedSegments: 0,
+    });
+    expect(db.getFile(secondFileId)).toMatchObject({
+      totalSegments: 1,
+      confirmedSegments: 1,
+    });
   });
 
   it("should include per-file segment status stats for progress bar rendering", () => {

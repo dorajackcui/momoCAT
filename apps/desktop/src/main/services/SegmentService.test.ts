@@ -238,6 +238,7 @@ describe('SegmentService transactional confirmation flow', () => {
     expect(source?.targetTokens).toEqual([]);
     expect(repeated?.status).toBe('new');
     expect(repeated?.targetTokens).toEqual([]);
+    expect(db.getFile(fileId)?.confirmedSegments).toBe(0);
 
     const workingTM = db.getProjectMountedTMs(projectId).find((tm) => tm.type === 'working');
     expect(workingTM).toBeDefined();
