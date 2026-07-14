@@ -1,5 +1,11 @@
 import Database from "better-sqlite3";
-import type { QaIssue, Segment, SegmentStatus, Token } from "@cat/core/models";
+import type {
+  QaIssue,
+  RepeatPropagationState,
+  Segment,
+  SegmentStatus,
+  Token,
+} from "@cat/core/models";
 
 interface SegmentRow {
   segmentId: string;
@@ -68,17 +74,34 @@ export class SegmentRepo {
   public getProjectSegmentsByHash(
     projectId: number,
     srcHash: string,
+    fileId?: number,
   ): Segment[] {
-    const rows = this.db
-      .prepare(
-        `
+    let rows: SegmentRow[];
+    if (fileId === undefined) {
+      rows = this.db
+        .prepare(
+          `
       SELECT segments.*
       FROM segments
       JOIN files ON segments.fileId = files.id
       WHERE files.projectId = ? AND segments.srcHash = ?
+      ORDER BY segments.fileId ASC, segments.orderIndex ASC
     `,
-      )
-      .all(projectId, srcHash) as SegmentRow[];
+        )
+        .all(projectId, srcHash) as SegmentRow[];
+    } else {
+      rows = this.db
+        .prepare(
+          `
+      SELECT segments.*
+      FROM segments
+      JOIN files ON segments.fileId = files.id
+      WHERE files.projectId = ? AND segments.fileId = ? AND segments.srcHash = ?
+      ORDER BY segments.orderIndex ASC
+    `,
+        )
+        .all(projectId, fileId, srcHash) as SegmentRow[];
+    }
 
     return rows.map((row) => this.mapRowToSegment(row));
   }
@@ -116,8 +139,32 @@ export class SegmentRepo {
     segmentId: string,
     targetTokens: Token[],
     status: SegmentStatus,
+    repeatPropagation?: RepeatPropagationState | null,
   ) {
     const normalizedStatus = this.normalizeStatus(status, targetTokens);
+    if (repeatPropagation !== undefined) {
+      const row = this.db
+        .prepare("SELECT metaJson FROM segments WHERE segmentId = ?")
+        .get(segmentId) as Pick<SegmentRow, "metaJson"> | undefined;
+      if (!row) return;
+
+      const meta = JSON.parse(row.metaJson) as Segment["meta"];
+      if (repeatPropagation) meta.repeatPropagation = repeatPropagation;
+      else delete meta.repeatPropagation;
+
+      this.db
+        .prepare(
+          "UPDATE segments SET targetTokensJson = ?, status = ?, metaJson = ?, qaIssuesJson = NULL, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE segmentId = ?",
+        )
+        .run(
+          JSON.stringify(targetTokens),
+          normalizedStatus,
+          JSON.stringify(meta),
+          segmentId,
+        );
+      return;
+    }
+
     this.db
       .prepare(
         "UPDATE segments SET targetTokensJson = ?, status = ?, qaIssuesJson = NULL, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE segmentId = ?",

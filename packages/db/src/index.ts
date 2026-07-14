@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import {
   QaIssue,
+  RepeatPropagationState,
   Segment,
   SegmentStatus,
   TBEntry,
@@ -219,8 +220,9 @@ export class CATDatabase {
   public getProjectSegmentsByHash(
     projectId: number,
     srcHash: string,
+    fileId?: number,
   ): Segment[] {
-    return this.segmentRepo.getProjectSegmentsByHash(projectId, srcHash);
+    return this.segmentRepo.getProjectSegmentsByHash(projectId, srcHash, fileId);
   }
 
   public getSegmentsPage(
@@ -247,8 +249,9 @@ export class CATDatabase {
     segmentId: string,
     targetTokens: Token[],
     status: SegmentStatus,
+    repeatPropagation?: RepeatPropagationState | null,
   ) {
-    this.segmentRepo.updateSegmentTarget(segmentId, targetTokens, status);
+    this.segmentRepo.updateSegmentTarget(segmentId, targetTokens, status, repeatPropagation);
   }
 
   public updateSegmentQaIssues(segmentId: string, qaIssues: QaIssue[]) {

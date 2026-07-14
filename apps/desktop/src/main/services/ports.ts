@@ -1,4 +1,12 @@
-import { QaIssue, Segment, SegmentStatus, TBEntry, TMEntry, Token } from '@cat/core/models';
+import {
+  QaIssue,
+  RepeatPropagationState,
+  Segment,
+  SegmentStatus,
+  TBEntry,
+  TMEntry,
+  Token,
+} from '@cat/core/models';
 import { Project, ProjectAIModel, ProjectQASettings, ProjectType } from '@cat/core/project';
 import type {
   MountedTBRecord as DbMountedTBRecord,
@@ -92,8 +100,13 @@ export interface SegmentRepository {
   getSegment(segmentId: string): Segment | undefined;
   getProjectIdByFileId(fileId: number): number | undefined;
   getProjectTypeByFileId(fileId: number): ProjectType | undefined;
-  getProjectSegmentsByHash(projectId: number, srcHash: string): Segment[];
-  updateSegmentTarget(segmentId: string, targetTokens: Token[], status: SegmentStatus): void;
+  getProjectSegmentsByHash(projectId: number, srcHash: string, fileId?: number): Segment[];
+  updateSegmentTarget(
+    segmentId: string,
+    targetTokens: Token[],
+    status: SegmentStatus,
+    repeatPropagation?: RepeatPropagationState | null,
+  ): void;
   updateSegmentQaIssues(segmentId: string, qaIssues: QaIssue[]): void;
 }
 

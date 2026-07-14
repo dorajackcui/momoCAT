@@ -1,4 +1,4 @@
-import type { Segment, SegmentStatus, Token } from '@cat/core/models';
+import type { RepeatPropagationState, Segment, SegmentStatus, Token } from '@cat/core/models';
 import { TMService } from './TMService';
 import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
@@ -12,6 +12,7 @@ interface PropagationBatch {
     segmentId: string;
     oldTargetTokens: Token[];
     oldStatus: SegmentStatus;
+    oldRepeatPropagation?: RepeatPropagationState;
   }[];
 }
 
@@ -145,27 +146,69 @@ export class SegmentService extends EventEmitter {
       throw new Error(`Segment not found: ${segmentId}`);
     }
 
-    const previousTargetSignature = JSON.stringify(existingSegment.targetTokens);
-    this.db.updateSegmentTarget(segmentId, targetTokens, status);
-
+    const previousTargetSignature = this.targetSignature(existingSegment);
+    const nextTargetSignature = JSON.stringify(targetTokens);
     const fileId = existingSegment.fileId;
+    const projectType = this.db.getProjectTypeByFileId(fileId) ?? 'translation';
+    const projectId =
+      projectType === 'translation' ? this.db.getProjectIdByFileId(fileId) : undefined;
+    const storedRepeatState = existingSegment.meta.repeatPropagation;
+    const sameSourceSegments =
+      projectId === undefined || status !== 'confirmed'
+        ? []
+        : this.db.getProjectSegmentsByHash(projectId, existingSegment.srcHash, fileId);
+    const participatesInRepeatCohort = sameSourceSegments.length > 1;
+    let nextRepeatState = storedRepeatState;
+
+    if (
+      storedRepeatState?.mode === 'following' &&
+      nextTargetSignature !== previousTargetSignature
+    ) {
+      nextRepeatState = { mode: 'detached' };
+    }
+
+    if (status === 'confirmed' && projectId !== undefined) {
+      if (!participatesInRepeatCohort) {
+        nextRepeatState = undefined;
+      } else if (!nextRepeatState) {
+        const legacyFollowingState = this.inferLegacyFollowingState(
+          existingSegment,
+          sameSourceSegments,
+        );
+        const hasEarlierRepeat = sameSourceSegments.some(
+          (segment) =>
+            segment.segmentId !== existingSegment.segmentId &&
+            this.isEarlierInFile(segment, existingSegment),
+        );
+        // A direct confirm on a later occurrence is a local contextual choice.
+        // The first same-source occurrence in this file becomes the leader.
+        nextRepeatState =
+          legacyFollowingState ?? (hasEarlierRepeat ? { mode: 'detached' } : { mode: 'leader' });
+      }
+    }
+
+    const repeatPropagationUpdate = this.repeatStatesEqual(storedRepeatState, nextRepeatState)
+      ? undefined
+      : (nextRepeatState ?? null);
+    this.db.updateSegmentTarget(segmentId, targetTokens, status, repeatPropagationUpdate);
+
     let propagatedIds: string[] = [];
     let workingTMUpdate: WorkingTMUpdatedPayload | undefined;
 
     if (status === 'confirmed') {
       const segment = this.db.getSegment(segmentId) ?? existingSegment;
-      const projectType = this.db.getProjectTypeByFileId(segment.fileId) ?? 'translation';
       if (projectType !== 'translation') {
         return { fileId, propagatedIds: [] };
       }
 
-      const projectId = this.db.getProjectIdByFileId(segment.fileId);
       if (projectId !== undefined) {
         if (options.commitToWorkingTM !== false) {
           this.tmService.upsertFromConfirmedSegment(projectId, segment);
           workingTMUpdate = { projectId, srcHash: segment.srcHash };
         }
-        propagatedIds = this.propagate(projectId, segment, previousTargetSignature);
+        if (nextRepeatState?.mode === 'leader') {
+          propagatedIds = this.propagate(projectId, segment, previousTargetSignature);
+        }
       }
     }
 
@@ -181,7 +224,7 @@ export class SegmentService extends EventEmitter {
   }
 
   /**
-   * Propagate translation to all identical segments in the project
+   * Propagate a leading occurrence to later, still-following occurrences.
    */
   private propagate(
     projectId: number,
@@ -192,20 +235,19 @@ export class SegmentService extends EventEmitter {
       `[SegmentService] Propagating segment ${sourceSegment.segmentId} in project ${projectId}`,
     );
 
-    // Non-confirmed repeats join the confirmed cohort. Confirmed repeats only
-    // follow a revision when they still contain the source segment's old target;
-    // a different confirmed target is treated as an intentional contextual variant.
-    const sourceTargetSignature = JSON.stringify(sourceSegment.targetTokens);
+    const sourceTargetSignature = this.targetSignature(sourceSegment);
     const repeats = this.db
-      .getProjectSegmentsByHash(projectId, sourceSegment.srcHash)
+      .getProjectSegmentsByHash(projectId, sourceSegment.srcHash, sourceSegment.fileId)
       .filter((segment: Segment) => {
-        if (segment.segmentId === sourceSegment.segmentId) return false;
-        if (segment.status !== 'confirmed') return true;
+        if (!this.isEarlierInFile(sourceSegment, segment)) return false;
+        if (segment.meta.repeatPropagation?.mode === 'detached') return false;
+        if (segment.meta.repeatPropagation?.mode === 'following') {
+          return segment.meta.repeatPropagation.sourceSegmentId === sourceSegment.segmentId;
+        }
 
-        const segmentTargetSignature = JSON.stringify(segment.targetTokens);
+        const segmentTargetSignature = this.targetSignature(segment);
         return (
-          segmentTargetSignature !== sourceTargetSignature &&
-          segmentTargetSignature === previousTargetSignature
+          segmentTargetSignature === '[]' || segmentTargetSignature === previousTargetSignature
         );
       });
 
@@ -226,11 +268,18 @@ export class SegmentService extends EventEmitter {
         segmentId: seg.segmentId,
         oldTargetTokens: seg.targetTokens,
         oldStatus: seg.status,
+        oldRepeatPropagation: seg.meta.repeatPropagation,
       });
 
-      // An identical source shares the confirmed translation and confirmation state.
-      this.db.updateSegmentTarget(seg.segmentId, sourceSegment.targetTokens, 'confirmed');
-      updatedIds.push(seg.segmentId);
+      const alreadyApplied =
+        seg.status === 'confirmed' && this.targetSignature(seg) === sourceTargetSignature;
+      if (!alreadyApplied) {
+        this.db.updateSegmentTarget(seg.segmentId, sourceSegment.targetTokens, 'confirmed', {
+          mode: 'following',
+          sourceSegmentId: sourceSegment.segmentId,
+        });
+        updatedIds.push(seg.segmentId);
+      }
     }
 
     this.lastBatch = batch;
@@ -238,12 +287,50 @@ export class SegmentService extends EventEmitter {
     return updatedIds;
   }
 
+  private inferLegacyFollowingState(
+    segment: Segment,
+    sameSourceSegments: Segment[],
+  ): RepeatPropagationState | undefined {
+    const segmentTargetSignature = this.targetSignature(segment);
+    const source = sameSourceSegments
+      .filter(
+        (candidate) =>
+          candidate.segmentId !== segment.segmentId &&
+          this.isEarlierInFile(candidate, segment) &&
+          candidate.status === 'confirmed' &&
+          this.targetSignature(candidate) === segmentTargetSignature,
+      )
+      .sort((left, right) => left.orderIndex - right.orderIndex)[0];
+
+    return source ? { mode: 'following', sourceSegmentId: source.segmentId } : undefined;
+  }
+
+  private targetSignature(segment: Segment): string {
+    return JSON.stringify(segment.targetTokens);
+  }
+
+  private isEarlierInFile(left: Segment, right: Segment): boolean {
+    return left.fileId === right.fileId && left.orderIndex < right.orderIndex;
+  }
+
+  private repeatStatesEqual(
+    left: RepeatPropagationState | undefined,
+    right: RepeatPropagationState | undefined,
+  ): boolean {
+    return JSON.stringify(left) === JSON.stringify(right);
+  }
+
   public async undoLastPropagation() {
     if (!this.lastBatch) return;
 
     console.log(`[SegmentService] Undoing propagation batch: ${this.lastBatch.id}`);
     for (const change of this.lastBatch.changes) {
-      this.db.updateSegmentTarget(change.segmentId, change.oldTargetTokens, change.oldStatus);
+      this.db.updateSegmentTarget(
+        change.segmentId,
+        change.oldTargetTokens,
+        change.oldStatus,
+        change.oldRepeatPropagation ?? null,
+      );
     }
 
     this.lastBatch = null;

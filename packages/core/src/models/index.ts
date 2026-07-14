@@ -46,6 +46,18 @@ export interface AutoFixSuggestion {
   apply: (targetTokens: Token[]) => Token[];
 }
 
+export type RepeatPropagationState =
+  | {
+      mode: "leader";
+    }
+  | {
+      mode: "following";
+      sourceSegmentId: string;
+    }
+  | {
+      mode: "detached";
+    };
+
 export interface ValidationResult {
   issues: QaIssue[];
   suggestions: AutoFixSuggestion[];
@@ -65,6 +77,7 @@ export interface Segment {
     rowRef?: number;
     context?: string;
     notes?: string[];
+    repeatPropagation?: RepeatPropagationState;
     updatedAt: string;
   };
   qaIssues?: QaIssue[];

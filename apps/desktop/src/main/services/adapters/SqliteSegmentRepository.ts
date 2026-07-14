@@ -1,5 +1,11 @@
 import { CATDatabase } from '@cat/db';
-import type { QaIssue, Segment, SegmentStatus, Token } from '@cat/core/models';
+import type {
+  QaIssue,
+  RepeatPropagationState,
+  Segment,
+  SegmentStatus,
+  Token,
+} from '@cat/core/models';
 import type { ProjectType } from '@cat/core/project';
 import { SegmentRepository } from '../ports';
 
@@ -26,12 +32,17 @@ export class SqliteSegmentRepository implements SegmentRepository {
     return this.db.getProjectTypeByFileId(fileId);
   }
 
-  getProjectSegmentsByHash(projectId: number, srcHash: string): Segment[] {
-    return this.db.getProjectSegmentsByHash(projectId, srcHash);
+  getProjectSegmentsByHash(projectId: number, srcHash: string, fileId?: number): Segment[] {
+    return this.db.getProjectSegmentsByHash(projectId, srcHash, fileId);
   }
 
-  updateSegmentTarget(segmentId: string, targetTokens: Token[], status: SegmentStatus): void {
-    this.db.updateSegmentTarget(segmentId, targetTokens, status);
+  updateSegmentTarget(
+    segmentId: string,
+    targetTokens: Token[],
+    status: SegmentStatus,
+    repeatPropagation?: RepeatPropagationState | null,
+  ): void {
+    this.db.updateSegmentTarget(segmentId, targetTokens, status, repeatPropagation);
   }
 
   updateSegmentQaIssues(segmentId: string, qaIssues: QaIssue[]): void {

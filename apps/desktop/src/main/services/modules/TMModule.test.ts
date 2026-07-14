@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Segment, Token } from '@cat/core/models';
+import type { RepeatPropagationState, Segment, Token } from '@cat/core/models';
 import { TMModule } from './TMModule';
 import {
   ProjectRepository,
@@ -75,15 +75,20 @@ class FailingSegmentRepository implements SegmentRepository {
     return this.delegate.getProjectTypeByFileId(fileId);
   }
 
-  getProjectSegmentsByHash(projectId: number, srcHash: string): Segment[] {
-    return this.delegate.getProjectSegmentsByHash(projectId, srcHash);
+  getProjectSegmentsByHash(projectId: number, srcHash: string, fileId?: number): Segment[] {
+    return this.delegate.getProjectSegmentsByHash(projectId, srcHash, fileId);
   }
 
-  updateSegmentTarget(segmentId: string, targetTokens: Token[], status: Segment['status']): void {
+  updateSegmentTarget(
+    segmentId: string,
+    targetTokens: Token[],
+    status: Segment['status'],
+    repeatPropagation?: RepeatPropagationState | null,
+  ): void {
     if (this.shouldFail(segmentId, status)) {
       throw new Error('Forced segment update failure');
     }
-    this.delegate.updateSegmentTarget(segmentId, targetTokens, status);
+    this.delegate.updateSegmentTarget(segmentId, targetTokens, status, repeatPropagation);
   }
 }
 
