@@ -1,10 +1,6 @@
 import React from 'react';
 import type { TMWithStats } from '../../../../shared/ipc';
-
-export function fileBaseName(filePath: string): string {
-  const segments = filePath.split(/[\\/]/u);
-  return segments[segments.length - 1] || filePath;
-}
+import { fileBaseName, LinkedFileButton } from '../LinkedFileButton';
 
 interface TMCardProps {
   tm: TMWithStats;
@@ -12,9 +8,17 @@ interface TMCardProps {
   onImport: (tmId: string) => void;
   onSync: (tm: TMWithStats) => void;
   onDelete: (tmId: string) => void;
+  onOpenLinkedFile: (filePath: string) => void;
 }
 
-export const TMCard: React.FC<TMCardProps> = ({ tm, onPreview, onImport, onSync, onDelete }) => (
+export const TMCard: React.FC<TMCardProps> = ({
+  tm,
+  onPreview,
+  onImport,
+  onSync,
+  onDelete,
+  onOpenLinkedFile,
+}) => (
   <div className="surface-card p-5 hover:border-brand/40 transition-colors group">
     <div className="flex justify-between items-start mb-3">
       <div>
@@ -23,16 +27,8 @@ export const TMCard: React.FC<TMCardProps> = ({ tm, onPreview, onImport, onSync,
           <span className="text-[10px] font-semibold text-brand bg-brand-soft px-1.5 py-0.5 rounded-control uppercase tracking-wider">
             {tm.srcLang} → {tm.tgtLang}
           </span>
-          <span className="text-[10px] font-semibold text-text-muted bg-muted px-1.5 py-0.5 rounded-control uppercase tracking-wider">
-            Main TM
-          </span>
           {tm.syncConfig && (
-            <span
-              className="text-[10px] font-semibold text-success bg-success-soft px-1.5 py-0.5 rounded-control tracking-wider"
-              title={tm.syncConfig.filePath}
-            >
-              ⟳ {fileBaseName(tm.syncConfig.filePath)}
-            </span>
+            <LinkedFileButton filePath={tm.syncConfig.filePath} onOpen={onOpenLinkedFile} />
           )}
         </div>
       </div>

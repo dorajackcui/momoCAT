@@ -48,10 +48,8 @@ interface EditorRowActionVisibility {
 export function getEditorRowStatusLineClass(
   segmentStatus: Segment['status'],
   hasError: boolean,
-  hasWarning: boolean,
 ): string {
   if (hasError) return 'bg-danger';
-  if (hasWarning) return 'bg-warning';
 
   if (segmentStatus === 'confirmed') return 'bg-success';
   if (segmentStatus === 'reviewed') return 'bg-info';
@@ -102,7 +100,7 @@ export function buildEditorRowDisplayModel({
 }: UseEditorRowDisplayModelParams): EditorRowDisplayModel {
   const hasError = qaIssues.some((issue) => issue.severity === 'error');
   const hasWarning = qaIssues.some((issue) => issue.severity === 'warning');
-  const statusLine = getEditorRowStatusLineClass(segmentStatus, hasError, hasWarning);
+  const statusLine = getEditorRowStatusLineClass(segmentStatus, hasError);
   const statusTitle = getEditorRowStatusTitle(segmentStatus, hasError, hasWarning);
 
   const sourceDisplayText = showNonPrintingSymbols

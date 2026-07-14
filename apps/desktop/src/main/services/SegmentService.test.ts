@@ -64,7 +64,7 @@ class FailingPropagationSegmentRepository implements SegmentRepository {
   }
 
   updateSegmentTarget(segmentId: string, targetTokens: Token[], status: SegmentStatus): void {
-    if (segmentId === this.failingSegmentId && status === 'draft') {
+    if (segmentId === this.failingSegmentId) {
       throw new Error('Propagation failed');
     }
     this.delegate.updateSegmentTarget(segmentId, targetTokens, status);
@@ -125,14 +125,14 @@ class InMemorySegmentRepository implements SegmentRepository {
 describe('SegmentService segment update events', () => {
   it('includes fileId in update results and emitted payloads', async () => {
     const fileId = 42;
-    const repo = new InMemorySegmentRepository([
-      buildSegment('seg-1', fileId, 0, 'hash-1'),
-    ]);
-    const tx = { runInTransaction: <T,>(fn: () => T) => fn() };
+    const repo = new InMemorySegmentRepository([buildSegment('seg-1', fileId, 0, 'hash-1')]);
+    const tx = { runInTransaction: <T>(fn: () => T) => fn() };
     const tmService = { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService;
     const service = new SegmentService(repo, tmService, tx);
     const eventSpy = vi.fn();
+    const workingTMUpdatedSpy = vi.fn();
     service.on('segments-updated', eventSpy);
+    service.on('working-tm-updated', workingTMUpdatedSpy);
 
     const targetTokens: Token[] = [{ type: 'text', content: 'translated' }];
     const result = await service.updateSegment('seg-1', targetTokens, 'translated');
@@ -144,6 +144,63 @@ describe('SegmentService segment update events', () => {
       segmentId: 'seg-1',
       status: 'translated',
     });
+    expect(workingTMUpdatedSpy).not.toHaveBeenCalled();
+  });
+
+  it('re-propagates a revised translation from an already confirmed repeated segment', async () => {
+    const fileId = 42;
+    const srcHash = 'hash-repeated';
+    const repo = new InMemorySegmentRepository([
+      buildSegment('seg-1', fileId, 0, srcHash),
+      buildSegment('seg-2', fileId, 1, srcHash),
+    ]);
+    const tx = { runInTransaction: <T>(fn: () => T) => fn() };
+    const tmService = { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService;
+    const service = new SegmentService(repo, tmService, tx);
+    const workingTMUpdatedSpy = vi.fn();
+    service.on('working-tm-updated', workingTMUpdatedSpy);
+
+    const initialTokens: Token[] = [{ type: 'text', content: 'initial' }];
+    await service.updateSegment('seg-1', initialTokens, 'confirmed');
+
+    const revisedTokens: Token[] = [{ type: 'text', content: 'revised' }];
+    const revisedResult = await service.updateSegment('seg-2', revisedTokens, 'confirmed');
+
+    expect(revisedResult.propagatedIds).toEqual(['seg-1']);
+    expect(toText(repo.getSegment('seg-1')?.targetTokens ?? [])).toBe('revised');
+    expect(toText(repo.getSegment('seg-2')?.targetTokens ?? [])).toBe('revised');
+
+    const unchangedResult = await service.updateSegment('seg-1', revisedTokens, 'confirmed');
+    expect(unchangedResult.propagatedIds).toEqual([]);
+    expect(workingTMUpdatedSpy).toHaveBeenLastCalledWith({ projectId: 1, srcHash });
+  });
+
+  it('preserves an intentionally divergent confirmed translation during re-propagation', async () => {
+    const fileId = 42;
+    const srcHash = 'hash-contextual-repeat';
+    const repo = new InMemorySegmentRepository([
+      buildSegment('seg-1', fileId, 0, srcHash),
+      buildSegment('seg-2', fileId, 1, srcHash),
+      buildSegment('seg-3', fileId, 2, srcHash),
+    ]);
+    const tx = { runInTransaction: <T>(fn: () => T) => fn() };
+    const tmService = { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService;
+    const service = new SegmentService(repo, tmService, tx);
+
+    const initialTokens: Token[] = [{ type: 'text', content: 'shared translation' }];
+    await service.updateSegment('seg-1', initialTokens, 'confirmed');
+
+    const divergentTokens: Token[] = [{ type: 'text', content: 'context-specific translation' }];
+    repo.updateSegmentTarget('seg-3', divergentTokens, 'confirmed');
+
+    const revisedTokens: Token[] = [{ type: 'text', content: 'revised shared translation' }];
+    const result = await service.updateSegment('seg-2', revisedTokens, 'confirmed');
+
+    expect(result.propagatedIds).toEqual(['seg-1']);
+    expect(toText(repo.getSegment('seg-1')?.targetTokens ?? [])).toBe('revised shared translation');
+    expect(toText(repo.getSegment('seg-3')?.targetTokens ?? [])).toBe(
+      'context-specific translation',
+    );
   });
 });
 
@@ -174,7 +231,9 @@ describe('SegmentService transactional confirmation flow', () => {
     const service = new SegmentService(segmentRepo, tmService, tx);
 
     const eventSpy = vi.fn();
+    const workingTMUpdatedSpy = vi.fn();
     service.on('segments-updated', eventSpy);
+    service.on('working-tm-updated', workingTMUpdatedSpy);
 
     const targetTokens: Token[] = [{ type: 'text', content: '你好' }];
     const result = await service.updateSegment('seg-1', targetTokens, 'confirmed');
@@ -185,7 +244,7 @@ describe('SegmentService transactional confirmation flow', () => {
     const repeated = db.getSegment('seg-2');
     expect(source?.status).toBe('confirmed');
     expect(toText(source?.targetTokens ?? [])).toBe('你好');
-    expect(repeated?.status).toBe('draft');
+    expect(repeated?.status).toBe('confirmed');
     expect(toText(repeated?.targetTokens ?? [])).toBe('你好');
 
     const workingTM = db.getProjectMountedTMs(projectId).find((tm) => tm.type === 'working');
@@ -203,6 +262,8 @@ describe('SegmentService transactional confirmation flow', () => {
       status: 'confirmed',
       propagatedIds: ['seg-2'],
     });
+    expect(workingTMUpdatedSpy).toHaveBeenCalledOnce();
+    expect(workingTMUpdatedSpy).toHaveBeenCalledWith({ projectId, srcHash });
   });
 
   it('rolls back all writes when confirmation fails mid-transaction', async () => {
@@ -225,7 +286,9 @@ describe('SegmentService transactional confirmation flow', () => {
     const service = new SegmentService(failingRepo, tmService, tx);
 
     const eventSpy = vi.fn();
+    const workingTMUpdatedSpy = vi.fn();
     service.on('segments-updated', eventSpy);
+    service.on('working-tm-updated', workingTMUpdatedSpy);
 
     const targetTokens: Token[] = [{ type: 'text', content: '你好' }];
     await expect(service.updateSegment('seg-1', targetTokens, 'confirmed')).rejects.toThrow(
@@ -249,6 +312,7 @@ describe('SegmentService transactional confirmation flow', () => {
     expect(tmEntry).toBeUndefined();
 
     expect(eventSpy).not.toHaveBeenCalled();
+    expect(workingTMUpdatedSpy).not.toHaveBeenCalled();
   });
 
   it('does not upsert TM or propagate on confirm for review projects', async () => {

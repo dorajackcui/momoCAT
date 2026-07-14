@@ -70,6 +70,16 @@ export const TBManager: React.FC = () => {
     loadTBs();
   }, []);
 
+  const handleOpenLinkedFile = async (filePath: string) => {
+    try {
+      await apiClient.openLocalFile(filePath);
+    } catch (error) {
+      feedbackService.error(
+        `Failed to open linked file: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+
   const selectedPreviewTB = previewTBId ? (tbs.find((tb) => tb.id === previewTBId) ?? null) : null;
   const selectedPreview = previewTBId ? (previewCache[previewTBId] ?? null) : null;
 
@@ -430,6 +440,7 @@ export const TBManager: React.FC = () => {
                 onImport={(tbId) => void handleStartImport(tbId)}
                 onSync={(target) => void handleSyncNow(target)}
                 onDelete={(tbId) => void handleDelete(tbId)}
+                onOpenLinkedFile={(filePath) => void handleOpenLinkedFile(filePath)}
               />
             ))}
           </div>

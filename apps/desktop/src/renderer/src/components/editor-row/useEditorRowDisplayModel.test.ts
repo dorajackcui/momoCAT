@@ -5,6 +5,29 @@ import {
 } from './useEditorRowDisplayModel';
 
 describe('useEditorRowDisplayModel.buildEditorRowDisplayModel', () => {
+  it('keeps the confirmed status color when only QA warnings are present', () => {
+    const model = buildEditorRowDisplayModel({
+      segmentStatus: 'confirmed',
+      qaIssues: [
+        {
+          ruleId: 'tb-term-missing',
+          severity: 'warning',
+          message: 'Use the preferred term.',
+        },
+      ],
+      isActive: false,
+      draftText: 'Target',
+      sourceEditorText: 'Source',
+      sourceTagsCount: 0,
+      sourceHighlightQuery: '',
+      highlightMode: 'contains',
+      showNonPrintingSymbols: false,
+    });
+
+    expect(model.statusLine).toBe('bg-success');
+    expect(model.statusTitle).toBe('Status: confirmed (QA warning)');
+  });
+
   it('builds source highlight chunks in non-printing mode', () => {
     const model = buildEditorRowDisplayModel({
       segmentStatus: 'draft',

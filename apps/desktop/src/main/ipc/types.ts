@@ -15,10 +15,7 @@ export interface IpcMainInvokeEventLike {
   } | null;
 }
 
-export type IpcMainListener = (
-  event: IpcMainInvokeEventLike,
-  ...args: unknown[]
-) => unknown;
+export type IpcMainListener = (event: IpcMainInvokeEventLike, ...args: unknown[]) => unknown;
 
 export interface MainHandlerDeps {
   ipcMain: IpcMainLike;
@@ -44,6 +41,13 @@ export interface ReferenceBackedHandlerDeps extends JobBackedHandlerDeps {
 export interface DialogHandlerDeps {
   ipcMain: IpcMainLike;
   dialog: Pick<Dialog, 'showOpenDialog' | 'showSaveDialog'>;
+}
+
+export interface SystemHandlerDeps {
+  ipcMain: IpcMainLike;
+  shell: {
+    openPath: (filePath: string) => Promise<string>;
+  };
 }
 
 export interface ClipboardLike {

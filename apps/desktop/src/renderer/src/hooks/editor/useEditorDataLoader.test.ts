@@ -278,6 +278,50 @@ describe('applyBatchSegmentUpdatesToStore', () => {
     expect(firstListener).not.toHaveBeenCalled();
     expect(secondListener).toHaveBeenCalledTimes(1);
   });
+
+  it('marks same-source propagation from a confirmed segment as confirmed', () => {
+    const source = createSegment('seg-1');
+    const qaIssues = [
+      { ruleId: 'term-check', severity: 'warning' as const, message: 'Check this term.' },
+    ];
+    const autoFixSuggestions = [
+      {
+        type: 'insert' as const,
+        description: 'Insert the preferred term.',
+        apply: (tokens: Token[]) => tokens,
+      },
+    ];
+    const repeated = {
+      ...createSegment('seg-2'),
+      qaIssues,
+      autoFixSuggestions,
+    };
+    const store = createEditorSegmentStore([source, repeated]);
+    const confirmEvent: SegmentsUpdatedEvent = {
+      fileId: 1,
+      segmentId: source.segmentId,
+      targetTokens: [{ type: 'text', content: 'confirmed target' }],
+      status: 'confirmed',
+      propagatedIds: [repeated.segmentId],
+      serverAppliedAt: '2026-07-14T00:00:00.000Z',
+    };
+
+    applyBatchSegmentUpdatesToStore({
+      store,
+      finalState: buildBatchFinalState([confirmEvent]),
+      normalizeTokens,
+      normalizeStatus,
+      directContext: 'confirm-update',
+      propagationContext: 'confirm-propagation',
+    });
+
+    expect(store.getSegment(repeated.segmentId)).toMatchObject({
+      targetTokens: confirmEvent.targetTokens,
+      status: 'confirmed',
+    });
+    expect(store.getSegment(repeated.segmentId)?.qaIssues).toBe(qaIssues);
+    expect(store.getSegment(repeated.segmentId)?.autoFixSuggestions).toBe(autoFixSuggestions);
+  });
 });
 
 describe('buildBatchFinalState', () => {

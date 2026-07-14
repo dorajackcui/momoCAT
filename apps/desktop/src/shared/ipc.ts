@@ -419,6 +419,7 @@ export interface AppUpdateStatusEvent {
 export interface ReferenceDataChangedEvent {
   projectId: number | null;
   kind: 'tm' | 'tb';
+  srcHash?: string;
   reason:
     | 'tm-created'
     | 'tm-deleted'
@@ -426,6 +427,7 @@ export interface ReferenceDataChangedEvent {
     | 'tm-unmounted'
     | 'tm-imported'
     | 'tm-committed'
+    | 'working-tm-updated'
     | 'tm-batch-matched'
     | 'tm-synced'
     | 'tb-created'
@@ -443,6 +445,7 @@ export interface DialogFileFilter {
 
 export interface DesktopApi {
   checkForUpdates: () => Promise<void>;
+  openLocalFile: (filePath: string) => Promise<void>;
 
   listProjects: () => Promise<ProjectWithStats[]>;
   createProject: (

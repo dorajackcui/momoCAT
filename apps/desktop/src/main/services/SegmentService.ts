@@ -32,6 +32,17 @@ interface SegmentUpdateEventPayload extends SegmentUpdateInput {
   serverAppliedAt: string;
 }
 
+export interface WorkingTMUpdatedPayload {
+  projectId: number;
+  srcHash: string;
+}
+
+interface SegmentUpdateInternalResult {
+  fileId: number;
+  propagatedIds: string[];
+  workingTMUpdate?: WorkingTMUpdatedPayload;
+}
+
 export class SegmentService extends EventEmitter {
   private db: SegmentRepository;
   private tmService: TMService;
@@ -58,7 +69,7 @@ export class SegmentService extends EventEmitter {
     status: SegmentStatus,
     clientRequestId?: string,
   ) {
-    const { fileId, propagatedIds } = this.tx.runInTransaction(() =>
+    const { fileId, propagatedIds, workingTMUpdate } = this.tx.runInTransaction(() =>
       this.updateSegmentInternal(segmentId, targetTokens, status),
     );
     const serverAppliedAt = new Date().toISOString();
@@ -72,6 +83,9 @@ export class SegmentService extends EventEmitter {
       clientRequestId,
       serverAppliedAt,
     });
+    if (workingTMUpdate) {
+      this.emitWorkingTMUpdated(workingTMUpdate);
+    }
 
     return { fileId, propagatedIds, clientRequestId, serverAppliedAt };
   }
@@ -86,14 +100,21 @@ export class SegmentService extends EventEmitter {
   ): Promise<SegmentUpdateEventPayload[]> {
     if (updates.length === 0) return [];
 
+    const workingTMUpdates = new Map<string, WorkingTMUpdatedPayload>();
     const events = this.tx.runInTransaction(() =>
       updates.map((update) => {
-        const { fileId, propagatedIds } = this.updateSegmentInternal(
+        const { fileId, propagatedIds, workingTMUpdate } = this.updateSegmentInternal(
           update.segmentId,
           update.targetTokens,
           update.status,
           options,
         );
+        if (workingTMUpdate) {
+          workingTMUpdates.set(
+            JSON.stringify([workingTMUpdate.projectId, workingTMUpdate.srcHash]),
+            workingTMUpdate,
+          );
+        }
         return {
           ...update,
           fileId,
@@ -106,6 +127,9 @@ export class SegmentService extends EventEmitter {
     for (const event of events) {
       this.emitSegmentUpdated(event);
     }
+    for (const update of workingTMUpdates.values()) {
+      this.emitWorkingTMUpdated(update);
+    }
 
     return events;
   }
@@ -115,16 +139,18 @@ export class SegmentService extends EventEmitter {
     targetTokens: Token[],
     status: SegmentStatus,
     options: SegmentUpdateOptions = {},
-  ): { fileId: number; propagatedIds: string[] } {
+  ): SegmentUpdateInternalResult {
     const existingSegment = this.db.getSegment(segmentId);
     if (!existingSegment) {
       throw new Error(`Segment not found: ${segmentId}`);
     }
 
+    const previousTargetSignature = JSON.stringify(existingSegment.targetTokens);
     this.db.updateSegmentTarget(segmentId, targetTokens, status);
 
     const fileId = existingSegment.fileId;
     let propagatedIds: string[] = [];
+    let workingTMUpdate: WorkingTMUpdatedPayload | undefined;
 
     if (status === 'confirmed') {
       const segment = this.db.getSegment(segmentId) ?? existingSegment;
@@ -137,30 +163,51 @@ export class SegmentService extends EventEmitter {
       if (projectId !== undefined) {
         if (options.commitToWorkingTM !== false) {
           this.tmService.upsertFromConfirmedSegment(projectId, segment);
+          workingTMUpdate = { projectId, srcHash: segment.srcHash };
         }
-        propagatedIds = this.propagate(projectId, segment);
+        propagatedIds = this.propagate(projectId, segment, previousTargetSignature);
       }
     }
 
-    return { fileId, propagatedIds };
+    return { fileId, propagatedIds, workingTMUpdate };
   }
 
   private emitSegmentUpdated(payload: SegmentUpdateEventPayload) {
     this.emit('segments-updated', payload);
   }
 
+  private emitWorkingTMUpdated(payload: WorkingTMUpdatedPayload) {
+    this.emit('working-tm-updated', payload);
+  }
+
   /**
    * Propagate translation to all identical segments in the project
    */
-  private propagate(projectId: number, sourceSegment: Segment): string[] {
+  private propagate(
+    projectId: number,
+    sourceSegment: Segment,
+    previousTargetSignature: string,
+  ): string[] {
     console.log(
       `[SegmentService] Propagating segment ${sourceSegment.segmentId} in project ${projectId}`,
     );
 
-    // Find segments with same srcHash in the same project (across files)
+    // Non-confirmed repeats join the confirmed cohort. Confirmed repeats only
+    // follow a revision when they still contain the source segment's old target;
+    // a different confirmed target is treated as an intentional contextual variant.
+    const sourceTargetSignature = JSON.stringify(sourceSegment.targetTokens);
     const repeats = this.db
       .getProjectSegmentsByHash(projectId, sourceSegment.srcHash)
-      .filter((s: Segment) => s.segmentId !== sourceSegment.segmentId && s.status !== 'confirmed');
+      .filter((segment: Segment) => {
+        if (segment.segmentId === sourceSegment.segmentId) return false;
+        if (segment.status !== 'confirmed') return true;
+
+        const segmentTargetSignature = JSON.stringify(segment.targetTokens);
+        return (
+          segmentTargetSignature !== sourceTargetSignature &&
+          segmentTargetSignature === previousTargetSignature
+        );
+      });
 
     if (repeats.length === 0) return [];
 
@@ -181,8 +228,8 @@ export class SegmentService extends EventEmitter {
         oldStatus: seg.status,
       });
 
-      // Update segment (using draft status for propagated translations)
-      this.db.updateSegmentTarget(seg.segmentId, sourceSegment.targetTokens, 'draft');
+      // An identical source shares the confirmed translation and confirmation state.
+      this.db.updateSegmentTarget(seg.segmentId, sourceSegment.targetTokens, 'confirmed');
       updatedIds.push(seg.segmentId);
     }
 

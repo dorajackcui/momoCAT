@@ -15,8 +15,11 @@ export function buildSearchableEditorSegments(
   segments: Segment[],
   segmentSaveErrors: Record<string, string>,
 ): SearchableEditorSegment[] {
+  const seenSourceHashes = new Set<string>();
   return segments.map((segment, index) => {
-    return buildSearchableEditorSegment(segment, index, segmentSaveErrors);
+    const isRepeatedSource = Boolean(segment.srcHash) && seenSourceHashes.has(segment.srcHash);
+    if (segment.srcHash) seenSourceHashes.add(segment.srcHash);
+    return buildSearchableEditorSegment(segment, index, segmentSaveErrors, isRepeatedSource);
   });
 }
 
@@ -24,6 +27,7 @@ function buildSearchableEditorSegment(
   segment: Segment,
   index: number,
   segmentSaveErrors: Record<string, string>,
+  isRepeatedSource = false,
 ): SearchableEditorSegment {
   const sourceText = normalizeEditorText(segment.sourceTokens, segment.sourceTokens);
   const targetText = normalizeEditorText(segment.targetTokens, segment.sourceTokens);
@@ -43,6 +47,7 @@ function buildSearchableEditorSegment(
     hasSaveError,
     isUntranslated,
     hasIssue: hasQaError || hasQaWarning || hasSaveError,
+    isRepeatedSource,
   };
 }
 
@@ -52,10 +57,18 @@ export function buildSearchableEditorSegmentsWithWeakCache(params: {
   cache: WeakMap<Segment, SearchableEditorSegment>;
 }): SearchableEditorSegment[] {
   const { segments, segmentSaveErrors, cache } = params;
+  const seenSourceHashes = new Set<string>();
   return segments.map((segment, index) => {
     const cached = cache.get(segment);
     const hasSaveError = Boolean(segmentSaveErrors[segment.segmentId]);
-    if (cached && cached.originalIndex === index && cached.hasSaveError === hasSaveError) {
+    const isRepeatedSource = Boolean(segment.srcHash) && seenSourceHashes.has(segment.srcHash);
+    if (segment.srcHash) seenSourceHashes.add(segment.srcHash);
+    if (
+      cached &&
+      cached.originalIndex === index &&
+      cached.hasSaveError === hasSaveError &&
+      cached.isRepeatedSource === isRepeatedSource
+    ) {
       return cached;
     }
 
@@ -65,12 +78,18 @@ export function buildSearchableEditorSegmentsWithWeakCache(params: {
         originalIndex: index,
         hasSaveError,
         hasIssue: cached.hasQaError || cached.hasQaWarning || hasSaveError,
+        isRepeatedSource,
       };
       cache.set(segment, nextCached);
       return nextCached;
     }
 
-    const nextSearchable = buildSearchableEditorSegment(segment, index, segmentSaveErrors);
+    const nextSearchable = buildSearchableEditorSegment(
+      segment,
+      index,
+      segmentSaveErrors,
+      isRepeatedSource,
+    );
     cache.set(segment, nextSearchable);
     return nextSearchable;
   });
@@ -124,10 +143,14 @@ export function buildSearchableEditorSegmentsIncrementally(params: {
 
     const cached = cache.get(segment);
     const hasSaveError = Boolean(segmentSaveErrors[segment.segmentId]);
+    const isRepeatedSource = previous[index]?.isRepeatedSource ?? false;
     const nextSearchable =
-      cached && cached.originalIndex === index && cached.hasSaveError === hasSaveError
+      cached &&
+      cached.originalIndex === index &&
+      cached.hasSaveError === hasSaveError &&
+      cached.isRepeatedSource === isRepeatedSource
         ? cached
-        : buildSearchableEditorSegment(segment, index, segmentSaveErrors);
+        : buildSearchableEditorSegment(segment, index, segmentSaveErrors, isRepeatedSource);
 
     if (nextSearchable !== previous[index]) {
       if (next === null) {

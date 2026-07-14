@@ -1,10 +1,6 @@
 import React from 'react';
 import type { TBWithStats } from '../../../../shared/ipc';
-
-export function fileBaseName(filePath: string): string {
-  const segments = filePath.split(/[\\/]/u);
-  return segments[segments.length - 1] || filePath;
-}
+import { fileBaseName, LinkedFileButton } from '../LinkedFileButton';
 
 interface TBCardProps {
   tb: TBWithStats;
@@ -12,9 +8,17 @@ interface TBCardProps {
   onImport: (tbId: string) => void;
   onSync: (tb: TBWithStats) => void;
   onDelete: (tbId: string) => void;
+  onOpenLinkedFile: (filePath: string) => void;
 }
 
-export const TBCard: React.FC<TBCardProps> = ({ tb, onPreview, onImport, onSync, onDelete }) => (
+export const TBCard: React.FC<TBCardProps> = ({
+  tb,
+  onPreview,
+  onImport,
+  onSync,
+  onDelete,
+  onOpenLinkedFile,
+}) => (
   <div className="surface-card p-5 hover:border-brand/40 transition-colors group">
     <div className="flex justify-between items-start mb-3">
       <div>
@@ -24,12 +28,7 @@ export const TBCard: React.FC<TBCardProps> = ({ tb, onPreview, onImport, onSync,
             {tb.srcLang} → {tb.tgtLang}
           </span>
           {tb.syncConfig && (
-            <span
-              className="text-[10px] font-semibold text-success bg-success-soft px-1.5 py-0.5 rounded-control tracking-wider"
-              title={tb.syncConfig.filePath}
-            >
-              ⟳ {fileBaseName(tb.syncConfig.filePath)}
-            </span>
+            <LinkedFileButton filePath={tb.syncConfig.filePath} onOpen={onOpenLinkedFile} />
           )}
         </div>
       </div>

@@ -9,6 +9,7 @@ import { registerAIHandlers } from './aiHandlers';
 import { registerDialogHandlers } from './dialogHandlers';
 import { registerClipboardHandlers } from './clipboardHandlers';
 import { registerJobHandlers } from './jobHandlers';
+import { registerSystemHandlers } from './systemHandlers';
 import type { IpcMainListener } from './types';
 
 describe('IPC handler registration smoke', () => {
@@ -53,6 +54,7 @@ describe('IPC handler registration smoke', () => {
     });
     registerClipboardHandlers({ ipcMain, clipboard });
     registerJobHandlers({ ipcMain, jobManager });
+    registerSystemHandlers({ ipcMain, shell: { openPath: vi.fn() } });
 
     const registeredChannels = new Set(handle.mock.calls.map((call) => call[0] as string));
 
@@ -66,6 +68,7 @@ describe('IPC handler registration smoke', () => {
       ...Object.values(IPC_CHANNELS.dialog),
       ...Object.values(IPC_CHANNELS.clipboard),
       ...Object.values(IPC_CHANNELS.job),
+      ...Object.values(IPC_CHANNELS.system),
     ];
 
     expect(registeredChannels.size).toBe(expectedChannels.length);

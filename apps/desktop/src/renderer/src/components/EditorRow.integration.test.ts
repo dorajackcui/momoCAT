@@ -216,13 +216,12 @@ describe('EditorRow keyboard shortcut decisions', () => {
 
 describe('EditorRow status display decisions', () => {
   it('maps status/qa state to status line classes', () => {
-    expect(getEditorRowStatusLineClass('translated', false, false)).toBe('bg-brand');
-    expect(getEditorRowStatusLineClass('reviewed', false, false)).toBe('bg-info');
-    expect(getEditorRowStatusLineClass('confirmed', false, false)).toBe('bg-success');
-    expect(getEditorRowStatusLineClass('draft', false, false)).toBe('bg-warning');
-    expect(getEditorRowStatusLineClass('new', false, false)).toBe('bg-text-faint');
-    expect(getEditorRowStatusLineClass('new', false, true)).toBe('bg-warning');
-    expect(getEditorRowStatusLineClass('new', true, false)).toBe('bg-danger');
+    expect(getEditorRowStatusLineClass('translated', false)).toBe('bg-brand');
+    expect(getEditorRowStatusLineClass('reviewed', false)).toBe('bg-info');
+    expect(getEditorRowStatusLineClass('confirmed', false)).toBe('bg-success');
+    expect(getEditorRowStatusLineClass('draft', false)).toBe('bg-warning');
+    expect(getEditorRowStatusLineClass('new', false)).toBe('bg-text-faint');
+    expect(getEditorRowStatusLineClass('new', true)).toBe('bg-danger');
   });
 
   it('includes qa suffix in status title when needed', () => {

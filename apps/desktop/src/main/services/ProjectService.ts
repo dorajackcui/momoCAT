@@ -15,7 +15,7 @@ import {
 } from '@cat/localization';
 import { SpreadsheetFilter } from '../filters/SpreadsheetFilter';
 import { TMService } from './TMService';
-import { SegmentService } from './SegmentService';
+import { SegmentService, type WorkingTMUpdatedPayload } from './SegmentService';
 import { TBService } from './TBService';
 import {
   AIRuntimeConfigProvider,
@@ -289,6 +289,11 @@ export class ProjectService {
   public onSegmentsUpdated(callback: (data: SegmentsUpdatedPayload) => void) {
     this.segmentService.on('segments-updated', callback);
     return () => this.segmentService.off('segments-updated', callback);
+  }
+
+  public onWorkingTMUpdated(callback: (data: WorkingTMUpdatedPayload) => void) {
+    this.segmentService.on('working-tm-updated', callback);
+    return () => this.segmentService.off('working-tm-updated', callback);
   }
 
   public onProgress(

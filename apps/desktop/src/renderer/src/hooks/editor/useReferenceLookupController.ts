@@ -85,6 +85,7 @@ export function createReferenceLookupControllerLoader(
   }
   const inFlight = new Map<string, InFlightEntry>();
   const projectVersions = new Map<number, number>();
+  const keyVersions = new Map<string, number>();
   let globalVersion = 0;
 
   const deleteProjectEntries = <T>(map: Map<string, T>, projectId: number): void => {
@@ -101,18 +102,26 @@ export function createReferenceLookupControllerLoader(
       globalVersion += 1;
       completed.clear();
       inFlight.clear();
+      keyVersions.clear();
       return;
     }
 
     projectVersions.set(projectId, (projectVersions.get(projectId) ?? 0) + 1);
     deleteProjectEntries(completed, projectId);
     deleteProjectEntries(inFlight, projectId);
+    deleteProjectEntries(keyVersions, projectId);
   };
 
   return {
     clear,
     invalidateProject(projectId: number | null): void {
       clear(projectId);
+    },
+    invalidateSource(projectId: number, srcHash: string): void {
+      const key = `${projectId}:${srcHash}`;
+      keyVersions.set(key, (keyVersions.get(key) ?? 0) + 1);
+      completed.delete(key);
+      inFlight.delete(key);
     },
     getCached(projectId: number, segment: Segment): ReferenceLookupResult | undefined {
       return completed.get(getReferenceLookupCacheKey(projectId, segment));
@@ -144,6 +153,7 @@ export function createReferenceLookupControllerLoader(
       const activeFetchers = prefetch ? prefetchFetchers : fetchers;
       const loadGlobalVersion = globalVersion;
       const loadProjectVersion = projectVersions.get(params.projectId) ?? 0;
+      const loadKeyVersion = keyVersions.get(key) ?? 0;
       const fetchPromise = (async () => {
         const [matchesResult, termsResult] = await Promise.allSettled([
           activeFetchers.getMatches(params.projectId, params.segment),
@@ -155,8 +165,13 @@ export function createReferenceLookupControllerLoader(
         };
         const isCurrent =
           loadGlobalVersion === globalVersion &&
-          loadProjectVersion === (projectVersions.get(params.projectId) ?? 0);
-        if (isCurrent && matchesResult.status === 'fulfilled' && termsResult.status === 'fulfilled') {
+          loadProjectVersion === (projectVersions.get(params.projectId) ?? 0) &&
+          loadKeyVersion === (keyVersions.get(key) ?? 0);
+        if (
+          isCurrent &&
+          matchesResult.status === 'fulfilled' &&
+          termsResult.status === 'fulfilled'
+        ) {
           completed.set(key, result);
         }
         return result;
@@ -323,11 +338,17 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
         void loader.load({ projectId, segment, prefetch: true });
       }
     },
-    invalidate(projectId: number | null): void {
-      loader.invalidateProject(projectId);
+    invalidate(projectId: number | null, srcHash?: string): void {
+      if (projectId !== null && srcHash) {
+        loader.invalidateSource(projectId, srcHash);
+      } else {
+        loader.invalidateProject(projectId);
+      }
       const invalidatesCurrent =
         projectId === null ||
-        (latestState.projectId !== null && projectId === latestState.projectId);
+        (latestState.projectId !== null &&
+          projectId === latestState.projectId &&
+          (!srcHash || latestState.segment?.srcHash === srcHash));
       if (!invalidatesCurrent) {
         return;
       }
@@ -391,7 +412,7 @@ export function useReferenceLookupController({
 
   useEffect(() => {
     const unsubscribe = subscribeToReferenceDataChanged((event) => {
-      schedulerRef.current?.invalidate(event.projectId);
+      schedulerRef.current?.invalidate(event.projectId, event.srcHash);
     });
     return unsubscribe;
   }, [subscribeToReferenceDataChanged]);

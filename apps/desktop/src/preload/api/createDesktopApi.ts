@@ -7,6 +7,7 @@ import { createEventApi } from './eventApi';
 import { createProjectApi } from './projectApi';
 import { createTBApi } from './tbApi';
 import { createTMApi } from './tmApi';
+import { createSystemApi } from './systemApi';
 import type { IpcRendererLike } from './types';
 
 export function createDesktopApi(ipcRenderer: IpcRendererLike): DesktopApi {
@@ -19,5 +20,6 @@ export function createDesktopApi(ipcRenderer: IpcRendererLike): DesktopApi {
     ...createDialogApi(ipcRenderer),
     ...createClipboardApi(ipcRenderer),
     ...createEventApi(ipcRenderer),
+    ...createSystemApi(ipcRenderer),
   };
 }

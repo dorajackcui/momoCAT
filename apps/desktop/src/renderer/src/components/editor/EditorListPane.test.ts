@@ -16,10 +16,13 @@ vi.mock('@tanstack/react-virtual', () => ({
 }));
 
 vi.mock('../EditorRow', () => ({
-  EditorRow: ({ segment }: { segment: Segment }) =>
+  EditorRow: ({ segment, isRepeatedSource }: { segment: Segment; isRepeatedSource?: boolean }) =>
     React.createElement(
       'span',
-      { 'data-testid': `row-${segment.segmentId}` },
+      {
+        'data-testid': `row-${segment.segmentId}`,
+        'data-repeated-source': String(Boolean(isRepeatedSource)),
+      },
       segment.targetTokens.map((token) => token.content).join(''),
     ),
 }));
@@ -79,5 +82,48 @@ describe('EditorListPane store-backed rows', () => {
 
     expect(html).toContain('after');
     expect(html).not.toContain('before');
+  });
+
+  it('passes the repeated-source marker to later occurrences', () => {
+    const first = createSegment('first');
+    const repeated = {
+      ...createSegment('second'),
+      segmentId: 'seg-2',
+      orderIndex: 1,
+      srcHash: first.srcHash,
+    };
+    const store = createEditorSegmentStore([first, repeated]);
+    const filteredSegments = buildSearchableEditorSegments([first, repeated], {});
+
+    const html = renderToStaticMarkup(
+      React.createElement(EditorListPane, {
+        scrollParentRef: { current: null },
+        virtualized: false,
+        filteredSegments,
+        segmentStore: store,
+        activeFilteredIndex: 0,
+        activeSegmentId: first.segmentId,
+        manualActivationSegmentId: null,
+        suppressAutoFocusSegmentId: null,
+        isSearchInputFocused: false,
+        onRowActivate: vi.fn(),
+        onRowAutoFocus: vi.fn(),
+        onTranslationChange: vi.fn(),
+        onTranslationBlur: vi.fn().mockResolvedValue(undefined),
+        onSegmentEditStateChange: vi.fn(),
+        onAITranslate: vi.fn(),
+        onAIRefine: vi.fn(),
+        onConfirm: vi.fn(),
+        aiTranslatingSegmentIds: {},
+        segmentSaveErrors: {},
+        sourceHighlightQuery: '',
+        targetHighlightQuery: '',
+        highlightMode: 'contains',
+        showNonPrintingSymbols: false,
+      }),
+    );
+
+    expect(html).toContain('data-testid="row-seg-1" data-repeated-source="false"');
+    expect(html).toContain('data-testid="row-seg-2" data-repeated-source="true"');
   });
 });

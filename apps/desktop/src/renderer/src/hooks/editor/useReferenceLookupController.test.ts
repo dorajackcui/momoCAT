@@ -48,6 +48,29 @@ describe('createReferenceLookupControllerLoader', () => {
     expect(getTermMatches).toHaveBeenCalledTimes(1);
   });
 
+  it('invalidates one source hash without discarding neighboring prefetched results', async () => {
+    const getMatches = vi.fn(
+      async (_projectId: number, segment: Segment) =>
+        [{ id: `tm-${segment.srcHash}` }] as TMMatch[],
+    );
+    const getTermMatches = vi.fn(async () => [] as TBMatch[]);
+    const loader = createReferenceLookupControllerLoader({ getMatches, getTermMatches });
+    const changed = createSegment('seg-a', 'hash-a');
+    const neighbor = createSegment('seg-b', 'hash-b');
+
+    await loader.load({ projectId: 7, segment: changed, prefetch: true });
+    const cachedNeighbor = await loader.load({ projectId: 7, segment: neighbor, prefetch: true });
+    expect(getMatches).toHaveBeenCalledTimes(2);
+
+    loader.invalidateSource(7, 'hash-a');
+
+    await expect(loader.load({ projectId: 7, segment: neighbor })).resolves.toBe(cachedNeighbor);
+    expect(getMatches).toHaveBeenCalledTimes(2);
+
+    await loader.load({ projectId: 7, segment: changed });
+    expect(getMatches).toHaveBeenCalledTimes(3);
+  });
+
   it('deduplicates in-flight loads for the same project and source hash', async () => {
     const tmDeferred = deferred<TMMatch[]>();
     const tbDeferred = deferred<TBMatch[]>();

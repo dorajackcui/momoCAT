@@ -53,6 +53,7 @@ describe('createDesktopApi smoke', () => {
     await api.syncTBWithExcel('tb-1');
     await api.getJobStatus('job-1');
     await api.checkForUpdates();
+    await api.openLocalFile('D:/references/terms.xlsx');
     await api.createPastedSourceFile(12, {
       sources: ['A', 'BB'],
       tagPolicy: 'default',
@@ -95,6 +96,7 @@ describe('createDesktopApi smoke', () => {
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tb.syncExecute, 'tb-1');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.job.getStatus, 'job-1');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.app.checkForUpdates);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.system.openPath, 'D:/references/terms.xlsx');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.project.createPastedSourceFile, 12, {
       sources: ['A', 'BB'],
       tagPolicy: 'default',

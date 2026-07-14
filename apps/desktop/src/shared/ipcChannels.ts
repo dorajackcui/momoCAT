@@ -2,6 +2,9 @@ export const IPC_CHANNELS = {
   app: {
     checkForUpdates: 'app-check-for-updates',
   },
+  system: {
+    openPath: 'system-open-path',
+  },
   project: {
     list: 'project-list',
     create: 'project-create',

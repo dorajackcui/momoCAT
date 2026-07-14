@@ -13,6 +13,10 @@ import type { AppUpdateStatusEvent, ReferenceDataChangedEvent } from '../shared/
 import { IPC_CHANNELS } from '../shared/ipcChannels';
 import { SegmentUpdateBatcher } from './ipc/SegmentUpdateBatcher';
 import { ReferenceLookupWorkerManager } from './services/referenceLookup/ReferenceLookupWorkerManager';
+import {
+  shouldInvalidateReferenceLookupWorkerCaches,
+  subscribeToWorkingTMReferenceDataChanges,
+} from './referenceDataInvalidation';
 import { AIRuntimeConfigService } from './services/modules/ai/AIRuntimeConfigService';
 import {
   AI_PROMPT_DEBUG_ENV,
@@ -35,6 +39,7 @@ import { registerAIHandlers } from './ipc/aiHandlers';
 import { registerDialogHandlers } from './ipc/dialogHandlers';
 import { registerClipboardHandlers } from './ipc/clipboardHandlers';
 import { registerJobHandlers } from './ipc/jobHandlers';
+import { registerSystemHandlers } from './ipc/systemHandlers';
 
 const { autoUpdater } = electronUpdater;
 
@@ -308,14 +313,21 @@ app.whenReady().then(async () => {
   // recognizer keyed by a per-connection data version). Invalidate them
   // alongside the renderer broadcast or warmed workers keep serving stale terms.
   const notifyReferenceDataChanged = (event: ReferenceDataChangedEvent) => {
-    void referenceLookup.invalidateReferenceData().catch((error) => {
-      console.error('[ReferenceLookup] Failed to invalidate worker caches:', error);
-    });
-    void referenceLookupPrefetch.invalidateReferenceData().catch((error) => {
-      console.error('[ReferenceLookup] Failed to invalidate prefetch worker caches:', error);
-    });
+    if (shouldInvalidateReferenceLookupWorkerCaches(event)) {
+      void referenceLookup.invalidateReferenceData().catch((error) => {
+        console.error('[ReferenceLookup] Failed to invalidate worker caches:', error);
+      });
+      void referenceLookupPrefetch.invalidateReferenceData().catch((error) => {
+        console.error('[ReferenceLookup] Failed to invalidate prefetch worker caches:', error);
+      });
+    }
     broadcastReferenceDataChanged(event);
   };
+  const unsubscribeWorkingTMReferenceDataChanges = subscribeToWorkingTMReferenceDataChanges(
+    projectService,
+    notifyReferenceDataChanged,
+  );
+  app.on('before-quit', unsubscribeWorkingTMReferenceDataChanges);
 
   registerProjectHandlers({ ipcMain, projectService });
   registerTMHandlers({
@@ -338,6 +350,7 @@ app.whenReady().then(async () => {
   registerDialogHandlers({ ipcMain, dialog });
   registerClipboardHandlers({ ipcMain, clipboard });
   registerJobHandlers({ ipcMain, jobManager });
+  registerSystemHandlers({ ipcMain, shell });
 
   const appUpdateService = createAppUpdateService({
     appName: 'momoCAT',

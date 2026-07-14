@@ -103,12 +103,13 @@ function applyPropagatedSegmentUpdate(params: {
     params.event.targetTokens,
     `segment ${params.segment.segmentId} target (${params.context})`,
   );
+  const nextStatus: SegmentStatus = params.event.status === 'confirmed' ? 'confirmed' : 'draft';
   return {
     ...params.segment,
     targetTokens,
-    status: 'draft' as SegmentStatus,
-    qaIssues: undefined,
-    autoFixSuggestions: undefined,
+    status: nextStatus,
+    qaIssues: nextStatus === 'confirmed' ? params.segment.qaIssues : undefined,
+    autoFixSuggestions: nextStatus === 'confirmed' ? params.segment.autoFixSuggestions : undefined,
   };
 }
 

@@ -109,6 +109,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
         segmentId={item.segment.segmentId}
         originalIndex={item.originalIndex}
         segmentStore={segmentStore}
+        isRepeatedSource={Boolean(item.isRepeatedSource)}
         isActive={item.segment.segmentId === activeSegmentId}
         disableAutoFocus={
           (isSearchInputFocused && manualActivationSegmentId !== item.segment.segmentId) ||

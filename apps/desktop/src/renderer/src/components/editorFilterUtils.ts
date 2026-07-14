@@ -17,6 +17,7 @@ export interface SearchableEditorSegment {
   hasSaveError: boolean;
   isUntranslated: boolean;
   hasIssue: boolean;
+  isRepeatedSource?: boolean;
 }
 
 export interface EditorFilterCriteria {

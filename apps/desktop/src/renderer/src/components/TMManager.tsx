@@ -73,6 +73,16 @@ export const TMManager: React.FC = () => {
     loadTMs();
   }, []);
 
+  const handleOpenLinkedFile = async (filePath: string) => {
+    try {
+      await apiClient.openLocalFile(filePath);
+    } catch (error) {
+      feedbackService.error(
+        `Failed to open linked file: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+
   const selectedPreviewTM = previewTMId ? (tms.find((tm) => tm.id === previewTMId) ?? null) : null;
   const selectedPreview = previewTMId ? (previewCache[previewTMId] ?? null) : null;
 
@@ -430,6 +440,7 @@ export const TMManager: React.FC = () => {
                 onImport={(tmId) => void handleStartImport(tmId)}
                 onSync={(target) => void handleSyncNow(target)}
                 onDelete={(tmId) => void handleDelete(tmId)}
+                onOpenLinkedFile={(filePath) => void handleOpenLinkedFile(filePath)}
               />
             ))}
           </div>

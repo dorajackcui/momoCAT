@@ -179,6 +179,17 @@ describe('useEditorFilters helpers', () => {
     });
   });
 
+  it('marks only later occurrences of the same source hash as repeated', () => {
+    const first = createSegment({ id: 's1', source: 'Repeat', target: '' });
+    const second = createSegment({ id: 's2', source: 'Repeat', target: '' });
+    const unique = createSegment({ id: 's3', source: 'Unique', target: '' });
+    second.srcHash = first.srcHash;
+
+    const searchable = buildSearchableEditorSegments([first, unique, second], {});
+
+    expect(searchable.map((item) => item.isRepeatedSource)).toEqual([false, false, true]);
+  });
+
   it('reuses cached searchable items for unchanged segment objects', () => {
     const segments: Segment[] = [
       createSegment({ id: 's1', source: 'Alpha', target: 'A' }),
