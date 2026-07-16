@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Generate app icons for the desktop build pipeline.
+Generate app icons for the desktop build pipeline on macOS.
 
 Uses apps/desktop/build/icon-source.png as the full-bleed source image.
+Requires the macOS `sips` command.
 Outputs (under apps/desktop/build):
 - icon.png (1024x1024)
 - icon.icns (macOS)
