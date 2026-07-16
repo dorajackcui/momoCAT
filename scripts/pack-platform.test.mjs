@@ -37,3 +37,20 @@ test('pack-platform dry-run preserves publish args for desktop workspace pack', 
   );
   assert.doesNotMatch(result.stdout, /run pack -- --publish always/);
 });
+
+test('pack-platform rejects a target that does not match the current host', () => {
+  const otherPlatform = process.platform === 'win32' ? 'mac' : 'win';
+  const expectedLabel = otherPlatform === 'win' ? 'Windows' : 'macOS';
+
+  const result = spawnSync(
+    process.execPath,
+    [scriptPath, '--platform', otherPlatform, '--dry-run'],
+    {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, new RegExp(`can only run on ${expectedLabel}`));
+});

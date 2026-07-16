@@ -96,13 +96,7 @@ Use this to verify project identity, language pair, file coverage, mounted TM/TB
 Inspect reads the workbook and composes TM/TB/MT artifacts without sending provider requests.
 
 ```bash
-momocat inspect localization \
-  --project-id <id> \
-  --input <input.xlsx> \
-  --output <inspect.xlsx> \
-  --json-output <inspect.json> \
-  --request-mode window-partial \
-  --target-baseline use-current-targets
+momocat inspect localization --project-id <id> --input <input.xlsx> --output <inspect.xlsx> --json-output <inspect.json> --request-mode window-partial --target-baseline use-current-targets
 ```
 
 Important options:
@@ -118,10 +112,7 @@ Use the same request mode, target baseline, and tag policy that the real transla
 ## Translate a file
 
 ```bash
-momocat translate file \
-  --project-id <id> \
-  --input <input.xlsx> \
-  --output <translated.xlsx>
+momocat translate file --project-id <id> --input <input.xlsx> --output <translated.xlsx>
 ```
 
 The command reads project/provider/TM/TB settings from SQLite, leaves the input unchanged, and does not import the external workbook into project storage.
@@ -180,6 +171,7 @@ npm run smoke:momocat -- --request-mode window-partial --prefix <prefix>
 ```
 
 Use `--inspect-only` when provider calls are not intended. Never commit the local smoke config or generated workbooks/sidecars.
+The tracked example uses repository-relative placeholder paths so it works in both shells; replace them with existing files or absolute paths for the current host.
 
 ## Troubleshooting
 

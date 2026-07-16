@@ -31,6 +31,17 @@ const retiredReferences = [
   /DOCS\/(?:archive|superpowers|specs|plans)(?:\/|\b)/u,
 ];
 const forbiddenGeneratedPaths = ["DOCS/node_modules"];
+const packageManifests = [
+  { workspace: "root", manifest: "package.json" },
+  { workspace: "apps/cli", manifest: "apps/cli/package.json" },
+  { workspace: "apps/desktop", manifest: "apps/desktop/package.json" },
+  { workspace: "packages/core", manifest: "packages/core/package.json" },
+  { workspace: "packages/db", manifest: "packages/db/package.json" },
+  {
+    workspace: "packages/localization",
+    manifest: "packages/localization/package.json",
+  },
+];
 
 const errors = [];
 let checkedLinks = 0;
@@ -85,7 +96,47 @@ function checkDocSet() {
   }
 }
 
-function checkMarkdownLinks(filePath, text) {
+export function githubHeadingSlug(heading) {
+  return heading
+    .replace(/!\[([^\]]*)\]\([^)]+\)/gu, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/gu, "$1")
+    .replace(/<[^>]*>/gu, "")
+    .replace(/[`*_~]/gu, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s_-]/gu, "")
+    .replace(/\s+/gu, "-");
+}
+
+export function collectMarkdownAnchors(text) {
+  const anchors = new Set();
+  const slugCounts = new Map();
+  let inFence = false;
+
+  for (const line of text.split(/\r?\n/u)) {
+    if (/^\s*(?:```|~~~)/u.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+
+    const heading = line.match(/^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/u);
+    if (!heading) continue;
+    const baseSlug = githubHeadingSlug(heading[1]);
+    if (!baseSlug) continue;
+
+    const duplicateIndex = slugCounts.get(baseSlug) ?? 0;
+    const slug = duplicateIndex === 0 ? baseSlug : `${baseSlug}-${duplicateIndex}`;
+    slugCounts.set(baseSlug, duplicateIndex + 1);
+    anchors.add(slug);
+  }
+
+  return anchors;
+}
+
+export function findMarkdownLinkErrors(filePath, text) {
+  const linkErrors = [];
+  let localLinkCount = 0;
   const linkPattern = /!?\[[^\]]*\]\(([^)]+)\)/gu;
   for (const match of text.matchAll(linkPattern)) {
     let destination = match[1].trim();
@@ -93,25 +144,67 @@ function checkMarkdownLinks(filePath, text) {
       destination = destination.slice(1, -1);
     }
     destination = destination.split(/\s+["']/u, 1)[0];
-    if (
-      destination === "" ||
-      destination.startsWith("#") ||
-      /^[a-z][a-z\d+.-]*:/iu.test(destination)
-    ) {
+    if (destination === "" || /^[a-z][a-z\d+.-]*:/iu.test(destination)) {
       continue;
     }
 
-    const cleanDestination = destination.split("#", 1)[0].split("?", 1)[0];
-    const resolved = path.resolve(
-      path.dirname(filePath),
-      decodeURIComponent(cleanDestination),
-    );
-    checkedLinks += 1;
-    if (!fs.existsSync(resolved)) {
-      errors.push(
-        `${relative(filePath)}:${lineNumber(text, match.index)} links to missing ${destination}`,
-      );
+    const fragmentIndex = destination.indexOf("#");
+    const pathWithQuery =
+      fragmentIndex >= 0 ? destination.slice(0, fragmentIndex) : destination;
+    const rawFragment =
+      fragmentIndex >= 0 ? destination.slice(fragmentIndex + 1) : "";
+    const cleanDestination = pathWithQuery.split("?", 1)[0];
+    let decodedDestination;
+    let decodedFragment;
+    try {
+      decodedDestination = decodeURIComponent(cleanDestination);
+      decodedFragment = decodeURIComponent(rawFragment);
+    } catch {
+      linkErrors.push({
+        line: lineNumber(text, match.index),
+        message: `contains invalid URL encoding in ${destination}`,
+      });
+      continue;
     }
+
+    const resolved = cleanDestination
+      ? path.resolve(path.dirname(filePath), decodedDestination)
+      : filePath;
+    localLinkCount += 1;
+    if (!fs.existsSync(resolved)) {
+      linkErrors.push({
+        line: lineNumber(text, match.index),
+        message: `links to missing ${destination}`,
+      });
+      continue;
+    }
+
+    if (
+      fragmentIndex >= 0 &&
+      decodedFragment !== "" &&
+      /\.md$/iu.test(resolved)
+    ) {
+      const targetText =
+        path.resolve(resolved) === path.resolve(filePath) ? text : read(resolved);
+      if (!collectMarkdownAnchors(targetText).has(decodedFragment)) {
+        linkErrors.push({
+          line: lineNumber(text, match.index),
+          message: `links to missing Markdown anchor ${destination}`,
+        });
+      }
+    }
+  }
+
+  return { errors: linkErrors, checkedLinks: localLinkCount };
+}
+
+function checkMarkdownLinks(filePath, text) {
+  const result = findMarkdownLinkErrors(filePath, text);
+  checkedLinks += result.checkedLinks;
+  for (const linkError of result.errors) {
+    errors.push(
+      `${relative(filePath)}:${linkError.line} ${linkError.message}`,
+    );
   }
 }
 
@@ -204,19 +297,8 @@ function checkMarkdownTables(filePath, text) {
 }
 
 function collectPackageScripts() {
-  const manifests = [
-    { workspace: "root", manifest: "package.json" },
-    { workspace: "apps/cli", manifest: "apps/cli/package.json" },
-    { workspace: "apps/desktop", manifest: "apps/desktop/package.json" },
-    { workspace: "packages/core", manifest: "packages/core/package.json" },
-    { workspace: "packages/db", manifest: "packages/db/package.json" },
-    {
-      workspace: "packages/localization",
-      manifest: "packages/localization/package.json",
-    },
-  ];
   const scripts = new Map();
-  for (const { workspace, manifest } of manifests) {
+  for (const { workspace, manifest } of packageManifests) {
     const parsed = JSON.parse(read(path.join(ROOT, manifest)));
     const record = {
       workspace,
@@ -226,6 +308,26 @@ function collectPackageScripts() {
     if (typeof parsed.name === "string") scripts.set(parsed.name, record);
   }
   return scripts;
+}
+
+export function findLocalScriptPaths(command) {
+  return [...new Set(command.match(/\bscripts\/[a-z\d._/-]+/giu) ?? [])];
+}
+
+function checkPackageScriptEntrypoints() {
+  for (const { workspace, manifest } of packageManifests) {
+    const parsed = JSON.parse(read(path.join(ROOT, manifest)));
+    for (const [scriptName, command] of Object.entries(parsed.scripts ?? {})) {
+      if (typeof command !== "string") continue;
+      for (const scriptPath of findLocalScriptPaths(command)) {
+        if (!fs.existsSync(path.join(ROOT, scriptPath))) {
+          errors.push(
+            `${manifest} script ${workspace}:${scriptName} references missing ${scriptPath}`,
+          );
+        }
+      }
+    }
+  }
 }
 
 export function findNpmRunCommands(text) {
@@ -323,6 +425,7 @@ function main() {
     checkScriptReferences(filePath, text, scripts);
     checkRetiredReferences(filePath, text);
   }
+  checkPackageScriptEntrypoints();
   checkVersionAndSchema();
 
   if (errors.length > 0) {

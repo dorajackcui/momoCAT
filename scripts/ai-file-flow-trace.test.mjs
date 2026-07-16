@@ -29,4 +29,7 @@ test("ai file flow trace script exposes help", () => {
   assert.match(result.stdout, /--target-col <n>/);
   assert.match(result.stdout, /--preview-limit <n>/);
   assert.match(result.stdout, /--target-scope <scope>/);
+  assert.match(result.stdout, /Example project/);
+  assert.match(result.stdout, /example-input\.xlsx/);
+  assert.equal(result.stdout.includes("C:\\path"), false);
 });

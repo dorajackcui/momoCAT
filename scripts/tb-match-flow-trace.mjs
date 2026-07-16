@@ -22,9 +22,9 @@ Options:
   -h, --help                     Show this help.
 
 Examples:
-  npm run trace:tb-flow -- --project-id 3 --source "Heritage Wings are visionaries"
-  npm run trace:tb-flow -- --project-id 3 --segment-id seg-123 --focus-src-term "Heritage Wings"
-  npm run trace:tb-flow -- --project-id 3 --source "Heritage Wings" --focus-tgt-term patriaigle`);
+  npm run trace:tb-flow -- --project-id 3 --source "Example term in context"
+  npm run trace:tb-flow -- --project-id 3 --segment-id seg-123 --focus-src-term "Example term"
+  npm run trace:tb-flow -- --project-id 3 --source "Example term" --focus-tgt-term "Example target"`);
 }
 
 function readValue(argv, index, flag) {

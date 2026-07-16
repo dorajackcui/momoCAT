@@ -23,6 +23,30 @@ npm run build:cli
 npm --silent run cli -- --help
 ```
 
+## Cross-platform development
+
+At the start of a task, identify the actual host instead of inferring it from path examples or the developer's other machine:
+
+```bash
+node -p "process.platform + ' ' + process.arch"
+```
+
+Prefer root npm scripts and Node entrypoints; they select `npm.cmd`/`npx.cmd` on Windows where required. A code fence labeled `bash` may still contain a portable npm/Node command, but shell operators, environment-variable assignment, and filesystem commands are not portable unless both forms are shown.
+
+| Concern | Windows | macOS | Agent rule |
+| --- | --- | --- | --- |
+| Interactive shell | PowerShell; process variables use `$env:NAME = '<value>'` | zsh/bash; process variables use `export NAME='<value>'` | Never paste one shell's assignment, quoting, or deletion syntax into the other. Prefer command flags over temporary environment state. |
+| Repository paths | Drive-letter paths and `\` are accepted by Windows tools | POSIX paths and `/` | Quote paths containing spaces. In code use `node:path`; in docs use generic placeholders or show both forms. Do not hand-concatenate separators. |
+| Text and imports | Filesystems are commonly case-insensitive | Filesystems may be case-sensitive or insensitive | Match on-disk filename casing exactly. Keep tracked text as UTF-8/LF per `.editorconfig` and `.gitattributes`; do not normalize it to CRLF. |
+| Python | Use `py -3` when Python is needed | Use `python3` | The app-icon generator additionally requires macOS `sips`; do not attempt it on Windows. |
+| Dependencies | Install/rebuild on Windows | Install/rebuild on macOS | Never copy or share `node_modules` across operating systems or CPU architectures. Native binaries and links are host-specific. |
+| Worktree dependency link | The helper tries a symlink, then a junction | The helper creates a directory symlink | Link only from a checkout on the same machine, OS, architecture, lockfile, and Node/npm versions. Otherwise run `npm ci`. |
+| Packaging | `npm run pack:win` creates the NSIS package; `release:win` is the only publish command | `npm run pack:mac` creates the DMG; there is no `release:mac` command | Package only on the named native host. Never claim the other platform, signing, notarization, or publishing was validated unless it actually ran there. |
+
+Safe cross-platform baseline commands are `npm ci`, `npm run dev`, `npm test`, `npm run typecheck`, `npm run build:cli`, and the root gate commands. Native-module state is still ABI-specific: use the rules in [Native module ABI](#native-module-abi) when switching between Electron and Node tests.
+
+Pure TypeScript or documentation work can normally be validated on one host. Changes involving path resolution, user-data discovery, process spawning, native dependencies, file dialogs, updater behavior, installers, signing, or platform branches require focused validation on both Windows and macOS. If only one host is available, report the untested platform explicitly rather than treating a dry run or build on one OS as cross-platform signoff.
+
 ## Command map
 
 The root `package.json` is the command source of truth.
@@ -182,6 +206,8 @@ Electron and host Node use different ABIs for `better-sqlite3`.
 
 If a native module suddenly fails to load after switching between desktop and tests, rebuild for the command you are about to run instead of reinstalling blindly.
 
+An installed `node_modules` tree is also OS- and architecture-specific. Do not move it between Windows and macOS, Intel and Apple Silicon, or native and emulated Node. Run `npm ci` on the target host before diagnosing an apparent application defect.
+
 ## Desktop e2e and packaging
 
 ```bash
@@ -205,7 +231,7 @@ npm run pack:mac
 
 Desktop icon source and generated assets are tracked under `apps/desktop/build`. Change `icon-source.png`, then regenerate `icon.png`, `icon.icns`, and `icon.ico` on macOS with `python3 scripts/generate_app_icon.py`; the generator requires `sips`. Run `node --test scripts/app-icon-assets.test.mjs` after regeneration.
 
-For a release, keep the root and desktop package versions aligned, update the visible app version marker and its test, then validate the native installer. Windows publishing uses `npm run release:win` with `GH_TOKEN` in the environment.
+For a release, keep the root and desktop package versions aligned, update the visible app version marker and its test, then validate the native installer. Windows publishing uses `npm run release:win` with `GH_TOKEN` in the environment. Set it with PowerShell's `$env:GH_TOKEN = '<token>'`; do not copy that syntax to macOS. There is currently no macOS publish command, so a DMG build is not a macOS release publication check.
 
 ## Schema and contract changes
 
@@ -221,20 +247,20 @@ To reuse an existing dependency tree in a worktree:
 npm run worktree:deps:link
 ```
 
-If the worktree already has `node_modules`, use `npm run worktree:deps:link:force`. On Windows the script can fall back from a directory symlink to a junction. The source checkout must already have installed dependencies.
+If the worktree already has `node_modules`, `npm run worktree:deps:link:force` removes that physical dependency tree in the current worktree and replaces it with a link; it does not remove the source checkout's dependencies. On Windows the script can fall back from a directory symlink to a junction; macOS uses a directory symlink. The source checkout must already have installed dependencies and must match the current host OS, architecture, lockfile, and pinned runtime. Never use this helper to reuse dependencies across Windows and macOS.
 
 ## Script ownership and maintenance
 
 Keep `scripts/` small and executable through stable root commands. An operator-facing script must have an npm entrypoint and documentation here; a helper must be imported by an entrypoint or test. Add a `*.test.mjs` contract for argument parsing, dry-run behavior, generated assets, or guardrail logic where applicable; `npm run test:scripts` discovers all such tests. Do not keep platform-specific duplicates after a cross-platform replacement exists.
 
-| Responsibility       | Maintained files                                                                                                                                                                                | Stable entrypoint                                   |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| Documentation/quality gates | `check-docs.mjs`, `gate-architecture-check.mjs`, `gate-style-classes.mjs`, `gate-file-size.mjs`, and adjacent Node tests                                                                 | `docs:check`, `gate:*`, `test:scripts`              |
-| Focused diagnostics  | `tm-match-flow-trace.mjs`, `tb-match-flow-trace.mjs`, `ai-file-flow-trace.mjs`, `momocat-standard-smoke.mjs`                                                                                    | `trace:*`, `smoke:momocat`                          |
-| Prompt generation    | `generate-ai-prompt-templates.mjs`, helper `ai-prompt-template-generator.mjs`                                                                                                                   | `ai-prompts:generate`, `ai-prompts:check`           |
-| App icon generation  | `generate_app_icon.py`, `app-icon-assets.test.mjs`                                                                                                                                              | macOS generator command above, then `test:scripts`  |
-| Native build/release | `rebuild-electron.mjs`, `pack-platform.mjs`, `pack-platform.test.mjs`                                                                                                                           | `rebuild:electron`, `pack:win`, `pack:mac`          |
-| Worktree dependency reuse | `worktree-link-deps.mjs`                                                                                                                                                                   | `worktree:deps:link`                                |
+| Responsibility | Maintained files | Stable entrypoint |
+| --- | --- | --- |
+| Documentation/quality gates | [`check-docs.mjs`](../scripts/check-docs.mjs), [`gate-architecture-check.mjs`](../scripts/gate-architecture-check.mjs), [`gate-style-classes.mjs`](../scripts/gate-style-classes.mjs), [`gate-file-size.mjs`](../scripts/gate-file-size.mjs), and adjacent Node tests | `docs:check`, `gate:*`, `test:scripts` |
+| Focused diagnostics | [`tm-match-flow-trace.mjs`](../scripts/tm-match-flow-trace.mjs), [`tb-match-flow-trace.mjs`](../scripts/tb-match-flow-trace.mjs), [`ai-file-flow-trace.mjs`](../scripts/ai-file-flow-trace.mjs), [`momocat-standard-smoke.mjs`](../scripts/momocat-standard-smoke.mjs) | `trace:*`, `smoke:momocat` |
+| Prompt generation | [`generate-ai-prompt-templates.mjs`](../scripts/generate-ai-prompt-templates.mjs), helper [`ai-prompt-template-generator.mjs`](../scripts/ai-prompt-template-generator.mjs) | `ai-prompts:generate`, `ai-prompts:check` |
+| App icon generation | [`generate_app_icon.py`](../scripts/generate_app_icon.py), [`app-icon-assets.test.mjs`](../scripts/app-icon-assets.test.mjs) | macOS generator command above, then `test:scripts` |
+| Native build/release | [`rebuild-electron.mjs`](../scripts/rebuild-electron.mjs), [`pack-platform.mjs`](../scripts/pack-platform.mjs), [`pack-platform.test.mjs`](../scripts/pack-platform.test.mjs) | `rebuild:electron`, `pack:win`, `pack:mac` |
+| Worktree dependency reuse | [`worktree-link-deps.mjs`](../scripts/worktree-link-deps.mjs) | `worktree:deps:link` |
 
 Prompt Markdown under `packages/core/src/project/prompts` is the editable source; `aiPromptTemplateCatalog.generated.ts` is generated output. Never edit the generated catalog directly. Regenerate it in the same change and let `ai-prompts:check` prove it is current.
 

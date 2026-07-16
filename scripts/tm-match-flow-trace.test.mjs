@@ -24,4 +24,6 @@ test('tm match flow trace script exposes help', () => {
   assert.match(result.stdout, /--src-hash <hash>/);
   assert.match(result.stdout, /--focus-src-hash <hashes>/);
   assert.match(result.stdout, /--no-recall-debug/);
+  assert.match(result.stdout, /Example source text/);
+  assert.match(result.stdout, /example-entry/);
 });

@@ -8,9 +8,10 @@ For every code change:
 
 1. Read [`DOCS/ARCHITECTURE.md`](DOCS/ARCHITECTURE.md).
 2. Read [`DOCS/DEVELOPMENT.md`](DOCS/DEVELOPMENT.md).
-3. Read the owning domain document selected in [`DOCS/README.md`](DOCS/README.md).
-4. Inspect `git status` and preserve unrelated user changes.
-5. Locate the implementation and nearest behavior tests before editing.
+3. Identify the active OS and CPU with `node -p "process.platform + ' ' + process.arch"`; for path, native-module, worktree, build, or packaging work, follow the [cross-platform rules](DOCS/DEVELOPMENT.md#cross-platform-development).
+4. Read the owning domain document selected in [`DOCS/README.md`](DOCS/README.md).
+5. Inspect `git status` and preserve unrelated user changes.
+6. Locate the implementation and nearest behavior tests before editing.
 
 Documentation-only changes may start with [`DOCS/README.md`](DOCS/README.md) and the owning topic document.
 

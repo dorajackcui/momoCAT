@@ -23,8 +23,8 @@ Options:
   -h, --help                     Show this help.
 
 Examples:
-  npm run trace:tm-flow -- --project-id 1 --source "阿茉玻曾见证清新天王"
-  npm run trace:tm-flow -- --project-id 1 --segment-id seg-123 --focus-src-hash amo-glass,fresh-king`);
+  npm run trace:tm-flow -- --project-id 1 --source "Example source text"
+  npm run trace:tm-flow -- --project-id 1 --segment-id seg-123 --focus-src-hash example-entry`);
 }
 
 function readValue(argv, index, flag) {

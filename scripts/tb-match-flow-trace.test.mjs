@@ -22,4 +22,6 @@ test('tb match flow trace script exposes help', () => {
   assert.match(result.stdout, /--source <text>/);
   assert.match(result.stdout, /--segment-id <id>/);
   assert.match(result.stdout, /--focus-src-term <term/);
+  assert.match(result.stdout, /Example term/);
+  assert.match(result.stdout, /Example target/);
 });

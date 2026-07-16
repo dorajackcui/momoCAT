@@ -1,6 +1,6 @@
 {
-  "inputPath": "C:\\path\\to\\mt.xlsx",
-  "dbPath": "C:\\path\\to\\local-smoke.db",
+  "inputPath": ".cat_data/smoke-input.xlsx",
+  "dbPath": ".cat_data/cat_v1.db",
   "projectId": 1,
   "outputDir": "testoutput",
   "inspectUnitLimit": 10,
