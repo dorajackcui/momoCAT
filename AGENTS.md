@@ -19,6 +19,8 @@ Documentation-only changes may start with [`DOCS/README.md`](DOCS/README.md) and
 
 - Put work in the owner layer defined by the architecture document; keep app shells and transport boundaries thin.
 - Use `rg` / `rg --files` for discovery and follow existing adjacent tests and conventions.
+- In Windows PowerShell, read repository text with `Get-Content -Encoding UTF8`; mojibake from the shell's legacy default is not evidence that the file is corrupt.
+- Use root `npm run format` only for agent-owned docs/scripts/config. `format:all` is an intentional repository-wide rewrite and must not be used during an ordinary feature task.
 - Preserve public contracts unless the task explicitly includes a migration.
 - Treat tokens, tags, schema compatibility, provider privacy, and resume identity as correctness boundaries.
 - For TM, TB, AI file-flow, or CLI smoke failures, follow the routing and data-safety rules in the [diagnostic playbooks](DOCS/DEVELOPMENT.md#diagnostic-playbooks) before changing matching or provider code.
@@ -31,6 +33,7 @@ Documentation-only changes may start with [`DOCS/README.md`](DOCS/README.md) and
 - Run the smallest relevant check before broad changes when practical, then rerun it after editing.
 - Use the validation matrix in [`DOCS/DEVELOPMENT.md`](DOCS/DEVELOPMENT.md).
 - Run `npm run docs:check` whenever documentation, package scripts, release markers, schema markers, or doc-linked paths change.
+- Run `npm run gate:text` after adding or renaming tracked text files; run `npm run format:check` when agent-owned docs, scripts, or root configuration change.
 - Treat `npm run gate:check` as the full repository audit. If it is not green before the task, record the failing stages and distinguish unchanged baseline failures from regressions; never claim the gate passed when it did not.
 - Do not broaden a scoped task merely to repair unrelated baseline failures.
 

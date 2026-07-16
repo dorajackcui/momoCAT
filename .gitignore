@@ -10,8 +10,9 @@ packages/*/dist/
 apps/cli/dist/
 apps/desktop/out/
 apps/desktop/dist/
+out/
 release/
-apps/desktop/dist
+coverage/
 
 # Local App Data & Database
 .cat_data/
@@ -38,7 +39,6 @@ pnpm-debug.log*
 *.swo
 
 # Dependency directories
-node_modules
 node_modules/
 .electron-gyp/
 .gyp/

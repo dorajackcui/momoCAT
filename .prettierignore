@@ -1,0 +1,14 @@
+node_modules/
+**/node_modules/
+**/dist/
+**/dist-electron/
+**/out/
+release/
+coverage/
+.cat_data/
+testoutput/
+apps/desktop/build/
+apps/desktop/test-results/
+package-lock.json
+packages/core/src/project/aiPromptTemplateCatalog.generated.ts
+.momocat-smoke.local.json

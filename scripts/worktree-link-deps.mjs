@@ -98,7 +98,9 @@ async function createNodeModulesLink(sourceNodeModules, targetNodeModules) {
     return 'symlink';
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[worktree:deps:link] Directory symlink failed on Windows, fallback to junction: ${message}`);
+    console.warn(
+      `[worktree:deps:link] Directory symlink failed on Windows, fallback to junction: ${message}`,
+    );
     await fs.symlink(sourceNodeModules, targetNodeModules, 'junction');
     return 'junction';
   }
@@ -131,7 +133,7 @@ async function main() {
   const sourceStats = await fs.stat(sourceNodeModules).catch(() => null);
   if (!sourceStats?.isDirectory()) {
     throw new Error(
-      `Source node_modules not found at: ${sourceNodeModules}\nInstall dependencies in source first (e.g. npm ci).`
+      `Source node_modules not found at: ${sourceNodeModules}\nInstall dependencies in source first (e.g. npm ci).`,
     );
   }
 
@@ -146,7 +148,7 @@ async function main() {
     } else {
       if (!force) {
         throw new Error(
-          'Current worktree already has a physical node_modules directory.\nUse --force to replace it with a link.'
+          'Current worktree already has a physical node_modules directory.\nUse --force to replace it with a link.',
         );
       }
       await fs.rm(targetNodeModules, { recursive: true, force: true });

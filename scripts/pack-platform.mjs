@@ -10,7 +10,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 function spawnCommandSync(command, args, options = {}) {
   return spawnSync(command, args, {
     ...options,
-    shell: process.platform === 'win32'
+    shell: process.platform === 'win32',
   });
 }
 
@@ -77,13 +77,15 @@ function main() {
 
   if (process.platform !== expected) {
     const platformLabel = platform === 'win' ? 'Windows' : 'macOS';
-    throw new Error(`pack:${platform} can only run on ${platformLabel}. Current platform: ${process.platform}.`);
+    throw new Error(
+      `pack:${platform} can only run on ${platformLabel}. Current platform: ${process.platform}.`,
+    );
   }
 
   const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   const commands = [
     { command: npmCmd, args: ['run', 'rebuild:electron'] },
-    { command: npmCmd, args: ['run', 'pack', '--workspace=apps/desktop'] }
+    { command: npmCmd, args: ['run', 'pack', '--workspace=apps/desktop'] },
   ];
 
   if (passThroughArgs.length > 0) {
@@ -100,7 +102,7 @@ function main() {
   for (const step of commands) {
     const result = spawnCommandSync(step.command, step.args, {
       cwd: repoRoot,
-      stdio: 'inherit'
+      stdio: 'inherit',
     });
 
     if (result.error) {

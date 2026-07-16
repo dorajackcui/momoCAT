@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
-import fs from "node:fs";
-import path from "node:path";
-import process from "node:process";
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import process from 'node:process';
 
-const TRACE_TEST_NAME = "ai-file-flow-env-trace";
-const TRACE_TEST_PATH =
-  "apps/desktop/src/main/diagnostics/aiFileFlowRunner.test.ts";
+const TRACE_TEST_NAME = 'ai-file-flow-env-trace';
+const TRACE_TEST_PATH = 'apps/desktop/src/main/diagnostics/aiFileFlowRunner.test.ts';
 
 function usage() {
   console.log(`Usage:
@@ -38,7 +37,7 @@ Examples:
 
 function readValue(argv, index, flag) {
   const value = argv[index + 1];
-  if (!value || value.startsWith("--")) {
+  if (!value || value.startsWith('--')) {
     throw new Error(`Missing value for ${flag}.`);
   }
   return value;
@@ -46,151 +45,151 @@ function readValue(argv, index, flag) {
 
 function parseArgs(argv) {
   const config = {
-    dbPath: path.resolve(process.cwd(), ".cat_data/cat_v1.db"),
-    projectId: "",
-    projectName: "",
-    fileId: "",
-    filePath: "",
+    dbPath: path.resolve(process.cwd(), '.cat_data/cat_v1.db'),
+    projectId: '',
+    projectName: '',
+    fileId: '',
+    filePath: '',
     hasHeader: true,
-    sourceCol: "",
-    targetCol: "",
-    contextCol: "",
+    sourceCol: '',
+    targetCol: '',
+    contextCol: '',
     hasManualImportOptions: false,
-    model: "",
-    mode: "standard",
-    targetScope: "",
-    previewLimit: "",
+    model: '',
+    mode: 'standard',
+    targetScope: '',
+    previewLimit: '',
   };
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
 
-    if (arg === "-h" || arg === "--help") {
+    if (arg === '-h' || arg === '--help') {
       usage();
       process.exit(0);
     }
-    if (arg === "--db" || arg === "--db-path") {
+    if (arg === '--db' || arg === '--db-path') {
       config.dbPath = path.resolve(readValue(argv, index, arg));
       index += 1;
       continue;
     }
-    if (arg.startsWith("--db=")) {
-      config.dbPath = path.resolve(arg.slice("--db=".length));
+    if (arg.startsWith('--db=')) {
+      config.dbPath = path.resolve(arg.slice('--db='.length));
       continue;
     }
-    if (arg === "--project-id") {
+    if (arg === '--project-id') {
       config.projectId = readValue(argv, index, arg);
       index += 1;
       continue;
     }
-    if (arg.startsWith("--project-id=")) {
-      config.projectId = arg.slice("--project-id=".length);
+    if (arg.startsWith('--project-id=')) {
+      config.projectId = arg.slice('--project-id='.length);
       continue;
     }
-    if (arg === "--project-name") {
+    if (arg === '--project-name') {
       config.projectName = readValue(argv, index, arg);
       index += 1;
       continue;
     }
-    if (arg.startsWith("--project-name=")) {
-      config.projectName = arg.slice("--project-name=".length);
+    if (arg.startsWith('--project-name=')) {
+      config.projectName = arg.slice('--project-name='.length);
       continue;
     }
-    if (arg === "--file-id") {
+    if (arg === '--file-id') {
       config.fileId = readValue(argv, index, arg);
       index += 1;
       continue;
     }
-    if (arg.startsWith("--file-id=")) {
-      config.fileId = arg.slice("--file-id=".length);
+    if (arg.startsWith('--file-id=')) {
+      config.fileId = arg.slice('--file-id='.length);
       continue;
     }
-    if (arg === "--file") {
+    if (arg === '--file') {
       config.filePath = path.resolve(readValue(argv, index, arg));
       index += 1;
       continue;
     }
-    if (arg.startsWith("--file=")) {
-      config.filePath = path.resolve(arg.slice("--file=".length));
+    if (arg.startsWith('--file=')) {
+      config.filePath = path.resolve(arg.slice('--file='.length));
       continue;
     }
-    if (arg === "--source-col") {
+    if (arg === '--source-col') {
       config.sourceCol = readValue(argv, index, arg);
       config.hasManualImportOptions = true;
       index += 1;
       continue;
     }
-    if (arg.startsWith("--source-col=")) {
-      config.sourceCol = arg.slice("--source-col=".length);
+    if (arg.startsWith('--source-col=')) {
+      config.sourceCol = arg.slice('--source-col='.length);
       config.hasManualImportOptions = true;
       continue;
     }
-    if (arg === "--target-col") {
+    if (arg === '--target-col') {
       config.targetCol = readValue(argv, index, arg);
       config.hasManualImportOptions = true;
       index += 1;
       continue;
     }
-    if (arg.startsWith("--target-col=")) {
-      config.targetCol = arg.slice("--target-col=".length);
+    if (arg.startsWith('--target-col=')) {
+      config.targetCol = arg.slice('--target-col='.length);
       config.hasManualImportOptions = true;
       continue;
     }
-    if (arg === "--context-col") {
+    if (arg === '--context-col') {
       config.contextCol = readValue(argv, index, arg);
       config.hasManualImportOptions = true;
       index += 1;
       continue;
     }
-    if (arg.startsWith("--context-col=")) {
-      config.contextCol = arg.slice("--context-col=".length);
+    if (arg.startsWith('--context-col=')) {
+      config.contextCol = arg.slice('--context-col='.length);
       config.hasManualImportOptions = true;
       continue;
     }
-    if (arg === "--no-header") {
+    if (arg === '--no-header') {
       config.hasHeader = false;
       config.hasManualImportOptions = true;
       continue;
     }
-    if (arg === "--has-header") {
+    if (arg === '--has-header') {
       config.hasHeader = true;
       config.hasManualImportOptions = true;
       continue;
     }
-    if (arg === "--model") {
+    if (arg === '--model') {
       config.model = readValue(argv, index, arg);
       index += 1;
       continue;
     }
-    if (arg.startsWith("--model=")) {
-      config.model = arg.slice("--model=".length);
+    if (arg.startsWith('--model=')) {
+      config.model = arg.slice('--model='.length);
       continue;
     }
-    if (arg === "--mode") {
+    if (arg === '--mode') {
       config.mode = readValue(argv, index, arg);
       index += 1;
       continue;
     }
-    if (arg.startsWith("--mode=")) {
-      config.mode = arg.slice("--mode=".length);
+    if (arg.startsWith('--mode=')) {
+      config.mode = arg.slice('--mode='.length);
       continue;
     }
-    if (arg === "--target-scope") {
+    if (arg === '--target-scope') {
       config.targetScope = readValue(argv, index, arg);
       index += 1;
       continue;
     }
-    if (arg.startsWith("--target-scope=")) {
-      config.targetScope = arg.slice("--target-scope=".length);
+    if (arg.startsWith('--target-scope=')) {
+      config.targetScope = arg.slice('--target-scope='.length);
       continue;
     }
-    if (arg === "--preview-limit") {
+    if (arg === '--preview-limit') {
       config.previewLimit = readValue(argv, index, arg);
       index += 1;
       continue;
     }
-    if (arg.startsWith("--preview-limit=")) {
-      config.previewLimit = arg.slice("--preview-limit=".length);
+    if (arg.startsWith('--preview-limit=')) {
+      config.previewLimit = arg.slice('--preview-limit='.length);
       continue;
     }
 
@@ -198,45 +197,42 @@ function parseArgs(argv) {
   }
 
   if (!config.projectId && !config.projectName) {
-    throw new Error("Missing --project-id or --project-name.");
+    throw new Error('Missing --project-id or --project-name.');
   }
   if (config.projectId && !isPositiveInteger(config.projectId)) {
-    throw new Error("--project-id must be a positive integer.");
+    throw new Error('--project-id must be a positive integer.');
   }
   if (!config.fileId && !config.filePath) {
-    throw new Error("Missing --file-id or --file.");
+    throw new Error('Missing --file-id or --file.');
   }
   if (config.fileId && !isPositiveInteger(config.fileId)) {
-    throw new Error("--file-id must be a positive integer.");
+    throw new Error('--file-id must be a positive integer.');
   }
   if (config.filePath && !fs.existsSync(config.filePath)) {
     throw new Error(`File not found: ${config.filePath}`);
   }
   if (config.hasManualImportOptions) {
-    validateNonNegativeInteger(config.sourceCol || "0", "--source-col");
-    validateNonNegativeInteger(config.targetCol || "1", "--target-col");
+    validateNonNegativeInteger(config.sourceCol || '0', '--source-col');
+    validateNonNegativeInteger(config.targetCol || '1', '--target-col');
     if (config.contextCol) {
-      validateNonNegativeInteger(config.contextCol, "--context-col");
+      validateNonNegativeInteger(config.contextCol, '--context-col');
     }
   }
-  if (config.mode !== "standard" && config.mode !== "dialogue") {
-    throw new Error("--mode must be standard or dialogue.");
+  if (config.mode !== 'standard' && config.mode !== 'dialogue') {
+    throw new Error('--mode must be standard or dialogue.');
   }
   if (
     config.targetScope &&
-    config.targetScope !== "blank-only" &&
-    config.targetScope !== "overwrite-non-confirmed"
+    config.targetScope !== 'blank-only' &&
+    config.targetScope !== 'overwrite-non-confirmed'
   ) {
-    throw new Error(
-      "--target-scope must be blank-only or overwrite-non-confirmed.",
-    );
+    throw new Error('--target-scope must be blank-only or overwrite-non-confirmed.');
   }
   if (
     config.previewLimit &&
-    (!Number.isInteger(Number(config.previewLimit)) ||
-      Number(config.previewLimit) < 0)
+    (!Number.isInteger(Number(config.previewLimit)) || Number(config.previewLimit) < 0)
   ) {
-    throw new Error("--preview-limit must be a non-negative integer.");
+    throw new Error('--preview-limit must be a non-negative integer.');
   }
   if (!fs.existsSync(config.dbPath)) {
     throw new Error(`Database not found: ${config.dbPath}`);
@@ -258,16 +254,16 @@ function validateNonNegativeInteger(value, flag) {
 function spawnCommandSync(command, args, options = {}) {
   return spawnSync(command, args, {
     ...options,
-    shell: process.platform === "win32",
+    shell: process.platform === 'win32',
   });
 }
 
 function runTrace(config) {
   const vitestCmd = path.join(
     process.cwd(),
-    "node_modules",
-    ".bin",
-    process.platform === "win32" ? "vitest.cmd" : "vitest",
+    'node_modules',
+    '.bin',
+    process.platform === 'win32' ? 'vitest.cmd' : 'vitest',
   );
   if (!fs.existsSync(vitestCmd)) {
     throw new Error(`Vitest binary not found: ${vitestCmd}`);
@@ -275,8 +271,8 @@ function runTrace(config) {
 
   const env = {
     ...process.env,
-    AI_FILE_FLOW_DYNAMIC: "1",
-    AI_FILE_FLOW_TRACE: "1",
+    AI_FILE_FLOW_DYNAMIC: '1',
+    AI_FILE_FLOW_TRACE: '1',
     AI_FILE_FLOW_DB_PATH: config.dbPath,
     AI_FILE_FLOW_PROJECT_ID: config.projectId,
     AI_FILE_FLOW_PROJECT_NAME: config.projectName,
@@ -288,25 +284,18 @@ function runTrace(config) {
     AI_FILE_FLOW_PREVIEW_LIMIT: config.previewLimit,
   };
   if (config.hasManualImportOptions) {
-    env.AI_FILE_FLOW_HAS_HEADER = config.hasHeader ? "1" : "0";
-    env.AI_FILE_FLOW_SOURCE_COL = config.sourceCol || "0";
-    env.AI_FILE_FLOW_TARGET_COL = config.targetCol || "1";
+    env.AI_FILE_FLOW_HAS_HEADER = config.hasHeader ? '1' : '0';
+    env.AI_FILE_FLOW_SOURCE_COL = config.sourceCol || '0';
+    env.AI_FILE_FLOW_TARGET_COL = config.targetCol || '1';
     env.AI_FILE_FLOW_CONTEXT_COL = config.contextCol;
   }
   const result = spawnCommandSync(
     vitestCmd,
-    [
-      "run",
-      TRACE_TEST_PATH,
-      "-t",
-      TRACE_TEST_NAME,
-      "--reporter=verbose",
-      "--testTimeout=3600000",
-    ],
+    ['run', TRACE_TEST_PATH, '-t', TRACE_TEST_NAME, '--reporter=verbose', '--testTimeout=3600000'],
     {
       cwd: process.cwd(),
       env,
-      stdio: "inherit",
+      stdio: 'inherit',
     },
   );
 

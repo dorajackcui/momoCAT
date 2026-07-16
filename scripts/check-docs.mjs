@@ -1,45 +1,35 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const ROOT = process.cwd();
-const DOCS_DIR = path.join(ROOT, "DOCS");
+const DOCS_DIR = path.join(ROOT, 'DOCS');
 
 const allowedDocs = new Set([
-  "DOCS/README.md",
-  "DOCS/ARCHITECTURE.md",
-  "DOCS/DEVELOPMENT.md",
-  "DOCS/DATA_MODEL.md",
-  "DOCS/CLI.md",
-  "DOCS/LOCALIZATION.md",
+  'DOCS/README.md',
+  'DOCS/ARCHITECTURE.md',
+  'DOCS/DEVELOPMENT.md',
+  'DOCS/DATA_MODEL.md',
+  'DOCS/CLI.md',
+  'DOCS/LOCALIZATION.md',
 ]);
 
-const entrypoints = [
-  "AGENTS.md",
-  "README.md",
-  "apps/cli/README.md",
-  ...allowedDocs,
-];
-const retiredPaths = [
-  "DOCS/archive",
-  "DOCS/superpowers",
-  "DOCS/specs",
-  "DOCS/plans",
-];
+const entrypoints = ['AGENTS.md', 'README.md', 'apps/cli/README.md', ...allowedDocs];
+const retiredPaths = ['DOCS/archive', 'DOCS/superpowers', 'DOCS/specs', 'DOCS/plans'];
 const retiredReferences = [
   /DOCS\/(?:00_START_HERE|10_ARCHITECTURE|20_ENGINEERING_RUNBOOK|30_DATA_MODEL|40_CLI_OPERATION|50_MT_REQUEST_MODEL|60_TM_TB_REFERENCE|90_STATUS_AND_ROADMAP|99_HISTORY)\.md/u,
   /DOCS\/(?:archive|superpowers|specs|plans)(?:\/|\b)/u,
 ];
-const forbiddenGeneratedPaths = ["DOCS/node_modules"];
+const forbiddenGeneratedPaths = ['DOCS/node_modules'];
 const packageManifests = [
-  { workspace: "root", manifest: "package.json" },
-  { workspace: "apps/cli", manifest: "apps/cli/package.json" },
-  { workspace: "apps/desktop", manifest: "apps/desktop/package.json" },
-  { workspace: "packages/core", manifest: "packages/core/package.json" },
-  { workspace: "packages/db", manifest: "packages/db/package.json" },
+  { workspace: 'root', manifest: 'package.json' },
+  { workspace: 'apps/cli', manifest: 'apps/cli/package.json' },
+  { workspace: 'apps/desktop', manifest: 'apps/desktop/package.json' },
+  { workspace: 'packages/core', manifest: 'packages/core/package.json' },
+  { workspace: 'packages/db', manifest: 'packages/db/package.json' },
   {
-    workspace: "packages/localization",
-    manifest: "packages/localization/package.json",
+    workspace: 'packages/localization',
+    manifest: 'packages/localization/package.json',
   },
 ];
 
@@ -47,20 +37,20 @@ const errors = [];
 let checkedLinks = 0;
 
 function relative(filePath) {
-  return path.relative(ROOT, filePath).split(path.sep).join("/");
+  return path.relative(ROOT, filePath).split(path.sep).join('/');
 }
 
 function read(filePath) {
-  return fs.readFileSync(filePath, "utf8");
+  return fs.readFileSync(filePath, 'utf8');
 }
 
 function listMarkdownFiles(directory) {
   const files = [];
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    if (entry.name === "node_modules" || entry.isSymbolicLink()) continue;
+    if (entry.name === 'node_modules' || entry.isSymbolicLink()) continue;
     const fullPath = path.join(directory, entry.name);
     if (entry.isDirectory()) files.push(...listMarkdownFiles(fullPath));
-    else if (entry.isFile() && entry.name.endsWith(".md")) files.push(fullPath);
+    else if (entry.isFile() && entry.name.endsWith('.md')) files.push(fullPath);
   }
   return files;
 }
@@ -72,8 +62,7 @@ function lineNumber(text, offset) {
 function checkDocSet() {
   const actual = new Set(listMarkdownFiles(DOCS_DIR).map(relative));
   for (const expected of allowedDocs) {
-    if (!actual.has(expected))
-      errors.push(`Missing active document: ${expected}`);
+    if (!actual.has(expected)) errors.push(`Missing active document: ${expected}`);
   }
   for (const file of actual) {
     if (!allowedDocs.has(file)) {
@@ -89,23 +78,21 @@ function checkDocSet() {
   }
   for (const generatedPath of forbiddenGeneratedPaths) {
     if (fs.existsSync(path.join(ROOT, generatedPath))) {
-      errors.push(
-        `Generated dependency/output path must not exist: ${generatedPath}`,
-      );
+      errors.push(`Generated dependency/output path must not exist: ${generatedPath}`);
     }
   }
 }
 
 export function githubHeadingSlug(heading) {
   return heading
-    .replace(/!\[([^\]]*)\]\([^)]+\)/gu, "$1")
-    .replace(/\[([^\]]+)\]\([^)]+\)/gu, "$1")
-    .replace(/<[^>]*>/gu, "")
-    .replace(/[`*_~]/gu, "")
+    .replace(/!\[([^\]]*)\]\([^)]+\)/gu, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/gu, '$1')
+    .replace(/<[^>]*>/gu, '')
+    .replace(/[`*_~]/gu, '')
     .trim()
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s_-]/gu, "")
-    .replace(/\s+/gu, "-");
+    .replace(/[^\p{L}\p{N}\s_-]/gu, '')
+    .replace(/\s+/gu, '-');
 }
 
 export function collectMarkdownAnchors(text) {
@@ -140,20 +127,18 @@ export function findMarkdownLinkErrors(filePath, text) {
   const linkPattern = /!?\[[^\]]*\]\(([^)]+)\)/gu;
   for (const match of text.matchAll(linkPattern)) {
     let destination = match[1].trim();
-    if (destination.startsWith("<") && destination.endsWith(">")) {
+    if (destination.startsWith('<') && destination.endsWith('>')) {
       destination = destination.slice(1, -1);
     }
     destination = destination.split(/\s+["']/u, 1)[0];
-    if (destination === "" || /^[a-z][a-z\d+.-]*:/iu.test(destination)) {
+    if (destination === '' || /^[a-z][a-z\d+.-]*:/iu.test(destination)) {
       continue;
     }
 
-    const fragmentIndex = destination.indexOf("#");
-    const pathWithQuery =
-      fragmentIndex >= 0 ? destination.slice(0, fragmentIndex) : destination;
-    const rawFragment =
-      fragmentIndex >= 0 ? destination.slice(fragmentIndex + 1) : "";
-    const cleanDestination = pathWithQuery.split("?", 1)[0];
+    const fragmentIndex = destination.indexOf('#');
+    const pathWithQuery = fragmentIndex >= 0 ? destination.slice(0, fragmentIndex) : destination;
+    const rawFragment = fragmentIndex >= 0 ? destination.slice(fragmentIndex + 1) : '';
+    const cleanDestination = pathWithQuery.split('?', 1)[0];
     let decodedDestination;
     let decodedFragment;
     try {
@@ -179,13 +164,8 @@ export function findMarkdownLinkErrors(filePath, text) {
       continue;
     }
 
-    if (
-      fragmentIndex >= 0 &&
-      decodedFragment !== "" &&
-      /\.md$/iu.test(resolved)
-    ) {
-      const targetText =
-        path.resolve(resolved) === path.resolve(filePath) ? text : read(resolved);
+    if (fragmentIndex >= 0 && decodedFragment !== '' && /\.md$/iu.test(resolved)) {
+      const targetText = path.resolve(resolved) === path.resolve(filePath) ? text : read(resolved);
       if (!collectMarkdownAnchors(targetText).has(decodedFragment)) {
         linkErrors.push({
           line: lineNumber(text, match.index),
@@ -202,19 +182,13 @@ function checkMarkdownLinks(filePath, text) {
   const result = findMarkdownLinkErrors(filePath, text);
   checkedLinks += result.checkedLinks;
   for (const linkError of result.errors) {
-    errors.push(
-      `${relative(filePath)}:${linkError.line} ${linkError.message}`,
-    );
+    errors.push(`${relative(filePath)}:${linkError.line} ${linkError.message}`);
   }
 }
 
 function isEscaped(text, index) {
   let backslashes = 0;
-  for (
-    let cursor = index - 1;
-    cursor >= 0 && text[cursor] === "\\";
-    cursor -= 1
-  ) {
+  for (let cursor = index - 1; cursor >= 0 && text[cursor] === '\\'; cursor -= 1) {
     backslashes += 1;
   }
   return backslashes % 2 === 1;
@@ -222,24 +196,23 @@ function isEscaped(text, index) {
 
 export function splitMarkdownTableRow(line) {
   const trimmed = line.trim();
-  if (!trimmed.includes("|")) return null;
+  if (!trimmed.includes('|')) return null;
 
   const cells = [];
-  let cell = "";
+  let cell = '';
   for (let index = 0; index < trimmed.length; index += 1) {
     const character = trimmed[index];
-    if (character === "|" && !isEscaped(trimmed, index)) {
+    if (character === '|' && !isEscaped(trimmed, index)) {
       cells.push(cell.trim());
-      cell = "";
+      cell = '';
     } else {
       cell += character;
     }
   }
   cells.push(cell.trim());
 
-  if (trimmed.startsWith("|")) cells.shift();
-  if (trimmed.endsWith("|") && !isEscaped(trimmed, trimmed.length - 1))
-    cells.pop();
+  if (trimmed.startsWith('|')) cells.shift();
+  if (trimmed.endsWith('|') && !isEscaped(trimmed, trimmed.length - 1)) cells.pop();
   return cells;
 }
 
@@ -273,7 +246,7 @@ export function findMarkdownTableErrors(text) {
 
     for (let rowIndex = index + 2; rowIndex < lines.length; rowIndex += 1) {
       const rowLine = lines[rowIndex];
-      if (rowLine.trim() === "" || /^\s*(?:```|~~~)/u.test(rowLine)) break;
+      if (rowLine.trim() === '' || /^\s*(?:```|~~~)/u.test(rowLine)) break;
       const row = splitMarkdownTableRow(rowLine);
       if (!row || row.length < 2) break;
       if (row.length !== expectedColumns) {
@@ -290,9 +263,7 @@ export function findMarkdownTableErrors(text) {
 
 function checkMarkdownTables(filePath, text) {
   for (const tableError of findMarkdownTableErrors(text)) {
-    errors.push(
-      `${relative(filePath)}:${tableError.line} ${tableError.message}`,
-    );
+    errors.push(`${relative(filePath)}:${tableError.line} ${tableError.message}`);
   }
 }
 
@@ -305,7 +276,7 @@ function collectPackageScripts() {
       scripts: new Set(Object.keys(parsed.scripts ?? {})),
     };
     scripts.set(workspace, record);
-    if (typeof parsed.name === "string") scripts.set(parsed.name, record);
+    if (typeof parsed.name === 'string') scripts.set(parsed.name, record);
   }
   return scripts;
 }
@@ -318,7 +289,7 @@ function checkPackageScriptEntrypoints() {
   for (const { workspace, manifest } of packageManifests) {
     const parsed = JSON.parse(read(path.join(ROOT, manifest)));
     for (const [scriptName, command] of Object.entries(parsed.scripts ?? {})) {
-      if (typeof command !== "string") continue;
+      if (typeof command !== 'string') continue;
       for (const scriptPath of findLocalScriptPaths(command)) {
         if (!fs.existsSync(path.join(ROOT, scriptPath))) {
           errors.push(
@@ -332,8 +303,7 @@ function checkPackageScriptEntrypoints() {
 
 export function findNpmRunCommands(text) {
   const commands = [];
-  const commandPattern =
-    /\bnpm(?:\s+--[a-z][a-z-]*)*\s+run\s+([a-z\d][a-z\d:_-]*)([^\r\n]*)/giu;
+  const commandPattern = /\bnpm(?:\s+--[a-z][a-z-]*)*\s+run\s+([a-z\d][a-z\d:_-]*)([^\r\n]*)/giu;
   for (const match of text.matchAll(commandPattern)) {
     const workspaceMatch = match[2].match(/--workspace(?:=|\s+)([^\s`|]+)/u);
     commands.push({
@@ -347,7 +317,7 @@ export function findNpmRunCommands(text) {
 
 function checkScriptReferences(filePath, text, scripts) {
   for (const command of findNpmRunCommands(text)) {
-    const workspaceKey = command.workspace ?? "root";
+    const workspaceKey = command.workspace ?? 'root';
     const target = scripts.get(workspaceKey);
     if (!target) {
       errors.push(
@@ -376,37 +346,31 @@ function checkRetiredReferences(filePath, text) {
 }
 
 function checkVersionAndSchema() {
-  const rootPackage = JSON.parse(read(path.join(ROOT, "package.json")));
-  const desktopPackage = JSON.parse(
-    read(path.join(ROOT, "apps/desktop/package.json")),
-  );
+  const rootPackage = JSON.parse(read(path.join(ROOT, 'package.json')));
+  const desktopPackage = JSON.parse(read(path.join(ROOT, 'apps/desktop/package.json')));
   if (rootPackage.version !== desktopPackage.version) {
     errors.push(
       `Release version mismatch: root=${rootPackage.version}, desktop=${desktopPackage.version}`,
     );
   }
 
-  const rootReadme = read(path.join(ROOT, "README.md"));
+  const rootReadme = read(path.join(ROOT, 'README.md'));
   const releaseMarker = `当前发布基线为 \`${rootPackage.version}\``;
   if (!rootReadme.includes(releaseMarker)) {
     errors.push(`README.md must contain the release marker: ${releaseMarker}`);
   }
 
-  const schemaSource = read(
-    path.join(ROOT, "packages/db/src/currentSchema.ts"),
-  );
+  const schemaSource = read(path.join(ROOT, 'packages/db/src/currentSchema.ts'));
   const schemaMatch = schemaSource.match(/CURRENT_SCHEMA_VERSION\s*=\s*(\d+)/u);
   if (!schemaMatch) {
-    errors.push("Could not read CURRENT_SCHEMA_VERSION from currentSchema.ts");
+    errors.push('Could not read CURRENT_SCHEMA_VERSION from currentSchema.ts');
     return;
   }
 
-  const dataModel = read(path.join(ROOT, "DOCS/DATA_MODEL.md"));
+  const dataModel = read(path.join(ROOT, 'DOCS/DATA_MODEL.md'));
   const schemaMarker = `current schema marker is **v${schemaMatch[1]}**`;
   if (!dataModel.includes(schemaMarker)) {
-    errors.push(
-      `DOCS/DATA_MODEL.md must contain the schema marker: ${schemaMarker}`,
-    );
+    errors.push(`DOCS/DATA_MODEL.md must contain the schema marker: ${schemaMarker}`);
   }
 }
 
@@ -441,6 +405,5 @@ function main() {
 
 const isMain =
   process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) ===
-    path.resolve(fileURLToPath(import.meta.url));
+  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 if (isMain) main();

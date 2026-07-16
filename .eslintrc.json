@@ -3,7 +3,7 @@
   "ignorePatterns": ["**/dist/**", "**/out/**", "**/build/**", "**/node_modules/**"],
   "overrides": [
     {
-      "files": ["packages/**/*.{ts,tsx}"],
+      "files": ["packages/**/*.{ts,tsx}", "apps/cli/src/**/*.{ts,tsx}"],
       "parser": "@typescript-eslint/parser",
       "plugins": ["@typescript-eslint"],
       "extends": ["eslint:recommended"],

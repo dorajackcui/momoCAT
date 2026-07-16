@@ -6,12 +6,20 @@ import process from 'node:process';
 function spawnCommandSync(command, args, options = {}) {
   return spawnSync(command, args, {
     ...options,
-    shell: process.platform === 'win32'
+    shell: process.platform === 'win32',
   });
 }
 
 const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-const args = ['electron-rebuild', '-v', '28.3.3', '-f', '-w', 'better-sqlite3', ...process.argv.slice(2)];
+const args = [
+  'electron-rebuild',
+  '-v',
+  '28.3.3',
+  '-f',
+  '-w',
+  'better-sqlite3',
+  ...process.argv.slice(2),
+];
 const cwd = process.cwd();
 const env = { ...process.env, HOME: cwd };
 
@@ -22,7 +30,7 @@ if (process.platform === 'win32' && !env.USERPROFILE) {
 const result = spawnCommandSync(npxCmd, args, {
   cwd,
   env,
-  stdio: 'inherit'
+  stdio: 'inherit',
 });
 
 if (result.error) {

@@ -33,7 +33,7 @@ Then read the owning domain document below. Documentation-only work may start he
 | SQLite/schema/repositories            | [`DATA_MODEL.md`](DATA_MODEL.md) and [`packages/db/src`](../packages/db/src)                                                                                        |
 | CLI parsing and operation             | [`CLI.md`](CLI.md), [`apps/cli/src`](../apps/cli/src)                                                                                                               |
 | TM/TB/AI flow diagnosis and CLI smoke | [`DEVELOPMENT.md`](DEVELOPMENT.md#diagnostic-playbooks)                                                                                                             |
-| Repository scripts and generators     | [`DEVELOPMENT.md`](DEVELOPMENT.md#script-ownership-and-maintenance)                                                                                                  |
+| Repository scripts and generators     | [`DEVELOPMENT.md`](DEVELOPMENT.md#script-ownership-and-maintenance)                                                                                                 |
 | Build, packaging, and updates         | [`DEVELOPMENT.md`](DEVELOPMENT.md), [`scripts/pack-platform.mjs`](../scripts/pack-platform.mjs)                                                                     |
 
 The root [README](../README.md) is the product entrypoint. `AGENTS.md` is the agent entrypoint. Package-specific READMEs may contain a short build/usage pointer, but the topic document above owns operational defaults and detailed contracts.

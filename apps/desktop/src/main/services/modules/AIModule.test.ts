@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Segment, Token } from '@cat/core/models';
 import { parseDisplayTextToTokens } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
