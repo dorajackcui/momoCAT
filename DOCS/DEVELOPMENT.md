@@ -70,6 +70,7 @@ The root `package.json` is the command source of truth.
 | `npm run gate:arch`             | Enforce package/service architecture guardrails.                               |
 | `npm run gate:style`            | Enforce renderer style-class rules.                                            |
 | `npm run gate:file-size`        | Enforce large-file thresholds.                                                 |
+| `npm run gate:smoke:large-file` | Rebuild for host Node and run the large-file TM regression.                    |
 | `npm run gate:check`            | Run the repository quality gate.                                               |
 | `npm run build`                 | Rebuild native modules and build the desktop app.                              |
 | `npm run build:cli`             | Build `@cat/localization` and the CLI bundle.                                  |
@@ -208,7 +209,7 @@ Electron and host Node use different ABIs for `better-sqlite3`.
 
 - Before desktop dev/build/pack: `npm run rebuild:electron`.
 - Before Node-based tests and DB scripts: `npm run rebuild:test`.
-- The root `dev`, `build`, and `test` commands already choose the appropriate rebuild.
+- Root dev/build, tests/traces, and `gate:smoke:large-file` already choose the appropriate rebuild.
 
 If a native module suddenly fails to load after switching between desktop and tests, rebuild for the command you are about to run instead of reinstalling blindly.
 

@@ -24,7 +24,7 @@
     "ai-prompts:check": "node scripts/generate-ai-prompt-templates.mjs --check",
     "gate:style": "node scripts/gate-style-classes.mjs",
     "gate:file-size": "node scripts/gate-file-size.mjs",
-    "gate:smoke:large-file": "vitest run apps/desktop/src/main/services/modules/TMModule.test.ts -t \"scans segments page by page\"",
+    "gate:smoke:large-file": "npm run rebuild:test && vitest run apps/desktop/src/main/services/modules/TMModule.test.ts -t \"scans segments page by page\"",
     "typecheck": "npm run typecheck --workspace=apps/desktop",
     "gate:check": "npm run docs:check && npm run gate:text && npm run format:check && npm run test:scripts && npm run ai-prompts:check && npm run typecheck --workspace=apps/desktop && npm run gate:arch && npm run gate:style && npm run gate:file-size && npm run lint && npm run gate:smoke:large-file",
     "rebuild:electron": "node scripts/rebuild-electron.mjs",
