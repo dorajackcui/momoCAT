@@ -332,6 +332,58 @@
     background: transparent;
   }
 
+  .quiet-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--color-text-faint), 0.16) transparent;
+  }
+
+  .quiet-scrollbar:hover {
+    scrollbar-color: rgba(var(--color-text-faint), 0.34) transparent;
+  }
+
+  .quiet-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  .quiet-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(var(--color-text-faint), 0.14);
+    border-radius: 999px;
+  }
+
+  .quiet-scrollbar:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(var(--color-text-faint), 0.34);
+  }
+
+  .quiet-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .editor-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--color-text-faint), 0.42) transparent;
+  }
+
+  .editor-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .editor-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(var(--color-text-faint), 0.42);
+    background-clip: content-box;
+    border: 1px solid transparent;
+    border-radius: 999px;
+  }
+
+  .editor-scrollbar:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(var(--color-text-faint), 0.58);
+  }
+
+  .editor-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
   .animate-toast-in {
     animation: toast-in 0.25s ease-out;
   }

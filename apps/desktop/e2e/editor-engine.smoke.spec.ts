@@ -91,6 +91,37 @@ async function closeSmokeSession(session: SmokeSession): Promise<void> {
 }
 
 test.describe('CodeMirror editor engine smoke', () => {
+  test('keeps segment height stable when activation mounts CodeMirror', async () => {
+    const session = await createSmokeSession();
+
+    try {
+      const { page } = session;
+      const rows = page.locator('div.group.grid');
+      await expect(rows).toHaveCount(3);
+
+      const secondRow = rows.nth(1);
+      const inactiveHeight = await secondRow.evaluate(
+        (element) => element.getBoundingClientRect().height,
+      );
+
+      await secondRow.click();
+      await expect(secondRow.locator('.editor-target-editor-host .cm-content')).toBeVisible();
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          }),
+      );
+
+      const activeHeight = await secondRow.evaluate(
+        (element) => element.getBoundingClientRect().height,
+      );
+      expect(Math.abs(activeHeight - inactiveHeight)).toBeLessThanOrEqual(0.5);
+    } finally {
+      await closeSmokeSession(session);
+    }
+  });
+
   test('non-printing symbols + filter stability + external update shortcuts', async () => {
     const session = await createSmokeSession();
 

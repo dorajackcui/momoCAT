@@ -9,8 +9,11 @@ interface EditorSidebarProps {
   activeTab: 'tm' | 'concordance';
   setActiveTab: (tab: 'tm' | 'concordance') => void;
   onStartResize: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  activeSegmentId: string | null;
+  activeSourceTokens: Token[];
   activeMatches: TMMatch[];
   activeTerms: TBMatch[];
+  sourceLocale?: string | null;
   referenceLoading: boolean;
   onApplyMatch: (tokens: Token[]) => void;
   onApplyTerm: (term: string) => void;
@@ -25,8 +28,11 @@ const EditorSidebarComponent: React.FC<EditorSidebarProps> = ({
   activeTab,
   setActiveTab,
   onStartResize,
+  activeSegmentId,
+  activeSourceTokens,
   activeMatches,
   activeTerms,
+  sourceLocale,
   referenceLoading,
   onApplyMatch,
   onApplyTerm,
@@ -37,7 +43,7 @@ const EditorSidebarComponent: React.FC<EditorSidebarProps> = ({
 }) => {
   return (
     <div
-      className="border-l border-border bg-muted/50 flex-col hidden lg:flex relative"
+      className="border-l border-border bg-surface flex-col hidden lg:flex relative"
       style={{ width: `${sidebarWidth}px` }}
     >
       <button
@@ -73,11 +79,15 @@ const EditorSidebarComponent: React.FC<EditorSidebarProps> = ({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0">
         {activeTab === 'tm' ? (
           <TMPanel
+            key={activeSegmentId ?? 'no-active-segment'}
             matches={activeMatches}
             termMatches={activeTerms}
+            activeSegmentId={activeSegmentId}
+            currentSourceTokens={activeSourceTokens}
+            sourceLocale={sourceLocale}
             loading={referenceLoading}
             onApply={onApplyMatch}
             onApplyTerm={onApplyTerm}

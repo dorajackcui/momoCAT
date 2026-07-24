@@ -142,6 +142,9 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
   const totalSegments = segmentStats.totalSegments;
   const confirmedSegments = segmentStats.confirmedSegments;
   const saveErrorCount = Object.keys(segmentSaveErrors).length;
+  const activeSourceTokens = activeSegmentId
+    ? (segmentStore.getSegment(activeSegmentId)?.sourceTokens ?? [])
+    : [];
 
   const handleExport = useCallback(() => {
     void handleBatchExport();
@@ -244,7 +247,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden bg-muted">
+    <div className="h-screen w-screen flex flex-col overflow-hidden bg-surface">
       {supportsBatchActions && (
         <ProjectAITranslateModal
           open={batchActions.isBatchAIModalOpen}
@@ -289,7 +292,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
       <div ref={layoutRef as React.RefObject<HTMLDivElement>} className="flex-1 flex min-h-0">
         <div
           ref={listScrollRef}
-          className="flex-1 overflow-y-auto bg-surface custom-scrollbar"
+          className="editor-scrollbar flex-1 overflow-y-auto bg-surface"
           style={{ scrollbarGutter: 'stable' }}
         >
           <div className="min-w-[800px]">
@@ -367,8 +370,11 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           onStartResize={handleStartSidebarResize}
+          activeSegmentId={activeSegmentId}
+          activeSourceTokens={activeSourceTokens}
           activeMatches={activeMatches}
           activeTerms={activeTerms}
+          sourceLocale={project?.srcLang ?? null}
           referenceLoading={referenceLoading}
           onApplyMatch={handleApplyMatch}
           onApplyTerm={handleApplyTerm}

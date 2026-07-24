@@ -101,6 +101,8 @@ For one persistent prompt row, selection is capped at:
 
 Explicit Concordance Search is a separate desktop route from the active TM-match flow. Confirm which route is wrong before changing recall SQL or scoring.
 
+The desktop CAT panel keeps TM/TB application behavior unchanged while comparing the selected TM source with the active segment source. Removed TM text and added current text are highlighted separately, and tag tokens remain atomic; TB rows do not drive the source comparison.
+
 ### Language profiles
 
 Default/CJK behavior uses the established normalization, scoring, concordance, diversity, and cap rules.

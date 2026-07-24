@@ -16,4 +16,13 @@ describe('renderer editor typography CSS', () => {
     expect(css).toContain('@apply editor-text-base pl-0.5 pr-12 py-0.5;');
     expect(css).not.toContain('@apply editor-text-base pl-1.5 pr-12 py-0.5;');
   });
+
+  it('keeps a subtle but visible scroll position marker in the editor', () => {
+    const css = readFileSync(resolve(__dirname, 'index.css'), 'utf8');
+
+    expect(css).toContain('.editor-scrollbar {');
+    expect(css).toContain('scrollbar-color: rgba(var(--color-text-faint), 0.42) transparent;');
+    expect(css).toContain('.editor-scrollbar::-webkit-scrollbar-thumb {');
+    expect(css).toContain('border-radius: 999px;');
+  });
 });

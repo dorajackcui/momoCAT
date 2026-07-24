@@ -1,7 +1,9 @@
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { TBMatch } from '@cat/core/models';
 import type { TMMatch } from './TMPanel';
-import { buildCombinedMatches } from './TMPanel';
+import { buildCombinedMatches, resolveSelectedTMMatch, TMPanel } from './TMPanel';
 
 function createTMMatch(index: number, similarity: number): TMMatch {
   const now = new Date().toISOString();
@@ -100,5 +102,64 @@ describe('buildCombinedMatches', () => {
       rank: 90,
     });
     expect(combined[0].payload).not.toHaveProperty('similarity');
+  });
+
+  it('selects the highest-ranked TM by default even when a TB sorts above it', () => {
+    const combined = buildCombinedMatches([createTMMatch(1, 80)], [createTBMatch(1)], 5);
+    const selected = resolveSelectedTMMatch(combined);
+
+    expect(combined[0].kind).toBe('tb');
+    expect(selected?.kind).toBe('tm');
+    expect(selected?.payload.id).toBe('tm-1');
+  });
+
+  it('preserves an explicit TM selection while it remains available', () => {
+    const combined = buildCombinedMatches([createTMMatch(1, 95), createTMMatch(2, 80)], [], 5);
+    const secondTM = combined.find((item) => item.kind === 'tm' && item.payload.id === 'tm-2');
+
+    expect(resolveSelectedTMMatch(combined, secondTM?.id)?.payload.id).toBe('tm-2');
+  });
+
+  it('renders the source comparison for the default TM selection', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(TMPanel, {
+        matches: [createTMMatch(1, 95)],
+        termMatches: [],
+        activeSegmentId: 'segment-1',
+        currentSourceTokens: [{ type: 'text', content: 'source-updated' }],
+        sourceLocale: 'en-US',
+        onApply: () => {},
+        onApplyTerm: () => {},
+      }),
+    );
+
+    expect(html).toContain('TM source');
+    expect(html).toContain('Current');
+    expect(html).toContain('bg-danger-soft');
+    expect(html).toContain('bg-success-soft');
+    expect(html).toContain('quiet-scrollbar');
+    expect(html).toContain('line-clamp-5');
+    expect(html).not.toContain('>...<');
+    expect(html).not.toContain('>less<');
+    expect(html).toContain('border-l-border bg-muted/60');
+    expect(html).not.toContain('border-l-brand/70');
+    expect(html).not.toContain('bg-brand-soft');
+  });
+
+  it('hides the source comparison when only TB matches are available', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(TMPanel, {
+        matches: [],
+        termMatches: [createTBMatch(1)],
+        activeSegmentId: 'segment-1',
+        currentSourceTokens: [{ type: 'text', content: 'source-1' }],
+        sourceLocale: 'en-US',
+        onApply: () => {},
+        onApplyTerm: () => {},
+      }),
+    );
+
+    expect(html).not.toContain('TM source');
+    expect(html).not.toContain('Current source');
   });
 });

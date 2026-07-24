@@ -23,7 +23,10 @@ interface EditorFilterBarProps {
   sortDirection: string;
   isSortMenuOpen: boolean;
   toggleSortMenu: () => void;
-  handleSortChange: (sortBy: 'default' | 'source_length' | 'target_length', direction: 'asc' | 'desc') => void;
+  handleSortChange: (
+    sortBy: 'default' | 'source_length' | 'target_length',
+    direction: 'asc' | 'desc',
+  ) => void;
   sourceQueryInput: string;
   targetQueryInput: string;
   setSourceQueryInput: (value: string) => void;
@@ -40,7 +43,9 @@ interface EditorFilterBarProps {
   matchMode: 'contains' | 'exact' | 'regex';
   handleMatchModeChange: (value: 'contains' | 'exact' | 'regex') => void;
   statusFilter: 'all' | 'new' | 'draft' | 'translated' | 'reviewed' | 'confirmed';
-  handleStatusFilterChange: (value: 'all' | 'new' | 'draft' | 'translated' | 'reviewed' | 'confirmed') => void;
+  handleStatusFilterChange: (
+    value: 'all' | 'new' | 'draft' | 'translated' | 'reviewed' | 'confirmed',
+  ) => void;
   qualityFilters: Array<'qa_error' | 'qa_warning' | 'save_error'>;
   toggleQualityFilter: (value: 'qa_error' | 'qa_warning' | 'save_error') => void;
   clearFilters: () => void;
@@ -90,7 +95,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
   sortMenuRef,
 }) => {
   return (
-    <div className="sticky top-0 z-20 bg-surface border-b border-border shadow-sm">
+    <div className="sticky top-0 z-20 bg-surface border-b border-border">
       <EditorBatchActionBar
         visible={supportsBatchActions}
         canRunActions={canRunActions}
@@ -104,7 +109,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
         onToggleNonPrintingSymbols={onToggleNonPrintingSymbols}
       />
 
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/80 backdrop-blur-sm">
+      <div className="flex items-center gap-2 px-4 py-2.5 bg-surface">
         <div ref={sortMenuRef as React.RefObject<HTMLDivElement>} className="relative shrink-0">
           <button
             type="button"
@@ -118,7 +123,12 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
             aria-label="Sort options"
           >
             <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h8M6 12h12M10 17h4" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 7h8M6 12h12M10 17h4"
+              />
             </svg>
           </button>
 
@@ -128,7 +138,9 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
 
           {isSortMenuOpen && (
             <div className="absolute left-0 top-full mt-2 w-64 rounded-lg border border-border bg-surface shadow-lg p-2 z-30 space-y-1">
-              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-text-faint">Sort</div>
+              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-text-faint">
+                Sort
+              </div>
               {FILTER_SORT_OPTIONS.map((option) => {
                 const active = sortBy === option.sortBy && sortDirection === option.sortDirection;
                 return (
@@ -158,7 +170,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
             onFocus={onSearchInputFocus}
             onBlur={onSearchInputBlur}
             placeholder="Filter source text"
-            className="w-full rounded-xl border border-border bg-surface pl-8 pr-3 py-1.5 text-sm text-text-muted focus:outline-none focus:ring-2 focus:ring-brand/20"
+            className="w-full rounded-xl border border-border bg-surface pl-8 pr-3 py-1.5 text-sm text-text-muted focus:border-brand/50 focus:outline-none focus:ring-1 focus:ring-brand/15"
           />
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -180,7 +192,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
             onFocus={onSearchInputFocus}
             onBlur={onSearchInputBlur}
             placeholder="Filter target text"
-            className="w-full rounded-xl border border-border bg-surface pl-8 pr-3 py-1.5 text-sm text-text-muted focus:outline-none focus:ring-2 focus:ring-brand/20"
+            className="w-full rounded-xl border border-border bg-surface pl-8 pr-3 py-1.5 text-sm text-text-muted focus:border-brand/50 focus:outline-none focus:ring-1 focus:ring-brand/15"
           />
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -207,7 +219,12 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
             title="Open filters"
           >
             <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18M6 12h12M10 20h4" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 4h18M6 12h12M10 20h4"
+              />
             </svg>
           </button>
           {activeFilterCount > 0 && (
@@ -219,7 +236,9 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
           {isFilterMenuOpen && (
             <div className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-border bg-surface shadow-lg p-3 z-30 space-y-3">
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-text-faint mb-2">Quick Presets</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-text-faint mb-2">
+                  Quick Presets
+                </div>
                 <div className="flex flex-wrap gap-1.5">
                   {FILTER_QUICK_PRESET_OPTIONS.map((preset) => {
                     const active = quickPreset === preset.value;
@@ -242,7 +261,9 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
               </div>
 
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-text-faint mb-2">Match Mode</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-text-faint mb-2">
+                  Match Mode
+                </div>
                 <div className="flex flex-wrap gap-1.5">
                   {FILTER_MATCH_MODE_OPTIONS.map((mode) => {
                     const active = matchMode === mode.value;
@@ -265,7 +286,9 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
               </div>
 
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-text-faint mb-2">Status</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-text-faint mb-2">
+                  Status
+                </div>
                 <div className="flex flex-wrap gap-1.5">
                   {FILTER_STATUS_OPTIONS.map((option) => {
                     const active = statusFilter === option.value;
@@ -288,7 +311,9 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
               </div>
 
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-text-faint mb-2">Quality</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-text-faint mb-2">
+                  Quality
+                </div>
                 <div className="flex flex-wrap gap-1.5">
                   {FILTER_QUALITY_OPTIONS.map((option) => {
                     const active = qualityFilters.includes(option.value);
@@ -321,8 +346,18 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
           aria-label="Clear filter"
           title="Clear filter"
         >
-          <svg className="w-3.5 h-3.5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          <svg
+            className="w-3.5 h-3.5 mx-auto"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
           </svg>
         </button>
       </div>

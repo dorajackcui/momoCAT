@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import type { TBMatch, TMEntry, Token } from '@cat/core/models';
 import { serializeTokensToDisplayText } from '@cat/core/text';
+import { SourceDiffPane } from './tm-panel/SourceDiffPane';
 
 export type TMMatchKind = 'tm' | 'concordance';
 
@@ -28,12 +29,15 @@ export type TMMatch = StandardTMMatch | ConcordanceTMMatch;
 interface TMPanelProps {
   matches: TMMatch[];
   termMatches: TBMatch[];
+  activeSegmentId: string | null;
+  currentSourceTokens: Token[];
+  sourceLocale?: string | null;
   loading?: boolean;
   onApply: (tokens: Token[]) => void;
   onApplyTerm: (term: string) => void;
 }
 
-type CombinedMatch =
+export type CombinedMatch =
   | {
       kind: 'tm';
       rank: number;
@@ -51,16 +55,18 @@ type CombinedMatch =
       payload: TBMatch;
     };
 
+type CombinedTMMatch = Extract<CombinedMatch, { kind: 'tm' }>;
+
 export function buildCombinedMatches(
   matches: TMMatch[],
   termMatches: TBMatch[],
   tmRenderLimit: number,
 ): CombinedMatch[] {
   return [
-    ...(matches || []).slice(0, tmRenderLimit).map((match, idx) => ({
+    ...(matches || []).slice(0, tmRenderLimit).map((match) => ({
       kind: 'tm' as const,
       rank: match.rank,
-      id: `tm-${match.id}-${idx}`,
+      id: `tm-${match.kind}-${match.id}`,
       sourceText: serializeTokensToDisplayText(match.sourceTokens),
       targetText: serializeTokensToDisplayText(match.targetTokens),
       payload: match,
@@ -80,22 +86,36 @@ export function buildCombinedMatches(
   });
 }
 
-export const TMPanel: React.FC<TMPanelProps> = ({ matches, termMatches, loading, onApply, onApplyTerm }) => {
+export function resolveSelectedTMMatch(
+  combined: CombinedMatch[],
+  selectedId?: string | null,
+): CombinedTMMatch | null {
+  const selected = selectedId
+    ? combined.find((item): item is CombinedTMMatch => item.kind === 'tm' && item.id === selectedId)
+    : undefined;
+  return selected ?? combined.find((item): item is CombinedTMMatch => item.kind === 'tm') ?? null;
+}
+
+export const TMPanel: React.FC<TMPanelProps> = ({
+  matches,
+  termMatches,
+  activeSegmentId,
+  currentSourceTokens,
+  sourceLocale,
+  loading,
+  onApply,
+  onApplyTerm,
+}) => {
   const TM_RENDER_LIMIT = 5;
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-
-  const truncate = (text: string, limit: number) => {
-    if (text.length <= limit) return text;
-    return `${text.slice(0, limit)}...`;
-  };
-
-  const toggleExpanded = (key: string) => {
-    setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const combined = useMemo(
     () => buildCombinedMatches(matches, termMatches, TM_RENDER_LIMIT),
     [matches, termMatches],
+  );
+  const selectedTM = useMemo(
+    () => resolveSelectedTMMatch(combined, selectedId),
+    [combined, selectedId],
   );
 
   if (loading) {
@@ -117,12 +137,14 @@ export const TMPanel: React.FC<TMPanelProps> = ({ matches, termMatches, loading,
   }
 
   return (
-    <div className="h-full flex flex-col">
-      {/* <div className="px-2 py-2 border-b border-border/60">
-        <span className="text-[10px] text-text-faint">{combined.length} matches found</span>
-      </div> */}
-
-      <div className="flex-1 overflow-y-auto">
+    <div className="h-full flex flex-col bg-surface">
+      <div
+        className={
+          selectedTM && activeSegmentId
+            ? 'quiet-scrollbar min-h-0 basis-3/5 overflow-y-auto'
+            : 'quiet-scrollbar min-h-0 flex-1 overflow-y-auto'
+        }
+      >
         {combined.map((item) => {
           const isTM = item.kind === 'tm';
           const match = item.payload;
@@ -150,19 +172,28 @@ export const TMPanel: React.FC<TMPanelProps> = ({ matches, termMatches, loading,
           const key = item.id;
           const sourceText = item.sourceText;
           const targetText = item.targetText;
-          const isExpanded = !!expanded[key];
-          const hasLongSource = sourceText.length > 180;
-          const hasLongTarget = targetText.length > 180;
+          const isSelected = isTM && selectedTM?.id === item.id;
 
           return (
-            <div key={key} className="border-b border-border/60 last:border-b-0">
-              <div className="px-2 py-1 flex items-center justify-between text-[9px] text-text-faint bg-muted/40">
+            <div
+              key={key}
+              className={`border-l-2 border-b border-border/60 last:border-b-0 ${
+                isSelected ? 'border-l-border bg-muted/60' : 'border-l-transparent'
+              }`}
+            >
+              <div className="px-2 py-1 flex items-center justify-between text-[9px] text-text-faint">
                 <span className="truncate">{tmLabel}</span>
                 <span>{isTM && ` · ${new Date(tmMatch!.updatedAt).toLocaleDateString()}`}</span>
               </div>
 
               <div
-                className="group grid grid-cols-[1fr_20px_1fr] items-stretch cursor-pointer hover:bg-brand-soft/30 transition-colors"
+                className={`group grid grid-cols-[1fr_20px_1fr] items-stretch cursor-pointer transition-colors ${
+                  isSelected ? '' : 'hover:bg-muted/30'
+                }`}
+                onClick={() => {
+                  if (!isTM) return;
+                  setSelectedId(item.id);
+                }}
                 onDoubleClick={() => {
                   if (isTM) {
                     onApply(tmMatch!.targetTokens);
@@ -172,19 +203,12 @@ export const TMPanel: React.FC<TMPanelProps> = ({ matches, termMatches, loading,
                 }}
                 title="Double click to apply match"
               >
-                <div className="px-2 py-2 border-r border-border/60 text-xs text-text-muted leading-snug">
-                  {isExpanded ? sourceText : truncate(sourceText, 170)}
-                  {hasLongSource && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleExpanded(key);
-                      }}
-                      className="ml-1 text-[10px] text-brand hover:underline"
-                    >
-                      {isExpanded ? 'less' : '...'}
-                    </button>
-                  )}
+                <div
+                  className={`px-2 py-2 border-r border-border/60 text-xs text-text-muted leading-snug ${
+                    isTM ? 'line-clamp-5' : ''
+                  }`}
+                >
+                  {sourceText}
                 </div>
 
                 <div className={`${scoreBg} text-white flex items-center justify-center px-[1px]`}>
@@ -193,25 +217,28 @@ export const TMPanel: React.FC<TMPanelProps> = ({ matches, termMatches, loading,
                   </span>
                 </div>
 
-                <div className="px-2 py-2 border-l border-border/60 text-xs text-text leading-snug">
-                  {isExpanded ? targetText : truncate(targetText, 300)}
-                  {hasLongTarget && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleExpanded(key);
-                      }}
-                      className="ml-1 text-[10px] text-brand hover:underline not-italic"
-                    >
-                      {isExpanded ? 'less' : '...'}
-                    </button>
-                  )}
+                <div
+                  className={`px-2 py-2 border-l border-border/60 text-xs text-text leading-snug ${
+                    isTM ? 'line-clamp-5' : ''
+                  }`}
+                >
+                  {targetText}
                 </div>
               </div>
             </div>
           );
         })}
       </div>
+
+      {selectedTM && activeSegmentId && (
+        <div className="min-h-0 basis-2/5 border-t border-border">
+          <SourceDiffPane
+            tmSourceTokens={selectedTM.payload.sourceTokens}
+            currentSourceTokens={currentSourceTokens}
+            sourceLocale={sourceLocale}
+          />
+        </div>
+      )}
     </div>
   );
 };

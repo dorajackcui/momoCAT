@@ -90,7 +90,7 @@ export const ConcordancePanel: React.FC<ConcordancePanelProps> = ({
         </form>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="quiet-scrollbar flex-1 overflow-y-auto p-4 space-y-4">
         {isSearching ? (
           <div className="text-center py-8 text-text-faint text-xs italic">Searching...</div>
         ) : results.length > 0 ? (

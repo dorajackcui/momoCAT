@@ -17,7 +17,7 @@ import {
   EditorEngineOptions,
 } from './types';
 
-const editorThemeExtension = EditorView.theme({
+export const codeMirrorEditorThemeSpec = {
   '&.cm-editor': {
     backgroundColor: 'transparent',
     outline: 'none',
@@ -36,7 +36,8 @@ const editorThemeExtension = EditorView.theme({
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
     padding: '0',
-    minHeight: '36px',
+    // The shared target layer owns the minimum height. Repeating it here adds
+    // the host padding twice and makes a segment grow when it becomes active.
   },
   '.cm-line': {
     padding: '0',
@@ -87,7 +88,9 @@ const editorThemeExtension = EditorView.theme({
     userSelect: 'none',
     pointerEvents: 'none',
   },
-});
+};
+
+const editorThemeExtension = EditorView.theme(codeMirrorEditorThemeSpec);
 
 class LineBreakWidget extends WidgetType {
   toDOM(): HTMLElement {
