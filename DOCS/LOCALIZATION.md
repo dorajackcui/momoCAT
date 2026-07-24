@@ -154,6 +154,8 @@ Post-commit `working-tm-updated` and segment events refresh match/reference stat
 
 Import is a one-time addition/overwrite operation. Sync creates a durable link to a local spreadsheet and exposes the linked file in desktop resource UI.
 
+Project resource pickers offer only unmounted TMs and TBs whose directed source/target language pair exactly matches the project.
+
 ### TB sync
 
 TB sync parses the entire linked workbook before mutation, then mirrors valid rows by clearing and rewriting the TB in one transaction. A read/parse/insert failure rolls back instead of leaving a partial TB. Sync records its latest outcome in `app_settings` and publishes reference invalidation after success.

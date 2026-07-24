@@ -18,6 +18,7 @@ import { PasteSourceModal } from './project-detail/PasteSourceModal';
 import { runFileQaWithRefresh } from './project-detail/runFileQaWithRefresh';
 import { buildFileQaFeedback } from './project-detail/fileQaFeedback';
 import { runFileReferenceExportAction } from './project-detail/fileInspectAction';
+import { hasMatchingLanguagePair } from './languageOptions';
 import { Spinner } from './ui';
 
 interface ProjectDetailProps {
@@ -572,14 +573,14 @@ export function ProjectDetail({
         ) : activeTab === 'tm' ? (
           <ProjectTMPane
             mountedTMs={mountedTMs}
-            allMainTMs={allMainTMs}
+            allMainTMs={allMainTMs.filter((tm) => hasMatchingLanguagePair(tm, project))}
             onMountTM={(tmId) => void handleMountTM(tmId)}
             onUnmountTM={(tmId) => void handleUnmountTM(tmId)}
           />
         ) : (
           <ProjectTBPane
             mountedTBs={mountedTBs}
-            allTBs={allTBs}
+            allTBs={allTBs.filter((tb) => hasMatchingLanguagePair(tb, project))}
             onMountTB={(tbId) => void handleMountTB(tbId)}
             onUnmountTB={(tbId) => void handleUnmountTB(tbId)}
           />

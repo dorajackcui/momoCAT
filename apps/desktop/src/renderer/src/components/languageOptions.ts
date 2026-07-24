@@ -16,3 +16,12 @@ export const DEFAULT_PROJECT_SOURCE_LANG = 'zh-CN';
 export const DEFAULT_PROJECT_TARGET_LANG = 'en-US';
 export const DEFAULT_ASSET_SOURCE_LANG = 'zh-CN';
 export const DEFAULT_ASSET_TARGET_LANG = 'en-US';
+
+interface LanguagePair {
+  srcLang: string;
+  tgtLang: string;
+}
+
+export function hasMatchingLanguagePair(resource: LanguagePair, project: LanguagePair): boolean {
+  return resource.srcLang === project.srcLang && resource.tgtLang === project.tgtLang;
+}
