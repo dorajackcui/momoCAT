@@ -2,7 +2,7 @@
 
 momoCAT 是一个基于 Electron、React、TypeScript 和 SQLite 的桌面 CAT（计算机辅助翻译）工具，同时提供可独立运行的 `momocat` CLI 与共享本地化引擎。
 
-当前发布基线为 `1.0.7`。当前行为以代码、测试和 [`DOCS/`](DOCS/README.md) 中的主题文档为准；仓库不再维护容易失真的“当前状态”或长期 roadmap 文档。
+当前发布基线为 `1.0.8`。当前行为以代码、测试和 [`DOCS/`](DOCS/README.md) 中的主题文档为准；仓库不再维护容易失真的“当前状态”或长期 roadmap 文档。
 
 ## 主要能力
 
