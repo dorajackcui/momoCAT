@@ -155,6 +155,20 @@ function isSegmentUpdateForActiveFile(
   return data.fileId === activeFileId;
 }
 
+// An event rewrites its direct segment and every propagated segment, so a
+// pending/editing state on any of them must delay the whole event. Otherwise a
+// propagation into the actively edited segment replaces the editor content
+// mid-typing and resets the caret.
+export function isSegmentUpdateDelayed(
+  data: SegmentsUpdatedEvent,
+  shouldDelayRemoteUpdate: (segmentId: string) => boolean,
+): boolean {
+  return (
+    shouldDelayRemoteUpdate(data.segmentId) ||
+    (data.propagatedIds ?? []).some((segmentId) => shouldDelayRemoteUpdate(segmentId))
+  );
+}
+
 export function handleIncomingSegmentsUpdatedEvent(
   data: SegmentsUpdatedEvent,
   handlers: RemoteUpdateQueueHandlers,
@@ -167,7 +181,7 @@ export function handleIncomingSegmentsUpdatedEvent(
     return 'stale';
   }
 
-  if (handlers.shouldDelayRemoteUpdate(data.segmentId)) {
+  if (isSegmentUpdateDelayed(data, handlers.shouldDelayRemoteUpdate)) {
     handlers.queuedRemoteUpdates.set(data.segmentId, data);
     return 'queued';
   }
@@ -193,7 +207,7 @@ export function handleIncomingSegmentsUpdatedBatch(
       stale += 1;
       continue;
     }
-    if (handlers.shouldDelayRemoteUpdate(data.segmentId)) {
+    if (isSegmentUpdateDelayed(data, handlers.shouldDelayRemoteUpdate)) {
       handlers.queuedRemoteUpdates.set(data.segmentId, data);
       queued += 1;
       continue;
@@ -228,7 +242,7 @@ export function drainQueuedSegmentsUpdatedEvents(handlers: RemoteUpdateQueueHand
       continue;
     }
 
-    if (handlers.shouldDelayRemoteUpdate(data.segmentId)) {
+    if (isSegmentUpdateDelayed(data, handlers.shouldDelayRemoteUpdate)) {
       continue;
     }
 

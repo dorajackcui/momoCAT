@@ -23,6 +23,7 @@ interface EditorRowDraftControllerResult {
   draftText: string;
   emitTranslationChange: (nextText: string) => void;
   setShortcutActionHandler: (handler: (action: EditorShortcutAction) => void) => void;
+  capturePendingCaretCoords: (coords: { x: number; y: number }) => void;
   editorController: {
     getSnapshot: () => {
       text: string;
@@ -108,6 +109,7 @@ export function useEditorRowDraftController({
   const suppressNextEngineChangeRef = useRef(false);
   const editorFocusedRef = useRef(false);
   const focusEpochRef = useRef(0);
+  const pendingCaretCoordsRef = useRef<{ x: number; y: number } | null>(null);
   const shortcutActionHandlerRef = useRef<((action: EditorShortcutAction) => void) | null>(null);
 
   useEffect(() => {
@@ -228,9 +230,11 @@ export function useEditorRowDraftController({
       handleEngineFocusChange(false);
     }
     if (becameActive && !disableAutoFocus) {
-      adapterRef.current?.focus();
+      const caretCoords = pendingCaretCoordsRef.current;
+      adapterRef.current?.focus(caretCoords ?? undefined);
       onAutoFocus?.(segmentId);
     }
+    pendingCaretCoordsRef.current = null;
     wasActiveRef.current = isActive;
   }, [adapterRef, disableAutoFocus, handleEngineFocusChange, isActive, onAutoFocus, segmentId]);
 
@@ -253,6 +257,10 @@ export function useEditorRowDraftController({
     },
     [],
   );
+
+  const capturePendingCaretCoords = useCallback((coords: { x: number; y: number }) => {
+    pendingCaretCoordsRef.current = coords;
+  }, []);
 
   const editorController = useMemo(
     () => ({
@@ -291,6 +299,7 @@ export function useEditorRowDraftController({
     draftText,
     emitTranslationChange,
     setShortcutActionHandler,
+    capturePendingCaretCoords,
     editorController,
   };
 }

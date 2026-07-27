@@ -86,6 +86,17 @@ describe('handleIncomingSegmentsUpdatedEvent', () => {
     expect(handlers.queuedRemoteUpdates.get('seg-2')).toEqual(event);
   });
 
+  it('queues incoming remote update when a propagated segment is being edited', () => {
+    const handlers = createHandlers({ shouldDelay: (id) => id === 'seg-editing' });
+    const event = { ...createEvent('seg-origin', 'req-4'), propagatedIds: ['seg-editing'] };
+
+    const result = handleIncomingSegmentsUpdatedEvent(event, handlers);
+
+    expect(result).toBe('queued');
+    expect(handlers.applySegmentsUpdatedEvent).not.toHaveBeenCalled();
+    expect(handlers.queuedRemoteUpdates.get('seg-origin')).toEqual(event);
+  });
+
   it('drops stale incoming remote update', () => {
     const handlers = createHandlers({ isStale: () => true });
     const event = createEvent('seg-3', 'req-3');

@@ -94,20 +94,25 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
     [segment.targetTokens, segment.sourceTokens],
   );
 
-  const { editorHostRef, draftText, setShortcutActionHandler, editorController } =
-    useEditorRowDraftController({
-      segmentId: segment.segmentId,
-      targetEditorText,
-      targetHighlightQuery,
-      highlightMode,
-      isActive,
-      disableAutoFocus,
-      showNonPrintingSymbols,
-      onAutoFocus,
-      onChange,
-      onBlur,
-      onEditStateChange,
-    });
+  const {
+    editorHostRef,
+    draftText,
+    setShortcutActionHandler,
+    capturePendingCaretCoords,
+    editorController,
+  } = useEditorRowDraftController({
+    segmentId: segment.segmentId,
+    targetEditorText,
+    targetHighlightQuery,
+    highlightMode,
+    isActive,
+    disableAutoFocus,
+    showNonPrintingSymbols,
+    onAutoFocus,
+    onChange,
+    onBlur,
+    onEditStateChange,
+  });
 
   const {
     aiRefineInputRef,
@@ -173,7 +178,12 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
       className={`group grid grid-cols-[30px_minmax(0,1fr)_4px_minmax(0,1fr)] border-b border-border transition-colors ${
         isActive ? 'bg-brand-soft/20' : 'hover:bg-muted/30'
       }`}
-      onClick={() => onActivate(segment.segmentId)}
+      onClick={(event) => {
+        // Remember where the user clicked so activation can place the caret
+        // there instead of resetting it to the start of the segment.
+        capturePendingCaretCoords({ x: event.clientX, y: event.clientY });
+        onActivate(segment.segmentId);
+      }}
     >
       <EditorRowNumberCell rowNumber={rowNumber} isRepeatedSource={isRepeatedSource} />
 

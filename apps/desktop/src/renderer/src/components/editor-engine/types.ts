@@ -38,7 +38,7 @@ export interface EditorEngineAdapter {
   setText(nextText: string, preserveSelection: boolean): void;
   setEditable(editable: boolean): void;
   setOptions(options: Partial<EditorEngineOptions>): void;
-  focus(): void;
+  focus(caretCoords?: { x: number; y: number }): void;
   replaceSelection(insertText: string): void;
   dispatchCommand(command: EditorCommand): boolean;
   getSnapshot(): EditorEngineSnapshot;
