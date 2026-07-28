@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { readFile } from 'fs/promises';
 import * as XLSX from 'xlsx';
 import type { Segment } from '@cat/core/models';
+import { normalizeTermForLookup } from '@cat/core/text';
 import {
   ProgressEmitter,
   SettingsRepository,
@@ -11,6 +12,7 @@ import {
 } from '../ports';
 import { TBService } from '../TBService';
 import { extractSheetRows } from '../../filters/sheetRows';
+import { dedupeRowsLastWins } from './resourceImportRows';
 import type {
   TBAssetPreview,
   TBImportOptions,
@@ -175,7 +177,8 @@ export class TBModule {
     try {
       // Parse the full workbook before touching the TB so an unreadable or
       // malformed file never leaves the term base half-cleared.
-      const rows = await this.readTermRows(config.filePath, config.columns);
+      const parsed = await this.readTermRows(config.filePath, config.columns);
+      const { rows, skipped } = this.dedupeTermRows(tb.srcLang, parsed);
       const removed = this.tbRepo.getTermBaseStats(tbId).entryCount;
 
       this.emitImportProgress(
@@ -190,6 +193,7 @@ export class TBModule {
         this.tbRepo.clearTermBaseEntries(tbId);
         return this.writeTermRowsChunk(tbId, tb.srcLang, rows, false);
       });
+      written.skipped += skipped;
 
       this.emitImportProgress(
         'tb-sync',
@@ -241,7 +245,7 @@ export class TBModule {
   private async writeTermRows(
     tbId: string,
     srcLang: string,
-    rows: ParsedTermRow[],
+    parsedRows: ParsedTermRow[],
     options: {
       overwrite: boolean;
       progressType: 'tb-import' | 'tb-sync';
@@ -249,9 +253,10 @@ export class TBModule {
       onProgress?: ImportProgressCallback;
     },
   ): Promise<{ success: number; skipped: number }> {
+    const { rows, skipped: droppedRows } = this.dedupeTermRows(srcLang, parsedRows);
     const totalRows = rows.length;
     let success = 0;
-    let skipped = 0;
+    let skipped = droppedRows;
 
     if (totalRows === 0) {
       return { success, skipped };
@@ -288,6 +293,20 @@ export class TBModule {
     }
 
     return { success, skipped };
+  }
+
+  // A file expresses srcNorm -> term bindings where later rows override
+  // earlier ones. Reducing here keeps the writers' ON CONFLICT semantics
+  // scoped to file-vs-database conflicts only. The key must stay in lockstep
+  // with the (tbId, srcNorm) unique index maintained by TBRepo.
+  private dedupeTermRows(
+    srcLang: string,
+    rows: ParsedTermRow[],
+  ): { rows: ParsedTermRow[]; skipped: number } {
+    const deduped = dedupeRowsLastWins(rows, (row) =>
+      row.srcTerm && row.tgtTerm ? normalizeTermForLookup(row.srcTerm, { locale: srcLang }) : null,
+    );
+    return { rows: deduped.rows, skipped: deduped.invalid + deduped.duplicates };
   }
 
   // Must be called inside a transaction owned by the caller.

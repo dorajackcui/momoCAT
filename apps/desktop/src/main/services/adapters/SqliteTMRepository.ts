@@ -20,6 +20,19 @@ export class SqliteTMRepository implements TMRepository {
     return this.db.insertTMEntryIfAbsentBySrcHash(entry);
   }
 
+  applyTMSyncUpdates(
+    tmId: string,
+    rows: Array<{
+      entryId: string;
+      sourceTokensJson: string;
+      targetTokensJson: string;
+      srcText: string;
+      tgtText: string;
+    }>,
+  ): number {
+    return this.db.applyTMSyncUpdates(tmId, rows);
+  }
+
   insertTMFts(tmId: string, srcText: string, tgtText: string, tmEntryId: string): void {
     this.db.insertTMFts(tmId, srcText, tgtText, tmEntryId);
   }
@@ -36,7 +49,11 @@ export class SqliteTMRepository implements TMRepository {
     return this.db.findTMEntryByHash(tmId, srcHash);
   }
 
-  searchConcordance(projectId: number, query: string, tmIds?: string[]): Array<TMEntry & { tmId: string }> {
+  searchConcordance(
+    projectId: number,
+    query: string,
+    tmIds?: string[],
+  ): Array<TMEntry & { tmId: string }> {
     return this.db.searchConcordance(projectId, query, tmIds) as Array<TMEntry & { tmId: string }>;
   }
 
@@ -68,9 +85,12 @@ export class SqliteTMRepository implements TMRepository {
     tmIds?: string[],
     options?: TMConcordanceRecallOptions,
   ): Array<TMEntry & { tmId: string }> {
-    return this.db.searchTMConcordanceRecallCandidates(projectId, queryText, tmIds, options) as Array<
-      TMEntry & { tmId: string }
-    >;
+    return this.db.searchTMConcordanceRecallCandidates(
+      projectId,
+      queryText,
+      tmIds,
+      options,
+    ) as Array<TMEntry & { tmId: string }>;
   }
 
   listTMs(type?: 'working' | 'main'): TMRecord[] {

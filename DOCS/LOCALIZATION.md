@@ -156,6 +156,8 @@ Post-commit `working-tm-updated` and segment events refresh match/reference stat
 
 Import is a one-time addition/overwrite operation. Sync creates a durable link to a local spreadsheet and exposes the linked file in desktop resource UI.
 
+All four write paths (TM import, TM sync, TB import, TB sync) treat a file as a key-to-entry mapping with last-wins semantics: rows sharing a conflict key (TM `srcHash`, TB `srcNorm`) collapse to the final occurrence, and duplicates count as skipped. TM import streams the file in one pass, tracking this run's writes per `srcHash` so a later duplicate rewrites the same entry in place; TB paths reduce in memory (`dedupeRowsLastWins`); TM sync reduces via `INSERT OR REPLACE` staging. `ON CONFLICT` clauses therefore express only file-vs-database policy: import `overwrite` replaces existing DB entries, otherwise they win.
+
 Project resource pickers offer only unmounted TMs and TBs whose directed source/target language pair exactly matches the project.
 
 ### TB sync

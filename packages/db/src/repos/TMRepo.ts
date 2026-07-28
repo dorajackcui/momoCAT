@@ -91,6 +91,12 @@ const TM_CONCORDANCE_RECALL_ENGLISH_EXACT_PHRASE_RAW_LIMIT = 8;
 const TM_RECALL_DIVERSITY_MAX_PER_BUCKET = 2;
 const TM_RECALL_DIVERSITY_MIN_CJK_BUCKET_LENGTH = 4;
 const TM_FTS_REPLACE_DELETE_BATCH_SIZE = 900;
+// FTS5 incremental merge: pages written per 'merge' step, and the max steps
+// one optimizeTMFts call may run. 16 pages/step keeps each step a few ms;
+// 64 rounds bounds a single call to ~1k pages of work regardless of how
+// fragmented the index is (leftovers roll over to the next call).
+const TM_FTS_MERGE_STEP_PAGES = 16;
+const TM_FTS_MERGE_MAX_ROUNDS = 64;
 const ONLY_CJK_RE = /^[一-龥]+$/;
 const WEAK_SHORT_CJK_TERMS = new Set(['前往', '可选']);
 
@@ -1842,7 +1848,25 @@ export class TMRepo {
     return deleted;
   }
 
+  // Incremental FTS maintenance with bounded cost per call. A full
+  // 'optimize' rewrites the whole tm_fts index, so its latency grows with
+  // TOTAL entries across all TMs (~9s at 460k entries) even when the sync
+  // touched far fewer rows. Instead: kick off a merge-all pass ('merge', -N),
+  // then advance it in fixed-size steps, stopping early once a step performs
+  // no work (sqlite3_total_changes stalls, per the FTS5 docs' pattern).
+  // Leftover work carries across calls — each large sync/import inches the
+  // index toward fully-merged while automerge handles day-to-day segments.
   public optimizeTMFts(): void {
-    this.db.prepare(`INSERT INTO tm_fts(tm_fts) VALUES('optimize')`).run();
+    const stmtMerge = this.db.prepare(`INSERT INTO tm_fts(tm_fts, rank) VALUES('merge', ?)`);
+    const stmtChanges = this.db.prepare('SELECT total_changes() AS c');
+    const readChanges = () => (stmtChanges.get() as { c: number }).c;
+
+    stmtMerge.run(-TM_FTS_MERGE_STEP_PAGES);
+    for (let round = 0; round < TM_FTS_MERGE_MAX_ROUNDS; round++) {
+      const before = readChanges();
+      stmtMerge.run(TM_FTS_MERGE_STEP_PAGES);
+      // Per the FTS5 docs: fewer than 2 rows modified means the merge is done.
+      if (readChanges() - before < 2) break;
+    }
   }
 }

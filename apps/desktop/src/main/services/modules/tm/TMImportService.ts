@@ -1,15 +1,12 @@
-import { randomUUID } from 'crypto';
 import { join } from 'path';
 import { Worker } from 'worker_threads';
 import { access, readFile } from 'fs/promises';
 import * as XLSX from 'xlsx';
-import { computeTagsSignature, parseDisplayTextToTokens } from '@cat/core/tag';
-import { computeMatchKey, computeSrcHash } from '@cat/core/text';
 import { extractSheetRows } from '../../../filters/sheetRows';
+import { runTMImportPipeline, type TMImportDatabasePort } from './tmImportPipeline';
 import type {
   ProgressEmitter,
   SpreadsheetPreviewData,
-  TMFtsReplacement,
   TMRepository,
   TransactionManager,
 } from '../../ports';
@@ -123,127 +120,27 @@ export class TMImportService {
     options: TMImportOptions,
     onProgress?: ImportProgressCallback,
   ): Promise<{ success: number; skipped: number }> {
-    const tm = this.tmRepo.getTM(tmId);
-    if (!tm) throw new Error('Target TM not found');
+    const db: TMImportDatabasePort = {
+      getTM: (id) => this.tmRepo.getTM(id),
+      runInTransaction: (fn) => this.tx.runInTransaction(fn),
+      upsertTMEntryBySrcHash: (entry) => this.tmRepo.upsertTMEntryBySrcHash(entry),
+      insertTMEntryIfAbsentBySrcHash: (entry) => this.tmRepo.insertTMEntryIfAbsentBySrcHash(entry),
+      insertTMFts: (id, srcText, tgtText, tmEntryId) =>
+        this.tmRepo.insertTMFts(id, srcText, tgtText, tmEntryId),
+      replaceTMFtsBatch: (rows) => this.tmRepo.replaceTMFtsBatch(rows),
+      applyTMSyncUpdates: (id, rows) => this.tmRepo.applyTMSyncUpdates(id, rows),
+    };
 
-    this.emitImportProgress(
+    return runTMImportPipeline(
+      db,
+      { tmId, filePath, options },
       {
-        current: 0,
-        total: 1,
-        message: 'Reading spreadsheet...',
-      },
-      onProgress,
-    );
-
-    const workbook = XLSX.read(await readFile(filePath), { type: 'buffer' });
-    const firstSheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[firstSheetName];
-    const sourceRows = extractSheetRows(worksheet, {
-      columnIndexes: [options.sourceCol, options.targetCol],
-    });
-    const rows = options.hasHeader ? sourceRows.slice(1) : sourceRows;
-
-    const totalRows = rows.length;
-    let success = 0;
-    let skipped = 0;
-
-    if (totalRows === 0) {
-      return { success, skipped };
-    }
-
-    const chunkSize = totalRows >= 100000 ? 1500 : 800;
-    this.emitImportProgress(
-      {
-        current: 0,
-        total: totalRows,
-        message: 'Preparing import...',
-      },
-      onProgress,
-    );
-
-    for (let i = 0; i < rows.length; i += chunkSize) {
-      const end = Math.min(i + chunkSize, rows.length);
-
-      this.tx.runInTransaction(() => {
-        const ftsReplacements: TMFtsReplacement[] = [];
-
-        for (let j = i; j < end; j++) {
-          const row = rows[j].cells;
-
-          const sourceText =
-            row[options.sourceCol] !== undefined ? String(row[options.sourceCol]).trim() : '';
-          const targetText =
-            row[options.targetCol] !== undefined ? String(row[options.targetCol]).trim() : '';
-
-          if (!sourceText || !targetText) {
-            skipped++;
-            continue;
-          }
-
-          const sourceTokens = parseDisplayTextToTokens(sourceText);
-          const targetTokens = parseDisplayTextToTokens(targetText);
-          const tagsSignature = computeTagsSignature(sourceTokens);
-          const matchKey = computeMatchKey(sourceTokens);
-          const srcHash = computeSrcHash(matchKey, tagsSignature);
-
-          const now = new Date().toISOString();
-          const entryBase = {
-            id: randomUUID(),
-            tmId,
-            projectId: 0,
-            srcLang: tm.srcLang,
-            tgtLang: tm.tgtLang,
-            srcHash,
-            matchKey,
-            tagsSignature,
-            sourceTokens,
-            targetTokens,
-            usageCount: 1,
-            createdAt: now,
-            updatedAt: now,
-          };
-
-          if (options.overwrite) {
-            const entryId = this.tmRepo.upsertTMEntryBySrcHash(entryBase);
-            ftsReplacements.push({
-              tmId,
-              srcText: sourceText,
-              tgtText: targetText,
-              tmEntryId: entryId,
-            });
-            success++;
-            continue;
-          }
-
-          const insertedId = this.tmRepo.insertTMEntryIfAbsentBySrcHash(entryBase);
-          if (!insertedId) {
-            skipped++;
-            continue;
-          }
-
-          this.tmRepo.insertTMFts(tmId, sourceText, targetText, insertedId);
-          success++;
-        }
-
-        if (ftsReplacements.length > 0) {
-          this.tmRepo.replaceTMFtsBatch(ftsReplacements);
-        }
-      });
-
-      const processedRows = end;
-      this.emitImportProgress(
-        {
-          current: processedRows,
-          total: totalRows,
-          message: `Imported ${processedRows} of ${totalRows} rows...`,
+        emitProgress: (current, total, message) => {
+          this.emitImportProgress({ current, total, message }, onProgress);
         },
-        onProgress,
-      );
-
-      await new Promise<void>((resolve) => setImmediate(resolve));
-    }
-
-    return { success, skipped };
+        yieldBetweenChunks: () => new Promise<void>((resolve) => setImmediate(resolve)),
+      },
+    );
   }
 
   private async resolveWorkerPath(candidatePaths: string[]): Promise<string | undefined> {

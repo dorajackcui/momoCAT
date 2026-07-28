@@ -113,6 +113,16 @@ export interface SegmentRepository {
 export interface TMRepository {
   upsertTMEntryBySrcHash(entry: TMEntry & { tmId: string }): string;
   insertTMEntryIfAbsentBySrcHash(entry: TMEntry & { tmId: string }): string | undefined;
+  applyTMSyncUpdates(
+    tmId: string,
+    rows: Array<{
+      entryId: string;
+      sourceTokensJson: string;
+      targetTokensJson: string;
+      srcText: string;
+      tgtText: string;
+    }>,
+  ): number;
   insertTMFts(tmId: string, srcText: string, tgtText: string, tmEntryId: string): void;
   replaceTMFts(tmId: string, srcText: string, tgtText: string, tmEntryId: string): void;
   replaceTMFtsBatch(rows: TMFtsReplacement[]): void;

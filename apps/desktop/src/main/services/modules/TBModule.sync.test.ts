@@ -119,6 +119,71 @@ describe('TBModule sync with local Excel', () => {
     expect(emitProgress).toHaveBeenCalledWith(expect.objectContaining({ type: 'tb-sync' }));
   });
 
+  it('keeps the last row when the Excel repeats a source term', async () => {
+    const tbId = db.createTermBase('Synced Glossary', 'en', 'fr');
+    const filePath = writeWorkbook('terms.xlsx', [
+      ['world', 'monde-v1'],
+      ['settings', 'parametres'],
+      ['World', 'monde-v2'], // same srcNorm as 'world': later row wins
+    ]);
+    await tbModule.setTBSyncConfig(tbId, {
+      filePath,
+      columns: { hasHeader: false, sourceCol: 0, targetCol: 1 },
+    });
+
+    const result = await tbModule.syncTBEntriesFromExcel(tbId);
+
+    expect(result).toEqual({ success: 2, skipped: 1, removed: 0 });
+    expect(listTerms(tbId).sort((a, b) => a.srcTerm.localeCompare(b.srcTerm))).toEqual([
+      { srcTerm: 'settings', tgtTerm: 'parametres', note: null },
+      { srcTerm: 'World', tgtTerm: 'monde-v2', note: null },
+    ]);
+  });
+
+  it('import keeps the last row for a repeated source term (overwrite off)', async () => {
+    const tbId = db.createTermBase('Glossary', 'en', 'fr');
+    const filePath = writeWorkbook('import.xlsx', [
+      ['world', 'monde-v1'],
+      ['world', 'monde-v2'],
+    ]);
+
+    const result = await tbModule.importTBEntries(tbId, filePath, {
+      hasHeader: false,
+      sourceCol: 0,
+      targetCol: 1,
+      overwrite: false,
+    });
+
+    expect(result).toEqual({ success: 1, skipped: 1 });
+    expect(listTerms(tbId)).toEqual([{ srcTerm: 'world', tgtTerm: 'monde-v2', note: null }]);
+  });
+
+  it('import without overwrite preserves existing DB entries; with overwrite replaces them', async () => {
+    const tbId = db.createTermBase('Glossary', 'en', 'fr');
+    db.insertTBEntryIfAbsentBySrcTerm({
+      id: 'existing-1',
+      tbId,
+      srcLang: 'en',
+      srcTerm: 'world',
+      tgtTerm: 'traduction-existante',
+    });
+    const filePath = writeWorkbook('import.xlsx', [['world', 'monde-fichier']]);
+    const columns = { hasHeader: false, sourceCol: 0, targetCol: 1 };
+
+    const kept = await tbModule.importTBEntries(tbId, filePath, { ...columns, overwrite: false });
+    expect(kept).toEqual({ success: 0, skipped: 1 });
+    expect(listTerms(tbId)).toEqual([
+      { srcTerm: 'world', tgtTerm: 'traduction-existante', note: null },
+    ]);
+
+    const replaced = await tbModule.importTBEntries(tbId, filePath, {
+      ...columns,
+      overwrite: true,
+    });
+    expect(replaced).toEqual({ success: 1, skipped: 0 });
+    expect(listTerms(tbId)).toEqual([{ srcTerm: 'world', tgtTerm: 'monde-fichier', note: null }]);
+  });
+
   it('reflects deletions in the Excel on the next sync', async () => {
     const tbId = db.createTermBase('Synced Glossary', 'en', 'fr');
     const filePath = writeWorkbook('terms.xlsx', [
