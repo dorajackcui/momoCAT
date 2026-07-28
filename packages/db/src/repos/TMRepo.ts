@@ -97,6 +97,9 @@ const TM_FTS_REPLACE_DELETE_BATCH_SIZE = 900;
 // fragmented the index is (leftovers roll over to the next call).
 const TM_FTS_MERGE_STEP_PAGES = 16;
 const TM_FTS_MERGE_MAX_ROUNDS = 64;
+// Rows per multi-row VALUES in sync staging/insert batches. 9 bind params per
+// staging row keeps 500 rows well under SQLITE_MAX_VARIABLE_NUMBER (32766).
+const TM_SYNC_INSERT_BATCH_SIZE = 500;
 const ONLY_CJK_RE = /^[一-龥]+$/;
 const WEAK_SHORT_CJK_TERMS = new Set(['前往', '可选']);
 
@@ -1568,8 +1571,6 @@ export class TMRepo {
   // Statements are prepared lazily: tm_sync_staging is an additive table
   // created by schema maintenance, which readonly connections skip.
 
-  private stmtStageTMSyncRow?: Database.Statement;
-  private stmtInsertTMSyncEntry?: Database.Statement;
   private stmtUpdateTMSyncTarget?: Database.Statement;
 
   public clearTMSyncStagingForTM(tmId: string, exceptRunId?: string): void {
@@ -1588,26 +1589,32 @@ export class TMRepo {
 
   // Must be called inside a transaction owned by the caller. INSERT OR REPLACE
   // on the (syncRunId, srcHash) primary key makes later file rows win when the
-  // file contains duplicate sources.
+  // file contains duplicate sources. Rows arrive in file order and multi-row
+  // VALUES preserves it, so REPLACE semantics are unchanged by batching.
   public stageTMSyncRows(runId: string, tmId: string, rows: TMSyncStagedRow[]): void {
-    this.stmtStageTMSyncRow ??= this.db.prepare(`
-      INSERT OR REPLACE INTO tm_sync_staging (
-        tmId, syncRunId, srcHash, matchKey, tagsSignature,
-        sourceTokensJson, targetTokensJson, srcText, tgtText
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    for (const row of rows) {
-      this.stmtStageTMSyncRow.run(
-        tmId,
-        runId,
-        row.srcHash,
-        row.matchKey,
-        row.tagsSignature,
-        row.sourceTokensJson,
-        row.targetTokensJson,
-        row.srcText,
-        row.tgtText,
-      );
+    for (let index = 0; index < rows.length; index += TM_SYNC_INSERT_BATCH_SIZE) {
+      const batch = rows.slice(index, index + TM_SYNC_INSERT_BATCH_SIZE);
+      const values = batch.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+      this.db
+        .prepare(`
+          INSERT OR REPLACE INTO tm_sync_staging (
+            tmId, syncRunId, srcHash, matchKey, tagsSignature,
+            sourceTokensJson, targetTokensJson, srcText, tgtText
+          ) VALUES ${values}
+        `)
+        .run(
+          ...batch.flatMap((row) => [
+            tmId,
+            runId,
+            row.srcHash,
+            row.matchKey,
+            row.tagsSignature,
+            row.sourceTokensJson,
+            row.targetTokensJson,
+            row.srcText,
+            row.tgtText,
+          ]),
+        );
     }
   }
 
@@ -1761,36 +1768,84 @@ export class TMRepo {
 
   // Must be called inside a transaction owned by the caller. Entry and FTS
   // rows are written as a pair so a rollback never leaves a dangling FTS row.
+  //
+  // Batched: one multi-row INSERT per table instead of three statements per
+  // row (entry INSERT + FTS INSERT + ftsRowid UPDATE), which dominated large
+  // sync applies. FTS rowids are assigned explicitly from MAX(rowid) — safe
+  // because the surrounding transaction holds the write lock — so the
+  // tm_entries.ftsRowid mapping can be written as one UPDATE ... FROM.
   public applyTMSyncInserts(
     tmId: string,
     rows: Array<TMSyncStagedRow & { id: string }>,
   ): number {
-    this.stmtInsertTMSyncEntry ??= this.db.prepare(`
-      INSERT INTO tm_entries (
-        id, tmId, srcHash, matchKey, tagsSignature,
-        sourceTokensJson, targetTokensJson, originSegmentId, usageCount
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 0)
-      ON CONFLICT(tmId, srcHash) DO NOTHING
-      RETURNING id
-    `);
-
     let inserted = 0;
-    for (const row of rows) {
-      const result = this.stmtInsertTMSyncEntry.get(
-        row.id,
+    for (let index = 0; index < rows.length; index += TM_SYNC_INSERT_BATCH_SIZE) {
+      inserted += this.applyTMSyncInsertBatch(
         tmId,
-        row.srcHash,
-        row.matchKey,
-        row.tagsSignature,
-        row.sourceTokensJson,
-        row.targetTokensJson,
-      ) as { id: string } | undefined;
-      if (!result) continue;
-
-      this.insertTMFtsForEntry(tmId, row.srcText, row.tgtText, result.id);
-      inserted += 1;
+        rows.slice(index, index + TM_SYNC_INSERT_BATCH_SIZE),
+      );
     }
     return inserted;
+  }
+
+  private applyTMSyncInsertBatch(
+    tmId: string,
+    rows: Array<TMSyncStagedRow & { id: string }>,
+  ): number {
+    if (rows.length === 0) return 0;
+
+    const entryValues = rows.map(() => '(?, ?, ?, ?, ?, ?, ?, NULL, 0)').join(', ');
+    const insertedRows = this.db
+      .prepare(`
+        INSERT INTO tm_entries (
+          id, tmId, srcHash, matchKey, tagsSignature,
+          sourceTokensJson, targetTokensJson, originSegmentId, usageCount
+        ) VALUES ${entryValues}
+        ON CONFLICT(tmId, srcHash) DO NOTHING
+        RETURNING id
+      `)
+      .all(
+        ...rows.flatMap((row) => [
+          row.id,
+          tmId,
+          row.srcHash,
+          row.matchKey,
+          row.tagsSignature,
+          row.sourceTokensJson,
+          row.targetTokensJson,
+        ]),
+      ) as Array<{ id: string }>;
+    if (insertedRows.length === 0) return 0;
+
+    // RETURNING row order is unspecified; filter the input by inserted id.
+    const insertedIds = new Set(insertedRows.map((row) => row.id));
+    const inserted = rows.filter((row) => insertedIds.has(row.id));
+
+    const baseRowid = (
+      this.db.prepare('SELECT COALESCE(MAX(rowid), 0) AS m FROM tm_fts').get() as { m: number }
+    ).m;
+    const ftsValues = inserted.map(() => '(?, ?, ?, ?, ?)').join(', ');
+    this.db
+      .prepare(`INSERT INTO tm_fts (rowid, tmId, srcText, tgtText, tmEntryId) VALUES ${ftsValues}`)
+      .run(
+        ...inserted.flatMap((row, offset) => [
+          baseRowid + 1 + offset,
+          tmId,
+          row.srcText,
+          row.tgtText,
+          row.id,
+        ]),
+      );
+
+    const mappingValues = inserted.map(() => '(?, ?)').join(', ');
+    this.db
+      .prepare(`
+        WITH v(rid, eid) AS (VALUES ${mappingValues})
+        UPDATE tm_entries SET ftsRowid = v.rid FROM v WHERE tm_entries.id = v.eid
+      `)
+      .run(...inserted.flatMap((row, offset) => [baseRowid + 1 + offset, row.id]));
+
+    return inserted.length;
   }
 
   // Must be called inside a transaction owned by the caller. Sync updates
