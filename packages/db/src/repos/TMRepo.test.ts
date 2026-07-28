@@ -222,3 +222,75 @@ describe('TMRepo FTS replacement', () => {
     expect(row.count).toBe(0);
   });
 });
+
+describe('TMRepo optimizeTMFts', () => {
+  let db: CATDatabase;
+
+  beforeEach(() => {
+    db = new CATDatabase(':memory:');
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  function ftsSegmentCount(): number {
+    const raw = (db as unknown as {
+      db: { prepare(sql: string): { get(...args: unknown[]): unknown } };
+    }).db;
+    // Every distinct segid in the %_idx shadow table is one b-tree segment
+    // of the FTS index structure.
+    return (raw.prepare('SELECT COUNT(DISTINCT segid) AS c FROM tm_fts_idx').get() as { c: number })
+      .c;
+  }
+
+  it('consolidates a fragmented index even when no merge is underway', () => {
+    const tmId = db.createTM('Merge TM', 'en', 'fr', 'main');
+    const now = '2026-06-15T00:00:00.000Z';
+
+    // Many small separate transactions -> many single-segment levels, the
+    // exact shape where a positive-only merge is a no-op (each level has
+    // fewer than usermerge segments), per the FTS5 merge documentation.
+    for (let i = 0; i < 32; i++) {
+      db.runInTransaction(() => {
+        for (let j = 0; j < 20; j++) {
+          const id = `entry-${i}-${j}`;
+          db.upsertTMEntryBySrcHash({
+            id,
+            tmId,
+            projectId: 0,
+            srcLang: 'en',
+            tgtLang: 'fr',
+            srcHash: `hash-${i}-${j}`,
+            matchKey: `source text ${i} ${j}`,
+            tagsSignature: '',
+            sourceTokens: [{ type: 'text', content: `Source text ${i} ${j} with words` }],
+            targetTokens: [{ type: 'text', content: `Texte cible ${i} ${j}` }],
+            createdAt: now,
+            updatedAt: now,
+            usageCount: 1,
+          });
+          db.insertTMFts(tmId, `Source text ${i} ${j} with words`, `Texte cible ${i} ${j}`, id);
+        }
+      });
+    }
+
+    const before = ftsSegmentCount();
+    expect(before).toBeGreaterThan(1);
+
+    db.optimizeTMFts();
+
+    // The kickoff/probe logic must have started real merge work; repeated
+    // calls converge to a single segment instead of no-oping forever.
+    for (let i = 0; i < 20 && ftsSegmentCount() > 1; i++) {
+      db.optimizeTMFts();
+    }
+    expect(ftsSegmentCount()).toBeLessThan(before);
+    expect(ftsSegmentCount()).toBe(1);
+
+    // Search still works on the merged index.
+    const projectId = db.createProject('P', 'en', 'fr');
+    db.mountTMToProject(projectId, tmId, 10, 'read');
+    expect(db.searchConcordance(projectId, 'Source text 3 5', [tmId]).length).toBeGreaterThan(0);
+  });
+});

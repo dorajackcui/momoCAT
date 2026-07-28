@@ -1906,22 +1906,35 @@ export class TMRepo {
   // Incremental FTS maintenance with bounded cost per call. A full
   // 'optimize' rewrites the whole tm_fts index, so its latency grows with
   // TOTAL entries across all TMs (~9s at 460k entries) even when the sync
-  // touched far fewer rows. Positive 'merge' steps resume a half-finished
-  // merge instead of restarting it (a negative 'merge' would reset progress
-  // on every call), so leftover work carries across calls without being
-  // repeated; 'usermerge' is lowered so steps keep consolidating even when
-  // only two segments share a level, converging toward fully-merged.
+  // touched far fewer rows.
+  //
+  // FTS5 'merge' semantics (per docs): a POSITIVE step continues a merge
+  // already underway (or starts one only among >= usermerge same-level
+  // segments); a NEGATIVE step starts a merge of ALL segments but RESTARTS
+  // from scratch on every call. So: probe with one positive step first —
+  // if it did real work, a merge was underway (or same-level segments were
+  // consolidated) and we just continue stepping. Only when the probe is a
+  // no-op (nothing underway, nothing same-level) kick off ONE negative
+  // merge-all and step that. Work not finished within the round budget is
+  // resumed — not repeated — by the next call's positive probe.
   public optimizeTMFts(): void {
     this.db.prepare(`INSERT INTO tm_fts(tm_fts, rank) VALUES('usermerge', 2)`).run();
     const stmtMerge = this.db.prepare(`INSERT INTO tm_fts(tm_fts, rank) VALUES('merge', ?)`);
     const stmtChanges = this.db.prepare('SELECT total_changes() AS c');
     const readChanges = () => (stmtChanges.get() as { c: number }).c;
-
-    for (let round = 0; round < TM_FTS_MERGE_MAX_ROUNDS; round++) {
+    // Per the FTS5 docs, a merge step that modifies fewer than 2 rows did
+    // no real work.
+    const step = (pages: number): boolean => {
       const before = readChanges();
-      stmtMerge.run(TM_FTS_MERGE_STEP_PAGES);
-      // Per the FTS5 docs: fewer than 2 rows modified means the merge is done.
-      if (readChanges() - before < 2) break;
+      stmtMerge.run(pages);
+      return readChanges() - before >= 2;
+    };
+
+    if (!step(TM_FTS_MERGE_STEP_PAGES)) {
+      if (!step(-TM_FTS_MERGE_STEP_PAGES)) return;
+    }
+    for (let round = 0; round < TM_FTS_MERGE_MAX_ROUNDS; round++) {
+      if (!step(TM_FTS_MERGE_STEP_PAGES)) break;
     }
   }
 }

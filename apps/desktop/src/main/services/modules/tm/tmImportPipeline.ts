@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { readFile } from 'fs/promises';
 import * as XLSX from 'xlsx';
 import { parseDisplayTextToTokens, computeTagsSignature } from '@cat/core/tag';
@@ -79,8 +79,8 @@ function parseTMImportRow(
 
 /**
  * Spreadsheet -> TM import. Single streaming pass: parsed token rows live
- * only for the current chunk, so peak memory is workbook + one chunk + an
- * id-sized map of unique srcHashes (see writtenByRun below).
+ * only for the current chunk, so peak memory is workbook + one chunk + a
+ * fixed-size-per-source digest map (see writtenByRun below).
  *
  * Within-file conflicts are last-wins: each chunk is reduced before its
  * transaction (in-chunk duplicates), and `writtenByRun` remembers which entry
@@ -120,11 +120,15 @@ export async function runTMImportPipeline(
   const chunkSize = totalRows >= 100000 ? 1500 : 800;
   emitProgress(0, totalRows, 'Preparing import...');
 
-  // srcHash -> entry id written by this run, or null when the DB kept its
-  // pre-existing entry (non-overwrite skip). Grows with unique sources
-  // (~50 bytes each; ~5 MB per 100k) — the price of cross-chunk last-wins
-  // without a staging table. Token arrays are NOT retained: peak heap stays
-  // at workbook + one chunk of parsed rows + this id map.
+  // Cross-chunk last-wins state: digest(srcHash) -> entry id written by this
+  // run, or null when the DB kept its pre-existing entry (non-overwrite
+  // skip). srcHash is the full normalized source text (matchKey:::tags), so
+  // keying by its 16-byte SHA-256 prefix keeps the map at a fixed ~90 bytes
+  // per unique source regardless of segment length (~9 MB per 100k). Token
+  // arrays are not retained; peak heap is workbook + one parsed chunk + this
+  // map.
+  const srcHashDigest = (srcHash: string): string =>
+    createHash('sha256').update(srcHash).digest('base64').slice(0, 22);
   const writtenByRun = new Map<string, string | null>();
 
   for (let i = 0; i < totalRows; i += chunkSize) {
@@ -143,7 +147,8 @@ export async function runTMImportPipeline(
       const ftsReplacements: TMFtsReplacementRow[] = [];
 
       for (const row of deduped.rows as ParsedTMImportRow[]) {
-        const prior = writtenByRun.get(row.srcHash);
+        const digest = srcHashDigest(row.srcHash);
+        const prior = writtenByRun.get(digest);
 
         if (prior === undefined) {
           const now = new Date().toISOString();
@@ -171,20 +176,20 @@ export async function runTMImportPipeline(
               tgtText: row.tgtText,
               tmEntryId: entryId,
             });
-            writtenByRun.set(row.srcHash, entryId);
+            writtenByRun.set(digest, entryId);
             success++;
             continue;
           }
 
           const insertedId = db.insertTMEntryIfAbsentBySrcHash(entryBase);
           if (!insertedId) {
-            writtenByRun.set(row.srcHash, null);
+            writtenByRun.set(digest, null);
             skipped++;
             continue;
           }
 
           db.insertTMFts(tmId, row.srcText, row.tgtText, insertedId);
-          writtenByRun.set(row.srcHash, insertedId);
+          writtenByRun.set(digest, insertedId);
           success++;
           continue;
         }
