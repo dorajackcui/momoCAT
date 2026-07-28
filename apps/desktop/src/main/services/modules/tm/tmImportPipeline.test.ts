@@ -154,6 +154,27 @@ describe('tmImportPipeline', () => {
     expect(listEntries()).toHaveLength(1);
   });
 
+  it('last-wins across chunk boundaries keeps one entry and one FTS row', async () => {
+    // Chunk size is 800 for files under 100k rows: put the first occurrence
+    // in chunk 1 and the winning duplicate in chunk 2.
+    const data: string[][] = [
+      ['source', 'target'],
+      ['Open settings', 'v-first'],
+    ];
+    for (let i = 0; i < 900; i++) {
+      data.push([`Filler row ${i}`, `Remplissage ${i}`]);
+    }
+    data.push(['Open settings', 'v-last']);
+    const filePath = writeWorkbook('tm.xlsx', data);
+
+    const result = await runTMImportPipeline(db, { tmId, filePath, options: importOptions() });
+
+    expect(result).toEqual({ success: 901, skipped: 1 });
+    const entry = listEntries().find((e) => e.source === 'Open settings');
+    expect(entry).toMatchObject({ target: 'v-last', usageCount: 1 });
+    expect(searchFts('settings')).toEqual(['v-last']);
+  });
+
   it('returns zeros for an empty sheet', async () => {
     const filePath = writeWorkbook('tm.xlsx', [['source', 'target']]);
     const result = await runTMImportPipeline(db, { tmId, filePath, options: importOptions() });

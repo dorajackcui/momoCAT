@@ -1906,17 +1906,17 @@ export class TMRepo {
   // Incremental FTS maintenance with bounded cost per call. A full
   // 'optimize' rewrites the whole tm_fts index, so its latency grows with
   // TOTAL entries across all TMs (~9s at 460k entries) even when the sync
-  // touched far fewer rows. Instead: kick off a merge-all pass ('merge', -N),
-  // then advance it in fixed-size steps, stopping early once a step performs
-  // no work (sqlite3_total_changes stalls, per the FTS5 docs' pattern).
-  // Leftover work carries across calls — each large sync/import inches the
-  // index toward fully-merged while automerge handles day-to-day segments.
+  // touched far fewer rows. Positive 'merge' steps resume a half-finished
+  // merge instead of restarting it (a negative 'merge' would reset progress
+  // on every call), so leftover work carries across calls without being
+  // repeated; 'usermerge' is lowered so steps keep consolidating even when
+  // only two segments share a level, converging toward fully-merged.
   public optimizeTMFts(): void {
+    this.db.prepare(`INSERT INTO tm_fts(tm_fts, rank) VALUES('usermerge', 2)`).run();
     const stmtMerge = this.db.prepare(`INSERT INTO tm_fts(tm_fts, rank) VALUES('merge', ?)`);
     const stmtChanges = this.db.prepare('SELECT total_changes() AS c');
     const readChanges = () => (stmtChanges.get() as { c: number }).c;
 
-    stmtMerge.run(-TM_FTS_MERGE_STEP_PAGES);
     for (let round = 0; round < TM_FTS_MERGE_MAX_ROUNDS; round++) {
       const before = readChanges();
       stmtMerge.run(TM_FTS_MERGE_STEP_PAGES);
