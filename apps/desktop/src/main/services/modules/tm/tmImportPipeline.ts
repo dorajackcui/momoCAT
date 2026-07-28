@@ -1,10 +1,8 @@
 import { createHash, randomUUID } from 'crypto';
-import { readFile } from 'fs/promises';
-import * as XLSX from 'xlsx';
 import { parseDisplayTextToTokens, computeTagsSignature } from '@cat/core/tag';
 import { computeMatchKey, computeSrcHash } from '@cat/core/text';
 import type { TMEntry, Token } from '@cat/core/models';
-import { extractSheetRows } from '../../../filters/sheetRows';
+import { extractSheetRows, readFirstSheet } from '../../../filters/sheetRows';
 import { dedupeRowsLastWins } from '../resourceImportRows';
 import type { TMImportOptions } from '../../../../shared/ipc';
 
@@ -102,8 +100,7 @@ export async function runTMImportPipeline(
   if (!tm) throw new Error('Target TM not found');
 
   emitProgress(0, 1, 'Reading spreadsheet...');
-  const workbook = XLSX.read(await readFile(input.filePath), { type: 'buffer' });
-  const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+  const worksheet = await readFirstSheet(input.filePath);
   const sourceRows = extractSheetRows(worksheet, {
     columnIndexes: [options.sourceCol, options.targetCol],
   });

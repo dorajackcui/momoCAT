@@ -1,9 +1,7 @@
 import { randomUUID } from 'crypto';
-import { readFile } from 'fs/promises';
-import * as XLSX from 'xlsx';
 import { parseDisplayTextToTokens, computeTagsSignature } from '@cat/core/tag';
 import { computeMatchKey, computeSrcHash } from '@cat/core/text';
-import { extractSheetRows } from '../../../filters/sheetRows';
+import { extractSheetRows, readFirstSheet } from '../../../filters/sheetRows';
 import type { TMSyncColumns, TMSyncDeletePolicy, TMSyncReport } from '../../../../shared/ipc';
 
 export interface TMSyncStagedRow {
@@ -162,8 +160,7 @@ export async function runTMSyncPipeline(
     emitProgress(0, 'Reading linked spreadsheet...');
     let rows: ReturnType<typeof extractSheetRows> | null = null;
     {
-      const workbook = XLSX.read(await readFile(input.filePath), { type: 'buffer' });
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const worksheet = await readFirstSheet(input.filePath);
       const sourceRows = extractSheetRows(worksheet, {
         columnIndexes: [input.columns.sourceCol, input.columns.targetCol],
       });

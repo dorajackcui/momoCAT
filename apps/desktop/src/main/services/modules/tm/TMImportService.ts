@@ -1,8 +1,7 @@
 import { join } from 'path';
 import { Worker } from 'worker_threads';
-import { access, readFile } from 'fs/promises';
-import * as XLSX from 'xlsx';
-import { extractSheetRows } from '../../../filters/sheetRows';
+import { access } from 'fs/promises';
+import { extractSheetRows, readFirstSheet } from '../../../filters/sheetRows';
 import { runTMImportPipeline, type TMImportDatabasePort } from './tmImportPipeline';
 import type {
   ProgressEmitter,
@@ -22,9 +21,7 @@ export class TMImportService {
   ) {}
 
   public async getTMImportPreview(filePath: string): Promise<SpreadsheetPreviewData> {
-    const workbook = XLSX.read(await readFile(filePath), { type: 'buffer' });
-    const firstSheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[firstSheetName];
+    const worksheet = await readFirstSheet(filePath);
     return extractSheetRows(worksheet, { maxRows: 10 }).map((row) => row.cells);
   }
 

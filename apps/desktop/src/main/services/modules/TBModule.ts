@@ -1,6 +1,4 @@
 import { randomUUID } from 'crypto';
-import { readFile } from 'fs/promises';
-import * as XLSX from 'xlsx';
 import type { Segment } from '@cat/core/models';
 import { normalizeTermForLookup } from '@cat/core/text';
 import {
@@ -11,7 +9,7 @@ import {
   TransactionManager,
 } from '../ports';
 import { TBService } from '../TBService';
-import { extractSheetRows } from '../../filters/sheetRows';
+import { extractSheetRows, readFirstSheet } from '../../filters/sheetRows';
 import { dedupeRowsLastWins } from './resourceImportRows';
 import type {
   TBAssetPreview,
@@ -102,9 +100,7 @@ export class TBModule {
   }
 
   public async getTBImportPreview(filePath: string): Promise<SpreadsheetPreviewData> {
-    const workbook = XLSX.read(await readFile(filePath), { type: 'buffer' });
-    const firstSheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[firstSheetName];
+    const worksheet = await readFirstSheet(filePath);
     return extractSheetRows(worksheet, { maxRows: 10 }).map((row) => row.cells);
   }
 
@@ -217,9 +213,7 @@ export class TBModule {
   }
 
   private async readTermRows(filePath: string, columns: TBSyncColumns): Promise<ParsedTermRow[]> {
-    const workbook = XLSX.read(await readFile(filePath), { type: 'buffer' });
-    const firstSheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[firstSheetName];
+    const worksheet = await readFirstSheet(filePath);
     const columnIndexes = [columns.sourceCol, columns.targetCol];
     if (typeof columns.noteCol === 'number') {
       columnIndexes.push(columns.noteCol);
