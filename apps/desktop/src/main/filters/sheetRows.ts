@@ -64,18 +64,29 @@ export function extractSheetRows(
   if (Array.isArray(worksheet)) {
     const result: SheetRow[] = [];
     const denseRows = worksheet as unknown as Array<Array<XLSX.CellObject | undefined> | undefined>;
+    // Dense rows are sparse arrays whose length is max column index + 1, so a
+    // stray cell in column XFD would make an index loop scan 16384 slots per
+    // row. Visit only the requested columns, or (no column filter) only the
+    // indexes that actually hold cells via forEach, which skips holes.
+    const selectedColumns = columnSet ? Array.from(columnSet) : null;
     for (let rowIndex = 0; rowIndex < denseRows.length; rowIndex++) {
       if (options.maxRows && options.maxRows > 0 && result.length >= options.maxRows) break;
       const denseRow = denseRows[rowIndex];
       if (!denseRow) continue;
 
       let rowArray: SheetCellValue[] | null = null;
-      for (let colIndex = 0; colIndex < denseRow.length; colIndex++) {
-        if (columnSet && !columnSet.has(colIndex)) continue;
-        const value = normalizeCellValue(denseRow[colIndex]);
-        if (!shouldKeepCell(value)) continue;
+      const visit = (cell: XLSX.CellObject | undefined, colIndex: number) => {
+        const value = normalizeCellValue(cell);
+        if (!shouldKeepCell(value)) return;
         rowArray ??= [];
         rowArray[colIndex] = value;
+      };
+      if (selectedColumns) {
+        for (const colIndex of selectedColumns) {
+          visit(denseRow[colIndex], colIndex);
+        }
+      } else {
+        denseRow.forEach(visit);
       }
       if (rowArray) {
         result.push({ rowIndex, cells: rowArray });
