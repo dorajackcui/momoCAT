@@ -31,6 +31,7 @@ export default defineConfig({
     ],
   },
   test: {
+    globalSetup: ['./vitest.globalSetup.ts'],
     exclude: [
       '.tmp/**',
       '**/node_modules/**',
