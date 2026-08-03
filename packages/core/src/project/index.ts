@@ -94,6 +94,17 @@ export {
   buildAIWindowModePromptBundle,
   parseAIWindowModeResponse,
 } from "./windowModePrompt";
+export {
+  buildSourceTerminologyPromptBundle,
+  parseSourceTerminologyResponse,
+} from "./sourceTerminologyPrompt";
+export type {
+  ParsedSourceTerminologySegment,
+  SourceTerminologyPromptBuildParams,
+  SourceTerminologyPromptBundle,
+  SourceTerminologyPromptHistoricalTerm,
+  SourceTerminologyPromptUnit,
+} from "./sourceTerminologyPrompt";
 export type {
   DialoguePromptBundle,
   DialoguePromptBundleBuildParams,

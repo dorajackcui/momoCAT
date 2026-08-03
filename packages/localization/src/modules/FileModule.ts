@@ -1,5 +1,6 @@
-import { readFile, writeFile } from 'fs/promises';
-import { extname, resolve } from 'path';
+import { readFile } from 'fs/promises';
+import { isUtf8 } from 'buffer';
+import { extname } from 'path';
 import * as XLSX from 'xlsx';
 import type {
   FileCellValue,
@@ -9,6 +10,12 @@ import type {
   InspectArtifact,
 } from '../artifacts';
 import type { LocalizationUnit, TranslateFileInput, TranslateUnitsResult } from '../types';
+import {
+  assertDistinctSpreadsheetPaths,
+  buildRowsWithAppendedColumns,
+  toFileCellValue,
+  writeSpreadsheetWorkbook,
+} from './spreadsheetOutput';
 
 export type SheetCell = string | number | boolean | null | undefined;
 
@@ -43,7 +50,8 @@ const DEFAULT_CONTEXT_HEADER = 'context';
 export async function parseExternalSpreadsheet(
   input: TranslateFileInput,
 ): Promise<ParsedSpreadsheetFile> {
-  const workbook = XLSX.read(await readFile(input.inputPath), { type: 'buffer' });
+  const fileBytes = await readFile(input.inputPath);
+  const workbook = readExternalWorkbook(input.inputPath, fileBytes);
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
     throw new Error(`Workbook has no sheets: ${input.inputPath}`);
@@ -72,6 +80,14 @@ export async function parseExternalSpreadsheet(
   };
 }
 
+function readExternalWorkbook(inputPath: string, fileBytes: Buffer): XLSX.WorkBook {
+  if (extname(inputPath).toLowerCase() === '.csv' && isUtf8(fileBytes)) {
+    return XLSX.read(fileBytes.toString('utf8').replace(/^\uFEFF/, ''), { type: 'string' });
+  }
+
+  return XLSX.read(fileBytes, { type: 'buffer' });
+}
+
 export function fileRowsToLocalizationUnits(rows: FileParseRowArtifact[]): LocalizationUnit[] {
   return rows
     .filter((row) => row.source.trim())
@@ -94,7 +110,7 @@ export async function writeTranslatedSpreadsheet(
   outputPath: string,
   explicitFormat?: TranslateFileInput['format'],
 ): Promise<void> {
-  assertNotInputPath(parsed.inputPath, outputPath);
+  assertDistinctSpreadsheetPaths(parsed.inputPath, outputPath);
 
   const rowIndexByUnitId = new Map(
     parsed.artifact.rows.map((row) => [row.unitId, row.rowIndex] as const),
@@ -115,7 +131,11 @@ export async function writeTranslatedSpreadsheet(
   }
 
   compactWorksheetRefToParsedRows(parsed);
-  await writeWorkbook(parsed.workbook, outputPath, detectBookType(outputPath, explicitFormat));
+  await writeSpreadsheetWorkbook(
+    parsed.workbook,
+    outputPath,
+    detectBookType(outputPath, explicitFormat),
+  );
 }
 
 export async function writeInspectSpreadsheet(
@@ -123,7 +143,7 @@ export async function writeInspectSpreadsheet(
   artifact: InspectArtifact,
   outputPath: string,
 ): Promise<void> {
-  assertNotInputPath(parsed.inputPath, outputPath);
+  assertDistinctSpreadsheetPaths(parsed.inputPath, outputPath);
 
   const workbook = XLSX.utils.book_new();
   const inspectUnitById = new Map(
@@ -142,7 +162,7 @@ export async function writeInspectSpreadsheet(
     'MT_SystemPrompt',
   );
 
-  await writeWorkbook(workbook, outputPath, 'xlsx');
+  await writeSpreadsheetWorkbook(workbook, outputPath, 'xlsx');
 }
 
 export interface ReferenceExportSpreadsheetRow {
@@ -156,18 +176,24 @@ export async function writeReferencesForMtSpreadsheet(
   rows: ReferenceExportSpreadsheetRow[],
   outputPath: string,
 ): Promise<void> {
-  assertNotInputPath(parsed.inputPath, outputPath);
+  assertDistinctSpreadsheetPaths(parsed.inputPath, outputPath);
 
   const workbook = XLSX.utils.book_new();
   const rowByUnitId = new Map(rows.map((row) => [row.unitId, row] as const));
 
   XLSX.utils.book_append_sheet(
     workbook,
-    XLSX.utils.aoa_to_sheet(buildReferenceExportRows(parsed, rowByUnitId)),
+    XLSX.utils.aoa_to_sheet(
+      buildRowsWithAppendedColumns(parsed, REFERENCE_EXPORT_COLUMNS, (parseRow) => {
+        if (!parseRow?.source.trim()) return ['', ''];
+        const referenceRow = rowByUnitId.get(parseRow.unitId);
+        return [referenceRow?.tmForMt ?? '', referenceRow?.tbForMt ?? ''];
+      }),
+    ),
     parsed.sheetName,
   );
 
-  await writeWorkbook(workbook, outputPath, 'xlsx');
+  await writeSpreadsheetWorkbook(workbook, outputPath, 'xlsx');
 }
 
 function resolveColumns(
@@ -373,7 +399,7 @@ function rowsToArtifacts(
       source: cellToText(row[columns.sourceCol]),
       target: cellToText(row[columns.targetCol]),
       context: columns.contextCol === undefined ? undefined : cellToText(row[columns.contextCol]),
-      originalCells: row.map(cellToSerializableValue),
+      originalCells: row.map(toFileCellValue),
     });
   }
 
@@ -396,7 +422,7 @@ function buildSegmentRows(
   }
 
   for (let rowIndex = 0; rowIndex < parsed.rawRows.length; rowIndex += 1) {
-    const originalCells = (parsed.rawRows[rowIndex] ?? []).map(cellToSerializableValue);
+    const originalCells = (parsed.rawRows[rowIndex] ?? []).map(toFileCellValue);
     if (parsed.columns.hasHeader && rowIndex === 0) {
       rows.push([...originalCells, ...INSPECT_COLUMNS]);
       continue;
@@ -433,45 +459,6 @@ function buildSegmentRows(
   return rows;
 }
 
-function buildReferenceExportRows(
-  parsed: ParsedSpreadsheetFile,
-  referenceRowByUnitId: Map<string, ReferenceExportSpreadsheetRow>,
-): FileCellValue[][] {
-  const rows: FileCellValue[][] = [];
-  const parseRowByIndex = new Map(parsed.artifact.rows.map((row) => [row.rowIndex, row] as const));
-
-  if (!parsed.columns.hasHeader) {
-    const width = Math.max(...parsed.rawRows.map((row) => row.length), 0);
-    rows.push([
-      ...Array.from({ length: width }, (_, index) => `Column ${index + 1}`),
-      ...REFERENCE_EXPORT_COLUMNS,
-    ]);
-  }
-
-  for (let rowIndex = 0; rowIndex < parsed.rawRows.length; rowIndex += 1) {
-    const originalCells = (parsed.rawRows[rowIndex] ?? []).map(cellToSerializableValue);
-    if (parsed.columns.hasHeader && rowIndex === 0) {
-      rows.push([...originalCells, ...REFERENCE_EXPORT_COLUMNS]);
-      continue;
-    }
-
-    const parseRow = parseRowByIndex.get(rowIndex);
-    if (!parseRow || !parseRow.source.trim()) {
-      rows.push([...originalCells, '', '']);
-      continue;
-    }
-
-    const referenceRow = referenceRowByUnitId.get(parseRow.unitId);
-    rows.push([
-      ...originalCells,
-      referenceRow?.tmForMt ?? '',
-      referenceRow?.tbForMt ?? '',
-    ]);
-  }
-
-  return rows;
-}
-
 function buildSystemPromptRows(artifact: InspectArtifact): FileCellValue[][] {
   const promptUnit = artifact.units.find((unit) => unit.status === 'ready');
 
@@ -497,14 +484,6 @@ function findHeaderColumn(headerRow: SheetCell[], headerName: string): number | 
 
 function cellToText(value: SheetCell): string {
   if (value === null || value === undefined) return '';
-  return String(value);
-}
-
-function cellToSerializableValue(value: SheetCell): FileCellValue {
-  if (value === undefined || value === null) return null;
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return value;
-  }
   return String(value);
 }
 
@@ -557,31 +536,6 @@ function compactWorksheetRefToParsedRows(parsed: ParsedSpreadsheetFile): void {
     s: { r: 0, c: 0 },
     e: { r: maxRowIndex, c: maxColumnIndex },
   });
-}
-
-async function writeWorkbook(
-  workbook: XLSX.WorkBook,
-  outputPath: string,
-  bookType: XLSX.BookType,
-): Promise<void> {
-  const data = XLSX.write(workbook, { bookType, type: 'buffer' }) as Buffer | Uint8Array | string;
-
-  if (typeof data === 'string') {
-    await writeFile(outputPath, data, 'utf8');
-  } else {
-    await writeFile(outputPath, Buffer.from(data));
-  }
-}
-
-function assertNotInputPath(inputPath: string, outputPath: string): void {
-  if (normalizePath(inputPath) === normalizePath(outputPath)) {
-    throw new Error('Output path must be different from input path.');
-  }
-}
-
-function normalizePath(path: string): string {
-  const resolvedPath = resolve(path);
-  return process.platform === 'win32' ? resolvedPath.toLowerCase() : resolvedPath;
 }
 
 function detectBookType(

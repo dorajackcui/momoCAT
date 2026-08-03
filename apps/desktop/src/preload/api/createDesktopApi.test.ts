@@ -46,6 +46,7 @@ describe('createDesktopApi smoke', () => {
     await api.runFileQA(1);
     await api.inspectFile(1, 'inspect.xlsx');
     await api.exportReferencesForMt(1, 'references.xlsx');
+    await api.precheckSourceTerminology(1, 'source-terms.xlsx');
     await api.setTBSyncConfig('tb-1', {
       filePath: 'D:/terms/glossary.xlsx',
       columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
@@ -89,6 +90,11 @@ describe('createDesktopApi smoke', () => {
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.runQA, 1);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.inspect, 1, 'inspect.xlsx');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.exportReferences, 1, 'references.xlsx');
+    expect(invoke).toHaveBeenCalledWith(
+      IPC_CHANNELS.file.precheckSourceTerminology,
+      1,
+      'source-terms.xlsx',
+    );
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tb.syncSetConfig, 'tb-1', {
       filePath: 'D:/terms/glossary.xlsx',
       columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },

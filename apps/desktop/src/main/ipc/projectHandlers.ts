@@ -170,4 +170,13 @@ export function registerProjectHandlers({ ipcMain, projectService }: MainHandler
       return projectService.exportReferencesForMt(fileId, outputPath);
     },
   );
+
+  registerHandle(
+    { ipcMain, projectService },
+    IPC_CHANNELS.file.precheckSourceTerminology,
+    (_event, ...args) => {
+      const [fileId, outputPath] = args as [number, string];
+      return projectService.precheckSourceTerminology(fileId, outputPath);
+    },
+  );
 }

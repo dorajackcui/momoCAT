@@ -20,6 +20,7 @@ export default defineConfig({
           tmSyncWorker: resolve('src/main/tmSyncWorker.ts'),
           referenceLookupWorker: resolve('src/main/referenceLookupWorker.ts'),
           referenceExportWorker: resolve('src/main/referenceExportWorker.ts'),
+          sourceTerminologyPrecheckWorker: resolve('src/main/sourceTerminologyPrecheckWorker.ts'),
         },
       },
     },

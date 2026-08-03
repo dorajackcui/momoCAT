@@ -8,8 +8,6 @@ import type {
 import { CATDatabase } from '@cat/db';
 import {
   LocalizationEngine,
-  LocalizationInspector,
-  LocalizationReferenceExporter,
   type CancellationToken,
   type TranslationAuditSink,
 } from '@cat/localization';
@@ -25,11 +23,17 @@ import {
   SpreadsheetPreviewData,
 } from './ports';
 import { AIProviderTransport } from './providers/AIProviderTransport';
+import { ProjectFileModule } from './modules/ProjectFileModule';
+import type {
+  FileOperationProgressEmitter,
+  InspectFileRunner,
+  ReferenceExportRunner,
+  SourceTerminologyPrecheckRunner,
+} from './modules/ProjectReferenceFileOperations';
 import {
-  ProjectFileModule,
-  type InspectFileRunner,
-  type ReferenceExportRunner,
-} from './modules/ProjectFileModule';
+  createInspectFileRunner,
+  createReferenceExportRunner,
+} from './modules/ProjectFileOperationRunners';
 import { TMModule } from './modules/TMModule';
 import { TBModule } from './modules/TBModule';
 import { AIModule } from './modules/AIModule';
@@ -39,7 +43,7 @@ import { SqliteTMRepository } from './adapters/SqliteTMRepository';
 import { SqliteTBRepository } from './adapters/SqliteTBRepository';
 import { SqliteSettingsRepository } from './adapters/SqliteSettingsRepository';
 import { SqliteTransactionManager } from './adapters/SqliteTransactionManager';
-import { ReferenceExportWorkerRunner } from './referenceExport/ReferenceExportWorkerRunner';
+import { createSourceTerminologyPrecheckRunner } from './sourceTerminologyPrecheck/createSourceTerminologyPrecheckRunner';
 import { ProxySettingsManager } from './proxy/ProxySettingsManager';
 import type {
   AIBatchMode,
@@ -47,6 +51,7 @@ import type {
   AIBatchTargetScope,
   FileInspectResult,
   FileReferenceExportResult,
+  FileSourceTerminologyPrecheckResult,
   ImportOptions,
   PastedSourceFileInput,
   ProxySettings,
@@ -77,6 +82,7 @@ interface ProjectServiceDependencies {
   aiRuntimeConfigProvider?: AIRuntimeConfigProvider;
   inspectFileRunner?: InspectFileRunner;
   referenceExportRunner?: ReferenceExportRunner;
+  sourceTerminologyPrecheckRunner?: SourceTerminologyPrecheckRunner;
   translationAuditSink?: TranslationAuditSink;
   projectModule?: ProjectFileModule;
   tmModule?: TMModule;
@@ -132,6 +138,14 @@ export class ProjectService {
     }) => {
       this.emitProgress(payload.type, payload.current, payload.total, payload.message);
     };
+    const emitFileOperationProgress: FileOperationProgressEmitter = (
+      type,
+      fileId,
+      current,
+      total,
+    ) => {
+      this.emitProgress(type, current, total, undefined, `file:${fileId}`);
+    };
 
     this.projectModule =
       deps.projectModule ??
@@ -143,6 +157,9 @@ export class ProjectService {
         deps.inspectFileRunner ??
           createInspectFileRunner(db, dbPath, aiRuntimeConfigProvider, aiTransport),
         deps.referenceExportRunner ?? createReferenceExportRunner(db, dbPath),
+        deps.sourceTerminologyPrecheckRunner ??
+          createSourceTerminologyPrecheckRunner(db, dbPath, aiRuntimeConfigProvider, aiTransport),
+        emitFileOperationProgress,
       );
     this.tmModule =
       deps.tmModule ??
@@ -486,20 +503,21 @@ export class ProjectService {
   }
 
   public async inspectFile(fileId: number, outputPath: string): Promise<FileInspectResult> {
-    const scope = `file:${fileId}`;
-    return this.projectModule.inspectFile(fileId, outputPath, (current, total) => {
-      this.emitProgress('inspect', current, total, undefined, scope);
-    });
+    return this.projectModule.inspectFile(fileId, outputPath);
   }
 
   public async exportReferencesForMt(
     fileId: number,
     outputPath: string,
   ): Promise<FileReferenceExportResult> {
-    const scope = `file:${fileId}`;
-    return this.projectModule.exportReferencesForMt(fileId, outputPath, (current, total) => {
-      this.emitProgress('reference-export', current, total, undefined, scope);
-    });
+    return this.projectModule.exportReferencesForMt(fileId, outputPath);
+  }
+
+  public async precheckSourceTerminology(
+    fileId: number,
+    outputPath: string,
+  ): Promise<FileSourceTerminologyPrecheckResult> {
+    return this.projectModule.precheckSourceTerminology(fileId, outputPath);
   }
 
   public getAISettings(): { apiKeySet: boolean; apiKeyLast4?: string } {
@@ -574,23 +592,4 @@ export class ProjectService {
   public async aiTestTranslate(projectId: number, sourceText: string, contextText?: string) {
     return this.aiModule.aiTestTranslate(projectId, sourceText, contextText);
   }
-}
-
-function createInspectFileRunner(
-  db: CATDatabase,
-  dbPath: string,
-  aiRuntimeConfigProvider?: AIRuntimeConfigProvider,
-  aiTransport?: AITransport,
-): InspectFileRunner {
-  const inspector = new LocalizationInspector(db, { dbPath, aiRuntimeConfigProvider, aiTransport });
-  return (input) => inspector.inspectFile(input);
-}
-
-function createReferenceExportRunner(db: CATDatabase, dbPath: string): ReferenceExportRunner {
-  const workerRunner = new ReferenceExportWorkerRunner({
-    dbPath,
-    fallbackRunner: (input) =>
-      new LocalizationReferenceExporter(db).exportReferencesForMtFile(input),
-  });
-  return (input) => workerRunner.run(input);
 }

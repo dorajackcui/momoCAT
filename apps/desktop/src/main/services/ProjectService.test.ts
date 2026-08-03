@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -26,7 +26,19 @@ vi.mock('@cat/localization', async (importOriginal) => {
 import { CATDatabase } from '@cat/db';
 import { ProjectService } from './ProjectService';
 import type { AITransport } from './ports';
-import type { ProjectFileModule } from './modules/ProjectFileModule';
+
+function createStoredFile(db: CATDatabase, projectsDir: string): number {
+  const projectId = db.createProject('Progress project', 'en', 'fr');
+  const fileId = db.createFile(
+    projectId,
+    'demo.xlsx',
+    JSON.stringify({ hasHeader: true, sourceCol: 0, targetCol: 1, tagPolicy: 'none' }),
+  );
+  const projectDir = join(projectsDir, String(projectId));
+  mkdirSync(projectDir, { recursive: true });
+  writeFileSync(join(projectDir, `${fileId}_demo.xlsx`), 'test workbook');
+  return fileId;
+}
 
 describe('ProjectService.inspectFile', () => {
   beforeEach(() => {
@@ -35,19 +47,25 @@ describe('ProjectService.inspectFile', () => {
     localizationMocks.LocalizationInspector.mockClear();
   });
 
-  it('delegates to ProjectFileModule.inspectFile', async () => {
+  it('routes inspect progress through the file-scoped emitter', async () => {
     const rootDir = mkdtempSync(join(tmpdir(), 'project-service-inspect-'));
     const dbPath = join(rootDir, 'cat.db');
     const db = new CATDatabase(dbPath);
-    const inspectFile = vi.fn().mockResolvedValue({
-      outputPath: 'inspect.xlsx',
-      jsonOutputPath: 'inspect.json',
-      summary: { total: 1, ready: 1, error: 0 },
+    const projectsDir = join(rootDir, 'projects');
+    const fileId = createStoredFile(db, projectsDir);
+    const inspectFileRunner = vi.fn(async (input) => {
+      input.onProgress?.(5, 10);
+      return {
+        outputPath: 'inspect.xlsx',
+        jsonOutputPath: 'inspect.json',
+        summary: { total: 1, ready: 1, error: 0 },
+        artifact: {} as never,
+      };
     });
 
     try {
-      const service = new ProjectService(db, join(rootDir, 'projects'), dbPath, {
-        projectModule: { inspectFile } as unknown as ProjectFileModule,
+      const service = new ProjectService(db, projectsDir, dbPath, {
+        inspectFileRunner,
         tmModule: {} as never,
         tbModule: {} as never,
         aiModule: { applySavedProxySettings: vi.fn() } as never,
@@ -56,20 +74,23 @@ describe('ProjectService.inspectFile', () => {
       const progressEvents: { type: string; current: number; total: number; scope?: string }[] = [];
       service.onProgress((data) => progressEvents.push(data));
 
-      const result = await service.inspectFile(44, 'inspect.xlsx');
+      const result = await service.inspectFile(fileId, 'inspect.xlsx');
 
-      expect(inspectFile).toHaveBeenCalledWith(44, 'inspect.xlsx', expect.any(Function));
+      expect(inspectFileRunner).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: expect.any(Number),
+          outputPath: 'inspect.xlsx',
+          onProgress: expect.any(Function),
+        }),
+      );
       expect(result.summary.ready).toBe(1);
       expect(localizationMocks.LocalizationInspector).not.toHaveBeenCalled();
-
-      const onProgress = inspectFile.mock.calls[0][2] as (current: number, total: number) => void;
-      onProgress(5, 10);
       expect(progressEvents).toContainEqual({
         type: 'inspect',
         current: 5,
         total: 10,
         message: undefined,
-        scope: 'file:44',
+        scope: `file:${fileId}`,
       });
     } finally {
       db.close();
@@ -107,18 +128,24 @@ describe('ProjectService.inspectFile', () => {
 });
 
 describe('ProjectService.exportReferencesForMt', () => {
-  it('delegates to ProjectFileModule.exportReferencesForMt with scoped progress', async () => {
+  it('routes reference-export progress through the file-scoped emitter', async () => {
     const rootDir = mkdtempSync(join(tmpdir(), 'project-service-reference-export-'));
     const dbPath = join(rootDir, 'cat.db');
     const db = new CATDatabase(dbPath);
-    const exportReferencesForMt = vi.fn().mockResolvedValue({
-      outputPath: 'references.xlsx',
-      summary: { total: 1, ready: 1, error: 0 },
+    const projectsDir = join(rootDir, 'projects');
+    const fileId = createStoredFile(db, projectsDir);
+    const referenceExportRunner = vi.fn(async (input) => {
+      input.onProgress?.(5, 10);
+      return {
+        outputPath: 'references.xlsx',
+        summary: { total: 1, ready: 1, error: 0 },
+        units: [],
+      };
     });
 
     try {
-      const service = new ProjectService(db, join(rootDir, 'projects'), dbPath, {
-        projectModule: { exportReferencesForMt } as unknown as ProjectFileModule,
+      const service = new ProjectService(db, projectsDir, dbPath, {
+        referenceExportRunner,
         tmModule: {} as never,
         tbModule: {} as never,
         aiModule: { applySavedProxySettings: vi.fn() } as never,
@@ -127,26 +154,22 @@ describe('ProjectService.exportReferencesForMt', () => {
       const progressEvents: { type: string; current: number; total: number; scope?: string }[] = [];
       service.onProgress((data) => progressEvents.push(data));
 
-      const result = await service.exportReferencesForMt(44, 'references.xlsx');
+      const result = await service.exportReferencesForMt(fileId, 'references.xlsx');
 
-      expect(exportReferencesForMt).toHaveBeenCalledWith(
-        44,
-        'references.xlsx',
-        expect.any(Function),
+      expect(referenceExportRunner).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: expect.any(Number),
+          outputPath: 'references.xlsx',
+          onProgress: expect.any(Function),
+        }),
       );
       expect(result.summary.ready).toBe(1);
-
-      const onProgress = exportReferencesForMt.mock.calls[0][2] as (
-        current: number,
-        total: number,
-      ) => void;
-      onProgress(5, 10);
       expect(progressEvents).toContainEqual({
         type: 'reference-export',
         current: 5,
         total: 10,
         message: undefined,
-        scope: 'file:44',
+        scope: `file:${fileId}`,
       });
     } finally {
       db.close();

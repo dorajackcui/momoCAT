@@ -30,6 +30,7 @@ export const IPC_CHANNELS = {
     runQA: 'file-run-qa',
     inspect: 'file-inspect',
     exportReferences: 'file-export-references-for-mt',
+    precheckSourceTerminology: 'file-precheck-source-terminology',
   },
   segment: {
     update: 'segment-update',

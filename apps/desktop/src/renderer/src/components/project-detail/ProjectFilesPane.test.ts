@@ -153,7 +153,7 @@ function renderPane(ai: ProjectAIController, projectType: 'translation' | 'revie
       onOpenFile: vi.fn(),
       onOpenCommitModal: vi.fn(),
       onOpenMatchModal: vi.fn(),
-      onInspectFile: vi.fn().mockResolvedValue(undefined),
+      onOpenReferenceActions: vi.fn(),
       onDeleteFile: vi.fn().mockResolvedValue(undefined),
       onExportFile: vi.fn().mockResolvedValue(undefined),
       onRunFileQA: vi.fn().mockResolvedValue(undefined),
@@ -193,10 +193,10 @@ describe('ProjectFilesPane', () => {
     expect(capturedButtons.map((button) => button.label)).not.toContain('Open');
   });
 
-  it('calls the inspect handler with the selected file', () => {
+  it('opens the TM/TB action chooser with the selected file', () => {
     const { ai } = createAIControllerMock();
     const file = createFile({ id: 77, name: 'inspect-me.xlsx' });
-    const onInspectFile = vi.fn();
+    const onOpenReferenceActions = vi.fn();
     capturedButtons.length = 0;
 
     renderToStaticMarkup(
@@ -205,7 +205,7 @@ describe('ProjectFilesPane', () => {
         onOpenFile: vi.fn(),
         onOpenCommitModal: vi.fn(),
         onOpenMatchModal: vi.fn(),
-        onInspectFile,
+        onOpenReferenceActions,
         onDeleteFile: vi.fn().mockResolvedValue(undefined),
         onExportFile: vi.fn().mockResolvedValue(undefined),
         onRunFileQA: vi.fn().mockResolvedValue(undefined),
@@ -218,7 +218,7 @@ describe('ProjectFilesPane', () => {
     expect(inspectButton).toBeDefined();
     inspectButton?.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
 
-    expect(onInspectFile).toHaveBeenCalledWith(file);
+    expect(onOpenReferenceActions).toHaveBeenCalledWith(file);
   });
 
   it('turns a running AI file job into a Stop action', () => {

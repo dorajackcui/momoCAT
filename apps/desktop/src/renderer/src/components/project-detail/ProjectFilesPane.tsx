@@ -13,7 +13,7 @@ interface ProjectFilesPaneProps {
   onOpenFile: (fileId: number) => void;
   onOpenCommitModal: (file: ProjectFileRecord) => void | Promise<void>;
   onOpenMatchModal: (file: ProjectFileRecord) => void | Promise<void>;
-  onInspectFile: (file: ProjectFileRecord) => void | Promise<void>;
+  onOpenReferenceActions: (file: ProjectFileRecord) => void;
   onDeleteFile: (fileId: number, fileName: string) => Promise<void>;
   onExportFile: (fileId: number, fileName: string) => Promise<void>;
   onRunFileQA: (fileId: number, fileName: string) => Promise<void>;
@@ -41,7 +41,7 @@ interface ProjectFileCardProps {
   onOpenFile: (fileId: number) => void;
   onOpenCommitModal: (file: ProjectFileRecord) => void | Promise<void>;
   onOpenMatchModal: (file: ProjectFileRecord) => void | Promise<void>;
-  onInspectFile: (file: ProjectFileRecord) => void | Promise<void>;
+  onOpenReferenceActions: (file: ProjectFileRecord) => void;
   onDeleteFile: (fileId: number, fileName: string) => Promise<void>;
   onExportFile: (fileId: number, fileName: string) => Promise<void>;
   onRunFileQA: (fileId: number, fileName: string) => Promise<void>;
@@ -57,7 +57,7 @@ function ProjectFileCard({
   onOpenFile,
   onOpenCommitModal,
   onOpenMatchModal,
-  onInspectFile,
+  onOpenReferenceActions,
   onDeleteFile,
   onExportFile,
   onRunFileQA,
@@ -131,11 +131,7 @@ function ProjectFileCard({
           </Button>
         )}
         {supportsTMWorkflow && (
-          <Button
-            onClick={() => void onInspectFile(file)}
-            variant="secondary"
-            size="sm"
-          >
+          <Button onClick={() => onOpenReferenceActions(file)} variant="secondary" size="sm">
             TM/TB
           </Button>
         )}
@@ -220,7 +216,7 @@ export function ProjectFilesPane({
   onOpenFile,
   onOpenCommitModal,
   onOpenMatchModal,
-  onInspectFile,
+  onOpenReferenceActions,
   onDeleteFile,
   onExportFile,
   onRunFileQA,
@@ -272,7 +268,7 @@ export function ProjectFilesPane({
               onOpenFile={onOpenFile}
               onOpenCommitModal={onOpenCommitModal}
               onOpenMatchModal={onOpenMatchModal}
-              onInspectFile={onInspectFile}
+              onOpenReferenceActions={onOpenReferenceActions}
               onDeleteFile={onDeleteFile}
               onExportFile={onExportFile}
               onRunFileQA={onRunFileQA}

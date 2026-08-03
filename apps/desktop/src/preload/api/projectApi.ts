@@ -25,6 +25,7 @@ type ProjectApiKeys =
   | 'runFileQA'
   | 'inspectFile'
   | 'exportReferencesForMt'
+  | 'precheckSourceTerminology'
   | 'updateSegment';
 
 export function createProjectApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<ProjectApiKeys> {
@@ -131,6 +132,12 @@ export function createProjectApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<
       ipcRenderer.invoke(IPC_CHANNELS.file.exportReferences, fileId, outputPath) as ReturnType<
         DesktopApi['exportReferencesForMt']
       >,
+    precheckSourceTerminology: (fileId, outputPath) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.file.precheckSourceTerminology,
+        fileId,
+        outputPath,
+      ) as ReturnType<DesktopApi['precheckSourceTerminology']>,
     updateSegment: (segmentId, targetTokens, status, clientRequestId) =>
       ipcRenderer.invoke(
         IPC_CHANNELS.segment.update,

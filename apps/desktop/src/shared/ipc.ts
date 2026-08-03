@@ -151,6 +151,16 @@ export interface FileReferenceExportResult {
   };
 }
 
+export interface FileSourceTerminologyPrecheckResult {
+  outputPath: string;
+  summary: {
+    total: number;
+    ready: number;
+    error: number;
+    uniqueTerms: number;
+  };
+}
+
 export type TMRecord = DbTMRecord;
 
 export interface TMWithStats extends TMRecord {
@@ -500,6 +510,10 @@ export interface DesktopApi {
   runFileQA: (fileId: number) => Promise<FileQaReport>;
   inspectFile: (fileId: number, outputPath: string) => Promise<FileInspectResult>;
   exportReferencesForMt: (fileId: number, outputPath: string) => Promise<FileReferenceExportResult>;
+  precheckSourceTerminology: (
+    fileId: number,
+    outputPath: string,
+  ) => Promise<FileSourceTerminologyPrecheckResult>;
   updateSegment: (
     segmentId: string,
     targetTokens: Token[],

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { DEFAULT_PROJECT_QA_SETTINGS, type ProjectQASettings } from '@cat/core/project';
-import type { AppProgressEvent, ProjectFileRecord, TMCommitScope } from '../../../shared/ipc';
+import type { ProjectFileRecord, TMCommitScope } from '../../../shared/ipc';
 import { ColumnSelector } from './ColumnSelector';
 import { apiClient } from '../services/apiClient';
 import { feedbackService } from '../services/feedbackService';
@@ -10,6 +10,8 @@ import { useProjectFileImport } from '../hooks/projectDetail/useProjectFileImpor
 import { useProjectAI } from '../hooks/projectDetail/useProjectAI';
 import { ProjectCommitModal } from './project-detail/ProjectCommitModal';
 import { ProjectMatchModal } from './project-detail/ProjectMatchModal';
+import { ProjectReferenceActionsModal } from './project-detail/ProjectReferenceActionsModal';
+import { ProjectReferenceOperationProgressModal } from './project-detail/ProjectReferenceOperationProgressModal';
 import { ProjectFilesPane } from './project-detail/ProjectFilesPane';
 import { ProjectTMPane } from './project-detail/ProjectTMPane';
 import { ProjectTBPane } from './project-detail/ProjectTBPane';
@@ -17,9 +19,8 @@ import { ProjectQASettingsModal } from './project-detail/ProjectQASettingsModal'
 import { PasteSourceModal } from './project-detail/PasteSourceModal';
 import { runFileQaWithRefresh } from './project-detail/runFileQaWithRefresh';
 import { buildFileQaFeedback } from './project-detail/fileQaFeedback';
-import { runFileReferenceExportAction } from './project-detail/fileInspectAction';
+import { useProjectReferenceActions } from './project-detail/useProjectReferenceActions';
 import { hasMatchingLanguagePair } from './languageOptions';
-import { Spinner } from './ui';
 
 interface ProjectDetailProps {
   projectId: number;
@@ -45,10 +46,6 @@ export function ProjectDetail({
   const [qaSettingsDraft, setQaSettingsDraft] = useState<ProjectQASettings>(
     DEFAULT_PROJECT_QA_SETTINGS,
   );
-  const [referenceExportProgress, setReferenceExportProgress] = useState<{
-    current: number;
-    total: number;
-  } | null>(null);
   const addFileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const {
@@ -72,6 +69,7 @@ export function ProjectDetail({
     commitToMainTM,
     matchFileWithTM,
   } = useProjectDetailData(projectId);
+  const referenceActions = useProjectReferenceActions(runMutation);
 
   const fileImport = useProjectFileImport({
     projectId,
@@ -263,28 +261,6 @@ export function ProjectDetail({
     }
   };
 
-  const handleInspectFile = async (file: ProjectFileRecord) => {
-    const expectedScope = `file:${file.id}`;
-    const unsubscribe = apiClient.onProgress((event: AppProgressEvent) => {
-      if (event.type === 'reference-export' && event.scope === expectedScope) {
-        setReferenceExportProgress({ current: event.current, total: event.total });
-      }
-    });
-    try {
-      await runFileReferenceExportAction(file, {
-        saveFileDialog: apiClient.saveFileDialog,
-        exportReferencesForMt: apiClient.exportReferencesForMt,
-        runMutation,
-        success: (message) => feedbackService.success(message),
-        info: (message) => feedbackService.info(message),
-        error: (message) => feedbackService.error(message),
-      });
-    } finally {
-      unsubscribe();
-      setReferenceExportProgress(null);
-    }
-  };
-
   const openQaSettings = () => {
     if (!project) return;
     setQaSettingsDraft(project.qaSettings || DEFAULT_PROJECT_QA_SETTINGS);
@@ -377,6 +353,13 @@ export function ProjectDetail({
         onConfirm={() => void confirmMatchModal()}
       />
 
+      <ProjectReferenceActionsModal
+        file={referenceActions.file}
+        onClose={referenceActions.close}
+        onPrecheckSourceTerms={referenceActions.precheckSourceTerms}
+        onExportReferences={referenceActions.exportReferences}
+      />
+
       <ProjectQASettingsModal
         isOpen={qaSettingsOpen}
         draft={qaSettingsDraft}
@@ -386,29 +369,7 @@ export function ProjectDetail({
         saving={qaSettingsSaving}
       />
 
-      {referenceExportProgress && (
-        <div className="modal-backdrop !z-[100]">
-          <div className="modal-card max-w-sm p-6 text-center animate-in fade-in zoom-in duration-200">
-            <div className="mb-4">
-              <div className="w-12 h-12 bg-brand-soft rounded-full flex items-center justify-center mx-auto mb-3">
-                <Spinner size="lg" tone="brand" />
-              </div>
-              <h2 className="text-lg font-bold text-text">Exporting TM/TB refs...</h2>
-              <p className="text-sm text-text-muted mt-1">
-                Processing row {referenceExportProgress.current} of {referenceExportProgress.total}
-              </p>
-            </div>
-            <div className="overflow-hidden h-2 rounded bg-brand-soft">
-              <div
-                className="h-full bg-brand transition-all duration-300"
-                style={{
-                  width: `${referenceExportProgress.total > 0 ? Math.round((referenceExportProgress.current / referenceExportProgress.total) * 100) : 0}%`,
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      <ProjectReferenceOperationProgressModal progress={referenceActions.progress} />
 
       <div className="px-10 py-4 bg-surface/90 backdrop-blur border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -563,7 +524,7 @@ export function ProjectDetail({
             onOpenFile={onOpenFile}
             onOpenCommitModal={openCommitModal}
             onOpenMatchModal={openMatchModal}
-            onInspectFile={handleInspectFile}
+            onOpenReferenceActions={referenceActions.open}
             onDeleteFile={handleDeleteFile}
             onExportFile={handleExportFile}
             onRunFileQA={handleRunFileQA}

@@ -119,4 +119,24 @@ describe('IPC handler registration smoke', () => {
     await expect(handler?.({}, 7, 'references.xlsx')).resolves.toBe(exportResult);
     expect(exportReferencesForMt).toHaveBeenCalledWith(7, 'references.xlsx');
   });
+
+  it('delegates source terminology precheck requests with the selected output path', async () => {
+    const handlers = new Map<string, IpcMainListener>();
+    const handle = vi.fn((channel: string, listener: IpcMainListener) => {
+      handlers.set(channel, listener);
+    });
+    const precheckResult = {
+      outputPath: 'source-terms.xlsx',
+      summary: { total: 3, ready: 3, error: 0, uniqueTerms: 5 },
+    };
+    const precheckSourceTerminology = vi.fn().mockResolvedValue(precheckResult);
+    const projectService = { precheckSourceTerminology } as unknown as ProjectService;
+
+    registerProjectHandlers({ ipcMain: { handle }, projectService });
+
+    const handler = handlers.get(IPC_CHANNELS.file.precheckSourceTerminology);
+    expect(handler).toBeDefined();
+    await expect(handler?.({}, 7, 'source-terms.xlsx')).resolves.toBe(precheckResult);
+    expect(precheckSourceTerminology).toHaveBeenCalledWith(7, 'source-terms.xlsx');
+  });
 });

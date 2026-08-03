@@ -8,8 +8,14 @@ import type {
   ExportReferencesForMtResult,
   InspectFileInput,
   InspectFileResult,
+  SourceTerminologyPrecheckFileInput,
+  SourceTerminologyPrecheckFileResult,
 } from '@cat/localization';
-import type { FileInspectResult, FileReferenceExportResult } from '../../../shared/ipc';
+import type {
+  FileInspectResult,
+  FileReferenceExportResult,
+  FileSourceTerminologyPrecheckResult,
+} from '../../../shared/ipc';
 import { ProjectFileModule } from './ProjectFileModule';
 import { ProjectRepository, SegmentRepository, SpreadsheetGateway } from '../ports';
 
@@ -526,7 +532,12 @@ describe('ProjectFileModule.exportReferencesForMt', () => {
     const outputPath = join(rootDir, 'references.xlsx');
     const exportResult: ExportReferencesForMtResult = {
       ...createReferenceExportResult(outputPath),
-      summary: { total: 3, ready: 2, error: 1, internal: 99 } as ExportReferencesForMtResult['summary'],
+      summary: {
+        total: 3,
+        ready: 2,
+        error: 1,
+        internal: 99,
+      } as ExportReferencesForMtResult['summary'],
     };
     const exportReferencesRunner = vi.fn<
       [ExportReferencesForMtInput],
@@ -579,6 +590,138 @@ describe('ProjectFileModule.exportReferencesForMt', () => {
       } satisfies FileReferenceExportResult);
       expect(Object.keys(result.summary)).toEqual(['total', 'ready', 'error']);
       expect(result).not.toHaveProperty('units');
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('ProjectFileModule.precheckSourceTerminology', () => {
+  it('maps stored import options to the shared source terminology prechecker input', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-source-terms-'));
+    const storedDir = join(rootDir, '9');
+    mkdirSync(storedDir);
+    writeFileSync(join(storedDir, '12_demo.xlsx'), 'fake spreadsheet');
+    const outputPath = join(rootDir, 'source-terms.xlsx');
+    const precheckResult: Pick<SourceTerminologyPrecheckFileResult, 'outputPath' | 'summary'> = {
+      outputPath,
+      summary: { total: 3, ready: 2, error: 1, uniqueTerms: 4 },
+    };
+    const precheckRunner = vi.fn(async (input: SourceTerminologyPrecheckFileInput) => {
+      input.onProgress?.(2, 3);
+      return precheckResult;
+    });
+    const emitFileOperationProgress = vi.fn();
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({
+        id: 12,
+        projectId: 9,
+        name: 'demo.xlsx',
+        importOptionsJson: JSON.stringify({
+          hasHeader: true,
+          sourceCol: 2,
+          targetCol: 4,
+          contextCol: 5,
+          tagPolicy: 'none',
+        }),
+      }),
+      getProject: vi.fn().mockReturnValue({ id: 9 }),
+    } as unknown as ProjectRepository;
+    const module = new ProjectFileModule(
+      projectRepo,
+      {} as SegmentRepository,
+      {} as SpreadsheetGateway,
+      rootDir,
+      undefined,
+      undefined,
+      precheckRunner,
+      emitFileOperationProgress,
+    );
+
+    try {
+      const result = await module.precheckSourceTerminology(12, outputPath);
+
+      expect(precheckRunner).toHaveBeenCalledWith({
+        projectId: 9,
+        inputPath: join(rootDir, '9', '12_demo.xlsx'),
+        outputPath,
+        columns: { hasHeader: true, sourceCol: 2, targetCol: 4, contextCol: 5 },
+        options: { tagPolicy: 'none' },
+        onProgress: expect.any(Function),
+      });
+      expect(emitFileOperationProgress).toHaveBeenCalledWith(
+        'source-terminology-precheck',
+        12,
+        2,
+        3,
+      );
+      expect(result).toEqual({
+        outputPath,
+        summary: { total: 3, ready: 2, error: 1, uniqueTerms: 4 },
+      } satisfies FileSourceTerminologyPrecheckResult);
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to imported segments when the stored source workbook is missing', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-source-terms-'));
+    const outputPath = join(rootDir, 'source-terms.xlsx');
+    let temporaryInputPath = '';
+    const precheckRunner = vi.fn(async (input: SourceTerminologyPrecheckFileInput) => {
+      temporaryInputPath = input.inputPath;
+      expect(readFileSync(input.inputPath, 'utf8')).toContain('First source');
+      expect(readFileSync(input.inputPath, 'utf8')).toContain('Second source');
+      return {
+        outputPath,
+        summary: { total: 2, ready: 2, error: 0, uniqueTerms: 3 },
+      };
+    });
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({
+        id: 12,
+        projectId: 9,
+        name: 'missing.xlsx',
+        importOptionsJson: JSON.stringify({
+          hasHeader: true,
+          sourceCol: 2,
+          targetCol: 4,
+          tagPolicy: 'none',
+        }),
+      }),
+      getProject: vi.fn().mockReturnValue({ id: 9 }),
+    } as unknown as ProjectRepository;
+    const segmentRepo = {
+      getSegmentsPage: vi
+        .fn()
+        .mockReturnValue([
+          { sourceTokens: [{ type: 'text', content: 'First source' }] } as Segment,
+          { sourceTokens: [{ type: 'text', content: 'Second source' }] } as Segment,
+        ]),
+    } as unknown as SegmentRepository;
+    const module = new ProjectFileModule(
+      projectRepo,
+      segmentRepo,
+      {} as SpreadsheetGateway,
+      rootDir,
+      undefined,
+      undefined,
+      precheckRunner,
+    );
+
+    try {
+      const result = await module.precheckSourceTerminology(12, outputPath);
+
+      expect(precheckRunner).toHaveBeenCalledWith({
+        projectId: 9,
+        inputPath: expect.stringContaining('momocat-source-terms-'),
+        outputPath,
+        columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+        options: { tagPolicy: 'none' },
+      });
+      expect(result.summary).toEqual({ total: 2, ready: 2, error: 0, uniqueTerms: 3 });
+      expect(temporaryInputPath).not.toBe('');
+      expect(existsSync(temporaryInputPath)).toBe(false);
     } finally {
       rmSync(rootDir, { recursive: true, force: true });
     }

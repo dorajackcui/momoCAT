@@ -15,6 +15,23 @@ export type {
   LocalizationReferenceExporterOptions,
   ReferenceExportUnitResult,
 } from './LocalizationReferenceExporter';
+export { LocalizationSourceTerminologyPrechecker } from './LocalizationSourceTerminologyPrechecker';
+export type {
+  LocalizationSourceTerminologyPrecheckerOptions,
+  SourceTerminologyPrecheckFileInput,
+  SourceTerminologyPrecheckFileResult,
+  SourceTerminologyPrecheckFileUnitResult,
+} from './LocalizationSourceTerminologyPrechecker';
+export { SourceTerminologyExtractor } from './SourceTerminologyExtractor';
+export type {
+  SourceTerminologyAggregate,
+  SourceTerminologyExtractionInput,
+  SourceTerminologyExtractionResult,
+  SourceTerminologyExtractorDependencies,
+  SourceTerminologyHistoricalTerm,
+  SourceTerminologyUnit,
+  SourceTerminologyUnitResult,
+} from './SourceTerminologyExtractor';
 export type * from './artifacts';
 export type * from './types';
 export type * from './job/types';
@@ -70,6 +87,11 @@ export type {
   ReferenceExportSpreadsheetRow,
   SheetCell,
 } from './modules/FileModule';
+export { writeSourceTerminologyPrecheckSpreadsheet } from './modules/sourceTerminologyPrecheckSpreadsheet';
+export type {
+  SourceTerminologyPrecheckSpreadsheetRow,
+  SourceTerminologySummarySpreadsheetRow,
+} from './modules/sourceTerminologyPrecheckSpreadsheet';
 export { translateSpreadsheetFile } from './spreadsheetFileAdapter';
 export {
   inferFileTranslationJobSidecarPaths,

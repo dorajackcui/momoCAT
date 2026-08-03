@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import * as XLSX from 'xlsx';
@@ -96,6 +96,51 @@ describe('FileModule', () => {
           metadata: { rowIndex: 3, rowNumber: 4 },
         },
       ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves non-Latin text in a UTF-8 CSV without a byte-order mark', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-module-'));
+    try {
+      const inputPath = join(root, 'utf8.csv');
+      const outputPath = join(root, 'unused.xlsx');
+      await writeFile(
+        inputPath,
+        'source,target\r\n“天空港”什么时候开放？,\r\nプロジェクト名は星の庭です。,',
+        'utf8',
+      );
+
+      const parsed = await parseExternalSpreadsheet({ projectId: 1, inputPath, outputPath });
+
+      expect(parsed.artifact.rows.map((row) => row.source)).toEqual([
+        '“天空港”什么时候开放？',
+        'プロジェクト名は星の庭です。',
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('strips a UTF-8 byte-order mark from headerless CSV source text', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cat-file-module-'));
+    try {
+      const inputPath = join(root, 'utf8-bom.csv');
+      const outputPath = join(root, 'unused.xlsx');
+      await writeFile(inputPath, '\uFEFF天空港,', 'utf8');
+
+      const parsed = await parseExternalSpreadsheet({
+        projectId: 1,
+        inputPath,
+        outputPath,
+        columns: { hasHeader: false, sourceCol: 0, targetCol: 1 },
+      });
+
+      expect(parsed.artifact.rows[0]).toMatchObject({
+        source: '天空港',
+        originalCells: ['天空港', ''],
+      });
     } finally {
       await rm(root, { recursive: true, force: true });
     }
