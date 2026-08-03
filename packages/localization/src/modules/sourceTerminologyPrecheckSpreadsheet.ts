@@ -18,7 +18,7 @@ export interface SourceTerminologyPrecheckSpreadsheetRow {
   unitId: string;
   historicalTb: string;
   sourceTerms: string[];
-  status: 'ready' | 'error';
+  status: 'ready' | 'error' | 'cancelled';
   error?: string;
 }
 

@@ -1,12 +1,14 @@
 import type { ReferenceOperationProgress } from './useProjectReferenceActions';
-import { Spinner } from '../ui';
+import { Button, Spinner } from '../ui';
 
 interface ProjectReferenceOperationProgressModalProps {
   progress: ReferenceOperationProgress | null;
+  onCancelPrecheck: () => void;
 }
 
 export function ProjectReferenceOperationProgressModal({
   progress,
+  onCancelPrecheck,
 }: ProjectReferenceOperationProgressModalProps) {
   if (!progress) return null;
 
@@ -24,7 +26,9 @@ export function ProjectReferenceOperationProgressModal({
               : 'Exporting TM/TB refs...'}
           </h2>
           <p className="text-sm text-text-muted mt-1">
-            Processing row {progress.current} of {progress.total}
+            {progress.total > 0
+              ? `Processing row ${progress.current} of ${progress.total}`
+              : 'Preparing source rows...'}
           </p>
         </div>
         <div className="overflow-hidden h-2 rounded bg-brand-soft">
@@ -33,6 +37,17 @@ export function ProjectReferenceOperationProgressModal({
             style={{ width: `${percentage}%` }}
           />
         </div>
+        {progress.kind === 'precheck' && (
+          <Button
+            type="button"
+            variant="secondary"
+            className="mt-5 w-full"
+            disabled={progress.cancelRequested}
+            onClick={onCancelPrecheck}
+          >
+            {progress.cancelRequested ? 'Stopping...' : 'Stop and keep partial output'}
+          </Button>
+        )}
       </div>
     </div>
   );

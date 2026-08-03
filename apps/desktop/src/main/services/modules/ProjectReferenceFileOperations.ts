@@ -7,8 +7,8 @@ import type {
   ExportReferencesForMtResult,
   InspectFileInput,
   InspectFileResult,
+  ObservableCancellationToken,
   SourceTerminologyPrecheckFileInput,
-  SourceTerminologyPrecheckFileResult,
 } from '@cat/localization';
 import type {
   FileInspectResult,
@@ -22,14 +22,14 @@ import {
 } from '../../../shared/fileTagPolicy';
 import { buildPastedSourceCsv } from './pastedSourceFile';
 import type { ProjectRepository, SegmentRepository } from '../ports';
+import type { SourceTerminologyPrecheckRunner } from '../sourceTerminologyPrecheck/types';
+
+export type { SourceTerminologyPrecheckRunner } from '../sourceTerminologyPrecheck/types';
 
 export type InspectFileRunner = (input: InspectFileInput) => Promise<InspectFileResult>;
 export type ReferenceExportRunner = (
   input: ExportReferencesForMtInput,
 ) => Promise<Pick<ExportReferencesForMtResult, 'outputPath' | 'summary'>>;
-export type SourceTerminologyPrecheckRunner = (
-  input: SourceTerminologyPrecheckFileInput,
-) => Promise<Pick<SourceTerminologyPrecheckFileResult, 'outputPath' | 'summary'>>;
 export type FileOperationProgressEmitter = (
   type: 'inspect' | 'reference-export' | 'source-terminology-precheck',
   fileId: number,
@@ -48,6 +48,11 @@ interface ProjectReferenceFileOperationsOptions {
 }
 
 export class ProjectReferenceFileOperations {
+  private readonly activeSourceTerminologyPrechecks = new Map<
+    number,
+    ObservableCancellationSource
+  >();
+
   constructor(private readonly options: ProjectReferenceFileOperationsOptions) {}
 
   public async inspectFile(
@@ -113,19 +118,39 @@ export class ProjectReferenceFileOperations {
   ): Promise<FileSourceTerminologyPrecheckResult> {
     const runner = this.options.sourceTerminologyPrecheckRunner;
     if (!runner) throw new Error('Source terminology precheck is not configured.');
-    const prepared = await this.prepareSourceTerminologyInput(fileId, outputPath);
+    if (this.activeSourceTerminologyPrechecks.has(fileId)) {
+      throw new Error('A source terminology precheck is already running for this file.');
+    }
+    const cancellationSource = new ObservableCancellationSource();
+    this.activeSourceTerminologyPrechecks.set(fileId, cancellationSource);
     const progress = this.resolveProgress('source-terminology-precheck', fileId, onProgress);
+    progress?.(0, 0);
+    let prepared:
+      | Awaited<ReturnType<ProjectReferenceFileOperations['prepareSourceTerminologyInput']>>
+      | undefined;
     try {
+      prepared = await this.prepareSourceTerminologyInput(fileId, outputPath);
       const result = await runner({
         ...prepared.input,
+        cancellationToken: cancellationSource,
         ...(progress ? { onProgress: progress } : {}),
       });
       return { outputPath: result.outputPath, summary: result.summary };
     } finally {
-      await prepared.cleanup?.().catch((error) => {
+      if (this.activeSourceTerminologyPrechecks.get(fileId) === cancellationSource) {
+        this.activeSourceTerminologyPrechecks.delete(fileId);
+      }
+      await prepared?.cleanup?.().catch((error) => {
         console.warn('[SourceTerminologyPrecheck] Failed to clean temporary source file:', error);
       });
     }
+  }
+
+  public cancelSourceTerminologyPrecheck(fileId: number): boolean {
+    const cancellationSource = this.activeSourceTerminologyPrechecks.get(fileId);
+    if (!cancellationSource) return false;
+    cancellationSource.cancel();
+    return true;
   }
 
   private async prepareSourceTerminologyInput(
@@ -255,6 +280,31 @@ export class ProjectReferenceFileOperations {
     return emitProgress
       ? (current, total) => emitProgress(type, fileId, current, total)
       : undefined;
+  }
+}
+
+class ObservableCancellationSource implements ObservableCancellationToken {
+  private requested = false;
+  private readonly listeners = new Set<() => void>();
+
+  public isCancellationRequested(): boolean {
+    return this.requested;
+  }
+
+  public onCancellationRequested(listener: () => void): () => void {
+    if (this.requested) {
+      listener();
+      return () => undefined;
+    }
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  public cancel(): void {
+    if (this.requested) return;
+    this.requested = true;
+    for (const listener of this.listeners) listener();
+    this.listeners.clear();
   }
 }
 

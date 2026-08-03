@@ -16,6 +16,12 @@ if (!port) {
 
 const PROGRESS_INTERVAL_MS = 100;
 const postMessage = (message: SourceTerminologyPrecheckWorkerMessage) => port.postMessage(message);
+let cancelRequested = false;
+port.on('message', (message: unknown) => {
+  if (message && typeof message === 'object' && (message as { type?: string }).type === 'cancel') {
+    cancelRequested = true;
+  }
+});
 
 const run = async () => {
   const input = workerData as SourceTerminologyPrecheckWorkerInput;
@@ -30,6 +36,7 @@ const run = async () => {
     let lastEmitAt = 0;
     const result = await prechecker.precheckFile({
       ...input.precheckInput,
+      cancellationToken: { isCancellationRequested: () => cancelRequested },
       onProgress: (current, total) => {
         const now = Date.now();
         if (current !== 0 && current !== total && now - lastEmitAt < PROGRESS_INTERVAL_MS) return;

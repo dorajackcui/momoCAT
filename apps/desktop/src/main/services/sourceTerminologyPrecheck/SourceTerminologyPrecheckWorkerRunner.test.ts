@@ -1,14 +1,16 @@
 import { EventEmitter } from 'events';
 import { join } from 'path';
-import type { SourceTerminologyPrecheckFileInput } from '@cat/localization';
 import { describe, expect, it, vi } from 'vitest';
 import { SourceTerminologyPrecheckWorkerRunner } from './SourceTerminologyPrecheckWorkerRunner';
 import type {
   SourceTerminologyPrecheckJobResult,
+  SourceTerminologyPrecheckOperationInput,
   SourceTerminologyPrecheckWorkerInput,
 } from './types';
 
-class MockWorker extends EventEmitter {}
+class MockWorker extends EventEmitter {
+  public readonly postMessage = vi.fn();
+}
 
 const WORKER_PATH = join(
   process.cwd(),
@@ -17,12 +19,12 @@ const WORKER_PATH = join(
 
 const JOB_RESULT: SourceTerminologyPrecheckJobResult = {
   outputPath: 'D:/out/source-terms.xlsx',
-  summary: { total: 3, ready: 3, error: 0, uniqueTerms: 2 },
+  summary: { total: 3, ready: 3, error: 0, cancelled: 0, uniqueTerms: 2 },
 };
 
 function createInput(
   onProgress?: (current: number, total: number) => void,
-): SourceTerminologyPrecheckFileInput {
+): SourceTerminologyPrecheckOperationInput {
   return {
     projectId: 7,
     inputPath: 'D:/in/source.xlsx',
@@ -35,7 +37,7 @@ function createInput(
 function createRunner(overrides?: {
   workerPathCandidates?: string[];
   fallbackRunner?: (
-    input: SourceTerminologyPrecheckFileInput,
+    input: SourceTerminologyPrecheckOperationInput,
   ) => Promise<SourceTerminologyPrecheckJobResult>;
 }) {
   const workers: MockWorker[] = [];
@@ -96,6 +98,37 @@ describe('SourceTerminologyPrecheckWorkerRunner', () => {
 
     await expect(promise).rejects.toThrow('provider failed');
     expect(fallbackRunner).not.toHaveBeenCalled();
+  });
+
+  it('forwards cancellation to the active worker without cloning the token', async () => {
+    const { runner, workers, factoryOptions } = createRunner();
+    let requested = false;
+    let listener: (() => void) | undefined;
+    const cancellationToken = {
+      isCancellationRequested: () => requested,
+      onCancellationRequested: (nextListener: () => void) => {
+        listener = nextListener;
+        return () => {
+          listener = undefined;
+        };
+      },
+    };
+    const promise = runner.run({ ...createInput(), cancellationToken });
+    const worker = await waitForWorker(workers);
+
+    expect(factoryOptions[0]?.workerData.precheckInput).not.toHaveProperty('cancellationToken');
+    requested = true;
+    listener?.();
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: 'cancel' });
+
+    worker.emit('message', {
+      type: 'done',
+      result: {
+        ...JOB_RESULT,
+        summary: { ...JOB_RESULT.summary, ready: 1, cancelled: 2 },
+      },
+    });
+    await expect(promise).resolves.toMatchObject({ summary: { ready: 1, cancelled: 2 } });
   });
 
   it('falls back only when the worker script is missing', async () => {

@@ -59,6 +59,7 @@ export function buildSourceTerminologyExtractionResult(
       total: units.length,
       ready: units.filter((unit) => unit.status === 'ready').length,
       error: units.filter((unit) => unit.status === 'error').length,
+      cancelled: units.filter((unit) => unit.status === 'cancelled').length,
       uniqueTerms: terms.length,
     },
   };

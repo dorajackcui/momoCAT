@@ -157,6 +157,7 @@ export interface FileSourceTerminologyPrecheckResult {
     total: number;
     ready: number;
     error: number;
+    cancelled: number;
     uniqueTerms: number;
   };
 }
@@ -514,6 +515,7 @@ export interface DesktopApi {
     fileId: number,
     outputPath: string,
   ) => Promise<FileSourceTerminologyPrecheckResult>;
+  cancelSourceTerminologyPrecheck: (fileId: number) => Promise<boolean>;
   updateSegment: (
     segmentId: string,
     targetTokens: Token[],

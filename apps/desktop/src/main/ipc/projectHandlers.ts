@@ -179,4 +179,13 @@ export function registerProjectHandlers({ ipcMain, projectService }: MainHandler
       return projectService.precheckSourceTerminology(fileId, outputPath);
     },
   );
+
+  registerHandle(
+    { ipcMain, projectService },
+    IPC_CHANNELS.file.cancelSourceTerminologyPrecheck,
+    (_event, ...args) => {
+      const [fileId] = args as [number];
+      return projectService.cancelSourceTerminologyPrecheck(fileId);
+    },
+  );
 }

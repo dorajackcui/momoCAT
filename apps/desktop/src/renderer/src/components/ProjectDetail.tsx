@@ -369,7 +369,10 @@ export function ProjectDetail({
         saving={qaSettingsSaving}
       />
 
-      <ProjectReferenceOperationProgressModal progress={referenceActions.progress} />
+      <ProjectReferenceOperationProgressModal
+        progress={referenceActions.progress}
+        onCancelPrecheck={referenceActions.cancelPrecheck}
+      />
 
       <div className="px-10 py-4 bg-surface/90 backdrop-blur border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-4">

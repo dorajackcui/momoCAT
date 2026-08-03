@@ -2,7 +2,7 @@ import { writeFile } from 'fs/promises';
 import { resolve } from 'path';
 import * as XLSX from 'xlsx';
 import type { FileCellValue, FileParseRowArtifact } from '../artifacts';
-import type { ParsedSpreadsheetFile } from './FileModule';
+import type { ParsedSpreadsheetFile, SheetCell } from './FileModule';
 
 export function buildRowsWithAppendedColumns(
   parsed: ParsedSpreadsheetFile,
@@ -39,12 +39,8 @@ export function buildRowsWithAppendedColumns(
   return rows;
 }
 
-export function toFileCellValue(value: unknown): FileCellValue {
-  if (value === undefined || value === null) return null;
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return value;
-  }
-  return String(value);
+export function toFileCellValue(value: SheetCell): FileCellValue {
+  return value ?? null;
 }
 
 export async function writeSpreadsheetWorkbook(
@@ -53,7 +49,11 @@ export async function writeSpreadsheetWorkbook(
   bookType: XLSX.BookType,
 ): Promise<void> {
   const data = XLSX.write(workbook, { bookType, type: 'buffer' }) as Buffer | Uint8Array | string;
-  await writeFile(outputPath, typeof data === 'string' ? data : Buffer.from(data), 'utf8');
+  if (typeof data === 'string') {
+    await writeFile(outputPath, data, 'utf8');
+    return;
+  }
+  await writeFile(outputPath, Buffer.from(data));
 }
 
 export function assertDistinctSpreadsheetPaths(inputPath: string, outputPath: string): void {

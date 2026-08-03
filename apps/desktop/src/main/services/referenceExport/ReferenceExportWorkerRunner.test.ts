@@ -5,7 +5,9 @@ import type { ExportReferencesForMtInput } from '@cat/localization';
 import { ReferenceExportWorkerRunner } from './ReferenceExportWorkerRunner';
 import type { ReferenceExportJobResult, ReferenceExportWorkerInput } from './types';
 
-class MockWorker extends EventEmitter {}
+class MockWorker extends EventEmitter {
+  public readonly postMessage = vi.fn();
+}
 
 const WORKER_PATH = join(process.cwd(), 'apps/desktop/src/main/services/referenceExport/types.ts');
 

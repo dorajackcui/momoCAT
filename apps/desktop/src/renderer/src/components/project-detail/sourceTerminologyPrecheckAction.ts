@@ -33,8 +33,12 @@ export async function runSourceTerminologyPrecheckAction(
     const result = await deps.runMutation(() =>
       deps.precheckSourceTerminology(file.id, outputPath),
     );
-    const { ready, total, error, uniqueTerms } = result.summary;
-    if (error > 0) {
+    const { ready, total, error, cancelled, uniqueTerms } = result.summary;
+    if (cancelled > 0) {
+      deps.info(
+        `Source term precheck stopped with partial output preserved: ${ready}/${total} rows ready, ${cancelled} cancelled, ${error} failed, ${uniqueTerms} unique candidates.`,
+      );
+    } else if (error > 0) {
       deps.info(
         `Source term precheck exported with issues: ${ready}/${total} rows ready, ${error} failed, ${uniqueTerms} unique candidates.`,
       );

@@ -1,10 +1,6 @@
 import type { PromptArtifact, TBArtifact, TMArtifact } from '../artifacts';
 import type { TranslationAuditSink } from '../audit/TranslationAudit';
-import type {
-  RuntimeTMSummary,
-  TranslateUnitReferences,
-  TranslateUnitsOptions,
-} from '../types';
+import type { RuntimeTMSummary, TranslateUnitReferences, TranslateUnitsOptions } from '../types';
 
 export type UnitResultStatus = 'translated' | 'skipped' | 'reused' | 'failed';
 
@@ -48,6 +44,10 @@ export interface JobOptions {
 
 export interface CancellationToken {
   isCancellationRequested(): boolean;
+}
+
+export interface ObservableCancellationToken extends CancellationToken {
+  onCancellationRequested(listener: () => void): () => void;
 }
 
 export interface TranslationJob {

@@ -6,7 +6,7 @@ import { SqliteProjectRepository } from './adapters/sqlite/SqliteProjectReposito
 import { SqliteSettingsRepository } from './adapters/sqlite/SqliteSettingsRepository';
 import { SqliteTBRepository } from './adapters/sqlite/SqliteTBRepository';
 import type { FileParseRowArtifact, TBArtifact } from './artifacts';
-import { parseExternalSpreadsheet } from './modules/FileModule';
+import { parseExternalSpreadsheet, type ParsedSpreadsheetFile } from './modules/FileModule';
 import { writeSourceTerminologyPrecheckSpreadsheet } from './modules/sourceTerminologyPrecheckSpreadsheet';
 import { TBModule } from './modules/TBModule';
 import type { AIRuntimeConfigProvider, AITransport } from './ports';
@@ -24,6 +24,7 @@ import {
 import { resolveTagPolicy } from './tagPolicy';
 import { createTransientSegment } from './transientSegment';
 import type { LocalizationEngineOptions, TranslateFileInput } from './types';
+import type { CancellationToken } from './job/types';
 
 const DEFAULT_MAX_CELL_CHARS = 30000;
 
@@ -35,6 +36,7 @@ export interface SourceTerminologyPrecheckFileInput extends TranslateFileInput {
   maxConcurrency?: number;
   maxCellChars?: number;
   onProgress?: (current: number, total: number) => void;
+  cancellationToken?: CancellationToken;
 }
 
 export interface SourceTerminologyPrecheckFileUnitResult {
@@ -44,7 +46,7 @@ export interface SourceTerminologyPrecheckFileUnitResult {
   historicalTerms: SourceTerminologyUnit['historicalTerms'];
   historicalTb: string;
   sourceTerms: string[];
-  status: 'ready' | 'error';
+  status: 'ready' | 'error' | 'cancelled';
   error?: string;
 }
 
@@ -56,6 +58,7 @@ export interface SourceTerminologyPrecheckFileResult {
     total: number;
     ready: number;
     error: number;
+    cancelled: number;
     uniqueTerms: number;
   };
 }
@@ -77,7 +80,8 @@ interface RowWithSegment {
 
 type HistoryResolution =
   | { status: 'ready'; artifact: TBArtifact }
-  | { status: 'error'; error: string };
+  | { status: 'error'; error: string }
+  | { status: 'cancelled' };
 
 export class LocalizationSourceTerminologyPrechecker {
   private readonly projectRepo: SqliteProjectRepository;
@@ -118,6 +122,11 @@ export class LocalizationSourceTerminologyPrechecker {
     const parsed = await parseExternalSpreadsheet(input);
     const tagPolicy = resolveTagPolicy(input.options?.tagPolicy);
     const sourceRows = parsed.artifact.rows.filter((row) => row.source.trim());
+    await yieldForCancellation();
+    if (input.cancellationToken?.isCancellationRequested() === true) {
+      return this.writeCancelledResult(parsed, sourceRows, input.outputPath);
+    }
+
     const documentId = `file:${basename(parsed.inputPath)}`;
     const rowsWithSegments = sourceRows.map((row, index) => ({
       row,
@@ -133,15 +142,21 @@ export class LocalizationSourceTerminologyPrechecker {
         { tagPolicy },
       ),
     }));
+    await yieldForCancellation();
+    if (input.cancellationToken?.isCancellationRequested() === true) {
+      return this.writeCancelledResult(parsed, sourceRows, input.outputPath);
+    }
     input.onProgress?.(0, rowsWithSegments.length);
 
     const historyBySourceHash = await this.resolveHistories(
       project.id,
       rowsWithSegments,
       input.maxConcurrency ?? this.options.maxConcurrency,
+      input.cancellationToken,
     );
     const extractionUnits: SourceTerminologyUnit[] = [];
     const precheckErrors = new Map<string, string>();
+    const precheckCancelled = new Set<string>();
     const historyByUnitId = new Map<string, SourceTerminologyUnit['historicalTerms']>();
 
     for (const { row, segment } of rowsWithSegments) {
@@ -152,6 +167,10 @@ export class LocalizationSourceTerminologyPrechecker {
       }
       if (history.status === 'error') {
         precheckErrors.set(row.unitId, history.error);
+        continue;
+      }
+      if (history.status === 'cancelled') {
+        precheckCancelled.add(row.unitId);
         continue;
       }
 
@@ -174,7 +193,7 @@ export class LocalizationSourceTerminologyPrechecker {
     let extraction: SourceTerminologyExtractionResult = {
       units: [],
       terms: [],
-      summary: { total: 0, ready: 0, error: 0, uniqueTerms: 0 },
+      summary: { total: 0, ready: 0, error: 0, cancelled: 0, uniqueTerms: 0 },
     };
     if (extractionUnits.length > 0) {
       extraction = await this.extractor.extract({
@@ -187,8 +206,12 @@ export class LocalizationSourceTerminologyPrechecker {
           maxAttempts: input.maxAttempts,
           maxConcurrency: input.maxConcurrency ?? this.options.maxConcurrency,
         },
+        cancellationToken: input.cancellationToken,
         onProgress: (current) => {
-          input.onProgress?.(precheckErrors.size + current, rowsWithSegments.length);
+          input.onProgress?.(
+            precheckErrors.size + precheckCancelled.size + current,
+            rowsWithSegments.length,
+          );
         },
       });
     } else {
@@ -201,6 +224,7 @@ export class LocalizationSourceTerminologyPrechecker {
     const units = rowsWithSegments.map(({ row }) => {
       const extracted = extractedByUnitId.get(row.unitId);
       const error = precheckErrors.get(row.unitId) ?? extracted?.error;
+      const cancelled = precheckCancelled.has(row.unitId) || extracted?.status === 'cancelled';
       const historicalTerms = historyByUnitId.get(row.unitId) ?? [];
       return {
         unitId: row.unitId,
@@ -209,7 +233,11 @@ export class LocalizationSourceTerminologyPrechecker {
         historicalTerms,
         historicalTb: truncateCell(formatHistoricalTerms(historicalTerms), maxCellChars),
         sourceTerms: extracted?.sourceTerms ?? [],
-        status: error ? ('error' as const) : ('ready' as const),
+        status: error
+          ? ('error' as const)
+          : cancelled
+            ? ('cancelled' as const)
+            : ('ready' as const),
         ...(error ? { error } : {}),
       };
     });
@@ -235,7 +263,37 @@ export class LocalizationSourceTerminologyPrechecker {
         total: units.length,
         ready: units.filter((unit) => unit.status === 'ready').length,
         error: units.filter((unit) => unit.status === 'error').length,
+        cancelled: units.filter((unit) => unit.status === 'cancelled').length,
         uniqueTerms: extraction.terms.length,
+      },
+    };
+  }
+
+  private async writeCancelledResult(
+    parsed: ParsedSpreadsheetFile,
+    sourceRows: FileParseRowArtifact[],
+    outputPath: string,
+  ): Promise<SourceTerminologyPrecheckFileResult> {
+    const units: SourceTerminologyPrecheckFileUnitResult[] = sourceRows.map((row) => ({
+      unitId: row.unitId,
+      rowNumber: row.rowNumber,
+      source: row.source,
+      historicalTerms: [],
+      historicalTb: '',
+      sourceTerms: [],
+      status: 'cancelled',
+    }));
+    await writeSourceTerminologyPrecheckSpreadsheet(parsed, units, [], outputPath);
+    return {
+      outputPath,
+      units,
+      terms: [],
+      summary: {
+        total: units.length,
+        ready: 0,
+        error: 0,
+        cancelled: units.length,
+        uniqueTerms: 0,
       },
     };
   }
@@ -244,6 +302,7 @@ export class LocalizationSourceTerminologyPrechecker {
     projectId: number,
     rows: RowWithSegment[],
     maxConcurrency?: number,
+    cancellationToken?: CancellationToken,
   ): Promise<Map<string, HistoryResolution>> {
     const leadBySourceHash = new Map<string, RowWithSegment>();
     for (const row of rows) {
@@ -254,7 +313,12 @@ export class LocalizationSourceTerminologyPrechecker {
     const groups = Array.from(leadBySourceHash.entries());
     const scheduled = await runBounded(
       groups,
-      async ([, row]) => this.tbModule.inspect(projectId, row.segment),
+      async ([, row]): Promise<HistoryResolution> => {
+        if (cancellationToken?.isCancellationRequested() === true) {
+          return { status: 'cancelled' };
+        }
+        return { status: 'ready', artifact: await this.tbModule.inspect(projectId, row.segment) };
+      },
       { maxConcurrency },
     );
     const resolved = new Map<string, HistoryResolution>();
@@ -263,7 +327,7 @@ export class LocalizationSourceTerminologyPrechecker {
       resolved.set(
         sourceHash,
         result.status === 'fulfilled'
-          ? { status: 'ready', artifact: result.value }
+          ? result.value
           : {
               status: 'error',
               error: result.reason instanceof Error ? result.reason.message : String(result.reason),
@@ -272,6 +336,10 @@ export class LocalizationSourceTerminologyPrechecker {
     });
     return resolved;
   }
+}
+
+function yieldForCancellation(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 function rowToUnit(row: FileParseRowArtifact, project: Project, inputPath: string) {

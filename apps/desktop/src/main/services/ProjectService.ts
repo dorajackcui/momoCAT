@@ -519,6 +519,9 @@ export class ProjectService {
   ): Promise<FileSourceTerminologyPrecheckResult> {
     return this.projectModule.precheckSourceTerminology(fileId, outputPath);
   }
+  public cancelSourceTerminologyPrecheck(fileId: number): boolean {
+    return this.projectModule.cancelSourceTerminologyPrecheck(fileId);
+  }
 
   public getAISettings(): { apiKeySet: boolean; apiKeyLast4?: string } {
     return this.aiModule.getAISettings();

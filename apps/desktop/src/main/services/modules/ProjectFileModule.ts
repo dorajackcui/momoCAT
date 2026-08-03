@@ -409,6 +409,10 @@ export class ProjectFileModule {
     return this.referenceOperations.precheckSourceTerminology(fileId, outputPath, onProgress);
   }
 
+  public cancelSourceTerminologyPrecheck(fileId: number): boolean {
+    return this.referenceOperations.cancelSourceTerminologyPrecheck(fileId);
+  }
+
   public async runFileQA(
     fileId: number,
     resolveTermMatches: (projectId: number, segment: Segment) => Promise<TBMatch[]>,

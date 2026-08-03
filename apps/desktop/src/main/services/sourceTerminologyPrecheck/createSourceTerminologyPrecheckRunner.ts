@@ -4,8 +4,8 @@ import {
   type AIRuntimeConfigProvider,
   type AITransport,
 } from '@cat/localization';
-import type { SourceTerminologyPrecheckRunner } from '../modules/ProjectReferenceFileOperations';
 import { SourceTerminologyPrecheckWorkerRunner } from './SourceTerminologyPrecheckWorkerRunner';
+import type { SourceTerminologyPrecheckRunner } from './types';
 
 export function createSourceTerminologyPrecheckRunner(
   db: CATDatabase,

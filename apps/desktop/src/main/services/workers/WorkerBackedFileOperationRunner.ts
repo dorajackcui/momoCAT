@@ -3,6 +3,12 @@ import { Worker } from 'worker_threads';
 
 interface ProgressInput {
   onProgress?: (current: number, total: number) => void;
+  cancellationToken?: OperationCancellationToken;
+}
+
+interface OperationCancellationToken {
+  isCancellationRequested(): boolean;
+  onCancellationRequested(listener: () => void): () => void;
 }
 
 export type FileOperationWorkerMessage<TResult> =
@@ -14,6 +20,7 @@ interface WorkerLike<TMessage> {
   on(event: 'message', listener: (message: TMessage) => void): unknown;
   on(event: 'error', listener: (error: Error) => void): unknown;
   on(event: 'exit', listener: (code: number) => void): unknown;
+  postMessage(message: unknown): unknown;
 }
 
 export type FileOperationWorkerFactory<TWorkerInput, TMessage> = (
@@ -30,9 +37,13 @@ interface WorkerBackedFileOperationRunnerOptions<
   operationLabel: string;
   workerDescription: string;
   workerPathCandidates: string[];
-  buildWorkerInput: (dbPath: string, input: Omit<TInput, 'onProgress'>) => TWorkerInput;
+  buildWorkerInput: (
+    dbPath: string,
+    input: Omit<TInput, 'onProgress' | 'cancellationToken'>,
+  ) => TWorkerInput;
   workerFactory?: FileOperationWorkerFactory<TWorkerInput, FileOperationWorkerMessage<TResult>>;
   fallbackRunner?: (input: TInput) => Promise<TResult>;
+  cancellationMessage?: unknown;
 }
 
 export class WorkerBackedFileOperationRunner<TInput extends ProgressInput, TWorkerInput, TResult> {
@@ -59,23 +70,38 @@ export class WorkerBackedFileOperationRunner<TInput extends ProgressInput, TWork
       );
     }
 
-    const { onProgress, ...jobInput } = input;
+    const { onProgress, cancellationToken, ...jobInput } = input;
     const workerFactory = this.options.workerFactory ?? this.createWorker;
 
     return new Promise<TResult>((resolve, reject) => {
       const worker = workerFactory(workerPath, {
         workerData: this.options.buildWorkerInput(
           this.options.dbPath,
-          jobInput as Omit<TInput, 'onProgress'>,
+          jobInput as Omit<TInput, 'onProgress' | 'cancellationToken'>,
         ),
       });
       let settled = false;
+      let unsubscribeCancellation: (() => void) | undefined;
 
-      const fail = (error: unknown) => {
+      const settle = (complete: () => void) => {
         if (settled) return;
         settled = true;
-        reject(error instanceof Error ? error : new Error(String(error)));
+        unsubscribeCancellation?.();
+        complete();
       };
+      const fail = (error: unknown) =>
+        settle(() => reject(error instanceof Error ? error : new Error(String(error))));
+
+      if (this.options.cancellationMessage !== undefined && cancellationToken) {
+        const requestCancellation = () => {
+          worker.postMessage(this.options.cancellationMessage);
+        };
+        if (cancellationToken.isCancellationRequested()) {
+          requestCancellation();
+        } else {
+          unsubscribeCancellation = cancellationToken.onCancellationRequested(requestCancellation);
+        }
+      }
 
       worker.on('message', (message) => {
         if (!message || typeof message !== 'object') return;
@@ -84,9 +110,7 @@ export class WorkerBackedFileOperationRunner<TInput extends ProgressInput, TWork
           return;
         }
         if (message.type === 'done') {
-          if (settled) return;
-          settled = true;
-          resolve(message.result);
+          settle(() => resolve(message.result));
           return;
         }
         if (message.type === 'error') {

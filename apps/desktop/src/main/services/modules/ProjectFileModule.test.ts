@@ -605,7 +605,7 @@ describe('ProjectFileModule.precheckSourceTerminology', () => {
     const outputPath = join(rootDir, 'source-terms.xlsx');
     const precheckResult: Pick<SourceTerminologyPrecheckFileResult, 'outputPath' | 'summary'> = {
       outputPath,
-      summary: { total: 3, ready: 2, error: 1, uniqueTerms: 4 },
+      summary: { total: 3, ready: 2, error: 1, cancelled: 0, uniqueTerms: 4 },
     };
     const precheckRunner = vi.fn(async (input: SourceTerminologyPrecheckFileInput) => {
       input.onProgress?.(2, 3);
@@ -647,6 +647,7 @@ describe('ProjectFileModule.precheckSourceTerminology', () => {
         outputPath,
         columns: { hasHeader: true, sourceCol: 2, targetCol: 4, contextCol: 5 },
         options: { tagPolicy: 'none' },
+        cancellationToken: expect.any(Object),
         onProgress: expect.any(Function),
       });
       expect(emitFileOperationProgress).toHaveBeenCalledWith(
@@ -657,7 +658,7 @@ describe('ProjectFileModule.precheckSourceTerminology', () => {
       );
       expect(result).toEqual({
         outputPath,
-        summary: { total: 3, ready: 2, error: 1, uniqueTerms: 4 },
+        summary: { total: 3, ready: 2, error: 1, cancelled: 0, uniqueTerms: 4 },
       } satisfies FileSourceTerminologyPrecheckResult);
     } finally {
       rmSync(rootDir, { recursive: true, force: true });
@@ -674,7 +675,7 @@ describe('ProjectFileModule.precheckSourceTerminology', () => {
       expect(readFileSync(input.inputPath, 'utf8')).toContain('Second source');
       return {
         outputPath,
-        summary: { total: 2, ready: 2, error: 0, uniqueTerms: 3 },
+        summary: { total: 2, ready: 2, error: 0, cancelled: 0, uniqueTerms: 3 },
       };
     });
     const projectRepo = {
@@ -718,10 +719,80 @@ describe('ProjectFileModule.precheckSourceTerminology', () => {
         outputPath,
         columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
         options: { tagPolicy: 'none' },
+        cancellationToken: expect.any(Object),
       });
-      expect(result.summary).toEqual({ total: 2, ready: 2, error: 0, uniqueTerms: 3 });
+      expect(result.summary).toEqual({
+        total: 2,
+        ready: 2,
+        error: 0,
+        cancelled: 0,
+        uniqueTerms: 3,
+      });
       expect(temporaryInputPath).not.toBe('');
       expect(existsSync(temporaryInputPath)).toBe(false);
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it('cancels an active precheck cooperatively and releases the file after partial output', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-source-terms-'));
+    const storedDir = join(rootDir, '9');
+    mkdirSync(storedDir);
+    writeFileSync(join(storedDir, '12_demo.xlsx'), 'fake spreadsheet');
+    const outputPath = join(rootDir, 'source-terms.xlsx');
+    let finish:
+      | ((result: Pick<SourceTerminologyPrecheckFileResult, 'outputPath' | 'summary'>) => void)
+      | undefined;
+    let receivedInput: SourceTerminologyPrecheckFileInput | undefined;
+    const precheckRunner = vi.fn(
+      (input: SourceTerminologyPrecheckFileInput) =>
+        new Promise<Pick<SourceTerminologyPrecheckFileResult, 'outputPath' | 'summary'>>(
+          (resolve) => {
+            receivedInput = input;
+            finish = resolve;
+          },
+        ),
+    );
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({
+        id: 12,
+        projectId: 9,
+        name: 'demo.xlsx',
+        importOptionsJson: JSON.stringify({
+          hasHeader: true,
+          sourceCol: 0,
+          targetCol: 1,
+          tagPolicy: 'none',
+        }),
+      }),
+      getProject: vi.fn().mockReturnValue({ id: 9 }),
+    } as unknown as ProjectRepository;
+    const module = new ProjectFileModule(
+      projectRepo,
+      {} as SegmentRepository,
+      {} as SpreadsheetGateway,
+      rootDir,
+      undefined,
+      undefined,
+      precheckRunner,
+    );
+
+    try {
+      const promise = module.precheckSourceTerminology(12, outputPath);
+      await vi.waitFor(() => expect(precheckRunner).toHaveBeenCalledTimes(1));
+
+      expect(module.cancelSourceTerminologyPrecheck(12)).toBe(true);
+      expect(receivedInput?.cancellationToken?.isCancellationRequested()).toBe(true);
+      finish?.({
+        outputPath,
+        summary: { total: 3, ready: 1, error: 0, cancelled: 2, uniqueTerms: 1 },
+      });
+
+      await expect(promise).resolves.toMatchObject({
+        summary: { ready: 1, cancelled: 2, uniqueTerms: 1 },
+      });
+      expect(module.cancelSourceTerminologyPrecheck(12)).toBe(false);
     } finally {
       rmSync(rootDir, { recursive: true, force: true });
     }

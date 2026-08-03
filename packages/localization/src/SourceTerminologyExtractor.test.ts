@@ -61,7 +61,13 @@ describe('SourceTerminologyExtractor', () => {
     });
 
     expect(createResponse).toHaveBeenCalledTimes(2);
-    expect(result.summary).toEqual({ total: 11, ready: 11, error: 0, uniqueTerms: 11 });
+    expect(result.summary).toEqual({
+      total: 11,
+      ready: 11,
+      error: 0,
+      cancelled: 0,
+      uniqueTerms: 11,
+    });
   });
 
   it('runs provider batches with bounded concurrency', async () => {
@@ -95,7 +101,61 @@ describe('SourceTerminologyExtractor', () => {
     });
 
     expect(maxActive).toBe(2);
-    expect(result.summary).toEqual({ total: 3, ready: 3, error: 0, uniqueTerms: 3 });
+    expect(result.summary).toEqual({
+      total: 3,
+      ready: 3,
+      error: 0,
+      cancelled: 0,
+      uniqueTerms: 3,
+    });
+  });
+
+  it('keeps an in-flight batch result and does not start new requests after cancellation', async () => {
+    const { extractor, createResponse } = createExtractor([]);
+    let cancelRequested = false;
+    let resolveFirstResponse:
+      | ((value: { content: string; status: number; endpoint: string }) => void)
+      | undefined;
+    createResponse.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFirstResponse = resolve;
+        }),
+    );
+
+    const promise = extractor.extract({
+      sourceLanguage: 'en',
+      units: Array.from({ length: 3 }, (_, index) => ({
+        documentId: 'file-1',
+        unitId: `row-${index + 1}`,
+        source: `FeatureName${index + 1}`,
+      })),
+      options: { batchSize: 1, maxConcurrency: 1 },
+      cancellationToken: { isCancellationRequested: () => cancelRequested },
+    });
+
+    await vi.waitFor(() => expect(createResponse).toHaveBeenCalledTimes(1));
+    cancelRequested = true;
+    resolveFirstResponse?.({
+      content: JSON.stringify({
+        segments: [{ id: 'source-term-1', terms: [{ sourceTerm: 'FeatureName1' }] }],
+      }),
+      status: 200,
+      endpoint: 'https://example.test/chat/completions',
+    });
+
+    const result = await promise;
+
+    expect(createResponse).toHaveBeenCalledTimes(1);
+    expect(result.units.map((unit) => unit.status)).toEqual(['ready', 'cancelled', 'cancelled']);
+    expect(result.terms).toMatchObject([{ sourceTerm: 'FeatureName1', occurrences: 1 }]);
+    expect(result.summary).toEqual({
+      total: 3,
+      ready: 1,
+      error: 0,
+      cancelled: 2,
+      uniqueTerms: 1,
+    });
   });
 
   it('reuses extraction for duplicate sources and aggregates per-unit candidates', async () => {
@@ -142,7 +202,13 @@ describe('SourceTerminologyExtractor', () => {
     expect(result.terms).toMatchObject([
       { sourceTerm: 'Account Settings', occurrences: 2, rowNumbers: [2, 3] },
     ]);
-    expect(result.summary).toEqual({ total: 2, ready: 2, error: 0, uniqueTerms: 1 });
+    expect(result.summary).toEqual({
+      total: 2,
+      ready: 2,
+      error: 0,
+      cancelled: 0,
+      uniqueTerms: 1,
+    });
     expect(progress).toEqual([
       [0, 2],
       [2, 2],

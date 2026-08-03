@@ -1,17 +1,17 @@
 import { join } from 'path';
-import type { SourceTerminologyPrecheckFileInput } from '@cat/localization';
 import {
   WorkerBackedFileOperationRunner,
   type FileOperationWorkerFactory,
 } from '../workers/WorkerBackedFileOperationRunner';
 import type {
   SourceTerminologyPrecheckJobResult,
+  SourceTerminologyPrecheckOperationInput,
   SourceTerminologyPrecheckWorkerInput,
   SourceTerminologyPrecheckWorkerMessage,
 } from './types';
 
 export type SourceTerminologyPrecheckFallbackRunner = (
-  input: SourceTerminologyPrecheckFileInput,
+  input: SourceTerminologyPrecheckOperationInput,
 ) => Promise<SourceTerminologyPrecheckJobResult>;
 
 interface SourceTerminologyPrecheckWorkerRunnerOptions {
@@ -26,7 +26,7 @@ interface SourceTerminologyPrecheckWorkerRunnerOptions {
 
 export class SourceTerminologyPrecheckWorkerRunner {
   private readonly runner: WorkerBackedFileOperationRunner<
-    SourceTerminologyPrecheckFileInput,
+    SourceTerminologyPrecheckOperationInput,
     SourceTerminologyPrecheckWorkerInput,
     SourceTerminologyPrecheckJobResult
   >;
@@ -44,11 +44,12 @@ export class SourceTerminologyPrecheckWorkerRunner {
       buildWorkerInput: (dbPath, precheckInput) => ({ dbPath, precheckInput }),
       workerFactory: options.workerFactory,
       fallbackRunner: options.fallbackRunner,
+      cancellationMessage: { type: 'cancel' },
     });
   }
 
   public run(
-    input: SourceTerminologyPrecheckFileInput,
+    input: SourceTerminologyPrecheckOperationInput,
   ): Promise<SourceTerminologyPrecheckJobResult> {
     return this.runner.run(input);
   }

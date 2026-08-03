@@ -23,7 +23,7 @@ describe('source terminology precheck action', () => {
   it('runs the precheck and reports unique source candidates', async () => {
     const result: FileSourceTerminologyPrecheckResult = {
       outputPath: 'D:/out/demo_source_terms.xlsx',
-      summary: { total: 3, ready: 3, error: 0, uniqueTerms: 5 },
+      summary: { total: 3, ready: 3, error: 0, cancelled: 0, uniqueTerms: 5 },
     };
     const saveFileDialog = vi.fn(async () => result.outputPath);
     const precheckSourceTerminology = vi.fn(async () => result);
@@ -44,6 +44,29 @@ describe('source terminology precheck action', () => {
       'Source term precheck exported: 3/3 rows ready, 5 unique candidates.',
     );
     expect(actual).toBe(result);
+  });
+
+  it('reports cancellation as a preserved partial output instead of a failure', async () => {
+    const result: FileSourceTerminologyPrecheckResult = {
+      outputPath: 'partial-source-terms.xlsx',
+      summary: { total: 10, ready: 4, error: 1, cancelled: 5, uniqueTerms: 2 },
+    };
+    const info = vi.fn();
+    const error = vi.fn();
+
+    await runSourceTerminologyPrecheckAction(file, {
+      saveFileDialog: vi.fn(async () => result.outputPath),
+      precheckSourceTerminology: vi.fn(async () => result),
+      runMutation: async (operation) => operation(),
+      success: vi.fn(),
+      info,
+      error,
+    });
+
+    expect(info).toHaveBeenCalledWith(
+      'Source term precheck stopped with partial output preserved: 4/10 rows ready, 5 cancelled, 1 failed, 2 unique candidates.',
+    );
+    expect(error).not.toHaveBeenCalled();
   });
 
   it('does not call the prechecker when the save dialog is cancelled', async () => {

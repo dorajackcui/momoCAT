@@ -10,7 +10,14 @@ import {
   buildSourceTerminologyExtractionResult,
   sourceTerminologyDocumentUnitKey,
 } from './sourceTerminologyAggregation';
+import {
+  cancelledSourceTerminologyUnitResult,
+  isSourceTerminologyCancellationRequested,
+  setCancelledSourceTerminologyUnitResults,
+  SOURCE_TERMINOLOGY_CANCELLED,
+} from './sourceTerminologyCancellation';
 import { isWholeSourceTerminologyEquivalent } from './sourceTerminologyEquivalence';
+import type { CancellationToken } from './job/types';
 
 const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_MAX_PROMPT_CHARS = 30000;
@@ -32,7 +39,7 @@ export interface SourceTerminologyUnit {
 
 export interface SourceTerminologyUnitResult extends SourceTerminologyUnit {
   sourceTerms: string[];
-  status: 'ready' | 'error';
+  status: 'ready' | 'error' | 'cancelled';
   error?: string;
 }
 
@@ -53,6 +60,7 @@ export interface SourceTerminologyExtractionResult {
     total: number;
     ready: number;
     error: number;
+    cancelled: number;
     uniqueTerms: number;
   };
 }
@@ -68,6 +76,7 @@ export interface SourceTerminologyExtractionInput {
     maxConcurrency?: number;
   };
   onProgress?: (current: number, total: number) => void;
+  cancellationToken?: CancellationToken;
 }
 
 export interface SourceTerminologyExtractorDependencies {
@@ -126,6 +135,13 @@ export class SourceTerminologyExtractor {
     );
     const groups = groupEquivalentUnits(units, sourceLanguage);
     const batches = packGroups(groups, batchSize, maxPromptChars);
+    if (isSourceTerminologyCancellationRequested(input.cancellationToken)) {
+      input.onProgress?.(units.length, units.length);
+      return buildSourceTerminologyExtractionResult(
+        units.map((unit) => cancelledSourceTerminologyUnitResult(unit)),
+        sourceLanguage,
+      );
+    }
     const { provider, apiKey } = this.deps.providerCatalogService.resolveProviderConfig(
       input.providerId,
     );
@@ -136,11 +152,21 @@ export class SourceTerminologyExtractor {
     const scheduled = await runBounded(
       batches,
       async (batch) => {
+        if (isSourceTerminologyCancellationRequested(input.cancellationToken)) {
+          for (const group of batch) {
+            setCancelledSourceTerminologyUnitResults(resultByDocumentUnit, group.units);
+          }
+          completed += batch.reduce((total, group) => total + group.units.length, 0);
+          input.onProgress?.(completed, units.length);
+          return;
+        }
+
         try {
           const termsByRequestId = await this.extractBatch({
             sourceLanguage,
             batch,
             maxAttempts,
+            cancellationToken: input.cancellationToken,
             provider: {
               apiKey,
               baseUrl: provider.baseUrl,
@@ -165,6 +191,14 @@ export class SourceTerminologyExtractor {
             }
           }
         } catch (error) {
+          if (error === SOURCE_TERMINOLOGY_CANCELLED) {
+            for (const group of batch) {
+              setCancelledSourceTerminologyUnitResults(resultByDocumentUnit, group.units);
+            }
+            completed += batch.reduce((total, group) => total + group.units.length, 0);
+            input.onProgress?.(completed, units.length);
+            return;
+          }
           const message = error instanceof Error ? error.message : String(error);
           for (const group of batch) {
             for (const unit of group.units) {
@@ -204,6 +238,7 @@ export class SourceTerminologyExtractor {
     sourceLanguage: string;
     batch: SourceTerminologyGroup[];
     maxAttempts: number;
+    cancellationToken?: CancellationToken;
     provider: {
       apiKey: string;
       baseUrl: string;
@@ -218,6 +253,9 @@ export class SourceTerminologyExtractor {
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= input.maxAttempts; attempt += 1) {
+      if (isSourceTerminologyCancellationRequested(input.cancellationToken)) {
+        throw SOURCE_TERMINOLOGY_CANCELLED;
+      }
       const prompt = buildSourceTerminologyPromptBundle({
         sourceLanguage: input.sourceLanguage,
         units: input.batch.map((group) => ({

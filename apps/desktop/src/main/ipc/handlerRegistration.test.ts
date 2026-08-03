@@ -127,10 +127,14 @@ describe('IPC handler registration smoke', () => {
     });
     const precheckResult = {
       outputPath: 'source-terms.xlsx',
-      summary: { total: 3, ready: 3, error: 0, uniqueTerms: 5 },
+      summary: { total: 3, ready: 3, error: 0, cancelled: 0, uniqueTerms: 5 },
     };
     const precheckSourceTerminology = vi.fn().mockResolvedValue(precheckResult);
-    const projectService = { precheckSourceTerminology } as unknown as ProjectService;
+    const cancelSourceTerminologyPrecheck = vi.fn().mockReturnValue(true);
+    const projectService = {
+      precheckSourceTerminology,
+      cancelSourceTerminologyPrecheck,
+    } as unknown as ProjectService;
 
     registerProjectHandlers({ ipcMain: { handle }, projectService });
 
@@ -138,5 +142,10 @@ describe('IPC handler registration smoke', () => {
     expect(handler).toBeDefined();
     await expect(handler?.({}, 7, 'source-terms.xlsx')).resolves.toBe(precheckResult);
     expect(precheckSourceTerminology).toHaveBeenCalledWith(7, 'source-terms.xlsx');
+
+    const cancelHandler = handlers.get(IPC_CHANNELS.file.cancelSourceTerminologyPrecheck);
+    expect(cancelHandler).toBeDefined();
+    expect(cancelHandler?.({}, 7)).toBe(true);
+    expect(cancelSourceTerminologyPrecheck).toHaveBeenCalledWith(7);
   });
 });
