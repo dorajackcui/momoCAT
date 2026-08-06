@@ -243,6 +243,71 @@ describe('SettingsModal', () => {
     );
   });
 
+  it('keeps proxy save disabled and clears stale proxy status during a connection test', async () => {
+    const testResult = {
+      ok: true,
+      connection,
+      models: connection.discoveredModels,
+      endpoint: 'https://api.openai.com/v1/models',
+    };
+    let resolveConnectionTest: (result: typeof testResult) => void = () => undefined;
+    apiClientMock.testAIConnection.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveConnectionTest = resolve;
+        }),
+    );
+    render(<SettingsModal isOpen onClose={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Proxy' }));
+    await waitFor(() => expect(screen.getByText('Save Proxy Settings')).not.toBeDisabled());
+    fireEvent.click(screen.getByLabelText('Use Custom Proxy URL'));
+    fireEvent.change(screen.getByLabelText('Custom Proxy URL'), {
+      target: { value: 'http://127.0.0.1:7001' },
+    });
+    apiClientMock.setProxySettings.mockResolvedValueOnce({
+      mode: 'custom',
+      customProxyUrl: 'http://127.0.0.1:7001',
+      effectiveProxyUrl: 'http://127.0.0.1:7001',
+    });
+    fireEvent.click(screen.getByText('Save Proxy Settings'));
+    expect(await screen.findByText('Proxy applied: http://127.0.0.1:7001')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Custom Proxy URL'), {
+      target: { value: 'http://127.0.0.1:7002' },
+    });
+    apiClientMock.setProxySettings.mockResolvedValueOnce({
+      mode: 'custom',
+      customProxyUrl: 'http://127.0.0.1:7002',
+      effectiveProxyUrl: 'http://127.0.0.1:7002',
+    });
+    fireEvent.click(screen.getByRole('tab', { name: 'AI Connections' }));
+    await waitForConnectionsTabReady();
+    fireEvent.change(screen.getByLabelText('Connection Name'), {
+      target: { value: 'OpenAI' },
+    });
+    fireEvent.change(screen.getByLabelText('API Base URL'), {
+      target: { value: 'https://api.openai.com/v1' },
+    });
+    fireEvent.change(screen.getByLabelText('API Key'), {
+      target: { value: 'sk-test-1234' },
+    });
+    fireEvent.click(screen.getByText('Test Connection'));
+    await waitFor(() => expect(apiClientMock.testAIConnection).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Proxy' }));
+    expect(screen.getByText('Save Proxy Settings')).toBeDisabled();
+    expect(screen.getByText('Active proxy: http://127.0.0.1:7002')).toBeInTheDocument();
+    expect(screen.queryByText('Proxy applied: http://127.0.0.1:7001')).not.toBeInTheDocument();
+
+    resolveConnectionTest(testResult);
+    await waitFor(() => expect(screen.getByText('Save Proxy Settings')).not.toBeDisabled());
+    expect(screen.queryByText('Connection tested: 2 models discovered.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'AI Connections' }));
+    expect(await screen.findByText('Connection tested: 2 models discovered.')).toBeInTheDocument();
+  });
+
   it('keeps discovered models available when refreshing lists after a successful test fails', async () => {
     apiClientMock.listAIConnections
       .mockResolvedValueOnce([])

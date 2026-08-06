@@ -2,9 +2,10 @@ import type { ProxySettingsController } from './useProxySettingsController';
 
 interface ProxySettingsTabProps {
   controller: ProxySettingsController;
+  busy: boolean;
 }
 
-export function ProxySettingsTab({ controller }: ProxySettingsTabProps) {
+export function ProxySettingsTab({ controller, busy }: ProxySettingsTabProps) {
   return (
     <section className="surface-card p-4 space-y-3">
       <h3 className="text-sm font-bold text-text">Proxy Settings</h3>
@@ -58,7 +59,7 @@ export function ProxySettingsTab({ controller }: ProxySettingsTabProps) {
 
       <button
         onClick={() => void controller.saveProxySettings()}
-        disabled={controller.loading || controller.saving}
+        disabled={busy}
         className="btn-secondary w-full"
       >
         {controller.saving ? 'Saving Proxy...' : 'Save Proxy Settings'}

@@ -22,6 +22,12 @@ const settings: SourceTerminologyPromptSettings = {
       prompt: 'Prefer named secondary concepts.',
       isBuiltin: false,
     },
+    {
+      id: 'prompt-tertiary',
+      name: 'Tertiary',
+      prompt: 'Prefer named tertiary concepts.',
+      isBuiltin: false,
+    },
   ],
   maxChars: 12000,
   maxNameChars: 80,
@@ -54,7 +60,30 @@ describe('TermExtractionPromptTab', () => {
 
     expect(await screen.findByLabelText('Prompt Name')).toHaveValue('');
     expect(editor).toHaveValue('Prefer named secondary concepts.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'View Default' }));
+    await waitFor(() => expect(editor).toHaveValue('Default extraction rules.'));
     expect(feedbackServiceMock.confirm).not.toHaveBeenCalled();
+  });
+
+  it('does not discard an edited prompt when deleting another prompt is cancelled', async () => {
+    feedbackServiceMock.confirm.mockResolvedValueOnce(false);
+    render(<TermExtractionPromptTab />);
+
+    const editor = await screen.findByLabelText('Term extraction selection prompt');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Secondary' }));
+    await waitFor(() => expect(editor).toHaveValue('Prefer named secondary concepts.'));
+    fireEvent.change(editor, { target: { value: 'Unsaved secondary changes.' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Tertiary' }));
+
+    await waitFor(() =>
+      expect(feedbackServiceMock.confirm).toHaveBeenCalledWith(
+        'Discard unsaved prompt changes and delete saved prompt "Tertiary"?',
+      ),
+    );
+    expect(apiClientMock.setSourceTerminologyPromptSettings).not.toHaveBeenCalled();
+    expect(editor).toHaveValue('Unsaved secondary changes.');
   });
 
   it('surfaces prompt catalog recovery warnings', async () => {

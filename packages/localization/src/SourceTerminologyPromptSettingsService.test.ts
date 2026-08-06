@@ -8,7 +8,7 @@ import {
   SourceTerminologyPromptSettingsService,
 } from './SourceTerminologyPromptSettingsService';
 
-function createService(seed?: Record<string, string>) {
+function createService(seed?: Record<string, string>, createId?: () => string) {
   const store = new Map(Object.entries(seed ?? {}));
   const ids = ['prompt-1', 'prompt-2', 'prompt-3'];
   const settingsRepo = {
@@ -20,7 +20,10 @@ function createService(seed?: Record<string, string>) {
   } satisfies Pick<SettingsRepository, 'getSetting' | 'setSetting'>;
 
   return {
-    service: new SourceTerminologyPromptSettingsService(settingsRepo, () => ids.shift() ?? 'next'),
+    service: new SourceTerminologyPromptSettingsService(
+      settingsRepo,
+      createId ?? (() => ids.shift() ?? 'next'),
+    ),
     settingsRepo,
     store,
   };
@@ -120,6 +123,17 @@ describe('SourceTerminologyPromptSettingsService', () => {
     expect(() => service.applyMutation({ action: 'activate', promptId: 'missing' })).toThrow(
       'not found',
     );
+  });
+
+  it('fails instead of retrying forever when unique prompt ids cannot be generated', () => {
+    const createId = vi.fn(() => 'repeated-id');
+    const { service } = createService(undefined, createId);
+    service.applyMutation({ action: 'create', name: 'First', prompt: 'Prefer first terms.' });
+
+    expect(() =>
+      service.applyMutation({ action: 'create', name: 'Second', prompt: 'Prefer second terms.' }),
+    ).toThrow('Unable to create a unique term extraction prompt id.');
+    expect(createId).toHaveBeenCalledTimes(9);
   });
 
   it('loads the legacy single prompt and migrates it on the first mutation', () => {

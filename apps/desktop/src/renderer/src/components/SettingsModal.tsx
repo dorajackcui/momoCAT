@@ -515,8 +515,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         >
           {activeTab === 'connections' && renderConnectionsTab()}
           {activeTab === 'term-extraction' && <TermExtractionPromptTab />}
-          {activeTab === 'proxy' && <ProxySettingsTab controller={proxySettings} />}
-          {status && <div className="status-note">{status}</div>}
+          {activeTab === 'proxy' && <ProxySettingsTab controller={proxySettings} busy={busy} />}
+          {activeTab === 'connections' && status && <div className="status-note">{status}</div>}
         </div>
       </div>
     </div>

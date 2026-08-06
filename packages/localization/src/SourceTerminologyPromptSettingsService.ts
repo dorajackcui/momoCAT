@@ -4,6 +4,7 @@ import type { SettingsRepository } from './ports';
 
 const SOURCE_TERMINOLOGY_PROMPT_CATALOG_KEY = 'source_terminology_selection_prompts_v2';
 const LEGACY_SOURCE_TERMINOLOGY_PROMPT_KEY = 'source_terminology_selection_prompt_v1';
+const MAX_PROMPT_ID_ATTEMPTS = 8;
 
 export const DEFAULT_SOURCE_TERMINOLOGY_PROMPT_ID = 'builtin:default';
 export const SOURCE_TERMINOLOGY_SELECTION_PROMPT_MAX_CHARS = 12000;
@@ -289,11 +290,17 @@ export class SourceTerminologyPromptSettingsService {
   }
 
   private createUniqueId(prompts: StoredPromptPreset[]): string {
-    let id = this.createId();
-    while (!id || id === DEFAULT_SOURCE_TERMINOLOGY_PROMPT_ID || prompts.some((p) => p.id === id)) {
-      id = this.createId();
+    for (let attempt = 0; attempt < MAX_PROMPT_ID_ATTEMPTS; attempt += 1) {
+      const id = this.createId();
+      if (
+        id &&
+        id !== DEFAULT_SOURCE_TERMINOLOGY_PROMPT_ID &&
+        !prompts.some((prompt) => prompt.id === id)
+      ) {
+        return id;
+      }
     }
-    return id;
+    throw new Error('Unable to create a unique term extraction prompt id.');
   }
 
   private assertMutablePromptId(promptId: string): void {

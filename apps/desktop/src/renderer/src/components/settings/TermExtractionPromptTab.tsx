@@ -12,6 +12,7 @@ export function TermExtractionPromptTab() {
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const [draft, setDraft] = useState('');
+  const [createSeed, setCreateSeed] = useState('');
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -26,6 +27,7 @@ export function TermExtractionPromptTab() {
       setSelectedPromptId(prompt?.id ?? null);
       setDraftName(prompt?.name ?? '');
       setDraft(prompt?.prompt ?? '');
+      setCreateSeed('');
       setCreating(false);
     },
     [],
@@ -62,7 +64,7 @@ export function TermExtractionPromptTab() {
   const normalizedName = draftName.trim();
   const normalizedDraft = draft.trim();
   const dirty = creating
-    ? normalizedName.length > 0 || normalizedDraft !== settings?.prompt
+    ? normalizedName.length > 0 || normalizedDraft !== createSeed
     : selectedPrompt !== null &&
       (normalizedName !== selectedPrompt.name || normalizedDraft !== selectedPrompt.prompt);
   const valid =
@@ -115,10 +117,12 @@ export function TermExtractionPromptTab() {
 
   const handleCreate = async () => {
     if (!settings || !(await confirmDiscard('a new prompt'))) return;
+    const seed = selectedPrompt?.prompt ?? settings.prompt;
     setCreating(true);
     setSelectedPromptId(null);
     setDraftName('');
-    setDraft(selectedPrompt?.prompt ?? settings.prompt);
+    setDraft(seed);
+    setCreateSeed(seed);
     setStatus(null);
   };
 
@@ -145,7 +149,11 @@ export function TermExtractionPromptTab() {
   };
 
   const handleDelete = async (prompt: SourceTerminologyPromptPreset) => {
-    const confirmed = await feedbackService.confirm(`Delete saved prompt "${prompt.name}"?`);
+    const confirmed = await feedbackService.confirm(
+      dirty
+        ? `Discard unsaved prompt changes and delete saved prompt "${prompt.name}"?`
+        : `Delete saved prompt "${prompt.name}"?`,
+    );
     if (!confirmed) return;
     await mutate({ action: 'delete', promptId: prompt.id }, `"${prompt.name}" was deleted.`);
   };

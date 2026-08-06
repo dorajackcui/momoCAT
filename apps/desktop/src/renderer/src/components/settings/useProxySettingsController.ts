@@ -51,6 +51,7 @@ export function useProxySettingsController(isOpen: boolean): ProxySettingsContro
   }, [isOpen]);
 
   const applyProxySettings = useCallback(async (): Promise<ProxySettings> => {
+    setStatus(null);
     const settings = await apiClient.setProxySettings({ mode, customProxyUrl });
     setMode(settings.mode);
     setCustomProxyUrl(settings.customProxyUrl);
