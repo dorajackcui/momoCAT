@@ -7,6 +7,7 @@ import {
   buildSearchableEditorSegmentsIncrementally,
   buildSearchableEditorSegmentsWithWeakCache,
   canReuseEditorSegmentListWithoutRefreshingSearchText,
+  createEditorFilterSnapshotCache,
   createEditorSearchableListCache,
   resolveActiveSegmentIdForFilteredList,
   resolveActiveFilteredSegmentIndex,
@@ -42,6 +43,82 @@ function createSegment(params: {
 }
 
 describe('useEditorFilters helpers', () => {
+  it('keeps filtered membership stable until the filter criteria changes', () => {
+    const cache = createEditorFilterSnapshotCache();
+    const criteria = {
+      ...createDefaultEditorFilterCriteria(),
+      targetQuery: 'apple',
+    };
+    const initial = buildSearchableEditorSegments(
+      [
+        createSegment({ id: 's1', target: 'apple' }),
+        createSegment({ id: 's2', target: 'green apple' }),
+        createSegment({ id: 's3', target: 'pear' }),
+      ],
+      {},
+    );
+
+    const firstResult = cache.resolve({ scopeKey: 1, segments: initial, criteria });
+
+    expect(firstResult.map((item) => item.segment.segmentId)).toEqual(['s1', 's2']);
+
+    const edited = buildSearchableEditorSegments(
+      [
+        createSegment({ id: 's1', target: 'pomme' }),
+        createSegment({ id: 's2', target: 'green apple' }),
+        createSegment({ id: 's3', target: 'apple' }),
+      ],
+      {},
+    );
+    const stableResult = cache.resolve({ scopeKey: 1, segments: edited, criteria });
+
+    expect(stableResult.map((item) => item.segment.segmentId)).toEqual(['s1', 's2']);
+    expect(stableResult[0].targetText).toBe('pomme');
+
+    const refreshedResult = cache.resolve({
+      scopeKey: 1,
+      segments: edited,
+      criteria: { ...criteria, targetQuery: 'pomme' },
+    });
+
+    expect(refreshedResult.map((item) => item.segment.segmentId)).toEqual(['s1']);
+  });
+
+  it('refreshes a filter snapshot when the segment list is structurally reloaded', () => {
+    const cache = createEditorFilterSnapshotCache();
+    const criteria = {
+      ...createDefaultEditorFilterCriteria(),
+      targetQuery: 'apple',
+    };
+
+    expect(cache.resolve({ scopeKey: 1, segments: [], criteria })).toEqual([]);
+
+    const firstLoad = buildSearchableEditorSegments(
+      [createSegment({ id: 's1', target: 'apple' })],
+      {},
+    );
+    expect(
+      cache
+        .resolve({ scopeKey: 1, segments: firstLoad, criteria, refreshToken: 1 })
+        .map((item) => item.segment.segmentId),
+    ).toEqual(['s1']);
+
+    const editedList = buildSearchableEditorSegments(
+      [createSegment({ id: 's1', target: 'apple' }), createSegment({ id: 's2', target: 'apple' })],
+      {},
+    );
+    expect(
+      cache
+        .resolve({ scopeKey: 1, segments: editedList, criteria, refreshToken: 1 })
+        .map((item) => item.segment.segmentId),
+    ).toEqual(['s1']);
+    expect(
+      cache
+        .resolve({ scopeKey: 1, segments: editedList, criteria, refreshToken: 2 })
+        .map((item) => item.segment.segmentId),
+    ).toEqual(['s1', 's2']);
+  });
+
   it('reuses stale search text only when list membership and order ignore segment content', () => {
     const defaults = createDefaultEditorFilterCriteria();
 

@@ -122,6 +122,38 @@ test.describe('CodeMirror editor engine smoke', () => {
     }
   });
 
+  test('keeps target filter results stable while editing until the query changes', async () => {
+    const session = await createSmokeSession();
+
+    try {
+      const { page } = session;
+      const rows = page.locator('div.group.grid');
+      const targetFilter = page.getByPlaceholder('Filter target text');
+
+      await targetFilter.fill('Needle target');
+      await expect.poll(() => rows.count()).toBe(1);
+
+      const filteredRow = rows.first();
+      await filteredRow.click();
+      const targetEditor = filteredRow.locator('.editor-target-editor-host .cm-content');
+      await expect(targetEditor).toBeVisible();
+      await targetEditor.focus();
+      await page.keyboard.press(process.platform === 'darwin' ? 'Meta+a' : 'Control+a');
+      await page.keyboard.insertText('pomme');
+
+      await expect(targetEditor).toContainText('pomme');
+      await page.waitForTimeout(300);
+      await expect(rows).toHaveCount(1);
+
+      await targetFilter.fill('Needle target!');
+      await expect.poll(() => rows.count()).toBe(0);
+      await targetFilter.fill('pomme');
+      await expect.poll(() => rows.count()).toBe(1);
+    } finally {
+      await closeSmokeSession(session);
+    }
+  });
+
   test('non-printing symbols + filter stability + external update shortcuts', async () => {
     const session = await createSmokeSession();
 

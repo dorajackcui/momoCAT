@@ -5,6 +5,7 @@ import {
   EditorMatchMode,
   EditorQualityFilter,
   EditorQuickPreset,
+  SearchableEditorSegment,
   EditorSortBy,
   EditorSortDirection,
   EditorStatusFilter,
@@ -129,6 +130,73 @@ export function canReuseEditorSegmentListWithoutRefreshingSearchText(
   );
 }
 
+export interface EditorFilterSnapshotCache {
+  resolve(params: {
+    scopeKey: string | number;
+    segments: SearchableEditorSegment[];
+    criteria: EditorFilterCriteria;
+    refreshToken?: number;
+  }): SearchableEditorSegment[];
+}
+
+function buildEditorFilterSnapshotKey(
+  scopeKey: string | number,
+  criteria: EditorFilterCriteria,
+): string {
+  return JSON.stringify([
+    scopeKey,
+    criteria.sourceQuery,
+    criteria.targetQuery,
+    criteria.status,
+    criteria.matchMode,
+    criteria.qualityFilters,
+    criteria.quickPreset,
+    criteria.sortBy,
+    criteria.sortDirection,
+  ]);
+}
+
+export function createEditorFilterSnapshotCache(): EditorFilterSnapshotCache {
+  let snapshotKey: string | null = null;
+  let snapshotIds: string[] = [];
+  let lastRefreshToken: number | undefined;
+
+  return {
+    resolve: ({ scopeKey, segments, criteria, refreshToken }) => {
+      if (canReuseEditorSegmentListWithoutRefreshingSearchText(criteria)) {
+        snapshotKey = null;
+        snapshotIds = [];
+        lastRefreshToken = refreshToken;
+        return segments;
+      }
+
+      const nextSnapshotKey = buildEditorFilterSnapshotKey(scopeKey, criteria);
+      const shouldRefresh =
+        snapshotKey !== nextSnapshotKey ||
+        (refreshToken !== undefined && refreshToken !== lastRefreshToken);
+
+      if (shouldRefresh) {
+        snapshotKey = nextSnapshotKey;
+        lastRefreshToken = refreshToken;
+        const matches = filterSearchableSegments(segments, criteria);
+        const sorted = sortSearchableSegments(matches, criteria.sortBy, criteria.sortDirection);
+        snapshotIds = sorted.map((item) => item.segment.segmentId);
+        return sorted;
+      }
+
+      const currentById = new Map(segments.map((item) => [item.segment.segmentId, item]));
+      const currentSnapshot = snapshotIds.flatMap((segmentId) => {
+        const item = currentById.get(segmentId);
+        return item ? [item] : [];
+      });
+      if (currentSnapshot.length !== snapshotIds.length) {
+        snapshotIds = currentSnapshot.map((item) => item.segment.segmentId);
+      }
+      return currentSnapshot;
+    },
+  };
+}
+
 export function useEditorFilters({
   fileId,
   segments,
@@ -145,6 +213,7 @@ export function useEditorFilters({
   const [debouncedTargetQuery, setDebouncedTargetQuery] = useState('');
   const filterStateHydratedRef = useRef(false);
   const searchableListCache = useMemo(() => createEditorSearchableListCache(), []);
+  const filterSnapshotCache = useMemo(() => createEditorFilterSnapshotCache(), []);
 
   const menus = useEditorFilterMenus();
   const {
@@ -187,14 +256,15 @@ export function useEditorFilters({
     segmentSaveErrors,
   ]);
 
-  const matchedSegments = useMemo(
-    () => filterSearchableSegments(searchableSegments, effectiveCriteria),
-    [searchableSegments, effectiveCriteria],
-  );
-
   const filteredSegments = useMemo(
-    () => sortSearchableSegments(matchedSegments, filterState.sortBy, filterState.sortDirection),
-    [matchedSegments, filterState.sortBy, filterState.sortDirection],
+    () =>
+      filterSnapshotCache.resolve({
+        scopeKey: fileId,
+        segments: searchableSegments,
+        criteria: effectiveCriteria,
+        refreshToken: segmentChangeHint?.orderChanged ? segmentChangeHint.revision : undefined,
+      }),
+    [effectiveCriteria, fileId, filterSnapshotCache, searchableSegments, segmentChangeHint],
   );
 
   const activeFilterCount = countActiveFilterFields(filterState);
