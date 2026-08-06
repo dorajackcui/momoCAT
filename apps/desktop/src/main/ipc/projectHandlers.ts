@@ -103,6 +103,11 @@ export function registerProjectHandlers({ ipcMain, projectService }: MainHandler
     return projectService.getFile(fileId);
   });
 
+  registerHandle({ ipcMain, projectService }, IPC_CHANNELS.file.rename, (_event, ...args) => {
+    const [fileId, name] = args as [number, string];
+    return projectService.renameFile(fileId, name);
+  });
+
   registerHandle({ ipcMain, projectService }, IPC_CHANNELS.file.remove, (_event, ...args) => {
     const [fileId] = args as [number];
     return projectService.deleteFile(fileId);

@@ -193,6 +193,58 @@ describe("CATDatabase", () => {
     });
   });
 
+  it("should rename file metadata without changing its contents or recency", () => {
+    const projectId = db.createProject("Rename File", "en", "zh");
+    const fileId = db.createFile(projectId, "original.xlsx", '{"sourceCol":0}');
+    db.bulkInsertSegments([
+      {
+        segmentId: "rename-segment",
+        fileId,
+        orderIndex: 0,
+        sourceTokens: [{ type: "text", content: "Hello" }],
+        targetTokens: [{ type: "text", content: "你好" }],
+        status: "confirmed",
+        tagsSignature: "",
+        matchKey: "hello",
+        srcHash: "rename-hash",
+        meta: { updatedAt: "2026-08-06T00:00:00.000Z" },
+      },
+    ]);
+    const before = db.getFile(fileId)!;
+    const segmentsBefore = db.getSegmentsPage(fileId, 0, 10);
+
+    expect(db.renameFileMetadata(fileId, "  renamed.xlsx  ")).toBe("renamed.xlsx");
+
+    const after = db.getFile(fileId)!;
+    expect(after).toMatchObject({
+      id: before.id,
+      uuid: before.uuid,
+      projectId: before.projectId,
+      name: "renamed.xlsx",
+      importOptionsJson: before.importOptionsJson,
+      totalSegments: before.totalSegments,
+      confirmedSegments: before.confirmedSegments,
+      createdAt: before.createdAt,
+      updatedAt: before.updatedAt,
+    });
+    expect(db.getSegmentsPage(fileId, 0, 10)).toEqual(segmentsBefore);
+  });
+
+  it("should reject invalid or missing file renames", () => {
+    const projectId = db.createProject("Rename File Validation", "en", "zh");
+    const fileId = db.createFile(projectId, "original.xlsx");
+
+    expect(() => db.renameFileMetadata(fileId, "   ")).toThrow("File name cannot be empty.");
+    expect(() => db.renameFileMetadata(fileId, "invalid/name.xlsx")).toThrow(
+      "File name contains invalid characters.",
+    );
+    expect(() => db.renameFileMetadata(fileId, "renamed.csv")).toThrow(
+      'File extension must remain ".xlsx".',
+    );
+    expect(() => db.renameFileMetadata(999_999, "missing.xlsx")).toThrow("File not found.");
+    expect(db.getFile(fileId)?.name).toBe("original.xlsx");
+  });
+
   it("should handle cascading delete (Project -> Files -> Segments)", () => {
     // 1. Create Project
     const projectId = db.createProject("Delete Me", "en", "zh");

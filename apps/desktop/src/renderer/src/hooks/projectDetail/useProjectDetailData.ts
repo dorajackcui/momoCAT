@@ -16,6 +16,7 @@ export interface UseProjectDetailDataResult {
   project: Project | null;
   setProject: React.Dispatch<React.SetStateAction<Project | null>>;
   files: ProjectFileRecord[];
+  setFiles: React.Dispatch<React.SetStateAction<ProjectFileRecord[]>>;
   mountedTMs: MountedTM[];
   allMainTMs: TMWithStats[];
   mountedTBs: MountedTB[];
@@ -283,6 +284,7 @@ export function useProjectDetailData(projectId: number): UseProjectDetailDataRes
     project,
     setProject,
     files,
+    setFiles,
     mountedTMs,
     allMainTMs,
     mountedTBs,

@@ -45,6 +45,7 @@ describe('createDesktopApi smoke', () => {
     await api.aiCancelFileJob('job-1');
     await api.openFileDialog([]);
     await api.readClipboard();
+    await api.renameFile(17, 'renamed.xlsx');
     await api.runFileQA(1);
     await api.inspectFile(1, 'inspect.xlsx');
     await api.exportReferencesForMt(1, 'references.xlsx');
@@ -92,6 +93,7 @@ describe('createDesktopApi smoke', () => {
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.cancelFileJob, 'job-1');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.dialog.openFile, []);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.clipboard.read);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.rename, 17, 'renamed.xlsx');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.runQA, 1);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.inspect, 1, 'inspect.xlsx');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.exportReferences, 1, 'references.xlsx');

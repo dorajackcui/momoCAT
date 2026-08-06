@@ -39,6 +39,7 @@ import { SettingsRepo } from "./repos/SettingsRepo";
 import { TBRepo } from "./repos/TBRepo";
 import { TMRepo } from "./repos/TMRepo";
 export * from "./types";
+export { normalizeProjectFileName } from './projectFileName';
 export { CURRENT_SCHEMA_VERSION, UnsupportedDatabaseSchemaError } from './currentSchema';
 
 export interface CATDatabaseOptions {
@@ -203,6 +204,10 @@ export class CATDatabase {
 
   public getFile(id: number): ProjectFileRecord | undefined {
     return this.projectRepo.getFile(id);
+  }
+
+  public renameFileMetadata(id: number, name: string): string {
+    return this.projectRepo.renameFileMetadata(id, name);
   }
 
   public deleteFile(id: number) {

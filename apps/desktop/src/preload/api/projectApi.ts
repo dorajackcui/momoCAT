@@ -17,6 +17,7 @@ type ProjectApiKeys =
   | 'getProjectFiles'
   | 'getFile'
   | 'getFilePreview'
+  | 'renameFile'
   | 'deleteFile'
   | 'addFileToProject'
   | 'createPastedSourceFile'
@@ -98,6 +99,10 @@ export function createProjectApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<
     getFilePreview: (filePath) =>
       ipcRenderer.invoke(IPC_CHANNELS.file.getPreview, filePath) as ReturnType<
         DesktopApi['getFilePreview']
+      >,
+    renameFile: (fileId, name) =>
+      ipcRenderer.invoke(IPC_CHANNELS.file.rename, fileId, name) as ReturnType<
+        DesktopApi['renameFile']
       >,
     deleteFile: (fileId) =>
       ipcRenderer.invoke(IPC_CHANNELS.file.remove, fileId) as ReturnType<DesktopApi['deleteFile']>,

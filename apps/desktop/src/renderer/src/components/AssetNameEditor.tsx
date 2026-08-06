@@ -1,16 +1,27 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 
 interface AssetNameEditorProps {
   name: string;
+  suffix?: string;
+  headingLevel?: 'h3' | 'h4';
   assetLabel: string;
   onRename: (name: string) => Promise<void>;
 }
 
-export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({ name, assetLabel, onRename }) => {
+export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
+  name,
+  suffix = '',
+  headingLevel = 'h3',
+  assetLabel,
+  onRename,
+}) => {
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState(name);
   const [isSaving, setIsSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const suffixDescriptionId = useId();
+  const displayName = `${name}${suffix}`;
+  const Heading = headingLevel;
 
   useEffect(() => {
     if (!isEditing) return;
@@ -46,7 +57,11 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({ name, assetLab
 
   if (isEditing) {
     return (
-      <form onSubmit={submit} className="flex items-center gap-1 min-w-0">
+      <form
+        onSubmit={submit}
+        onClick={(event) => event.stopPropagation()}
+        className="flex items-center gap-1 min-w-0"
+      >
         <input
           ref={inputRef}
           type="text"
@@ -60,8 +75,14 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({ name, assetLab
           }}
           className="field-input !px-2 !py-1 text-sm font-bold min-w-0"
           aria-label={`Rename ${assetLabel}`}
+          aria-describedby={suffix ? suffixDescriptionId : undefined}
           disabled={isSaving}
         />
+        {suffix && (
+          <span id={suffixDescriptionId} className="text-sm font-bold text-text">
+            {suffix}
+          </span>
+        )}
         <button
           type="submit"
           className="p-1 text-text-faint hover:text-success hover:bg-success-soft rounded-control transition-colors disabled:opacity-40"
@@ -96,16 +117,19 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({ name, assetLab
 
   return (
     <div className="flex items-center gap-1 min-w-0">
-      <h3 className="font-bold text-text group-hover:text-brand transition-colors">{name}</h3>
+      <Heading className="font-bold text-text group-hover:text-brand transition-colors">
+        {displayName}
+      </Heading>
       <button
         type="button"
-        onClick={() => {
+        onClick={(event) => {
+          event.stopPropagation();
           setDraftName(name);
           setIsEditing(true);
         }}
         className="p-1 text-text-faint hover:text-brand hover:bg-brand-soft rounded-control transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
         title={`Rename ${assetLabel}`}
-        aria-label={`Rename ${name}`}
+        aria-label={`Rename ${displayName}`}
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path

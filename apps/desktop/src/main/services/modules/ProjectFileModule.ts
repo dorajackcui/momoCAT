@@ -1,6 +1,7 @@
 import { basename, join } from 'path';
-import { copyFile, mkdir, rm, unlink, writeFile } from 'fs/promises';
+import { copyFile, mkdir, rename, rm, unlink, writeFile } from 'fs/promises';
 import { type Segment, type TBMatch } from '@cat/core/models';
+import { normalizeProjectFileName } from '@cat/db';
 import {
   DEFAULT_PROJECT_QA_SETTINGS,
   type FileQaReport,
@@ -21,6 +22,7 @@ import type {
   FileReferenceExportResult,
   FileSourceTerminologyPrecheckResult,
   PastedSourceFileInput,
+  ProjectFileRenameResult,
 } from '../../../shared/ipc';
 import {
   buildPastedSourceCsv,
@@ -34,6 +36,7 @@ import {
   type ReferenceExportRunner,
   type SourceTerminologyPrecheckRunner,
 } from './ProjectReferenceFileOperations';
+import { internalProjectFilePath } from './projectFileStorage';
 
 export class ProjectFileModule {
   private static readonly SEGMENT_PAGE_SIZE = 2000;
@@ -159,7 +162,11 @@ export class ProjectFileModule {
 
     try {
       fileId = this.projectRepo.createFile(projectId, fileName, JSON.stringify(options));
-      storedPath = join(projectDir, `${fileId}_${fileName}`);
+      storedPath = internalProjectFilePath(this.projectsDir, {
+        id: fileId,
+        projectId,
+        name: fileName,
+      });
       await copyFile(filePath, storedPath);
 
       const segments = await this.filter.import(storedPath, projectId, fileId, options);
@@ -250,7 +257,11 @@ export class ProjectFileModule {
 
     try {
       fileId = this.projectRepo.createFile(projectId, fileName, JSON.stringify(options));
-      storedPath = join(projectDir, `${fileId}_${fileName}`);
+      storedPath = internalProjectFilePath(this.projectsDir, {
+        id: fileId,
+        projectId,
+        name: fileName,
+      });
       await writeFile(storedPath, buildPastedSourceCsv(sources), 'utf8');
 
       const segments = await this.filter.import(storedPath, projectId, fileId, options);
@@ -317,13 +328,49 @@ export class ProjectFileModule {
     return this.projectRepo.getFile(fileId);
   }
 
+  public async renameFile(fileId: number, name: string): Promise<ProjectFileRenameResult> {
+    const file = this.projectRepo.getFile(fileId);
+    if (!file) throw new Error('File not found.');
+
+    const nextName = normalizeProjectFileName(file.name, name);
+    if (nextName === file.name) {
+      return { name: nextName, internalFile: 'unchanged' };
+    }
+
+    const currentPath = internalProjectFilePath(this.projectsDir, file);
+    const nextPath = internalProjectFilePath(this.projectsDir, { ...file, name: nextName });
+    let internalFile: ProjectFileRenameResult['internalFile'] = 'renamed';
+    try {
+      await rename(currentPath, nextPath);
+    } catch (error) {
+      if (!this.isFileNotFoundError(error)) throw error;
+      internalFile = 'missing';
+    }
+
+    try {
+      const persistedName = this.projectRepo.renameFileMetadata(fileId, nextName);
+      return { name: persistedName, internalFile };
+    } catch (error) {
+      if (internalFile === 'missing') throw error;
+      try {
+        await rename(nextPath, currentPath);
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [error, rollbackError],
+          'File rename failed and the internal file name could not be restored.',
+        );
+      }
+      throw error;
+    }
+  }
+
   public async deleteFile(fileId: number) {
     const file = this.projectRepo.getFile(fileId);
     if (!file) return;
 
     this.projectRepo.deleteFile(fileId);
 
-    const filePath = join(this.projectsDir, file.projectId.toString(), `${file.id}_${file.name}`);
+    const filePath = internalProjectFilePath(this.projectsDir, file);
     try {
       await unlink(filePath);
     } catch (error) {
@@ -381,7 +428,7 @@ export class ProjectFileModule {
       throw error;
     }
 
-    const storedPath = join(this.projectsDir, file.projectId.toString(), `${file.id}_${file.name}`);
+    const storedPath = internalProjectFilePath(this.projectsDir, file);
     await this.filter.export(storedPath, segments, finalOptions, outputPath);
   }
 

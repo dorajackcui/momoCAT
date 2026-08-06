@@ -16,6 +16,8 @@ import type {
   TMRecord as DbTMRecord,
   TMType as DbTMType,
 } from '../../../../packages/db/src/types';
+import type { AssetRenameApi } from './assetRenameApi';
+export type { ProjectFileRenameResult } from './assetRenameApi';
 
 export type TMType = DbTMType;
 export type ProjectType = CoreProjectType;
@@ -456,7 +458,7 @@ export interface DialogFileFilter {
   extensions: string[];
 }
 
-export interface DesktopApi {
+export interface DesktopApi extends AssetRenameApi {
   checkForUpdates: () => Promise<void>;
   openLocalFile: (filePath: string) => Promise<void>;
 
@@ -534,7 +536,6 @@ export interface DesktopApi {
   listTMs: (type?: TMType) => Promise<TMWithStats[]>;
   getTMPreview: (tmId: string) => Promise<TMAssetPreview>;
   createTM: (name: string, srcLang: string, tgtLang: string, type?: TMType) => Promise<string>;
-  renameTM: (tmId: string, name: string) => Promise<void>;
   deleteTM: (tmId: string) => Promise<void>;
   getProjectMountedTMs: (projectId: number) => Promise<MountedTM[]>;
   mountTMToProject: (
@@ -555,7 +556,6 @@ export interface DesktopApi {
   listTBs: () => Promise<TBWithStats[]>;
   getTBPreview: (tbId: string) => Promise<TBAssetPreview>;
   createTB: (name: string, srcLang: string, tgtLang: string) => Promise<string>;
-  renameTB: (tbId: string, name: string) => Promise<void>;
   deleteTB: (tbId: string) => Promise<void>;
   getProjectMountedTBs: (projectId: number) => Promise<MountedTB[]>;
   mountTBToProject: (projectId: number, tbId: string, priority?: number) => Promise<void>;

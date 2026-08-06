@@ -206,6 +206,10 @@ export class ProjectService {
     return this.projectModule.getFile(fileId);
   }
 
+  public async renameFile(fileId: number, name: string) {
+    return this.projectModule.renameFile(fileId, name);
+  }
+
   public getProject(projectId: number) {
     return this.projectModule.getProject(projectId);
   }

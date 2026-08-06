@@ -21,6 +21,7 @@ import {
   resolveImportOptionsTagPolicy,
 } from '../../../shared/fileTagPolicy';
 import { buildPastedSourceCsv } from './pastedSourceFile';
+import { internalProjectFilePath } from './projectFileStorage';
 import type { ProjectRepository, SegmentRepository } from '../ports';
 import type { SourceTerminologyPrecheckRunner } from '../sourceTerminologyPrecheck/types';
 
@@ -166,11 +167,7 @@ export class ProjectReferenceFileOperations {
     if (!project) throw new Error('Project not found');
 
     const importOptions = parseFileImportOptions(file);
-    const storedPath = join(
-      this.options.projectsDir,
-      file.projectId.toString(),
-      `${file.id}_${file.name}`,
-    );
+    const storedPath = internalProjectFilePath(this.options.projectsDir, file);
     try {
       await access(storedPath);
       if (!isInspectImportOptions(importOptions)) {
@@ -241,11 +238,7 @@ export class ProjectReferenceFileOperations {
       throw new Error(`${label} not found for this file. Please re-import the file.`);
     }
 
-    const inputPath = join(
-      this.options.projectsDir,
-      file.projectId.toString(),
-      `${file.id}_${file.name}`,
-    );
+    const inputPath = internalProjectFilePath(this.options.projectsDir, file);
     try {
       await access(inputPath);
     } catch (error) {

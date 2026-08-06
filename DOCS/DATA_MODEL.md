@@ -37,6 +37,7 @@ Important project fields:
 Important file/segment fields:
 
 - `files.importOptionsJson` persists column selection and file-level tag policy used by edit, translation, QA, TM commit, and export.
+- Renaming an imported file preserves its extension, identity, segments, statistics, import options, and `updatedAt`. When the internal project copy exists it is renamed with the metadata; if it is already missing, the metadata rename succeeds with an explicit degraded result so the desktop can warn that path-based operations remain unavailable.
 - `segments.sourceTokensJson` and `targetTokensJson` are authoritative token payloads.
 - `tagsSignature`, `matchKey`, and `srcHash` support tag-aware TM/repeat matching.
 - `segments.metaJson` stores row/context metadata and repeat-propagation state.

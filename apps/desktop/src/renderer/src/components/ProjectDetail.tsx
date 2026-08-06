@@ -52,6 +52,7 @@ export function ProjectDetail({
     project,
     setProject,
     files,
+    setFiles,
     mountedTMs,
     allMainTMs,
     mountedTBs,
@@ -220,6 +221,25 @@ export function ProjectDetail({
       });
     } catch {
       feedbackService.error('Failed to delete file');
+    }
+  };
+
+  const handleRenameFile = async (fileId: number, name: string) => {
+    try {
+      const result = await apiClient.renameFile(fileId, name);
+      setFiles((current) =>
+        current.map((file) => (file.id === fileId ? { ...file, name: result.name } : file)),
+      );
+      if (result.internalFile === 'missing') {
+        feedbackService.info(
+          'File renamed, but its internal source file is missing. Export and inspect remain unavailable for this file.',
+        );
+      }
+    } catch (error) {
+      feedbackService.error(
+        `Failed to rename file: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw error;
     }
   };
 
@@ -528,6 +548,7 @@ export function ProjectDetail({
             onOpenCommitModal={openCommitModal}
             onOpenMatchModal={openMatchModal}
             onOpenReferenceActions={referenceActions.open}
+            onRenameFile={handleRenameFile}
             onDeleteFile={handleDeleteFile}
             onExportFile={handleExportFile}
             onRunFileQA={handleRunFileQA}

@@ -9,6 +9,7 @@ import {
 } from '@cat/core/project';
 import { randomUUID } from 'crypto';
 import type { FileSegmentStatusStats, ProjectFileRecord, ProjectSavedPromptRecord } from '../types';
+import { normalizeProjectFileName } from '../projectFileName';
 
 interface FileWithSegmentStatsRow extends Omit<ProjectFileRecord, 'segmentStatusStats'> {
   derivedTotalSegments?: number | null;
@@ -286,6 +287,22 @@ export class ProjectRepo {
     }
 
     return this.toProjectFileRecord(row);
+  }
+
+  public renameFileMetadata(id: number, name: string): string {
+    const existing = this.db.prepare('SELECT name FROM files WHERE id = ?').get(id) as
+      | { name: string }
+      | undefined;
+    if (!existing) {
+      throw new Error('File not found.');
+    }
+    const normalizedName = normalizeProjectFileName(existing.name, name);
+
+    const result = this.db.prepare('UPDATE files SET name = ? WHERE id = ?').run(normalizedName, id);
+    if (result.changes === 0) {
+      throw new Error('File not found.');
+    }
+    return normalizedName;
   }
 
   public deleteFile(id: number) {

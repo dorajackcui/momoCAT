@@ -85,6 +85,10 @@ export class SqliteProjectRepository implements ProjectRepository {
     return this.db.getFile(id);
   }
 
+  renameFileMetadata(id: number, name: string): string {
+    return this.db.renameFileMetadata(id, name);
+  }
+
   deleteFile(id: number): void {
     this.db.deleteFile(id);
   }

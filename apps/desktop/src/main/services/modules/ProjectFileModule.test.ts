@@ -224,6 +224,184 @@ describe('ProjectFileModule.addFileToProject cleanup', () => {
   });
 });
 
+describe('ProjectFileModule.renameFile', () => {
+  it('renames the internal file and metadata while preserving the record', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-rename-'));
+    const projectDir = join(rootDir, '1');
+    const fileRecord = {
+      id: 42,
+      uuid: 'file-42',
+      projectId: 1,
+      name: 'original.xlsx',
+      totalSegments: 3,
+      confirmedSegments: 1,
+      importOptionsJson: '{"sourceCol":0,"targetCol":1}',
+      createdAt: '2026-08-06T00:00:00.000Z',
+      updatedAt: '2026-08-06T01:00:00.000Z',
+    };
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(join(projectDir, '42_original.xlsx'), 'spreadsheet bytes');
+
+    const projectRepo = {
+      getFile: vi.fn().mockImplementation(() => fileRecord),
+      renameFileMetadata: vi.fn().mockImplementation((_fileId: number, name: string) => {
+        fileRecord.name = name;
+        return name;
+      }),
+    } as unknown as ProjectRepository;
+    const module = new ProjectFileModule(
+      projectRepo,
+      {} as SegmentRepository,
+      {} as SpreadsheetGateway,
+      rootDir,
+    );
+
+    try {
+      await expect(module.renameFile(42, '  renamed.xlsx  ')).resolves.toEqual({
+        name: 'renamed.xlsx',
+        internalFile: 'renamed',
+      });
+
+      expect(projectRepo.renameFileMetadata).toHaveBeenCalledWith(42, 'renamed.xlsx');
+      expect(existsSync(join(projectDir, '42_original.xlsx'))).toBe(false);
+      expect(readFileSync(join(projectDir, '42_renamed.xlsx'), 'utf8')).toBe('spreadsheet bytes');
+      expect(fileRecord).toMatchObject({
+        id: 42,
+        uuid: 'file-42',
+        name: 'renamed.xlsx',
+        totalSegments: 3,
+        confirmedSegments: 1,
+        importOptionsJson: '{"sourceCol":0,"targetCol":1}',
+        updatedAt: '2026-08-06T01:00:00.000Z',
+      });
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it('restores the internal file name when metadata persistence fails', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-rename-'));
+    const projectDir = join(rootDir, '1');
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(join(projectDir, '7_original.csv'), 'Source,Target');
+
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({ id: 7, projectId: 1, name: 'original.csv' }),
+      renameFileMetadata: vi.fn().mockImplementation(() => {
+        throw new Error('Database write failed');
+      }),
+    } as unknown as ProjectRepository;
+    const module = new ProjectFileModule(
+      projectRepo,
+      {} as SegmentRepository,
+      {} as SpreadsheetGateway,
+      rootDir,
+    );
+
+    try {
+      await expect(module.renameFile(7, 'renamed.csv')).rejects.toThrow('Database write failed');
+      expect(readFileSync(join(projectDir, '7_original.csv'), 'utf8')).toBe('Source,Target');
+      expect(existsSync(join(projectDir, '7_renamed.csv'))).toBe(false);
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it('renames the metadata and reports a missing internal file', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-rename-'));
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({ id: 9, projectId: 1, name: 'missing.xlsx' }),
+      renameFileMetadata: vi.fn().mockReturnValue('renamed.xlsx'),
+    } as unknown as ProjectRepository;
+    const module = new ProjectFileModule(
+      projectRepo,
+      {} as SegmentRepository,
+      {} as SpreadsheetGateway,
+      rootDir,
+    );
+
+    try {
+      await expect(module.renameFile(9, 'renamed.xlsx')).resolves.toEqual({
+        name: 'renamed.xlsx',
+        internalFile: 'missing',
+      });
+      expect(projectRepo.renameFileMetadata).toHaveBeenCalledWith(9, 'renamed.xlsx');
+      expect(existsSync(join(rootDir, '1', '9_missing.xlsx'))).toBe(false);
+      expect(existsSync(join(rootDir, '1', '9_renamed.xlsx'))).toBe(false);
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports both failures when metadata persistence and file rollback fail', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-rename-'));
+    const projectDir = join(rootDir, '1');
+    const originalPath = join(projectDir, '10_original.csv');
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(originalPath, 'Source,Target');
+
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({ id: 10, projectId: 1, name: 'original.csv' }),
+      renameFileMetadata: vi.fn().mockImplementation(() => {
+        mkdirSync(originalPath);
+        throw new Error('Database write failed');
+      }),
+    } as unknown as ProjectRepository;
+    const module = new ProjectFileModule(
+      projectRepo,
+      {} as SegmentRepository,
+      {} as SpreadsheetGateway,
+      rootDir,
+    );
+
+    try {
+      const error = await module.renameFile(10, 'renamed.csv').catch((cause: unknown) => cause);
+
+      expect(error).toBeInstanceOf(AggregateError);
+      const aggregate = error as AggregateError;
+      expect(aggregate.message).toContain('could not be restored');
+      expect(aggregate.errors).toHaveLength(2);
+      expect((aggregate.errors[0] as Error).message).toBe('Database write failed');
+      expect(existsSync(join(projectDir, '10_renamed.csv'))).toBe(true);
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects missing files, extension changes, and unsafe names before moving anything', async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-rename-'));
+    const projectDir = join(rootDir, '1');
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(join(projectDir, '8_original.xlsx'), 'spreadsheet bytes');
+
+    const projectRepo = {
+      getFile: vi.fn().mockReturnValue({ id: 8, projectId: 1, name: 'original.xlsx' }),
+      renameFileMetadata: vi.fn(),
+    } as unknown as ProjectRepository;
+    const module = new ProjectFileModule(
+      projectRepo,
+      {} as SegmentRepository,
+      {} as SpreadsheetGateway,
+      rootDir,
+    );
+
+    try {
+      await expect(module.renameFile(8, 'renamed.csv')).rejects.toThrow(
+        'File extension must remain ".xlsx".',
+      );
+      await expect(module.renameFile(8, '../renamed.xlsx')).rejects.toThrow(
+        'File name contains invalid characters.',
+      );
+      projectRepo.getFile = vi.fn().mockReturnValue(undefined);
+      await expect(module.renameFile(999, 'missing.xlsx')).rejects.toThrow('File not found.');
+      expect(projectRepo.renameFileMetadata).not.toHaveBeenCalled();
+      expect(readFileSync(join(projectDir, '8_original.xlsx'), 'utf8')).toBe('spreadsheet bytes');
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('ProjectFileModule.createPastedSourceFile', () => {
   it('writes an internal CSV and imports it through the spreadsheet gateway', async () => {
     const rootDir = mkdtempSync(join(tmpdir(), 'project-file-module-paste-'));

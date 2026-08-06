@@ -23,6 +23,7 @@ export const IPC_CHANNELS = {
   },
   file: {
     get: 'file-get',
+    rename: 'file-rename',
     remove: 'file-delete',
     getSegments: 'file-get-segments',
     getPreview: 'file-get-preview',

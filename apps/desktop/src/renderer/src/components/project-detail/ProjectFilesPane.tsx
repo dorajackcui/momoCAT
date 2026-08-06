@@ -3,6 +3,7 @@ import type { ProjectType } from '@cat/core/project';
 import type { ProjectFileRecord } from '../../../../shared/ipc';
 import { ProjectAIController } from '../../hooks/projectDetail/useProjectAI';
 import type { TrackedAIJob } from '../../hooks/projectDetail/ai/types';
+import { AssetNameEditor } from '../AssetNameEditor';
 import { Button, Card, IconButton } from '../ui';
 import { ProjectAIPane } from './ProjectAIPane';
 import { ProjectAITranslateModal, type ProjectAITranslateSubmit } from './ProjectAITranslateModal';
@@ -14,6 +15,7 @@ interface ProjectFilesPaneProps {
   onOpenCommitModal: (file: ProjectFileRecord) => void | Promise<void>;
   onOpenMatchModal: (file: ProjectFileRecord) => void | Promise<void>;
   onOpenReferenceActions: (file: ProjectFileRecord) => void;
+  onRenameFile: (fileId: number, name: string) => Promise<void>;
   onDeleteFile: (fileId: number, fileName: string) => Promise<void>;
   onExportFile: (fileId: number, fileName: string) => Promise<void>;
   onRunFileQA: (fileId: number, fileName: string) => Promise<void>;
@@ -42,6 +44,7 @@ interface ProjectFileCardProps {
   onOpenCommitModal: (file: ProjectFileRecord) => void | Promise<void>;
   onOpenMatchModal: (file: ProjectFileRecord) => void | Promise<void>;
   onOpenReferenceActions: (file: ProjectFileRecord) => void;
+  onRenameFile: (fileId: number, name: string) => Promise<void>;
   onDeleteFile: (fileId: number, fileName: string) => Promise<void>;
   onExportFile: (fileId: number, fileName: string) => Promise<void>;
   onRunFileQA: (fileId: number, fileName: string) => Promise<void>;
@@ -58,6 +61,7 @@ function ProjectFileCard({
   onOpenCommitModal,
   onOpenMatchModal,
   onOpenReferenceActions,
+  onRenameFile,
   onDeleteFile,
   onExportFile,
   onRunFileQA,
@@ -66,6 +70,9 @@ function ProjectFileCard({
   isReviewProject,
   isCustomProject,
 }: ProjectFileCardProps) {
+  const extensionIndex = file.name.lastIndexOf('.');
+  const editableName = extensionIndex > 0 ? file.name.slice(0, extensionIndex) : file.name;
+  const extension = extensionIndex > 0 ? file.name.slice(extensionIndex) : '';
   const progressBuckets = deriveFileProgressBuckets(file);
   const progress = toPercent(progressBuckets);
   const job = useTrackedFileJob(ai, file.id);
@@ -87,7 +94,13 @@ function ProjectFileCard({
       className="flex items-center justify-between p-4 hover:border-brand/40 hover:shadow-sm transition-all group"
     >
       <div className="flex-1 cursor-pointer" onClick={() => onOpenFile(file.id)}>
-        <h4 className="font-bold text-text group-hover:text-brand">{file.name}</h4>
+        <AssetNameEditor
+          name={editableName}
+          suffix={extension}
+          headingLevel="h4"
+          assetLabel="file"
+          onRename={(name) => onRenameFile(file.id, `${name}${extension}`)}
+        />
         <div className="flex items-center gap-4 mt-1">
           <div className="w-32 h-1.5 bg-muted rounded-full overflow-hidden flex">
             <div className="h-full bg-danger" style={{ width: `${progress.qaProblemPct}%` }} />
@@ -217,6 +230,7 @@ export function ProjectFilesPane({
   onOpenCommitModal,
   onOpenMatchModal,
   onOpenReferenceActions,
+  onRenameFile,
   onDeleteFile,
   onExportFile,
   onRunFileQA,
@@ -269,6 +283,7 @@ export function ProjectFilesPane({
               onOpenCommitModal={onOpenCommitModal}
               onOpenMatchModal={onOpenMatchModal}
               onOpenReferenceActions={onOpenReferenceActions}
+              onRenameFile={onRenameFile}
               onDeleteFile={onDeleteFile}
               onExportFile={onExportFile}
               onRunFileQA={onRunFileQA}

@@ -91,6 +91,7 @@ export interface ProjectRepository {
   createFile(projectId: number, name: string, importOptionsJson?: string): number;
   listFiles(projectId: number): ProjectFileRecord[];
   getFile(id: number): ProjectFileRecord | undefined;
+  renameFileMetadata(id: number, name: string): string;
   deleteFile(id: number): void;
 }
 

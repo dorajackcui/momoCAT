@@ -99,6 +99,23 @@ describe('IPC handler registration smoke', () => {
     expect(inspectFile).toHaveBeenCalledWith(7, 'inspect.xlsx');
   });
 
+  it('delegates file rename requests to the project service', async () => {
+    const handlers = new Map<string, IpcMainListener>();
+    const handle = vi.fn((channel: string, listener: IpcMainListener) => {
+      handlers.set(channel, listener);
+    });
+    const renameResult = { name: 'renamed.xlsx', internalFile: 'renamed' as const };
+    const renameFile = vi.fn().mockResolvedValue(renameResult);
+    const projectService = { renameFile } as unknown as ProjectService;
+
+    registerProjectHandlers({ ipcMain: { handle }, projectService });
+
+    const handler = handlers.get(IPC_CHANNELS.file.rename);
+    expect(handler).toBeDefined();
+    await expect(handler?.({}, 17, 'renamed.xlsx')).resolves.toBe(renameResult);
+    expect(renameFile).toHaveBeenCalledWith(17, 'renamed.xlsx');
+  });
+
   it('delegates reference export requests to the project service with the selected output path', async () => {
     const handlers = new Map<string, IpcMainListener>();
     const handle = vi.fn((channel: string, listener: IpcMainListener) => {

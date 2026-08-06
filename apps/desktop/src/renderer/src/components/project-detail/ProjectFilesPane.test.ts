@@ -154,6 +154,7 @@ function renderPane(ai: ProjectAIController, projectType: 'translation' | 'revie
       onOpenCommitModal: vi.fn(),
       onOpenMatchModal: vi.fn(),
       onOpenReferenceActions: vi.fn(),
+      onRenameFile: vi.fn().mockResolvedValue(undefined),
       onDeleteFile: vi.fn().mockResolvedValue(undefined),
       onExportFile: vi.fn().mockResolvedValue(undefined),
       onRunFileQA: vi.fn().mockResolvedValue(undefined),
@@ -184,6 +185,14 @@ describe('ProjectFilesPane', () => {
     expect(html).toContain('group-focus-within:opacity-100');
   });
 
+  it('shows the full file name with an inline rename action', () => {
+    const { ai } = createAIControllerMock();
+    const html = renderPane(ai, 'translation');
+
+    expect(html).toContain('demo.xlsx');
+    expect(html).toContain('aria-label="Rename demo.xlsx"');
+  });
+
   it('does not duplicate file opening in the action buttons', () => {
     const { ai } = createAIControllerMock();
     capturedButtons.length = 0;
@@ -206,6 +215,7 @@ describe('ProjectFilesPane', () => {
         onOpenCommitModal: vi.fn(),
         onOpenMatchModal: vi.fn(),
         onOpenReferenceActions,
+        onRenameFile: vi.fn().mockResolvedValue(undefined),
         onDeleteFile: vi.fn().mockResolvedValue(undefined),
         onExportFile: vi.fn().mockResolvedValue(undefined),
         onRunFileQA: vi.fn().mockResolvedValue(undefined),
