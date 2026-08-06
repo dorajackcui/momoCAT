@@ -40,6 +40,7 @@ import { registerDialogHandlers } from './ipc/dialogHandlers';
 import { registerClipboardHandlers } from './ipc/clipboardHandlers';
 import { registerJobHandlers } from './ipc/jobHandlers';
 import { registerSystemHandlers } from './ipc/systemHandlers';
+import { focusPrimaryWindow } from './singleInstance';
 
 const { autoUpdater } = electronUpdater;
 
@@ -55,6 +56,15 @@ const userDataPath = is.dev ? join(app.getAppPath(), '../../.cat_data') : app.ge
 
 if (is.dev) {
   app.setPath('userData', userDataPath);
+}
+
+const primaryInstanceReady = app.requestSingleInstanceLock() ? app.whenReady() : null;
+if (!primaryInstanceReady) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    focusPrimaryWindow(BrowserWindow.getAllWindows());
+  });
 }
 
 async function loadProxyEnvFromFile(filePath: string) {
@@ -225,7 +235,7 @@ function broadcastReferenceDataChanged(event: ReferenceDataChangedEvent) {
   });
 }
 
-app.whenReady().then(async () => {
+primaryInstanceReady?.then(async () => {
   electronApp.setAppUserModelId('com.cat.tool');
 
   app.on('browser-window-created', (_, window) => {
