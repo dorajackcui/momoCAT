@@ -12,6 +12,8 @@ type AIApiKeys =
   | 'deleteAIProvider'
   | 'getProxySettings'
   | 'setProxySettings'
+  | 'getSourceTerminologyPromptSettings'
+  | 'setSourceTerminologyPromptSettings'
   | 'aiTranslateSegment'
   | 'aiRefineSegment'
   | 'aiTranslateFile'
@@ -35,7 +37,9 @@ export function createAIApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<AIApi
         DesktopApi['deleteAIConnection']
       >,
     listAIProviders: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.ai.listProviders) as ReturnType<DesktopApi['listAIProviders']>,
+      ipcRenderer.invoke(IPC_CHANNELS.ai.listProviders) as ReturnType<
+        DesktopApi['listAIProviders']
+      >,
     addAIProvider: (input) =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.addProvider, input) as ReturnType<
         DesktopApi['addAIProvider']
@@ -51,6 +55,14 @@ export function createAIApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<AIApi
     setProxySettings: (settings) =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.setProxySettings, settings) as ReturnType<
         DesktopApi['setProxySettings']
+      >,
+    getSourceTerminologyPromptSettings: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.ai.getSourceTerminologyPromptSettings) as ReturnType<
+        DesktopApi['getSourceTerminologyPromptSettings']
+      >,
+    setSourceTerminologyPromptSettings: (input) =>
+      ipcRenderer.invoke(IPC_CHANNELS.ai.setSourceTerminologyPromptSettings, input) as ReturnType<
+        DesktopApi['setSourceTerminologyPromptSettings']
       >,
     aiTranslateSegment: (segmentId) =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.translateSegment, segmentId) as ReturnType<

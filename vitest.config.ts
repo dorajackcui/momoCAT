@@ -32,6 +32,7 @@ export default defineConfig({
   },
   test: {
     globalSetup: ['./vitest.globalSetup.ts'],
+    setupFiles: ['./vitest.setup.ts'],
     exclude: [
       '.tmp/**',
       '**/node_modules/**',
@@ -41,7 +42,7 @@ export default defineConfig({
       '**/build/**',
       '**/e2e/**',
     ],
-    include: ['**/*.{test,spec}.{ts,js}'],
+    include: ['**/*.{test,spec}.{ts,tsx,js,jsx}'],
     environment: 'node',
   },
 });

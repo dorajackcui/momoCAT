@@ -68,6 +68,23 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
 
   registerHandle(
     { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.ai.getSourceTerminologyPromptSettings,
+    () => projectService.getSourceTerminologyPromptSettings(),
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.ai.setSourceTerminologyPromptSettings,
+    (_event, ...args) => {
+      const [input] = args as [
+        Parameters<typeof projectService.setSourceTerminologyPromptSettings>[0],
+      ];
+      return projectService.setSourceTerminologyPromptSettings(input);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
     IPC_CHANNELS.ai.translateSegment,
     (_event, ...args) => {
       const [segmentId] = args as [string];

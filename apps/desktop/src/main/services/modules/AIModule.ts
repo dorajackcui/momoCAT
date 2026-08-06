@@ -1,11 +1,17 @@
 import { TagValidator } from '@cat/core/qa';
-import type { CancellationToken, LocalizationEngine } from '@cat/localization';
+import {
+  SourceTerminologyPromptSettingsService,
+  type CancellationToken,
+  type LocalizationEngine,
+} from '@cat/localization';
 import type {
   AIBatchMode,
   AIBatchTargetBaseline,
   AIBatchTargetScope,
   ProxySettings,
   ProxySettingsInput,
+  SourceTerminologyPromptSettings,
+  SourceTerminologyPromptSettingsInput,
 } from '../../../shared/ipc';
 import type {
   AIRuntimeConfigProvider,
@@ -36,6 +42,7 @@ export class AIModule {
   private static readonly SEGMENT_PAGE_SIZE = 1000;
 
   private readonly settingsService: AISettingsService;
+  private readonly sourceTerminologyPromptSettingsService: SourceTerminologyPromptSettingsService;
   private readonly providerCatalogService: AIProviderCatalogService;
   private readonly translationOrchestrator: AITranslationOrchestrator;
   private readonly projectRepo: ProjectRepository;
@@ -61,6 +68,9 @@ export class AIModule {
     );
 
     this.settingsService = new AISettingsService(settingsRepo, proxySettingsManager);
+    this.sourceTerminologyPromptSettingsService = new SourceTerminologyPromptSettingsService(
+      settingsRepo,
+    );
     this.providerCatalogService = new AIProviderCatalogService(settingsRepo, transport);
     this.translationOrchestrator = new AITranslationOrchestrator(
       projectRepo,
@@ -121,6 +131,16 @@ export class AIModule {
 
   public applySavedProxySettings(): ProxySettings {
     return this.settingsService.applySavedProxySettings();
+  }
+
+  public getSourceTerminologyPromptSettings(): SourceTerminologyPromptSettings {
+    return this.sourceTerminologyPromptSettingsService.getSettings();
+  }
+
+  public setSourceTerminologyPromptSettings(
+    input: SourceTerminologyPromptSettingsInput,
+  ): SourceTerminologyPromptSettings {
+    return this.sourceTerminologyPromptSettingsService.applyMutation(input);
   }
 
   public async aiTranslateFile(

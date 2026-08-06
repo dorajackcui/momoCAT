@@ -95,6 +95,7 @@ export {
   parseAIWindowModeResponse,
 } from "./windowModePrompt";
 export {
+  DEFAULT_SOURCE_TERMINOLOGY_SELECTION_PROMPT,
   buildSourceTerminologyPromptBundle,
   parseSourceTerminologyResponse,
 } from "./sourceTerminologyPrompt";

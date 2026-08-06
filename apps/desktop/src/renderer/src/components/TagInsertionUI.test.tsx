@@ -1,5 +1,8 @@
+// @vitest-environment jsdom
+
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { TagInsertionUI } from './TagInsertionUI';
 import type { Token } from '@cat/core/models';
 
@@ -10,11 +13,11 @@ describe('TagInsertionUI', () => {
     { type: 'tag', content: '{1}', meta: { id: '{1}' } },
   ];
 
-  const mockOnInsertTag = jest.fn();
-  const mockOnInsertAllTags = jest.fn();
+  const mockOnInsertTag = vi.fn();
+  const mockOnInsertAllTags = vi.fn();
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('Visibility', () => {
@@ -87,9 +90,9 @@ describe('TagInsertionUI', () => {
       );
 
       // Check for display format in capsules
-      expect(screen.getByText('[1')).toBeInTheDocument(); // paired-start
-      expect(screen.getByText('2]')).toBeInTheDocument(); // paired-end
-      expect(screen.getByText('⟨1⟩')).toBeInTheDocument(); // standalone
+      expect(screen.getByText('{1>')).toBeInTheDocument(); // paired-start
+      expect(screen.getByText('<2}')).toBeInTheDocument(); // paired-end
+      expect(screen.getByText('{3}')).toBeInTheDocument(); // standalone
     });
   });
 
@@ -233,7 +236,7 @@ describe('TagInsertionUI', () => {
         />,
       );
 
-      const capsule = screen.getByText('[1').closest('span');
+      const capsule = screen.getByText('{1>').closest('span');
       expect(capsule).toHaveClass('bg-brand-soft', 'text-brand', 'border-brand/30');
     });
   });

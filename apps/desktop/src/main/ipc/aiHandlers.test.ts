@@ -14,6 +14,52 @@ function createIpcMainStub() {
 }
 
 describe('ai handlers', () => {
+  it('delegates source terminology prompt settings through the AI boundary', async () => {
+    const { handlers, ipcMain } = createIpcMainStub();
+    const settings = {
+      prompt: 'Prefer named locations.',
+      activePromptId: 'prompt-1',
+      prompts: [
+        {
+          id: 'prompt-1',
+          name: 'Locations',
+          prompt: 'Prefer named locations.',
+          isBuiltin: false,
+        },
+      ],
+      maxChars: 12000,
+      maxNameChars: 80,
+    };
+    const getSourceTerminologyPromptSettings = vi.fn().mockReturnValue(settings);
+    const setSourceTerminologyPromptSettings = vi.fn().mockReturnValue(settings);
+
+    registerAIHandlers({
+      ipcMain,
+      projectService: {
+        getSourceTerminologyPromptSettings,
+        setSourceTerminologyPromptSettings,
+      } as never,
+      jobManager: {} as never,
+    });
+
+    expect(handlers.get(IPC_CHANNELS.ai.getSourceTerminologyPromptSettings)?.({})).toBe(settings);
+    expect(
+      handlers.get(IPC_CHANNELS.ai.setSourceTerminologyPromptSettings)?.(
+        {},
+        {
+          action: 'create',
+          name: 'Locations',
+          prompt: 'Prefer named locations.',
+        },
+      ),
+    ).toBe(settings);
+    expect(setSourceTerminologyPromptSettings).toHaveBeenCalledWith({
+      action: 'create',
+      name: 'Locations',
+      prompt: 'Prefer named locations.',
+    });
+  });
+
   it('forwards file translate options to project service when translating file', async () => {
     const { handlers, ipcMain } = createIpcMainStub();
     const startJob = vi.fn();

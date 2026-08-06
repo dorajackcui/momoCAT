@@ -40,6 +40,12 @@ describe('createDesktopApi smoke', () => {
     await api.deleteAIProvider('custom:demo');
     await api.getProxySettings();
     await api.setProxySettings({ mode: 'off' });
+    await api.getSourceTerminologyPromptSettings();
+    await api.setSourceTerminologyPromptSettings({
+      action: 'create',
+      name: 'Locations',
+      prompt: 'Prefer named locations.',
+    });
     await api.aiTranslateSegment('seg-1');
     await api.aiRefineSegment('seg-1', 'tone down');
     await api.aiCancelFileJob('job-1');
@@ -88,6 +94,12 @@ describe('createDesktopApi smoke', () => {
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.deleteProvider, 'custom:demo');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.getProxySettings);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.setProxySettings, { mode: 'off' });
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.getSourceTerminologyPromptSettings);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.setSourceTerminologyPromptSettings, {
+      action: 'create',
+      name: 'Locations',
+      prompt: 'Prefer named locations.',
+    });
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.translateSegment, 'seg-1');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.refineSegment, 'seg-1', 'tone down');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.cancelFileJob, 'job-1');

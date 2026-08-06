@@ -17,7 +17,25 @@ import type {
   TMType as DbTMType,
 } from '../../../../packages/db/src/types';
 import type { AssetRenameApi } from './assetRenameApi';
+import type { AISettingsApi } from './aiSettingsApi';
 export type { ProjectFileRenameResult } from './assetRenameApi';
+export type {
+  AddAIProviderInput,
+  AIConnectionKind,
+  AIConnectionSummary,
+  AIProviderKind,
+  AIProviderProtocol,
+  AIProviderSummary,
+  AISettings,
+  AITestConnectionResult,
+  ProxyMode,
+  ProxySettings,
+  ProxySettingsInput,
+  SourceTerminologyPromptPreset,
+  SourceTerminologyPromptSettings,
+  SourceTerminologyPromptSettingsInput,
+  TestAIConnectionInput,
+} from './aiSettingsApi';
 
 export type TMType = DbTMType;
 export type ProjectType = CoreProjectType;
@@ -278,79 +296,6 @@ export interface StructuredJobError {
   details?: string;
 }
 
-export interface AISettings {
-  apiKeySet: boolean;
-  apiKeyLast4?: string;
-}
-
-export type AIProviderKind = 'configured' | 'legacy';
-export type AIConnectionKind = 'openai-compatible';
-export type AIProviderProtocol = 'chat-completions';
-
-export interface AIConnectionSummary {
-  id: string;
-  name: string;
-  baseUrl: string;
-  protocol: AIProviderProtocol;
-  kind: AIConnectionKind;
-  apiKeyLast4?: string;
-  discoveredModels: string[];
-  lastTestedAt?: string;
-  lastRefreshedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AIProviderSummary {
-  id: string;
-  name: string;
-  baseUrl: string;
-  model: string;
-  protocol: AIProviderProtocol;
-  kind: AIProviderKind;
-  connectionId: string;
-  connectionName: string;
-  apiKeyLast4?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface TestAIConnectionInput {
-  connectionId?: string;
-  name: string;
-  baseUrl: string;
-  apiKey: string;
-}
-
-export interface AITestConnectionResult {
-  ok: boolean;
-  connection?: AIConnectionSummary;
-  models?: string[];
-  error?: string;
-  status?: number;
-  endpoint?: string;
-  rawResponseText?: string;
-}
-
-export interface AddAIProviderInput {
-  name: string;
-  connectionId: string;
-  model: string;
-}
-
-export type ProxyMode = 'off' | 'system' | 'custom';
-
-export interface ProxySettings {
-  mode: ProxyMode;
-  customProxyUrl: string;
-  effectiveProxyUrl?: string;
-}
-
-export interface ProxySettingsInput {
-  mode: ProxyMode;
-  customProxyUrl?: string;
-}
-
 export interface AITestTranslateResult {
   ok: boolean;
   error?: string;
@@ -458,7 +403,7 @@ export interface DialogFileFilter {
   extensions: string[];
 }
 
-export interface DesktopApi extends AssetRenameApi {
+export interface DesktopApi extends AssetRenameApi, AISettingsApi {
   checkForUpdates: () => Promise<void>;
   openLocalFile: (filePath: string) => Promise<void>;
 
@@ -565,15 +510,6 @@ export interface DesktopApi extends AssetRenameApi {
   setTBSyncConfig: (tbId: string, config: TBSyncConfigInput) => Promise<void>;
   syncTBWithExcel: (tbId: string) => Promise<TBSyncStartResult>;
 
-  getAISettings: () => Promise<AISettings>;
-  listAIConnections: () => Promise<AIConnectionSummary[]>;
-  testAIConnection: (input: TestAIConnectionInput) => Promise<AITestConnectionResult>;
-  deleteAIConnection: (connectionId: string) => Promise<void>;
-  listAIProviders: () => Promise<AIProviderSummary[]>;
-  addAIProvider: (input: AddAIProviderInput) => Promise<AIProviderSummary>;
-  deleteAIProvider: (providerId: string) => Promise<void>;
-  getProxySettings: () => Promise<ProxySettings>;
-  setProxySettings: (settings: ProxySettingsInput) => Promise<ProxySettings>;
   aiTranslateSegment: (segmentId: string) => Promise<AISegmentTranslateResult>;
   aiRefineSegment: (segmentId: string, instruction: string) => Promise<AISegmentTranslateResult>;
   aiTranslateFile: (fileId: number, options?: AITranslateFileOptions) => Promise<string>;

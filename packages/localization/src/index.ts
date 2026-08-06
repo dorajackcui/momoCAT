@@ -32,6 +32,17 @@ export type {
   SourceTerminologyUnit,
   SourceTerminologyUnitResult,
 } from './SourceTerminologyExtractor';
+export {
+  DEFAULT_SOURCE_TERMINOLOGY_PROMPT_ID,
+  SOURCE_TERMINOLOGY_PROMPT_NAME_MAX_CHARS,
+  SOURCE_TERMINOLOGY_SELECTION_PROMPT_MAX_CHARS,
+  SourceTerminologyPromptSettingsService,
+} from './SourceTerminologyPromptSettingsService';
+export type {
+  SourceTerminologyPromptPreset,
+  SourceTerminologyPromptSettingsMutation,
+  SourceTerminologyPromptSettingsSnapshot,
+} from './SourceTerminologyPromptSettingsService';
 export type * from './artifacts';
 export type * from './types';
 export type * from './job/types';

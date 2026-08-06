@@ -6,6 +6,7 @@ import { normalizeTermForLookup } from '@cat/core/text';
 import type { AIProviderCatalogService } from './providers/AIProviderCatalogService';
 import type { AIRuntimeConfigProvider, AITransport } from './ports';
 import { runBounded } from './RequestScheduler';
+import { SOURCE_TERMINOLOGY_SELECTION_PROMPT_MAX_CHARS } from './SourceTerminologyPromptSettingsService';
 import {
   buildSourceTerminologyExtractionResult,
   sourceTerminologyDocumentUnitKey,
@@ -68,6 +69,7 @@ export interface SourceTerminologyExtractionResult {
 export interface SourceTerminologyExtractionInput {
   sourceLanguage: string;
   providerId?: string | null;
+  selectionPrompt?: string;
   units: SourceTerminologyUnit[];
   options?: {
     batchSize?: number;
@@ -103,6 +105,7 @@ export class SourceTerminologyExtractor {
     }
 
     const units = normalizeUnits(input.units);
+    const selectionPrompt = validateSelectionPrompt(input.selectionPrompt);
     input.onProgress?.(0, units.length);
     if (units.length === 0) {
       return buildSourceTerminologyExtractionResult([], sourceLanguage);
@@ -134,7 +137,13 @@ export class SourceTerminologyExtractor {
       'maxConcurrency',
     );
     const groups = groupEquivalentUnits(units, sourceLanguage);
-    const batches = packGroups(groups, batchSize, maxPromptChars);
+    const batches = packGroups(
+      groups,
+      batchSize,
+      maxPromptChars,
+      sourceLanguage,
+      selectionPrompt,
+    );
     if (isSourceTerminologyCancellationRequested(input.cancellationToken)) {
       input.onProgress?.(units.length, units.length);
       return buildSourceTerminologyExtractionResult(
@@ -166,6 +175,7 @@ export class SourceTerminologyExtractor {
             sourceLanguage,
             batch,
             maxAttempts,
+            selectionPrompt,
             cancellationToken: input.cancellationToken,
             provider: {
               apiKey,
@@ -238,6 +248,7 @@ export class SourceTerminologyExtractor {
     sourceLanguage: string;
     batch: SourceTerminologyGroup[];
     maxAttempts: number;
+    selectionPrompt?: string;
     cancellationToken?: CancellationToken;
     provider: {
       apiKey: string;
@@ -258,6 +269,7 @@ export class SourceTerminologyExtractor {
       }
       const prompt = buildSourceTerminologyPromptBundle({
         sourceLanguage: input.sourceLanguage,
+        selectionPrompt: input.selectionPrompt,
         units: input.batch.map((group) => ({
           id: group.requestId,
           source: group.representative.source,
@@ -359,32 +371,43 @@ function packGroups(
   groups: SourceTerminologyGroup[],
   batchSize: number,
   maxPromptChars: number,
+  sourceLanguage: string,
+  selectionPrompt?: string,
 ): SourceTerminologyGroup[][] {
   const batches: SourceTerminologyGroup[][] = [];
   let current: SourceTerminologyGroup[] = [];
-  let currentChars = 0;
 
   for (const group of groups) {
-    const estimatedChars =
-      group.representative.source.length +
-      (group.representative.historicalTerms ?? []).reduce(
-        (total, term) => total + term.sourceTerm.length + 16,
-        0,
-      ) +
-      300;
-    if (
-      current.length > 0 &&
-      (current.length >= batchSize || currentChars + estimatedChars > maxPromptChars)
-    ) {
+    const next = [...current, group];
+    const promptChars = measurePromptCharsForGroups(sourceLanguage, next, selectionPrompt);
+    if (current.length > 0 && (current.length >= batchSize || promptChars > maxPromptChars)) {
       batches.push(current);
-      current = [];
-      currentChars = 0;
+      current = [group];
+      continue;
     }
-    current.push(group);
-    currentChars += estimatedChars;
+    current = next;
   }
   if (current.length > 0) batches.push(current);
   return batches;
+}
+
+function measurePromptCharsForGroups(
+  sourceLanguage: string,
+  groups: SourceTerminologyGroup[],
+  selectionPrompt?: string,
+): number {
+  const prompt = buildSourceTerminologyPromptBundle({
+    sourceLanguage,
+    selectionPrompt,
+    units: groups.map((group) => ({
+      id: group.requestId,
+      source: group.representative.source,
+      historicalTerms: (group.representative.historicalTerms ?? []).map((term) => ({
+        sourceTerm: term.sourceTerm,
+      })),
+    })),
+  });
+  return prompt.systemPrompt.length + prompt.userPrompt.length;
 }
 
 function filterSourceTerms(input: {
@@ -442,4 +465,18 @@ function validatePositiveIntegerOption(
     throw new Error(`${name} must be a positive integer.`);
   }
   return value;
+}
+
+function validateSelectionPrompt(prompt: string | undefined): string | undefined {
+  if (prompt === undefined) return undefined;
+  const normalized = prompt.trim();
+  if (!normalized) {
+    throw new Error('Term extraction prompt cannot be empty.');
+  }
+  if (normalized.length > SOURCE_TERMINOLOGY_SELECTION_PROMPT_MAX_CHARS) {
+    throw new Error(
+      `Term extraction prompt cannot exceed ${SOURCE_TERMINOLOGY_SELECTION_PROMPT_MAX_CHARS} characters.`,
+    );
+  }
+  return normalized;
 }

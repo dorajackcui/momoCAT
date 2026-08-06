@@ -83,6 +83,8 @@ export const IPC_CHANNELS = {
     deleteProvider: 'ai-provider-delete',
     getProxySettings: 'proxy-settings-get',
     setProxySettings: 'proxy-settings-set',
+    getSourceTerminologyPromptSettings: 'source-terminology-prompt-settings-get',
+    setSourceTerminologyPromptSettings: 'source-terminology-prompt-settings-set',
     translateSegment: 'ai-translate-segment',
     refineSegment: 'ai-refine-segment',
     translateFile: 'ai-translate-file',

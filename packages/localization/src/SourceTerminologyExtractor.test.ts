@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { buildSourceTerminologyPromptBundle } from '@cat/core/project';
 import { SourceTerminologyExtractor } from './SourceTerminologyExtractor';
 
 function createExtractor(responses: Array<string | Error>) {
@@ -108,6 +109,36 @@ describe('SourceTerminologyExtractor', () => {
       cancelled: 0,
       uniqueTerms: 3,
     });
+  });
+
+  it('counts a customized selection policy against the prompt-size budget', async () => {
+    const selectionPrompt = 'Prefer named locations and named features. '.repeat(80);
+    const firstPrompt = buildSourceTerminologyPromptBundle({
+      sourceLanguage: 'en',
+      selectionPrompt,
+      units: [{ id: 'source-term-1', source: 'Open FeatureName1' }],
+    });
+    const maxPromptChars = firstPrompt.systemPrompt.length + firstPrompt.userPrompt.length;
+    const { extractor, createResponse } = createExtractor([
+      JSON.stringify({
+        segments: [{ id: 'source-term-1', terms: [{ sourceTerm: 'FeatureName1' }] }],
+      }),
+      JSON.stringify({
+        segments: [{ id: 'source-term-2', terms: [{ sourceTerm: 'FeatureName2' }] }],
+      }),
+    ]);
+
+    await extractor.extract({
+      sourceLanguage: 'en',
+      selectionPrompt,
+      units: [
+        { documentId: 'file-1', unitId: 'row-1', source: 'Open FeatureName1' },
+        { documentId: 'file-1', unitId: 'row-2', source: 'Open FeatureName2' },
+      ],
+      options: { maxPromptChars },
+    });
+
+    expect(createResponse).toHaveBeenCalledTimes(2);
   });
 
   it('keeps an in-flight batch result and does not start new requests after cancellation', async () => {
@@ -262,6 +293,25 @@ describe('SourceTerminologyExtractor', () => {
 
     expect(result.units.map((unit) => unit.sourceTerms)).toEqual([[], ['Project Codename']]);
     expect(createResponse.mock.calls[0][0].systemPrompt).toContain('Never force a candidate');
+  });
+
+  it('applies a custom selection policy without exposing the response contract', async () => {
+    const { extractor, createResponse } = createExtractor([
+      JSON.stringify({
+        segments: [{ id: 'source-term-1', terms: [{ sourceTerm: 'Moon Harbor' }] }],
+      }),
+    ]);
+
+    await extractor.extract({
+      sourceLanguage: 'en',
+      selectionPrompt: 'Prefer named locations.',
+      units: [{ documentId: 'file-1', unitId: 'row-1', source: 'Visit Moon Harbor' }],
+    });
+
+    const request = createResponse.mock.calls[0][0];
+    expect(request.systemPrompt).toContain('Prefer named locations.');
+    expect(request.systemPrompt).toContain('Return strict JSON only');
+    expect(request.userPrompt).toContain('Strict JSON format');
   });
 
   it('repairs one malformed response and keeps batch failures scoped', async () => {

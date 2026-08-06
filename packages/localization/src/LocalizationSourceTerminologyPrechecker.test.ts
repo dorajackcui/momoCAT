@@ -12,6 +12,7 @@ describe('LocalizationSourceTerminologyPrechecker', () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Source Terms', 'en', 'fr');
+      db.setSetting('source_terminology_selection_prompt_v1', 'Prefer named UI concepts.');
       const tbId = db.createTermBase('History', 'en', 'fr');
       db.mountTermBaseToProject(projectId, tbId, 10);
       db.insertTBEntryIfAbsentBySrcTerm({
@@ -82,7 +83,10 @@ describe('LocalizationSourceTerminologyPrechecker', () => {
       });
 
       expect(extract).toHaveBeenCalledWith(
-        expect.objectContaining({ options: expect.objectContaining({ maxConcurrency: 2 }) }),
+        expect.objectContaining({
+          selectionPrompt: 'Prefer named UI concepts.',
+          options: expect.objectContaining({ maxConcurrency: 2 }),
+        }),
       );
       expect(result.summary).toEqual({
         total: 2,

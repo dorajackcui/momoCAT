@@ -1,8 +1,15 @@
+// @vitest-environment jsdom
+
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsModal } from './SettingsModal';
-import type { AIConnectionSummary, AIProviderSummary } from '../../../shared/ipc';
+import type {
+  AIConnectionSummary,
+  AIProviderSummary,
+  SourceTerminologyPromptSettings,
+  SourceTerminologyPromptSettingsInput,
+} from '../../../shared/ipc';
 
 const connection: AIConnectionSummary = {
   id: 'connection:openai',
@@ -39,16 +46,33 @@ const legacyProvider: AIProviderSummary = {
   connectionName: 'Legacy',
 };
 
-const apiClientMock = {
+const defaultPromptSettings: SourceTerminologyPromptSettings = {
+  prompt: 'Default extraction rules.',
+  activePromptId: 'builtin:default',
+  prompts: [
+    {
+      id: 'builtin:default',
+      name: 'Default',
+      prompt: 'Default extraction rules.',
+      isBuiltin: true,
+    },
+  ],
+  maxChars: 12000,
+  maxNameChars: 80,
+};
+
+const apiClientMock = vi.hoisted(() => ({
   getProxySettings: vi.fn(),
   setProxySettings: vi.fn(),
+  getSourceTerminologyPromptSettings: vi.fn(),
+  setSourceTerminologyPromptSettings: vi.fn(),
   listAIConnections: vi.fn(),
   testAIConnection: vi.fn(),
   deleteAIConnection: vi.fn(),
   listAIProviders: vi.fn(),
   addAIProvider: vi.fn(),
   deleteAIProvider: vi.fn(),
-};
+}));
 
 vi.mock('../services/apiClient', () => ({
   apiClient: apiClientMock,
@@ -72,6 +96,28 @@ describe('SettingsModal', () => {
       customProxyUrl: '',
       effectiveProxyUrl: '',
     });
+    apiClientMock.getSourceTerminologyPromptSettings.mockResolvedValue(defaultPromptSettings);
+    apiClientMock.setSourceTerminologyPromptSettings.mockImplementation(
+      async (input: SourceTerminologyPromptSettingsInput) => {
+        if (input.action === 'create') {
+          return {
+            ...defaultPromptSettings,
+            prompt: input.prompt,
+            activePromptId: 'prompt-1',
+            prompts: [
+              ...defaultPromptSettings.prompts,
+              {
+                id: 'prompt-1',
+                name: input.name,
+                prompt: input.prompt,
+                isBuiltin: false,
+              },
+            ],
+          };
+        }
+        return defaultPromptSettings;
+      },
+    );
     apiClientMock.listAIConnections.mockResolvedValue([]);
     apiClientMock.testAIConnection.mockResolvedValue({
       ok: true,
@@ -155,6 +201,46 @@ describe('SettingsModal', () => {
     fireEvent.click(screen.getByText('Add Provider'));
 
     expect(apiClientMock.addAIProvider).not.toHaveBeenCalled();
+  });
+
+  it('applies the current proxy draft before testing a connection', async () => {
+    render(<SettingsModal isOpen onClose={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Proxy' }));
+    await waitFor(() => expect(screen.getByText('Save Proxy Settings')).not.toBeDisabled());
+    fireEvent.click(screen.getByLabelText('Use Custom Proxy URL'));
+    fireEvent.change(screen.getByLabelText('Custom Proxy URL'), {
+      target: { value: 'http://127.0.0.1:7890' },
+    });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'AI Connections' }));
+    await waitForConnectionsTabReady();
+    fireEvent.change(screen.getByLabelText('Connection Name'), {
+      target: { value: 'OpenAI' },
+    });
+    fireEvent.change(screen.getByLabelText('API Base URL'), {
+      target: { value: 'https://api.openai.com/v1' },
+    });
+    fireEvent.change(screen.getByLabelText('API Key'), {
+      target: { value: 'sk-test-1234' },
+    });
+    apiClientMock.setProxySettings.mockResolvedValueOnce({
+      mode: 'custom',
+      customProxyUrl: 'http://127.0.0.1:7890',
+      effectiveProxyUrl: 'http://127.0.0.1:7890',
+    });
+
+    fireEvent.click(screen.getByText('Test Connection'));
+
+    await waitFor(() =>
+      expect(apiClientMock.setProxySettings).toHaveBeenCalledWith({
+        mode: 'custom',
+        customProxyUrl: 'http://127.0.0.1:7890',
+      }),
+    );
+    expect(apiClientMock.setProxySettings.mock.invocationCallOrder[0]).toBeLessThan(
+      apiClientMock.testAIConnection.mock.invocationCallOrder[0],
+    );
   });
 
   it('keeps discovered models available when refreshing lists after a successful test fails', async () => {
@@ -292,5 +378,42 @@ describe('SettingsModal', () => {
     );
 
     await screen.findByText('Proxy applied: http://127.0.0.1:7890');
+  });
+
+  it('creates a named term extraction prompt and switches back to the built-in default', async () => {
+    render(<SettingsModal isOpen onClose={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Term Extraction' }));
+    const editor = await screen.findByLabelText('Term extraction selection prompt');
+    expect(editor).toHaveValue('Default extraction rules.');
+    expect(editor).toHaveAttribute('readonly');
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Prompt' }));
+    fireEvent.change(await screen.findByLabelText('Prompt Name'), {
+      target: { value: 'Named locations' },
+    });
+    fireEvent.change(editor, { target: { value: 'Prefer named locations.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save and Use' }));
+
+    await waitFor(() =>
+      expect(apiClientMock.setSourceTerminologyPromptSettings).toHaveBeenCalledWith({
+        action: 'create',
+        name: 'Named locations',
+        prompt: 'Prefer named locations.',
+      }),
+    );
+    expect(
+      await screen.findByText('"Named locations" was saved and is now in use.'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use Default' }));
+
+    await waitFor(() =>
+      expect(apiClientMock.setSourceTerminologyPromptSettings).toHaveBeenLastCalledWith({
+        action: 'activate',
+        promptId: 'builtin:default',
+      }),
+    );
+    expect(editor).toHaveValue('Default extraction rules.');
   });
 });

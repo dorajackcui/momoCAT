@@ -1,26 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import type {
-  AIConnectionSummary,
-  AIProviderSummary,
-  ProxyMode,
-  ProxySettings,
-} from '../../../shared/ipc';
-import {
-  chooseInitialProviderModel,
-  isSavedConnectionReuseActive,
-} from './aiProviderSelection';
+import type { AIConnectionSummary, AIProviderSummary } from '../../../shared/ipc';
+import { chooseInitialProviderModel, isSavedConnectionReuseActive } from './aiProviderSelection';
 import { apiClient } from '../services/apiClient';
 import { notifyAIProvidersChanged } from '../services/aiProviderEvents';
+import { ProxySettingsTab } from './settings/ProxySettingsTab';
+import { TermExtractionPromptTab } from './settings/TermExtractionPromptTab';
+import { useProxySettingsController } from './settings/useProxySettingsController';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type SettingsTabId = 'connections' | 'proxy';
+type SettingsTabId = 'connections' | 'term-extraction' | 'proxy';
 
 const SETTINGS_TABS: Array<{ id: SettingsTabId; label: string }> = [
   { id: 'connections', label: 'AI Connections' },
+  { id: 'term-extraction', label: 'Term Extraction' },
   { id: 'proxy', label: 'Proxy' },
 ];
 
@@ -33,6 +29,7 @@ function buildProviderName(connection: AIConnectionSummary, model: string): stri
 }
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+  const proxySettings = useProxySettingsController(isOpen);
   const [activeTab, setActiveTab] = useState<SettingsTabId>('connections');
   const [connections, setConnections] = useState<AIConnectionSummary[]>([]);
   const [providers, setProviders] = useState<AIProviderSummary[]>([]);
@@ -42,11 +39,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [testedConnection, setTestedConnection] = useState<AIConnectionSummary | null>(null);
   const [selectedModel, setSelectedModel] = useState('');
   const [providerNameInput, setProviderNameInput] = useState('');
-  const [proxyMode, setProxyMode] = useState<ProxyMode>('system');
-  const [customProxyUrl, setCustomProxyUrl] = useState('');
-  const [effectiveProxyUrl, setEffectiveProxyUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [savingProxy, setSavingProxy] = useState(false);
   const [testingProvider, setTestingProvider] = useState(false);
   const [addingProvider, setAddingProvider] = useState(false);
   const [deletingConnectionId, setDeletingConnectionId] = useState<string | null>(null);
@@ -79,21 +72,14 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     const load = async () => {
       setLoading(true);
       try {
-        const [proxySettings, connectionList, providerList] = await Promise.all([
-          apiClient.getProxySettings(),
+        const [connectionList, providerList] = await Promise.all([
           apiClient.listAIConnections(),
           apiClient.listAIProviders(),
         ]);
 
-        setProxyMode(proxySettings.mode);
-        setCustomProxyUrl(proxySettings.customProxyUrl);
-        setEffectiveProxyUrl(proxySettings.effectiveProxyUrl ?? null);
         setConnections(connectionList);
         setProviders(providerList);
       } catch {
-        setProxyMode('system');
-        setCustomProxyUrl('');
-        setEffectiveProxyUrl(null);
         setConnections([]);
         setProviders([]);
       } finally {
@@ -108,7 +94,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   const busy =
     loading ||
-    savingProxy ||
+    proxySettings.loading ||
+    proxySettings.saving ||
     testingProvider ||
     addingProvider ||
     deletingConnectionId !== null ||
@@ -132,22 +119,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setProviders(providerList);
   };
 
-  const applyProxySettings = async (): Promise<ProxySettings> => {
-    const updated = await apiClient.setProxySettings({
-      mode: proxyMode,
-      customProxyUrl,
-    });
-    setProxyMode(updated.mode);
-    setCustomProxyUrl(updated.customProxyUrl);
-    setEffectiveProxyUrl(updated.effectiveProxyUrl ?? null);
-    return updated;
-  };
-
   const handleTestConnection = async () => {
     setTestingProvider(true);
     setStatus(null);
     try {
-      await applyProxySettings();
+      await proxySettings.applyProxySettings();
       const result = await apiClient.testAIConnection({
         name: connectionNameInput,
         baseUrl: connectionBaseUrlInput,
@@ -267,24 +243,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       setStatus(`Failed to delete provider: ${message}`);
     } finally {
       setDeletingProviderId(null);
-    }
-  };
-
-  const handleSaveProxy = async () => {
-    setSavingProxy(true);
-    setStatus(null);
-    try {
-      const proxySettings = await applyProxySettings();
-      if (proxySettings.effectiveProxyUrl) {
-        setStatus(`Proxy applied: ${proxySettings.effectiveProxyUrl}`);
-      } else {
-        setStatus('Proxy disabled. Direct connection will be used.');
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setStatus(`Failed to save proxy settings: ${message}`);
-    } finally {
-      setSavingProxy(false);
     }
   };
 
@@ -505,68 +463,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     </div>
   );
 
-  const renderProxyTab = () => (
-    <section className="surface-card p-4 space-y-3">
-      <h3 className="text-sm font-bold text-text">Proxy Settings</h3>
-      <div className="space-y-2 text-sm text-text-muted">
-        <label className="flex items-center gap-2">
-          <input
-            type="radio"
-            name="proxy-mode"
-            checked={proxyMode === 'off'}
-            onChange={() => setProxyMode('off')}
-            className="accent-brand"
-          />
-          <span>No Proxy (Direct)</span>
-        </label>
-        <label className="flex items-center gap-2">
-          <input
-            type="radio"
-            name="proxy-mode"
-            checked={proxyMode === 'system'}
-            onChange={() => setProxyMode('system')}
-            className="accent-brand"
-          />
-          <span>Use System/Environment Proxy</span>
-        </label>
-        <label className="flex items-center gap-2">
-          <input
-            type="radio"
-            name="proxy-mode"
-            checked={proxyMode === 'custom'}
-            onChange={() => setProxyMode('custom')}
-            className="accent-brand"
-          />
-          <span>Use Custom Proxy URL</span>
-        </label>
-      </div>
-
-      {proxyMode === 'custom' && (
-        <input
-          aria-label="Custom Proxy URL"
-          type="text"
-          value={customProxyUrl}
-          onChange={(event) => setCustomProxyUrl(event.target.value)}
-          placeholder="http://127.0.0.1:7890"
-          className="field-input"
-        />
-      )}
-
-      <p className="text-[11px] text-text-muted">
-        Active proxy: {effectiveProxyUrl || 'None (direct)'}
-      </p>
-
-      <button onClick={handleSaveProxy} disabled={busy} className="btn-secondary w-full">
-        {savingProxy ? 'Saving Proxy...' : 'Save Proxy Settings'}
-      </button>
-    </section>
-  );
-
   return (
     <div className="settings-modal-backdrop">
       <div className="modal-card max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
         <div className="modal-header">
-          <h2 className="text-xl font-bold text-text">AI & Network Settings</h2>
+          <h2 className="text-xl font-bold text-text">Settings</h2>
           <button
             onClick={onClose}
             className="text-text-faint hover:text-text-muted transition-colors"
@@ -582,7 +483,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           </button>
         </div>
 
-        <div className="px-6 py-3 border-b border-border flex gap-2 overflow-x-auto">
+        <div
+          role="tablist"
+          aria-label="Settings sections"
+          className="px-6 py-3 border-b border-border flex items-center gap-2 overflow-x-auto"
+        >
           {SETTINGS_TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
@@ -594,8 +499,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 onClick={() => setActiveTab(tab.id)}
                 className={
                   isActive
-                    ? 'px-3 py-2 rounded-control text-sm font-semibold bg-brand text-white whitespace-nowrap'
-                    : 'px-3 py-2 rounded-control text-sm font-medium text-text-muted hover:text-text hover:bg-muted transition-colors whitespace-nowrap'
+                    ? 'inline-flex h-9 shrink-0 items-center justify-center rounded-control px-4 text-sm font-semibold leading-5 bg-brand text-white whitespace-nowrap'
+                    : 'inline-flex h-9 shrink-0 items-center justify-center rounded-control px-4 text-sm font-medium leading-5 text-text-muted hover:text-text hover:bg-muted transition-colors whitespace-nowrap'
                 }
               >
                 {tab.label}
@@ -609,7 +514,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           style={{ scrollbarGutter: 'stable' }}
         >
           {activeTab === 'connections' && renderConnectionsTab()}
-          {activeTab === 'proxy' && renderProxyTab()}
+          {activeTab === 'term-extraction' && <TermExtractionPromptTab />}
+          {activeTab === 'proxy' && <ProxySettingsTab controller={proxySettings} />}
           {status && <div className="status-note">{status}</div>}
         </div>
       </div>

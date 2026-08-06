@@ -21,6 +21,7 @@ import {
   type SourceTerminologyExtractionResult,
   type SourceTerminologyUnit,
 } from './SourceTerminologyExtractor';
+import { SourceTerminologyPromptSettingsService } from './SourceTerminologyPromptSettingsService';
 import { resolveTagPolicy } from './tagPolicy';
 import { createTransientSegment } from './transientSegment';
 import type { LocalizationEngineOptions, TranslateFileInput } from './types';
@@ -71,6 +72,7 @@ export interface LocalizationSourceTerminologyPrecheckerOptions extends Pick<
   aiRuntimeConfigProvider?: AIRuntimeConfigProvider;
   tbModule?: Pick<TBModule, 'inspect'>;
   extractor?: Pick<SourceTerminologyExtractor, 'extract'>;
+  promptSettingsService?: Pick<SourceTerminologyPromptSettingsService, 'getSettings'>;
 }
 
 interface RowWithSegment {
@@ -87,6 +89,10 @@ export class LocalizationSourceTerminologyPrechecker {
   private readonly projectRepo: SqliteProjectRepository;
   private readonly tbModule: Pick<TBModule, 'inspect'>;
   private readonly extractor: Pick<SourceTerminologyExtractor, 'extract'>;
+  private readonly promptSettingsService: Pick<
+    SourceTerminologyPromptSettingsService,
+    'getSettings'
+  >;
 
   constructor(
     db: CATDatabase,
@@ -102,6 +108,8 @@ export class LocalizationSourceTerminologyPrechecker {
     const providerCatalogService = new AIProviderCatalogService(settingsRepo, aiTransport);
 
     this.tbModule = options.tbModule ?? new TBModule({ tbRepo, tbService });
+    this.promptSettingsService =
+      options.promptSettingsService ?? new SourceTerminologyPromptSettingsService(settingsRepo);
     this.extractor =
       options.extractor ??
       new SourceTerminologyExtractor({
@@ -196,9 +204,11 @@ export class LocalizationSourceTerminologyPrechecker {
       summary: { total: 0, ready: 0, error: 0, cancelled: 0, uniqueTerms: 0 },
     };
     if (extractionUnits.length > 0) {
+      const promptSettings = this.promptSettingsService.getSettings();
       extraction = await this.extractor.extract({
         sourceLanguage: project.srcLang,
         providerId: input.providerId ?? project.aiModel,
+        selectionPrompt: promptSettings.prompt,
         units: extractionUnits,
         options: {
           batchSize: input.batchSize,

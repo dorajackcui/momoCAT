@@ -41,6 +41,8 @@ import type {
   PastedSourceFileInput,
   ProxySettings,
   ProxySettingsInput,
+  SourceTerminologyPromptSettings,
+  SourceTerminologyPromptSettingsInput,
   TBImportOptions,
   TBSyncConfig,
   TBSyncConfigInput,
@@ -538,6 +540,16 @@ export class ProjectService {
 
   public setProxySettings(settings: ProxySettingsInput): ProxySettings {
     return this.aiModule.setProxySettings(settings);
+  }
+
+  public getSourceTerminologyPromptSettings(): SourceTerminologyPromptSettings {
+    return this.aiModule.getSourceTerminologyPromptSettings();
+  }
+
+  public setSourceTerminologyPromptSettings(
+    input: SourceTerminologyPromptSettingsInput,
+  ): SourceTerminologyPromptSettings {
+    return this.aiModule.setSourceTerminologyPromptSettings(input);
   }
 
   public async aiTranslateFile(

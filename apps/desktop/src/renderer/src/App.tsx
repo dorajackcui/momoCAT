@@ -196,7 +196,7 @@ function App(): JSX.Element {
           <button
             onClick={() => setIsSettingsOpen(true)}
             className="btn-secondary !px-3 !py-1.5"
-            title="AI & Network Settings"
+            title="Settings"
           >
             Settings
           </button>
