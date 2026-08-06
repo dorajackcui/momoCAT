@@ -62,6 +62,14 @@ export class TBModule {
     return this.tbRepo.createTermBase(name, srcLang, tgtLang);
   }
 
+  public async renameTB(tbId: string, name: string): Promise<void> {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      throw new Error('Term base name cannot be empty.');
+    }
+    this.tbRepo.renameTermBase(tbId, trimmedName);
+  }
+
   public async deleteTB(tbId: string) {
     this.tbRepo.deleteTermBase(tbId);
     this.settingsRepo.setSetting(tbSyncConfigKey(tbId), null);

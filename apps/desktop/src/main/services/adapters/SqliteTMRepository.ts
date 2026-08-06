@@ -105,6 +105,10 @@ export class SqliteTMRepository implements TMRepository {
     return this.db.createTM(name, srcLang, tgtLang, type);
   }
 
+  renameTM(id: string, name: string): void {
+    this.db.renameTM(id, name);
+  }
+
   deleteTM(id: string): void {
     this.db.deleteTM(id);
   }

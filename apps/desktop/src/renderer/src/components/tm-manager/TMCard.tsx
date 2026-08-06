@@ -1,5 +1,6 @@
 import React from 'react';
 import type { TMWithStats } from '../../../../shared/ipc';
+import { AssetNameEditor } from '../AssetNameEditor';
 import { fileBaseName, LinkedFileButton } from '../LinkedFileButton';
 
 interface TMCardProps {
@@ -7,6 +8,7 @@ interface TMCardProps {
   onPreview: (tmId: string) => void;
   onImport: (tmId: string) => void;
   onSync: (tm: TMWithStats) => void;
+  onRename: (tmId: string, name: string) => Promise<void>;
   onDelete: (tmId: string) => void;
   onOpenLinkedFile: (filePath: string) => void;
 }
@@ -16,13 +18,18 @@ export const TMCard: React.FC<TMCardProps> = ({
   onPreview,
   onImport,
   onSync,
+  onRename,
   onDelete,
   onOpenLinkedFile,
 }) => (
   <div className="surface-card p-5 hover:border-brand/40 transition-colors group">
     <div className="flex justify-between items-start mb-3">
       <div>
-        <h3 className="font-bold text-text group-hover:text-brand transition-colors">{tm.name}</h3>
+        <AssetNameEditor
+          name={tm.name}
+          assetLabel="TM"
+          onRename={(name) => onRename(tm.id, name)}
+        />
         <div className="flex items-center gap-2 mt-1">
           <span className="text-[10px] font-semibold text-brand bg-brand-soft px-1.5 py-0.5 rounded-control uppercase tracking-wider">
             {tm.srcLang} → {tm.tgtLang}

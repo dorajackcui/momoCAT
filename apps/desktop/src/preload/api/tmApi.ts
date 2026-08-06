@@ -9,6 +9,7 @@ type TMApiKeys =
   | 'listTMs'
   | 'getTMPreview'
   | 'createTM'
+  | 'renameTM'
   | 'deleteTM'
   | 'getProjectMountedTMs'
   | 'mountTMToProject'
@@ -43,6 +44,8 @@ export function createTMApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<TMApi
       ipcRenderer.invoke(IPC_CHANNELS.tm.create, name, srcLang, tgtLang, type) as ReturnType<
         DesktopApi['createTM']
       >,
+    renameTM: (tmId, name) =>
+      ipcRenderer.invoke(IPC_CHANNELS.tm.rename, tmId, name) as ReturnType<DesktopApi['renameTM']>,
     deleteTM: (tmId) =>
       ipcRenderer.invoke(IPC_CHANNELS.tm.remove, tmId) as ReturnType<DesktopApi['deleteTM']>,
     getProjectMountedTMs: (projectId) =>

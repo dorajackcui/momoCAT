@@ -150,6 +150,7 @@ export interface TMRepository {
   listTMs(type?: TMType): TMRecord[];
   listTMEntries(tmId: string, limit?: number, offset?: number): TMEntryWithTmId[];
   createTM(name: string, srcLang: string, tgtLang: string, type: TMType): string;
+  renameTM(id: string, name: string): void;
   deleteTM(id: string): void;
   getTM(tmId: string): TMRecord | undefined;
   getTMStats(tmId: string): { entryCount: number; maxEntryUpdatedAt?: string | null };
@@ -161,6 +162,7 @@ export interface TMRepository {
 export interface TBRepository {
   listTermBases(): TBRecord[];
   createTermBase(name: string, srcLang: string, tgtLang: string): string;
+  renameTermBase(id: string, name: string): void;
   deleteTermBase(id: string): void;
   clearTermBaseEntries(tbId: string): void;
   getTermBase(tbId: string): TBRecord | undefined;

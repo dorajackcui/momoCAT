@@ -28,11 +28,13 @@ describe('TBCard', () => {
         onPreview: vi.fn(),
         onImport: vi.fn(),
         onSync: vi.fn(),
+        onRename: vi.fn(),
         onDelete: vi.fn(),
         onOpenLinkedFile: vi.fn(),
       }),
     );
 
+    expect(html).toContain('aria-label="Rename Product Terms"');
     expect(html).toContain('aria-label="Open linked file product-terms.xlsx"');
     expect(html).toContain('product-terms.xlsx');
   });

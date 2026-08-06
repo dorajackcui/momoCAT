@@ -36,12 +36,14 @@ function createDeps() {
       findTermMatches: vi.fn(),
       searchConcordance: vi.fn(),
       createTM: vi.fn().mockResolvedValue('tm-1'),
+      renameTM: vi.fn().mockResolvedValue(undefined),
       deleteTM: vi.fn().mockResolvedValue(undefined),
       mountTMToProject: vi.fn().mockResolvedValue(undefined),
       unmountTMFromProject: vi.fn().mockResolvedValue(undefined),
       commitToMainTM: vi.fn().mockResolvedValue(undefined),
       batchMatchFileWithTM: vi.fn().mockResolvedValue(undefined),
       createTB: vi.fn().mockResolvedValue('tb-1'),
+      renameTB: vi.fn().mockResolvedValue(undefined),
       deleteTB: vi.fn().mockResolvedValue(undefined),
       mountTBToProject: vi.fn().mockResolvedValue(undefined),
       unmountTBFromProject: vi.fn().mockResolvedValue(undefined),
@@ -147,6 +149,11 @@ describe('reference lookup IPC handlers', () => {
       expected: { projectId: null, kind: 'tm', reason: 'tm-created' },
     },
     {
+      channel: IPC_CHANNELS.tm.rename,
+      args: ['tm-1', 'Renamed TM'],
+      expected: { projectId: null, kind: 'tm', reason: 'tm-renamed' },
+    },
+    {
       channel: IPC_CHANNELS.tm.remove,
       args: ['tm-1'],
       expected: { projectId: null, kind: 'tm', reason: 'tm-deleted' },
@@ -189,6 +196,11 @@ describe('reference lookup IPC handlers', () => {
       channel: IPC_CHANNELS.tb.create,
       args: ['Main TB', 'en', 'zh'],
       expected: { projectId: null, kind: 'tb', reason: 'tb-created' },
+    },
+    {
+      channel: IPC_CHANNELS.tb.rename,
+      args: ['tb-1', 'Renamed TB'],
+      expected: { projectId: null, kind: 'tb', reason: 'tb-renamed' },
     },
     {
       channel: IPC_CHANNELS.tb.remove,

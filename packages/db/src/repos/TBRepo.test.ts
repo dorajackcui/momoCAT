@@ -28,6 +28,47 @@ describe('TBRepo FTS replacement', () => {
     return (db as unknown as RawDb).db;
   }
 
+  it('renames a term base without changing its contents, mounts, recency, or ordering', () => {
+    const projectId = db.createProject('Rename Project', 'en', 'fr');
+    const newerTbId = db.createTermBase('Newer TB', 'en', 'fr');
+    db.mountTermBaseToProject(projectId, tbId, 5);
+    db.mountTermBaseToProject(projectId, newerTbId, 5);
+    db.insertTBEntryIfAbsentBySrcTerm({
+      id: 'rename-entry',
+      tbId,
+      srcLang: 'en',
+      srcTerm: 'Hello',
+      tgtTerm: 'Bonjour',
+    });
+    const stableUpdatedAt = '2020-01-01T00:00:00.000Z';
+    raw().prepare('UPDATE term_bases SET updatedAt = ? WHERE id = ?').run(stableUpdatedAt, tbId);
+    raw()
+      .prepare('UPDATE term_bases SET updatedAt = ? WHERE id = ?')
+      .run('2021-01-01T00:00:00.000Z', newerTbId);
+    const mountedBefore = db.getProjectMountedTermBases(projectId).map((tb) => tb.id);
+    const version = db.getTBDataVersion();
+
+    db.renameTermBase(tbId, '  Renamed TB  ');
+
+    expect(db.getTermBase(tbId)).toMatchObject({
+      id: tbId,
+      name: 'Renamed TB',
+      updatedAt: stableUpdatedAt,
+    });
+    expect(db.getTermBaseStats(tbId).entryCount).toBe(1);
+    expect(db.getProjectMountedTermBases(projectId).map((tb) => tb.id)).toEqual(mountedBefore);
+    expect(db.getTBDataVersion()).toBeGreaterThan(version);
+  });
+
+  it('rejects empty names and nonexistent term bases without invalidating metadata', () => {
+    const version = db.getTBDataVersion();
+
+    expect(() => db.renameTermBase(tbId, '   ')).toThrow('Term base name cannot be empty.');
+    expect(() => db.renameTermBase('missing-tb', 'Renamed TB')).toThrow('Term base not found.');
+    expect(db.getTermBase(tbId)?.name).toBe('Main TB');
+    expect(db.getTBDataVersion()).toBe(version);
+  });
+
   it('keeps exactly one FTS row per entry and tracks its rowid across rewrites', () => {
     const entryId = db.upsertTBEntryBySrcTerm({
       id: 'entry-rowid',

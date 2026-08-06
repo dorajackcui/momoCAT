@@ -100,6 +100,20 @@ export class TBRepo {
     return id;
   }
 
+  public renameTermBase(id: string, name: string): void {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      throw new Error('Term base name cannot be empty.');
+    }
+    const result = this.db
+      .prepare('UPDATE term_bases SET name = ? WHERE id = ?')
+      .run(trimmedName, id);
+    if (result.changes === 0) {
+      throw new Error('Term base not found.');
+    }
+    this.bumpTBDataVersion();
+  }
+
   public deleteTermBase(id: string) {
     this.stmtDeleteTbFtsByTbId.run(id);
     this.db.prepare('DELETE FROM term_bases WHERE id = ?').run(id);

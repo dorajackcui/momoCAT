@@ -75,6 +75,37 @@ describe('TBModule sync with local Excel', () => {
     expect(plain?.syncConfig).toBeNull();
   });
 
+  it('trims names, rejects empty names, and preserves entries, mounts, and sync config', async () => {
+    const projectId = db.createProject('Rename Project', 'en', 'fr');
+    const tbId = db.createTermBase('Original TB', 'en', 'fr');
+    db.mountTermBaseToProject(projectId, tbId, 4);
+    db.insertTBEntryIfAbsentBySrcTerm({
+      id: 'rename-entry',
+      tbId,
+      srcLang: 'en',
+      srcTerm: 'Hello',
+      tgtTerm: 'Bonjour',
+    });
+    await tbModule.setTBSyncConfig(tbId, {
+      filePath: join(root, 'terms.xlsx'),
+      columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+    });
+
+    await tbModule.renameTB(tbId, '  Renamed TB  ');
+
+    expect(db.getTermBase(tbId)?.name).toBe('Renamed TB');
+    expect(db.getTermBaseStats(tbId).entryCount).toBe(1);
+    expect(db.getProjectMountedTermBases(projectId)).toEqual([
+      expect.objectContaining({ id: tbId, priority: 4 }),
+    ]);
+    expect(tbModule.getTBSyncConfig(tbId)).toMatchObject({
+      filePath: join(root, 'terms.xlsx'),
+      columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+    });
+
+    await expect(tbModule.renameTB(tbId, '   ')).rejects.toThrow('Term base name cannot be empty.');
+  });
+
   it('mirrors the Excel contents on sync: adds, updates, and removes entries', async () => {
     const tbId = db.createTermBase('Synced Glossary', 'en', 'fr');
     const filePath = writeWorkbook('terms.xlsx', [

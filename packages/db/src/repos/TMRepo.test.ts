@@ -12,6 +12,55 @@ describe('TMRepo FTS replacement', () => {
     db.close();
   });
 
+  it('renames a TM without changing its identity, contents, mounts, or recency', () => {
+    const projectId = db.createProject('Rename Project', 'en', 'fr');
+    const tmId = db.createTM('Original TM', 'en', 'fr', 'main');
+    db.mountTMToProject(projectId, tmId, 7, 'read');
+    db.upsertTMEntryBySrcHash({
+      id: 'rename-entry',
+      tmId,
+      projectId,
+      srcLang: 'en',
+      tgtLang: 'fr',
+      srcHash: 'rename-hash',
+      matchKey: 'hello',
+      tagsSignature: '',
+      sourceTokens: [{ type: 'text', content: 'Hello' }],
+      targetTokens: [{ type: 'text', content: 'Bonjour' }],
+      createdAt: '2026-06-15T00:00:00.000Z',
+      updatedAt: '2026-06-15T00:00:00.000Z',
+      usageCount: 1,
+    });
+    const raw = (db as unknown as {
+      db: { prepare(sql: string): { run(...args: unknown[]): unknown } };
+    }).db;
+    const stableUpdatedAt = '2020-01-01T00:00:00.000Z';
+    raw.prepare('UPDATE tms SET updatedAt = ? WHERE id = ?').run(stableUpdatedAt, tmId);
+
+    db.renameTM(tmId, '  Renamed TM  ');
+
+    expect(db.getTM(tmId)).toMatchObject({
+      id: tmId,
+      name: 'Renamed TM',
+      srcLang: 'en',
+      tgtLang: 'fr',
+      type: 'main',
+      updatedAt: stableUpdatedAt,
+    });
+    expect(db.getTMStats(tmId).entryCount).toBe(1);
+    expect(db.getProjectMountedTMs(projectId)).toContainEqual(
+      expect.objectContaining({ id: tmId, priority: 7, permission: 'read' }),
+    );
+  });
+
+  it('rejects empty names and nonexistent TMs', () => {
+    const tmId = db.createTM('Original TM', 'en', 'fr', 'main');
+
+    expect(() => db.renameTM(tmId, '   ')).toThrow('TM name cannot be empty.');
+    expect(() => db.renameTM('missing-tm', 'Renamed TM')).toThrow('TM not found.');
+    expect(db.getTM(tmId)?.name).toBe('Original TM');
+  });
+
   it('replaces FTS rows in batch and keeps the last replacement for duplicate entry ids', () => {
     const projectId = db.createProject('Batch FTS Project', 'en', 'fr');
     const tmId = db.createTM('Main TM', 'en', 'fr', 'main');

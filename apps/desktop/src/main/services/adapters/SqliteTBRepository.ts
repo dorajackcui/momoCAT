@@ -13,6 +13,10 @@ export class SqliteTBRepository implements TBRepository {
     return this.db.createTermBase(name, srcLang, tgtLang);
   }
 
+  renameTermBase(id: string, name: string): void {
+    this.db.renameTermBase(id, name);
+  }
+
   deleteTermBase(id: string): void {
     this.db.deleteTermBase(id);
   }

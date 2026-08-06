@@ -433,6 +433,7 @@ export interface ReferenceDataChangedEvent {
   srcHash?: string;
   reason:
     | 'tm-created'
+    | 'tm-renamed'
     | 'tm-deleted'
     | 'tm-mounted'
     | 'tm-unmounted'
@@ -442,6 +443,7 @@ export interface ReferenceDataChangedEvent {
     | 'tm-batch-matched'
     | 'tm-synced'
     | 'tb-created'
+    | 'tb-renamed'
     | 'tb-deleted'
     | 'tb-mounted'
     | 'tb-unmounted'
@@ -532,6 +534,7 @@ export interface DesktopApi {
   listTMs: (type?: TMType) => Promise<TMWithStats[]>;
   getTMPreview: (tmId: string) => Promise<TMAssetPreview>;
   createTM: (name: string, srcLang: string, tgtLang: string, type?: TMType) => Promise<string>;
+  renameTM: (tmId: string, name: string) => Promise<void>;
   deleteTM: (tmId: string) => Promise<void>;
   getProjectMountedTMs: (projectId: number) => Promise<MountedTM[]>;
   mountTMToProject: (
@@ -552,6 +555,7 @@ export interface DesktopApi {
   listTBs: () => Promise<TBWithStats[]>;
   getTBPreview: (tbId: string) => Promise<TBAssetPreview>;
   createTB: (name: string, srcLang: string, tgtLang: string) => Promise<string>;
+  renameTB: (tbId: string, name: string) => Promise<void>;
   deleteTB: (tbId: string) => Promise<void>;
   getProjectMountedTBs: (projectId: number) => Promise<MountedTB[]>;
   mountTBToProject: (projectId: number, tbId: string, priority?: number) => Promise<void>;

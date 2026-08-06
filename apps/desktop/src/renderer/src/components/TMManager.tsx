@@ -163,6 +163,18 @@ export const TMManager: React.FC = () => {
     }
   };
 
+  const handleRename = async (tmId: string, name: string) => {
+    try {
+      await apiClient.renameTM(tmId, name);
+      setTMs((current) => current.map((tm) => (tm.id === tmId ? { ...tm, name } : tm)));
+    } catch (error) {
+      feedbackService.error(
+        `Failed to rename TM: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw error;
+    }
+  };
+
   const handleStartImport = async (tmId: string) => {
     setImportNotice(null);
     const filePath = await apiClient.openFileDialog(TM_SPREADSHEET_FILTERS);
@@ -439,6 +451,7 @@ export const TMManager: React.FC = () => {
                 onPreview={(tmId) => void handleOpenPreview(tmId)}
                 onImport={(tmId) => void handleStartImport(tmId)}
                 onSync={(target) => void handleSyncNow(target)}
+                onRename={handleRename}
                 onDelete={(tmId) => void handleDelete(tmId)}
                 onOpenLinkedFile={(filePath) => void handleOpenLinkedFile(filePath)}
               />

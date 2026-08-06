@@ -90,6 +90,17 @@ export function registerTMHandlers({
 
   registerHandle(
     { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.tm.rename,
+    async (_event, ...args) => {
+      const [tmId, name] = args as [string, string];
+      const result = await projectService.renameTM(tmId, name);
+      notifyReferenceDataChanged({ projectId: null, kind: 'tm', reason: 'tm-renamed' });
+      return result;
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.getMountedByProject,
     (_event, ...args) => {
       const [projectId] = args as [number];

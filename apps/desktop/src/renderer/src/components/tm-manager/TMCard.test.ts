@@ -29,12 +29,14 @@ describe('TMCard', () => {
         onPreview: vi.fn(),
         onImport: vi.fn(),
         onSync: vi.fn(),
+        onRename: vi.fn(),
         onDelete: vi.fn(),
         onOpenLinkedFile: vi.fn(),
       }),
     );
 
     expect(html).not.toContain('Main TM');
+    expect(html).toContain('aria-label="Rename Product TM"');
     expect(html).toContain('aria-label="Open linked file product-tm.xlsx"');
     expect(html).toContain('product-tm.xlsx');
   });

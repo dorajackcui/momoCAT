@@ -102,9 +102,11 @@ function createCommitHarness(segments: Segment[]) {
   } as unknown as SegmentRepository;
   const tmRepo = {
     getTM: vi.fn().mockReturnValue({ id: 'tm-main', srcLang: 'en', tgtLang: 'zh' }),
+    renameTM: vi.fn(),
     upsertTMEntryBySrcHash: vi.fn((entry: { srcHash: string }) => `entry-${entry.srcHash}`),
     replaceTMFts: vi.fn(),
   } as unknown as TMRepository & {
+    renameTM: ReturnType<typeof vi.fn>;
     upsertTMEntryBySrcHash: ReturnType<typeof vi.fn>;
     replaceTMFts: ReturnType<typeof vi.fn>;
   };
@@ -126,6 +128,27 @@ function createCommitHarness(segments: Segment[]) {
 
   return { module, tmRepo };
 }
+
+describe('TMModule.renameTM', () => {
+  it('trims names, rejects empty names, and preserves the sync binding', async () => {
+    const { module, tmRepo } = createCommitHarness([]);
+    await module.setTMSyncConfig('tm-main', {
+      filePath: 'D:/references/main-tm.xlsx',
+      columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+    });
+
+    await module.renameTM('tm-main', '  Renamed TM  ');
+
+    expect(tmRepo.renameTM).toHaveBeenCalledWith('tm-main', 'Renamed TM');
+    expect(module.getTMSyncConfig('tm-main')).toMatchObject({
+      filePath: 'D:/references/main-tm.xlsx',
+      columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+    });
+
+    await expect(module.renameTM('tm-main', '   ')).rejects.toThrow('TM name cannot be empty.');
+    expect(tmRepo.renameTM).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('TMModule.commitToMainTM', () => {
   it('keeps the default scope limited to confirmed segments', async () => {

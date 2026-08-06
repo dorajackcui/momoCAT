@@ -1518,6 +1518,17 @@ export class TMRepo {
     return id;
   }
 
+  public renameTM(id: string, name: string): void {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      throw new Error('TM name cannot be empty.');
+    }
+    const result = this.db.prepare('UPDATE tms SET name = ? WHERE id = ?').run(trimmedName, id);
+    if (result.changes === 0) {
+      throw new Error('TM not found.');
+    }
+  }
+
   public deleteTM(id: string) {
     const deleteRows = () => {
       this.db.prepare('DELETE FROM tm_fts WHERE tmId = ?').run(id);

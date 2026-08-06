@@ -154,6 +154,18 @@ export const TBManager: React.FC = () => {
     }
   };
 
+  const handleRename = async (tbId: string, name: string) => {
+    try {
+      await apiClient.renameTB(tbId, name);
+      setTBs((current) => current.map((tb) => (tb.id === tbId ? { ...tb, name } : tb)));
+    } catch (error) {
+      feedbackService.error(
+        `Failed to rename term base: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw error;
+    }
+  };
+
   const handleStartImport = async (tbId: string) => {
     setImportNotice(null);
     const filePath = await apiClient.openFileDialog(TB_SPREADSHEET_FILTERS);
@@ -439,6 +451,7 @@ export const TBManager: React.FC = () => {
                 onPreview={(tbId) => void handleOpenPreview(tbId)}
                 onImport={(tbId) => void handleStartImport(tbId)}
                 onSync={(target) => void handleSyncNow(target)}
+                onRename={handleRename}
                 onDelete={(tbId) => void handleDelete(tbId)}
                 onOpenLinkedFile={(filePath) => void handleOpenLinkedFile(filePath)}
               />

@@ -6,30 +6,15 @@ import type {
   ProjectType,
 } from '@cat/core/project';
 import { CATDatabase } from '@cat/db';
-import {
-  LocalizationEngine,
-  type CancellationToken,
-  type TranslationAuditSink,
-} from '@cat/localization';
+import { LocalizationEngine, type CancellationToken } from '@cat/localization';
 import { SpreadsheetFilter } from '../filters/SpreadsheetFilter';
 import { TMService } from './TMService';
 import { SegmentService, type WorkingTMUpdatedPayload } from './SegmentService';
 import { TBService } from './TBService';
-import {
-  AIRuntimeConfigProvider,
-  AITransport,
-  SegmentsUpdatedPayload,
-  SpreadsheetGateway,
-  SpreadsheetPreviewData,
-} from './ports';
+import { SegmentsUpdatedPayload, SpreadsheetPreviewData } from './ports';
 import { AIProviderTransport } from './providers/AIProviderTransport';
 import { ProjectFileModule } from './modules/ProjectFileModule';
-import type {
-  FileOperationProgressEmitter,
-  InspectFileRunner,
-  ReferenceExportRunner,
-  SourceTerminologyPrecheckRunner,
-} from './modules/ProjectReferenceFileOperations';
+import type { FileOperationProgressEmitter } from './modules/ProjectReferenceFileOperations';
 import {
   createInspectFileRunner,
   createReferenceExportRunner,
@@ -72,23 +57,7 @@ import type {
   AITestConnectionResult,
   TestAIConnectionInput,
 } from './modules/ai/AIProviderCatalogService';
-
-interface ProjectServiceDependencies {
-  filter?: SpreadsheetGateway;
-  tmService?: TMService;
-  tbService?: TBService;
-  segmentService?: SegmentService;
-  aiTransport?: AITransport;
-  aiRuntimeConfigProvider?: AIRuntimeConfigProvider;
-  inspectFileRunner?: InspectFileRunner;
-  referenceExportRunner?: ReferenceExportRunner;
-  sourceTerminologyPrecheckRunner?: SourceTerminologyPrecheckRunner;
-  translationAuditSink?: TranslationAuditSink;
-  projectModule?: ProjectFileModule;
-  tmModule?: TMModule;
-  tbModule?: TBModule;
-  aiModule?: AIModule;
-}
+import type { ProjectServiceDependencies } from './ProjectServiceDependencies';
 
 interface ImportProgress {
   current: number;
@@ -367,6 +336,10 @@ export class ProjectService {
     return this.tmModule.createTM(name, srcLang, tgtLang, type);
   }
 
+  public async renameTM(tmId: string, name: string) {
+    return this.tmModule.renameTM(tmId, name);
+  }
+
   public async deleteTM(tmId: string) {
     return this.tmModule.deleteTM(tmId);
   }
@@ -398,6 +371,10 @@ export class ProjectService {
 
   public async createTB(name: string, srcLang: string, tgtLang: string) {
     return this.tbModule.createTB(name, srcLang, tgtLang);
+  }
+
+  public async renameTB(tbId: string, name: string) {
+    return this.tbModule.renameTB(tbId, name);
   }
 
   public async deleteTB(tbId: string) {

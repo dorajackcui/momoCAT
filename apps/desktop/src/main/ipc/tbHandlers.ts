@@ -74,6 +74,17 @@ export function registerTBHandlers({
 
   registerHandle(
     { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.tb.rename,
+    async (_event, ...args) => {
+      const [tbId, name] = args as [string, string];
+      const result = await projectService.renameTB(tbId, name);
+      notifyReferenceDataChanged({ projectId: null, kind: 'tb', reason: 'tb-renamed' });
+      return result;
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.getMountedByProject,
     (_event, ...args) => {
       const [projectId] = args as [number];

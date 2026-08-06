@@ -78,6 +78,14 @@ export class TMModule {
     return this.queryService.createTM(name, srcLang, tgtLang, type);
   }
 
+  public async renameTM(tmId: string, name: string): Promise<void> {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      throw new Error('TM name cannot be empty.');
+    }
+    return this.queryService.renameTM(tmId, trimmedName);
+  }
+
   public async deleteTM(tmId: string) {
     await this.queryService.deleteTM(tmId);
     this.syncService.clearTMSyncConfig(tmId);

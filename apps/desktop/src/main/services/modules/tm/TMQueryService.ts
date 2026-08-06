@@ -63,6 +63,10 @@ export class TMQueryService {
     return this.tmRepo.createTM(name, srcLang, tgtLang, type);
   }
 
+  public async renameTM(tmId: string, name: string): Promise<void> {
+    this.tmRepo.renameTM(tmId, name);
+  }
+
   public async deleteTM(tmId: string) {
     this.tmRepo.deleteTM(tmId);
   }

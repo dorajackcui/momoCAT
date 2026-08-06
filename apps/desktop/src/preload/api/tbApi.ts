@@ -8,6 +8,7 @@ type TBApiKeys =
   | 'listTBs'
   | 'getTBPreview'
   | 'createTB'
+  | 'renameTB'
   | 'deleteTB'
   | 'getProjectMountedTBs'
   | 'mountTBToProject'
@@ -34,6 +35,8 @@ export function createTBApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<TBApi
       ipcRenderer.invoke(IPC_CHANNELS.tb.create, name, srcLang, tgtLang) as ReturnType<
         DesktopApi['createTB']
       >,
+    renameTB: (tbId, name) =>
+      ipcRenderer.invoke(IPC_CHANNELS.tb.rename, tbId, name) as ReturnType<DesktopApi['renameTB']>,
     deleteTB: (tbId) =>
       ipcRenderer.invoke(IPC_CHANNELS.tb.remove, tbId) as ReturnType<DesktopApi['deleteTB']>,
     getProjectMountedTBs: (projectId) =>

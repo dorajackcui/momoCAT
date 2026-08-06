@@ -1,5 +1,6 @@
 import React from 'react';
 import type { TBWithStats } from '../../../../shared/ipc';
+import { AssetNameEditor } from '../AssetNameEditor';
 import { fileBaseName, LinkedFileButton } from '../LinkedFileButton';
 
 interface TBCardProps {
@@ -7,6 +8,7 @@ interface TBCardProps {
   onPreview: (tbId: string) => void;
   onImport: (tbId: string) => void;
   onSync: (tb: TBWithStats) => void;
+  onRename: (tbId: string, name: string) => Promise<void>;
   onDelete: (tbId: string) => void;
   onOpenLinkedFile: (filePath: string) => void;
 }
@@ -16,13 +18,18 @@ export const TBCard: React.FC<TBCardProps> = ({
   onPreview,
   onImport,
   onSync,
+  onRename,
   onDelete,
   onOpenLinkedFile,
 }) => (
   <div className="surface-card p-5 hover:border-brand/40 transition-colors group">
     <div className="flex justify-between items-start mb-3">
       <div>
-        <h3 className="font-bold text-text group-hover:text-brand transition-colors">{tb.name}</h3>
+        <AssetNameEditor
+          name={tb.name}
+          assetLabel="term base"
+          onRename={(name) => onRename(tb.id, name)}
+        />
         <div className="flex items-center gap-2 mt-1">
           <span className="text-[10px] font-semibold text-brand bg-brand-soft px-1.5 py-0.5 rounded-control uppercase tracking-wider">
             {tb.srcLang} → {tb.tgtLang}

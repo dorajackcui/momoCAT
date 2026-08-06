@@ -19,8 +19,10 @@ describe('createDesktopApi smoke', () => {
     await api.listProjects();
     await api.listTMs();
     await api.getTMPreview('tm-1');
+    await api.renameTM('tm-1', 'Renamed TM');
     await api.listTBs();
     await api.getTBPreview('tb-1');
+    await api.renameTB('tb-1', 'Renamed TB');
     await api.getAISettings();
     await api.listAIConnections();
     await api.listAIProviders();
@@ -64,8 +66,10 @@ describe('createDesktopApi smoke', () => {
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.project.list);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tm.list, undefined);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tm.preview, 'tm-1');
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tm.rename, 'tm-1', 'Renamed TM');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tb.list);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tb.preview, 'tb-1');
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tb.rename, 'tb-1', 'Renamed TB');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.getSettings);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.listConnections);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.listProviders);

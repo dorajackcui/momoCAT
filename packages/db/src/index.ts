@@ -288,6 +288,10 @@ export class CATDatabase {
     return this.tbRepo.createTermBase(name, srcLang, tgtLang);
   }
 
+  public renameTermBase(id: string, name: string) {
+    this.tbRepo.renameTermBase(id, name);
+  }
+
   public deleteTermBase(id: string) {
     this.tbRepo.deleteTermBase(id);
   }
@@ -471,6 +475,10 @@ export class CATDatabase {
 
   public createTM(name: string, srcLang: string, tgtLang: string, type: TMType): string {
     return this.tmRepo.createTM(name, srcLang, tgtLang, type);
+  }
+
+  public renameTM(id: string, name: string) {
+    this.tmRepo.renameTM(id, name);
   }
 
   public deleteTM(id: string) {
