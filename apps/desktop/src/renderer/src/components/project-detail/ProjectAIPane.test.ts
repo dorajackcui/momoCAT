@@ -87,11 +87,15 @@ type ElementPredicate = (element: TestElement) => boolean;
 function renderPane(
   controller: ProjectAIController,
   projectType?: 'translation' | 'review' | 'custom',
+  expanded = true,
+  onToggle = vi.fn(),
 ) {
   return renderToStaticMarkup(
     React.createElement(ProjectAIPane, {
       ai: controller,
       projectType: projectType ?? 'translation',
+      expanded,
+      onToggle,
     }),
   );
 }
@@ -132,8 +136,14 @@ function findElement(node: React.ReactNode, predicate: ElementPredicate): TestEl
 function findElementForController(
   controller: ProjectAIController,
   predicate: ElementPredicate,
+  expanded = true,
+  onToggle = vi.fn(),
 ): TestElement {
-  const root = React.createElement(ProjectAIPane, { ai: controller });
+  const root = React.createElement(ProjectAIPane, {
+    ai: controller,
+    expanded,
+    onToggle,
+  });
   const match = findElement(root, predicate);
   if (!match) {
     throw new Error('Expected ProjectAIPane element was not found.');
@@ -149,6 +159,36 @@ function findTestPromptButton(controller: ProjectAIController): TestElement {
 }
 
 describe('ProjectAIPane', () => {
+  it('renders a compact provider summary and hides the settings form when collapsed', () => {
+    const onToggle = vi.fn();
+    const controller = createController();
+    const html = renderPane(controller, 'translation', false, onToggle);
+    const toggle = findElementForController(
+      controller,
+      (element) => element.type === 'button' && element.props['aria-expanded'] === false,
+      false,
+      onToggle,
+    );
+
+    expect(html).toContain('AI Settings');
+    expect(html).toContain('OpenAI / gpt-demo');
+    expect(html).toContain('Saved');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('project-ai-effective-prompt');
+    expect(html).not.toContain('AI Settings Saved');
+
+    (toggle.props.onClick as () => void)();
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the save action available while collapsed when settings have changed', () => {
+    const controller = createController({ hasUnsavedPromptChanges: true });
+    const html = renderPane(controller, 'translation', false);
+
+    expect(html).toContain('Unsaved Changes');
+    expect(html).toContain('Save AI Settings');
+  });
+
   it('renders a read-only effective prompt preview and editable custom prompt', () => {
     const controller = createController({
       promptDraft: 'Use concise style.',

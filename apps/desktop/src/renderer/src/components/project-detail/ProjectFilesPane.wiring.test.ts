@@ -131,6 +131,8 @@ describe('ProjectFilesPane wiring', () => {
         onRunFileQA: vi.fn().mockResolvedValue(undefined),
         ai,
         projectType: 'translation',
+        aiSettingsExpanded: false,
+        onToggleAISettings: vi.fn(),
       }),
     );
 

@@ -46,6 +46,7 @@ export function ProjectDetail({
   const [qaSettingsDraft, setQaSettingsDraft] = useState<ProjectQASettings>(
     DEFAULT_PROJECT_QA_SETTINGS,
   );
+  const [aiSettingsExpanded, setAISettingsExpanded] = useState(false);
   const addFileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const {
@@ -554,6 +555,8 @@ export function ProjectDetail({
             onRunFileQA={handleRunFileQA}
             ai={ai}
             projectType={project.projectType || 'translation'}
+            aiSettingsExpanded={aiSettingsExpanded}
+            onToggleAISettings={() => setAISettingsExpanded((expanded) => !expanded)}
           />
         ) : activeTab === 'tm' ? (
           <ProjectTMPane

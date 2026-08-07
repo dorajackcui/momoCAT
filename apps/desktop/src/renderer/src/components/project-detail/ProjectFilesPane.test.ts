@@ -160,6 +160,8 @@ function renderPane(ai: ProjectAIController, projectType: 'translation' | 'revie
       onRunFileQA: vi.fn().mockResolvedValue(undefined),
       ai,
       projectType,
+      aiSettingsExpanded: false,
+      onToggleAISettings: vi.fn(),
     }),
   );
 }
@@ -221,6 +223,8 @@ describe('ProjectFilesPane', () => {
         onRunFileQA: vi.fn().mockResolvedValue(undefined),
         ai,
         projectType: 'translation',
+        aiSettingsExpanded: false,
+        onToggleAISettings: vi.fn(),
       }),
     );
 

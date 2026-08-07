@@ -6,31 +6,72 @@ import { ProjectPromptManagerModal } from './ProjectPromptManagerModal';
 interface ProjectAIPaneProps {
   ai: ProjectAIController;
   projectType?: ProjectType;
+  expanded: boolean;
+  onToggle: () => void;
 }
 
-export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPaneProps) {
+export function ProjectAIPane({
+  ai,
+  projectType = 'translation',
+  expanded,
+  onToggle,
+}: ProjectAIPaneProps) {
   const isReviewProject = projectType === 'review';
   const isCustomProject = projectType === 'custom';
-  const shouldShowUnavailableCurrentProvider =
-    Boolean(ai.modelDraft) && !ai.providerOptions.some((provider) => provider.id === ai.modelDraft);
+  const selectedProvider = ai.providerOptions.find((provider) => provider.id === ai.modelDraft);
+  const shouldShowUnavailableCurrentProvider = Boolean(ai.modelDraft) && !selectedProvider;
+  const providerNeedsAttention = ai.providerSetupRequired || shouldShowUnavailableCurrentProvider;
+  const providerSummary = selectedProvider
+    ? selectedProvider.name
+    : ai.providerSetupRequired
+      ? 'Provider not configured'
+      : shouldShowUnavailableCurrentProvider
+        ? 'Provider unavailable'
+        : 'No provider selected';
 
-  return (
-    <Card variant="subtle" className="mb-8 p-5">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h3 className="text-sm font-bold text-text-muted uppercase tracking-wider">
+  const header = (
+    <div className={`flex items-center justify-between gap-4 ${expanded ? 'mb-3' : ''}`}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-control text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+      >
+        <svg
+          className={`h-4 w-4 shrink-0 text-text-faint transition-transform ${
+            expanded ? 'rotate-90' : ''
+          }`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+        <span className="min-w-0">
+          <span className="block text-sm font-bold text-text-muted uppercase tracking-wider">
             AI Settings
-          </h3>
-          <div className="mt-1 flex items-center gap-2">
+          </span>
+          <span className="mt-1 flex min-w-0 items-center gap-2">
             <Badge tone={ai.hasUnsavedPromptChanges ? 'warning' : 'success'}>
               {ai.hasUnsavedPromptChanges ? 'Unsaved Changes' : 'Saved'}
             </Badge>
-            {ai.promptSavedAt && !ai.hasUnsavedPromptChanges && (
-              <span className="text-[10px] text-text-faint">at {ai.promptSavedAt}</span>
+            <span
+              className={`truncate text-xs ${
+                providerNeedsAttention ? 'text-warning' : 'text-text-faint'
+              }`}
+            >
+              {providerSummary}
+            </span>
+            {expanded && ai.promptSavedAt && !ai.hasUnsavedPromptChanges && (
+              <span className="shrink-0 text-[10px] text-text-faint">at {ai.promptSavedAt}</span>
             )}
-          </div>
-        </div>
+          </span>
+        </span>
+      </button>
+      {(expanded || ai.hasUnsavedPromptChanges || ai.savingPrompt) && (
         <Button
+          type="button"
           onClick={() => void ai.savePrompt()}
           disabled={ai.savingPrompt || !ai.hasUnsavedPromptChanges}
           size="sm"
@@ -43,7 +84,30 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
               ? 'Save AI Settings'
               : 'AI Settings Saved'}
         </Button>
-      </div>
+      )}
+    </div>
+  );
+  const promptManager = ai.savedPrompts.managerOpen ? (
+    <ProjectPromptManagerModal
+      open={true}
+      onClose={ai.savedPrompts.closeManager}
+      savedPrompts={ai.savedPrompts}
+      currentDraft={ai.promptDraft}
+    />
+  ) : null;
+
+  if (!expanded) {
+    return (
+      <Card variant="subtle" className="mb-8 p-5">
+        {header}
+        {promptManager}
+      </Card>
+    );
+  }
+
+  return (
+    <Card variant="subtle" className="mb-8 p-5">
+      {header}
       <div className="mb-3">
         <label
           htmlFor="project-ai-effective-prompt"
@@ -279,14 +343,7 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
           </>
         )}
       </div>
-      {ai.savedPrompts.managerOpen && (
-        <ProjectPromptManagerModal
-          open={true}
-          onClose={ai.savedPrompts.closeManager}
-          savedPrompts={ai.savedPrompts}
-          currentDraft={ai.promptDraft}
-        />
-      )}
+      {promptManager}
     </Card>
   );
 }

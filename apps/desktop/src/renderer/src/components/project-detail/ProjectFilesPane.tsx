@@ -21,6 +21,8 @@ interface ProjectFilesPaneProps {
   onRunFileQA: (fileId: number, fileName: string) => Promise<void>;
   ai: ProjectAIController;
   projectType?: ProjectType;
+  aiSettingsExpanded: boolean;
+  onToggleAISettings: () => void;
 }
 
 export function buildProjectAITranslateStartOptions(options: ProjectAITranslateSubmit) {
@@ -236,6 +238,8 @@ export function ProjectFilesPane({
   onRunFileQA,
   ai,
   projectType = 'translation',
+  aiSettingsExpanded,
+  onToggleAISettings,
 }: ProjectFilesPaneProps) {
   const [aiTranslateFile, setAiTranslateFile] = useState<{ id: number; name: string } | null>(null);
   const isReviewProject = projectType === 'review';
@@ -247,7 +251,12 @@ export function ProjectFilesPane({
 
   return (
     <div className="max-w-4xl mx-auto">
-      <ProjectAIPane ai={ai} projectType={projectType} />
+      <ProjectAIPane
+        ai={ai}
+        projectType={projectType}
+        expanded={aiSettingsExpanded}
+        onToggle={onToggleAISettings}
+      />
       {aiTranslateFile && (
         <ProjectAITranslateModal
           open={true}
