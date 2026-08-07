@@ -98,15 +98,15 @@ export function ProjectAIPane({
 
   if (!expanded) {
     return (
-      <Card variant="subtle" className="mb-8 p-5">
+      <div className="mb-8 rounded-panel border border-border p-5">
         {header}
         {promptManager}
-      </Card>
+      </div>
     );
   }
 
   return (
-    <Card variant="subtle" className="mb-8 p-5">
+    <div className="mb-8 rounded-panel border border-border p-5">
       {header}
       <div className="mb-3">
         <label
@@ -344,6 +344,6 @@ export function ProjectAIPane({
         )}
       </div>
       {promptManager}
-    </Card>
+    </div>
   );
 }
