@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo } from 'react';
 import type { Segment, Token } from '@cat/core/models';
 import { serializeTokensToEditorText } from '@cat/core/tag';
 import { TagInsertionUI } from './TagInsertionUI';
-import { EditorMatchMode } from './editorFilterUtils';
+import { EditorMatchMode, type RepeatedSourceRole } from './editorFilterUtils';
 import { EditorRowSourceCell } from './editor-row/EditorRowSourceCell';
 import { EditorRowNumberCell } from './editor-row/EditorRowNumberCell';
 import { EditorRowTargetActions } from './editor-row/EditorRowTargetActions';
@@ -16,7 +16,7 @@ interface EditorRowProps {
   segment: Segment;
   rowNumber: number;
   isActive: boolean;
-  isRepeatedSource?: boolean;
+  repeatedSourceRole?: RepeatedSourceRole;
   disableAutoFocus?: boolean;
   saveError?: string;
   sourceHighlightQuery?: string;
@@ -48,7 +48,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
   segment,
   rowNumber,
   isActive,
-  isRepeatedSource = false,
+  repeatedSourceRole,
   disableAutoFocus = false,
   saveError,
   sourceHighlightQuery = '',
@@ -185,7 +185,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
         onActivate(segment.segmentId);
       }}
     >
-      <EditorRowNumberCell rowNumber={rowNumber} isRepeatedSource={isRepeatedSource} />
+      <EditorRowNumberCell rowNumber={rowNumber} repeatedSourceRole={repeatedSourceRole} />
 
       <EditorRowSourceCell
         sourceContent={renderChunks(displayModel.sourceHighlightChunks)}
@@ -260,7 +260,7 @@ const areEditorRowPropsEqual = (prev: EditorRowProps, next: EditorRowProps): boo
   prev.segment === next.segment &&
   prev.rowNumber === next.rowNumber &&
   prev.isActive === next.isActive &&
-  prev.isRepeatedSource === next.isRepeatedSource &&
+  prev.repeatedSourceRole === next.repeatedSourceRole &&
   prev.disableAutoFocus === next.disableAutoFocus &&
   prev.saveError === next.saveError &&
   prev.sourceHighlightQuery === next.sourceHighlightQuery &&

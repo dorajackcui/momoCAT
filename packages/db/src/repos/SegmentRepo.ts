@@ -172,6 +172,26 @@ export class SegmentRepo {
       .run(JSON.stringify(targetTokens), normalizedStatus, segmentId);
   }
 
+  public updateSegmentRepeatPropagation(
+    segmentId: string,
+    repeatPropagation: RepeatPropagationState | null,
+  ) {
+    const row = this.db
+      .prepare("SELECT metaJson FROM segments WHERE segmentId = ?")
+      .get(segmentId) as Pick<SegmentRow, "metaJson"> | undefined;
+    if (!row) return;
+
+    const meta = JSON.parse(row.metaJson) as Segment["meta"];
+    if (repeatPropagation) meta.repeatPropagation = repeatPropagation;
+    else delete meta.repeatPropagation;
+
+    this.db
+      .prepare(
+        "UPDATE segments SET metaJson = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE segmentId = ?",
+      )
+      .run(JSON.stringify(meta), segmentId);
+  }
+
   public updateSegmentQaIssues(segmentId: string, qaIssues: QaIssue[]) {
     this.db
       .prepare(

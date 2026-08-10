@@ -90,6 +90,13 @@ class FailingSegmentRepository implements SegmentRepository {
     }
     this.delegate.updateSegmentTarget(segmentId, targetTokens, status, repeatPropagation);
   }
+
+  updateSegmentRepeatPropagation(
+    segmentId: string,
+    repeatPropagation: RepeatPropagationState | null,
+  ): void {
+    this.delegate.updateSegmentRepeatPropagation(segmentId, repeatPropagation);
+  }
 }
 
 function createCommitHarness(segments: Segment[]) {
@@ -293,7 +300,7 @@ describe('TMModule.batchMatchFileWithTM', () => {
     expect(segmentService.updateSegmentsAtomically).toHaveBeenCalledTimes(1);
     expect(segmentService.updateSegmentsAtomically).toHaveBeenCalledWith(
       [{ segmentId: 'seg-1', targetTokens: matchedTokens, status: 'confirmed' }],
-      { commitToWorkingTM: false },
+      { commitToWorkingTM: false, preserveRepeatLink: true },
     );
     expect(segmentRepo.updateSegmentTarget).not.toHaveBeenCalled();
   });
@@ -413,7 +420,7 @@ describe('TMModule.batchMatchFileWithTM', () => {
         { segmentId: 'seg-0', targetTokens: matchedTokens, status: 'confirmed' },
         { segmentId: 'seg-last', targetTokens: matchedTokens, status: 'confirmed' },
       ],
-      { commitToWorkingTM: false },
+      { commitToWorkingTM: false, preserveRepeatLink: true },
     );
   });
 
@@ -512,6 +519,15 @@ describe('TMModule.batchMatchFileWithTM', () => {
       status: 'confirmed',
       propagatedIds: [],
     });
+
+    expect(db.getSegment('seg-2')?.meta.repeatPropagation).toEqual({
+      mode: 'following',
+      sourceSegmentId: 'seg-1',
+    });
+    const revisedTokens: Token[] = [{ type: 'text', content: '您好' }];
+    const revision = await segmentService.updateSegment('seg-1', revisedTokens, 'confirmed');
+    expect(revision.propagatedIds).toEqual(['seg-2']);
+    expect(db.getSegment('seg-2')?.targetTokens).toEqual(revisedTokens);
   });
 
   it('rolls back all matched updates when one segment confirmation fails', async () => {

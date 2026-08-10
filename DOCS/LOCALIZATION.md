@@ -155,12 +155,16 @@ Every translation project has a mounted read/write Working TM. Confirming a tran
 
 Same-source repeats are scoped to the current file:
 
-- the first confirmed occurrence can become `leader`;
-- later compatible occurrences become `following` and receive confirmed target propagation;
-- manually changing a follower makes it `detached`;
-- detached or contextually distinct later occurrences are not overwritten;
-- a later unlinked occurrence cannot start a second propagation chain;
+- the first occurrence is the `leader` and propagates when confirmed;
+- later empty or same-target occurrences start as `following`;
+- a later non-empty different target starts as `detached`;
+- manually changing or directly confirming a follower makes it `detached`;
+- automated TM batch confirmation preserves an existing follower link;
+- AI translation alone keeps a follower linked, and leader propagation confirms it without detaching;
+- detached later occurrences are not overwritten, and a later occurrence cannot start a second propagation chain;
 - unique sources do not persist repeat metadata.
+
+The editor marks every occurrence in a same-source repeat group. The first occurrence uses the same repeat icon with a small superscript `1`; later occurrences use the plain repeat icon. The `首次重复` quick filter isolates those first occurrences.
 
 Post-commit `working-tm-updated` and segment events refresh match/reference state. Batch workflows that deliberately should not pollute Working TM pass `commitToWorkingTM: false` while preserving their own propagation/event behavior.
 

@@ -108,6 +108,10 @@ export interface SegmentRepository {
     status: SegmentStatus,
     repeatPropagation?: RepeatPropagationState | null,
   ): void;
+  updateSegmentRepeatPropagation(
+    segmentId: string,
+    repeatPropagation: RepeatPropagationState | null,
+  ): void;
   updateSegmentQaIssues(segmentId: string, qaIssues: QaIssue[]): void;
 }
 

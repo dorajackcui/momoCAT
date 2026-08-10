@@ -3,9 +3,10 @@ import type { Segment } from '@cat/core/models';
 export type EditorStatusFilter = 'all' | 'new' | 'draft' | 'translated' | 'reviewed' | 'confirmed';
 export type EditorMatchMode = 'contains' | 'exact' | 'regex';
 export type EditorQualityFilter = 'qa_error' | 'qa_warning' | 'save_error';
-export type EditorQuickPreset = 'none' | 'untranslated' | 'confirmed' | 'issues';
+export type EditorQuickPreset = 'none' | 'untranslated' | 'confirmed' | 'first_repeat' | 'issues';
 export type EditorSortBy = 'default' | 'source_length' | 'target_length';
 export type EditorSortDirection = 'asc' | 'desc';
+export type RepeatedSourceRole = 'first' | 'later';
 
 export interface SearchableEditorSegment {
   segment: Segment;
@@ -17,7 +18,7 @@ export interface SearchableEditorSegment {
   hasSaveError: boolean;
   isUntranslated: boolean;
   hasIssue: boolean;
-  isRepeatedSource?: boolean;
+  repeatedSourceRole?: RepeatedSourceRole;
 }
 
 export interface EditorFilterCriteria {
@@ -89,6 +90,7 @@ const quickPresetPredicates: Record<EditorQuickPreset, (item: SearchableEditorSe
     none: () => true,
     untranslated: (item) => item.isUntranslated,
     confirmed: (item) => item.segment.status === 'confirmed',
+    first_repeat: (item) => item.repeatedSourceRole === 'first',
     issues: (item) => item.hasIssue,
   };
 
@@ -106,32 +108,7 @@ export function countActiveFilterFields(criteria: EditorFilterCriteria): number 
 export function getQuickPresetPatch(
   preset: EditorQuickPreset,
 ): Pick<EditorFilterCriteria, 'status' | 'qualityFilters' | 'quickPreset'> {
-  switch (preset) {
-    case 'confirmed':
-      return {
-        status: 'all',
-        qualityFilters: [],
-        quickPreset: 'confirmed',
-      };
-    case 'issues':
-      return {
-        status: 'all',
-        qualityFilters: [],
-        quickPreset: 'issues',
-      };
-    case 'untranslated':
-      return {
-        status: 'all',
-        qualityFilters: [],
-        quickPreset: 'untranslated',
-      };
-    default:
-      return {
-        status: 'all',
-        qualityFilters: [],
-        quickPreset: 'none',
-      };
-  }
+  return { status: 'all', qualityFilters: [], quickPreset: preset };
 }
 
 export function filterSearchableSegments(

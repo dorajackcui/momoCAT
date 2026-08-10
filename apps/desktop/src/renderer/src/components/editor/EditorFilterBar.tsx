@@ -7,6 +7,7 @@ import {
   FILTER_SORT_OPTIONS,
   FILTER_STATUS_OPTIONS,
 } from '../../hooks/useEditorFilters';
+import type { EditorQuickPreset } from '../editorFilterUtils';
 
 interface EditorFilterBarProps {
   supportsBatchActions: boolean;
@@ -38,8 +39,8 @@ interface EditorFilterBarProps {
   isFilterMenuOpen: boolean;
   activeFilterCount: number;
   toggleFilterMenu: () => void;
-  quickPreset: string;
-  applyQuickPreset: (value: 'none' | 'untranslated' | 'confirmed' | 'issues') => void;
+  quickPreset: EditorQuickPreset;
+  applyQuickPreset: (value: EditorQuickPreset) => void;
   matchMode: 'contains' | 'exact' | 'regex';
   handleMatchModeChange: (value: 'contains' | 'exact' | 'regex') => void;
   statusFilter: 'all' | 'new' | 'draft' | 'translated' | 'reviewed' | 'confirmed';

@@ -25,6 +25,7 @@ interface SegmentUpdateInput {
 
 interface SegmentUpdateOptions {
   commitToWorkingTM?: boolean;
+  preserveRepeatLink?: boolean;
 }
 
 interface SegmentUpdateEventPayload extends SegmentUpdateInput {
@@ -146,45 +147,43 @@ export class SegmentService extends EventEmitter {
       throw new Error(`Segment not found: ${segmentId}`);
     }
 
-    const previousTargetSignature = this.targetSignature(existingSegment);
-    const nextTargetSignature = JSON.stringify(targetTokens);
     const fileId = existingSegment.fileId;
     const projectType = this.db.getProjectTypeByFileId(fileId) ?? 'translation';
     const projectId =
       projectType === 'translation' ? this.db.getProjectIdByFileId(fileId) : undefined;
-    const storedRepeatState = existingSegment.meta.repeatPropagation;
     const sameSourceSegments =
-      projectId === undefined || status !== 'confirmed'
-        ? []
-        : this.db.getProjectSegmentsByHash(projectId, existingSegment.srcHash, fileId);
+      projectId === undefined ? [] : this.getRepeatCohort(projectId, existingSegment);
+    const currentSegment =
+      sameSourceSegments.find((segment) => segment.segmentId === segmentId) ?? existingSegment;
+    const previousTargetSignature = this.targetSignature(currentSegment);
+    const nextTargetSignature = JSON.stringify(targetTokens);
+    const storedRepeatState = currentSegment.meta.repeatPropagation;
     const participatesInRepeatCohort = sameSourceSegments.length > 1;
-    let nextRepeatState = storedRepeatState;
+    const leader = sameSourceSegments[0];
+    const isLeader = participatesInRepeatCohort && leader?.segmentId === segmentId;
 
-    if (
-      storedRepeatState?.mode === 'following' &&
-      nextTargetSignature !== previousTargetSignature
-    ) {
-      nextRepeatState = { mode: 'detached' };
+    if (isLeader && (status === 'confirmed' || nextTargetSignature !== previousTargetSignature)) {
+      this.materializeRepeatFollowers(sameSourceSegments);
     }
 
-    if (status === 'confirmed' && projectId !== undefined) {
-      if (!participatesInRepeatCohort) {
-        nextRepeatState = undefined;
-      } else if (!nextRepeatState) {
-        const legacyFollowingState = this.inferLegacyFollowingState(
-          existingSegment,
-          sameSourceSegments,
-        );
-        const hasEarlierRepeat = sameSourceSegments.some(
-          (segment) =>
-            segment.segmentId !== existingSegment.segmentId &&
-            this.isEarlierInFile(segment, existingSegment),
-        );
-        // A direct confirm on a later occurrence is a local contextual choice.
-        // The first same-source occurrence in this file becomes the leader.
-        nextRepeatState =
-          legacyFollowingState ?? (hasEarlierRepeat ? { mode: 'detached' } : { mode: 'leader' });
-      }
+    let nextRepeatState = this.resolveRepeatState(
+      currentSegment,
+      leader,
+      participatesInRepeatCohort,
+    );
+
+    if (!participatesInRepeatCohort) {
+      nextRepeatState = undefined;
+    } else if (
+      !isLeader &&
+      !options.preserveRepeatLink &&
+      (status === 'confirmed' ||
+        ((status === 'draft' || status === 'new') &&
+          nextTargetSignature !== previousTargetSignature))
+    ) {
+      // A manual edit or direct confirmation of a later occurrence opts it
+      // out of the first occurrence's propagation chain.
+      nextRepeatState = { mode: 'detached' };
     }
 
     const repeatPropagationUpdate = this.repeatStatesEqual(storedRepeatState, nextRepeatState)
@@ -207,7 +206,7 @@ export class SegmentService extends EventEmitter {
           workingTMUpdate = { projectId, srcHash: segment.srcHash };
         }
         if (nextRepeatState?.mode === 'leader') {
-          propagatedIds = this.propagate(projectId, segment, previousTargetSignature);
+          propagatedIds = this.propagate(projectId, segment);
         }
       }
     }
@@ -226,11 +225,7 @@ export class SegmentService extends EventEmitter {
   /**
    * Propagate a leading occurrence to later, still-following occurrences.
    */
-  private propagate(
-    projectId: number,
-    sourceSegment: Segment,
-    previousTargetSignature: string,
-  ): string[] {
+  private propagate(projectId: number, sourceSegment: Segment): string[] {
     console.log(
       `[SegmentService] Propagating segment ${sourceSegment.segmentId} in project ${projectId}`,
     );
@@ -240,14 +235,9 @@ export class SegmentService extends EventEmitter {
       .getProjectSegmentsByHash(projectId, sourceSegment.srcHash, sourceSegment.fileId)
       .filter((segment: Segment) => {
         if (!this.isEarlierInFile(sourceSegment, segment)) return false;
-        if (segment.meta.repeatPropagation?.mode === 'detached') return false;
-        if (segment.meta.repeatPropagation?.mode === 'following') {
-          return segment.meta.repeatPropagation.sourceSegmentId === sourceSegment.segmentId;
-        }
-
-        const segmentTargetSignature = this.targetSignature(segment);
         return (
-          segmentTargetSignature === '[]' || segmentTargetSignature === previousTargetSignature
+          segment.meta.repeatPropagation?.mode === 'following' &&
+          segment.meta.repeatPropagation.sourceSegmentId === sourceSegment.segmentId
         );
       });
 
@@ -287,22 +277,48 @@ export class SegmentService extends EventEmitter {
     return updatedIds;
   }
 
-  private inferLegacyFollowingState(
-    segment: Segment,
-    sameSourceSegments: Segment[],
-  ): RepeatPropagationState | undefined {
-    const segmentTargetSignature = this.targetSignature(segment);
-    const source = sameSourceSegments
-      .filter(
-        (candidate) =>
-          candidate.segmentId !== segment.segmentId &&
-          this.isEarlierInFile(candidate, segment) &&
-          candidate.status === 'confirmed' &&
-          this.targetSignature(candidate) === segmentTargetSignature,
-      )
-      .sort((left, right) => left.orderIndex - right.orderIndex)[0];
+  private getRepeatCohort(projectId: number, segment: Segment): Segment[] {
+    return this.db
+      .getProjectSegmentsByHash(projectId, segment.srcHash, segment.fileId)
+      .sort((left, right) => left.orderIndex - right.orderIndex);
+  }
 
-    return source ? { mode: 'following', sourceSegmentId: source.segmentId } : undefined;
+  private materializeRepeatFollowers(cohort: Segment[]): void {
+    const leader = cohort[0];
+    for (const candidate of cohort.slice(1)) {
+      const storedState = candidate.meta.repeatPropagation;
+      const nextState = this.resolveRepeatState(candidate, leader, true);
+
+      if (nextState && !this.repeatStatesEqual(storedState, nextState)) {
+        this.db.updateSegmentRepeatPropagation(candidate.segmentId, nextState);
+      }
+    }
+  }
+
+  private resolveRepeatState(
+    candidate: Segment,
+    leader: Segment | undefined,
+    participatesInRepeatCohort: boolean,
+  ): RepeatPropagationState | undefined {
+    if (!leader || !participatesInRepeatCohort) return undefined;
+    if (candidate.segmentId === leader.segmentId) return { mode: 'leader' };
+
+    const storedState = candidate.meta.repeatPropagation;
+    if (storedState?.mode === 'detached') return storedState;
+    if (storedState?.mode === 'following' && storedState.sourceSegmentId === leader.segmentId) {
+      return storedState;
+    }
+    if (
+      !this.hasTargetContent(candidate) ||
+      this.targetSignature(candidate) === this.targetSignature(leader)
+    ) {
+      return { mode: 'following', sourceSegmentId: leader.segmentId };
+    }
+    return { mode: 'detached' };
+  }
+
+  private hasTargetContent(segment: Segment): boolean {
+    return segment.targetTokens.some((token) => token.content.trim().length > 0);
   }
 
   private targetSignature(segment: Segment): string {

@@ -58,6 +58,7 @@ export const FILTER_QUALITY_OPTIONS: Array<{ value: EditorQualityFilter; label: 
 export const FILTER_QUICK_PRESET_OPTIONS: Array<{ value: EditorQuickPreset; label: string }> = [
   { value: 'untranslated', label: '未翻译' },
   { value: 'confirmed', label: '已确认' },
+  { value: 'first_repeat', label: '首次重复' },
   { value: 'issues', label: '有问题段' },
 ];
 

@@ -138,6 +138,12 @@ describe('useEditorFilters helpers', () => {
     expect(
       canReuseEditorSegmentListWithoutRefreshingSearchText({
         ...defaults,
+        quickPreset: 'first_repeat',
+      }),
+    ).toBe(false);
+    expect(
+      canReuseEditorSegmentListWithoutRefreshingSearchText({
+        ...defaults,
         sortBy: 'target_length',
       }),
     ).toBe(false);
@@ -219,6 +225,12 @@ describe('useEditorFilters helpers', () => {
     });
   });
 
+  it('accepts the persisted first-repeat quick preset', () => {
+    expect(sanitizePersistedEditorFilterState({ quickPreset: 'first_repeat' }).quickPreset).toBe(
+      'first_repeat',
+    );
+  });
+
   it('builds searchable segment flags from segment and save errors', () => {
     const segments: Segment[] = [
       createSegment({
@@ -256,7 +268,7 @@ describe('useEditorFilters helpers', () => {
     });
   });
 
-  it('marks only later occurrences of the same source hash as repeated', () => {
+  it('marks every occurrence of a repeated source hash, including the first', () => {
     const first = createSegment({ id: 's1', source: 'Repeat', target: '' });
     const second = createSegment({ id: 's2', source: 'Repeat', target: '' });
     const unique = createSegment({ id: 's3', source: 'Unique', target: '' });
@@ -264,7 +276,11 @@ describe('useEditorFilters helpers', () => {
 
     const searchable = buildSearchableEditorSegments([first, unique, second], {});
 
-    expect(searchable.map((item) => item.isRepeatedSource)).toEqual([false, false, true]);
+    expect(searchable.map((item) => item.repeatedSourceRole)).toEqual([
+      'first',
+      undefined,
+      'later',
+    ]);
   });
 
   it('reuses cached searchable items for unchanged segment objects', () => {

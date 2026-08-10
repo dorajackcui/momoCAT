@@ -56,6 +56,7 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
       hasSaveError: false,
       isUntranslated: true,
       hasIssue: false,
+      repeatedSourceRole: 'first',
     },
     {
       segment: makeSegment('s2', 'draft'),
@@ -67,6 +68,7 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
       hasSaveError: false,
       isUntranslated: false,
       hasIssue: true,
+      repeatedSourceRole: 'later',
     },
     {
       segment: makeSegment('s3', 'confirmed'),
@@ -141,6 +143,15 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
     expect(filtered).toHaveLength(1);
     expect(filtered[0].segment.segmentId).toBe('s3');
   });
+
+  it('filters to the first occurrence of each repeated source', () => {
+    const filtered = filterSearchableSegments(segments, {
+      ...createDefaultEditorFilterCriteria(),
+      quickPreset: 'first_repeat',
+    });
+
+    expect(filtered.map((item) => item.segment.segmentId)).toEqual(['s1']);
+  });
 });
 
 describe('editorFilterUtils.buildHighlightChunks', () => {
@@ -200,6 +211,11 @@ describe('editorFilterUtils helpers', () => {
       status: 'all',
       qualityFilters: [],
       quickPreset: 'confirmed',
+    });
+    expect(getQuickPresetPatch('first_repeat')).toEqual({
+      status: 'all',
+      qualityFilters: [],
+      quickPreset: 'first_repeat',
     });
   });
 });

@@ -660,6 +660,46 @@ describe("CATDatabase", () => {
     expect(segment?.qaIssues).toBeUndefined();
   });
 
+  it("should update repeat state without changing target, status, or qa issues", () => {
+    const projectId = db.createProject("Repeat State Project", "en", "zh");
+    const fileId = db.createFile(projectId, "repeat-state.xlsx");
+    const targetTokens = [{ type: "text" as const, content: "Existing target" }];
+
+    db.bulkInsertSegments([
+      {
+        segmentId: "repeat-state-1",
+        fileId,
+        orderIndex: 0,
+        sourceTokens: [{ type: "text", content: "Repeat" }],
+        targetTokens,
+        status: "translated",
+        tagsSignature: "",
+        matchKey: "repeat",
+        srcHash: "repeat-state-hash",
+        meta: { updatedAt: new Date().toISOString() },
+      },
+    ]);
+    db.updateSegmentQaIssues("repeat-state-1", [
+      {
+        ruleId: "test-warning",
+        severity: "warning",
+        message: "Keep this warning",
+      },
+    ]);
+
+    db.updateSegmentRepeatPropagation("repeat-state-1", { mode: "leader" });
+
+    expect(db.getSegment("repeat-state-1")).toMatchObject({
+      targetTokens,
+      status: "translated",
+      qaIssues: [{ ruleId: "test-warning" }],
+      meta: { repeatPropagation: { mode: "leader" } },
+    });
+
+    db.updateSegmentRepeatPropagation("repeat-state-1", null);
+    expect(db.getSegment("repeat-state-1")?.meta.repeatPropagation).toBeUndefined();
+  });
+
   it("should normalize invalid segment status values when reading", () => {
     const projectId = db.createProject("Status Normalize Project", "en", "zh");
     const fileId = db.createFile(projectId, "normalize.xlsx");

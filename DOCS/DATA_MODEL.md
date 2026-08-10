@@ -46,9 +46,17 @@ Important file/segment fields:
 
 Repeat state inside `metaJson` is one of:
 
-- `leader`: first confirmed source occurrence that can propagate within its file;
-- `following` with `sourceSegmentId`: still follows that leader;
-- `detached`: explicitly diverged and no longer receives automatic propagation.
+- `leader`: first source occurrence that can propagate when confirmed within its file;
+- `following` with `sourceSegmentId`: follows that leader and receives its confirmed target;
+- `detached`: a later occurrence that no longer receives automatic propagation.
+
+Leader identity is always determined by the first source occurrence in file order, even before its
+metadata is written. Repeat state is persisted lazily: touching a later occurrence writes only that
+occurrence, while changing or confirming the leader materializes the follower states needed for
+propagation. Later empty or same-target occurrences start `following`; a later non-empty different
+target starts `detached`. Manually changing or directly confirming a later occurrence also detaches
+it. AI translation alone does not detach a follower, and confirmation propagated from the leader
+keeps it following.
 
 This is a JSON contract, not a separate schema column. Changes require model, repository, service, and regression-test updates together.
 

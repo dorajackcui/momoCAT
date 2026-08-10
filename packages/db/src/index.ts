@@ -259,13 +259,15 @@ export class CATDatabase {
     this.segmentRepo.updateSegmentTarget(segmentId, targetTokens, status, repeatPropagation);
   }
 
+  public updateSegmentRepeatPropagation(segmentId: string, state: RepeatPropagationState | null) {
+    this.segmentRepo.updateSegmentRepeatPropagation(segmentId, state);
+  }
+
   public updateSegmentQaIssues(segmentId: string, qaIssues: QaIssue[]) {
     this.segmentRepo.updateSegmentQaIssues(segmentId, qaIssues);
   }
 
-  public getProjectStats(
-    projectId: number,
-  ): { status: string; count: number }[] {
+  public getProjectStats(projectId: number): { status: string; count: number }[] {
     return this.segmentRepo.getProjectStats(projectId);
   }
 

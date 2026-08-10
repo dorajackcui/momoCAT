@@ -46,12 +46,7 @@ export class TMBatchOpsService {
         usageCount: 1,
       });
 
-      this.tmRepo.replaceTMFts(
-        tmId,
-        sourceText,
-        targetText,
-        entryId,
-      );
+      this.tmRepo.replaceTMFts(tmId, sourceText, targetText, entryId);
     });
 
     return committedCount;
@@ -102,6 +97,7 @@ export class TMBatchOpsService {
     if (updates.length > 0) {
       await this.segmentService.updateSegmentsAtomically(updates, {
         commitToWorkingTM: false,
+        preserveRepeatLink: true,
       });
     }
 

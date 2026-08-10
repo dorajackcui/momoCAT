@@ -16,12 +16,18 @@ vi.mock('@tanstack/react-virtual', () => ({
 }));
 
 vi.mock('../EditorRow', () => ({
-  EditorRow: ({ segment, isRepeatedSource }: { segment: Segment; isRepeatedSource?: boolean }) =>
+  EditorRow: ({
+    segment,
+    repeatedSourceRole,
+  }: {
+    segment: Segment;
+    repeatedSourceRole?: 'first' | 'later';
+  }) =>
     React.createElement(
       'span',
       {
         'data-testid': `row-${segment.segmentId}`,
-        'data-repeated-source': String(Boolean(isRepeatedSource)),
+        'data-repeated-source-role': repeatedSourceRole ?? 'none',
       },
       segment.targetTokens.map((token) => token.content).join(''),
     ),
@@ -84,7 +90,7 @@ describe('EditorListPane store-backed rows', () => {
     expect(html).not.toContain('before');
   });
 
-  it('passes the repeated-source marker to later occurrences', () => {
+  it('passes distinct first and later repeat roles to editor rows', () => {
     const first = createSegment('first');
     const repeated = {
       ...createSegment('second'),
@@ -123,7 +129,7 @@ describe('EditorListPane store-backed rows', () => {
       }),
     );
 
-    expect(html).toContain('data-testid="row-seg-1" data-repeated-source="false"');
-    expect(html).toContain('data-testid="row-seg-2" data-repeated-source="true"');
+    expect(html).toContain('data-testid="row-seg-1" data-repeated-source-role="first"');
+    expect(html).toContain('data-testid="row-seg-2" data-repeated-source-role="later"');
   });
 });

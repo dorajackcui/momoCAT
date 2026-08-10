@@ -45,6 +45,13 @@ export class SqliteSegmentRepository implements SegmentRepository {
     this.db.updateSegmentTarget(segmentId, targetTokens, status, repeatPropagation);
   }
 
+  updateSegmentRepeatPropagation(
+    segmentId: string,
+    repeatPropagation: RepeatPropagationState | null,
+  ): void {
+    this.db.updateSegmentRepeatPropagation(segmentId, repeatPropagation);
+  }
+
   updateSegmentQaIssues(segmentId: string, qaIssues: QaIssue[]): void {
     this.db.updateSegmentQaIssues(segmentId, qaIssues);
   }
