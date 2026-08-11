@@ -1,103 +1,33 @@
 import { randomUUID } from 'crypto';
 import { normalizeProjectAIModel } from '@cat/core/project';
 import type { AITransport, SettingsRepository } from '../ports';
+import { filterDiscoveredModelIds } from './AIProviderModelFilter';
+import {
+  AIProviderCatalogStorage,
+  last4,
+  normalizeBaseUrl,
+} from './AIProviderCatalogStorage';
+import type {
+  AddAIProviderInput,
+  AIConnectionSummary,
+  AIProviderSummary,
+  AITestConnectionResult,
+  LegacyCustomProvider,
+  ResolvedAIProviderConfig,
+  StoredAIConnection,
+  StoredAIProvider,
+  TestAIConnectionInput,
+} from './AIProviderCatalogTypes';
 
-const CONNECTION_CATALOG_KEY = 'ai_connection_catalog_v1';
-const PROVIDER_CATALOG_KEY = 'ai_provider_catalog_v2';
-const LEGACY_PROVIDER_CATALOG_KEY = 'ai_provider_catalog_v1';
-const CONNECTION_KEY_PREFIX = 'ai_connection_key::';
-const LEGACY_PROVIDER_KEY_PREFIX = 'ai_provider_key::';
-const OPENAI_API_KEY = 'openai_api_key';
-
-export interface TestAIConnectionInput {
-  connectionId?: string;
-  name: string;
-  baseUrl: string;
-  apiKey: string;
-}
-
-export interface AIConnectionSummary {
-  id: string;
-  name: string;
-  baseUrl: string;
-  protocol: 'chat-completions';
-  kind: 'openai-compatible';
-  apiKeyLast4?: string;
-  discoveredModels: string[];
-  lastTestedAt?: string;
-  lastRefreshedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AITestConnectionResult {
-  ok: boolean;
-  connection?: AIConnectionSummary;
-  models?: string[];
-  status?: number;
-  endpoint?: string;
-  rawResponseText?: string;
-  error?: string;
-}
-
-export interface AddAIProviderInput {
-  name: string;
-  connectionId: string;
-  model: string;
-}
-
-export interface AIProviderSummary {
-  id: string;
-  name: string;
-  baseUrl: string;
-  model: string;
-  protocol: 'chat-completions';
-  kind: 'configured' | 'legacy';
-  connectionId: string;
-  connectionName: string;
-  apiKeyLast4?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ResolvedAIProviderConfig {
-  provider: AIProviderSummary;
-  apiKey: string;
-}
-
-interface StoredAIConnection extends AIConnectionSummary {}
-
-interface StoredAIProvider {
-  id: string;
-  name: string;
-  connectionId: string;
-  model: string;
-  protocol: 'chat-completions';
-  kind: 'configured';
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface LegacyCustomProvider {
-  id: string;
-  name: string;
-  baseUrl: string;
-  model: string;
-  protocol: 'chat-completions';
-  kind: 'custom';
-  apiKeyLast4?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.trim().replace(/\/+$/, '');
-}
-
-function last4(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed.slice(-4) : undefined;
-}
+export { filterDiscoveredModelIds } from './AIProviderModelFilter';
+export type {
+  AddAIProviderInput,
+  AIConnectionSummary,
+  AIProviderSummary,
+  AITestConnectionResult,
+  ResolvedAIProviderConfig,
+  TestAIConnectionInput,
+} from './AIProviderCatalogTypes';
 
 function validateConnectionInput(input: TestAIConnectionInput): TestAIConnectionInput {
   const connectionId = input.connectionId?.trim();
@@ -105,17 +35,9 @@ function validateConnectionInput(input: TestAIConnectionInput): TestAIConnection
   const baseUrl = normalizeBaseUrl(input.baseUrl);
   const apiKey = input.apiKey.trim();
 
-  if (!name) {
-    throw new Error('Connection name is required');
-  }
-
-  if (!baseUrl) {
-    throw new Error('API Base URL is required');
-  }
-
-  if (!apiKey) {
-    throw new Error('API key is required');
-  }
+  if (!name) throw new Error('Connection name is required');
+  if (!baseUrl) throw new Error('API Base URL is required');
+  if (!apiKey) throw new Error('API key is required');
 
   return {
     ...(connectionId ? { connectionId } : {}),
@@ -130,66 +52,29 @@ function validateProviderInput(input: AddAIProviderInput): AddAIProviderInput {
   const connectionId = input.connectionId.trim();
   const model = input.model.trim();
 
-  if (!name) {
-    throw new Error('Provider name is required');
-  }
+  if (!name) throw new Error('Provider name is required');
+  if (!connectionId) throw new Error('AI provider connection is required');
+  if (!model) throw new Error('Model is required');
 
-  if (!connectionId) {
-    throw new Error('AI provider connection is required');
-  }
-
-  if (!model) {
-    throw new Error('Model is required');
-  }
-
-  return {
-    name,
-    connectionId,
-    model,
-  };
+  return { name, connectionId, model };
 }
 
 function isLegacyOrMissingProviderId(providerId: string): boolean {
   return !providerId || providerId.startsWith('builtin:openai:');
 }
 
-export function filterDiscoveredModelIds(models: string[]): string[] {
-  const denyPatterns = [
-    /embedding/i,
-    /\bembed\b/i,
-    /audio/i,
-    /tts/i,
-    /whisper/i,
-    /image/i,
-    /image-only/i,
-    /vision-image/i,
-  ];
-  const seen = new Set<string>();
-  const filtered: string[] = [];
+export class AIProviderCatalogService {
+  private readonly storage: AIProviderCatalogStorage;
 
-  for (const rawModel of models) {
-    const model = rawModel.trim();
-    if (!model || seen.has(model)) {
-      continue;
-    }
-    if (denyPatterns.some((pattern) => pattern.test(model))) {
-      continue;
-    }
-    seen.add(model);
-    filtered.push(model);
+  constructor(
+    settingsRepo: SettingsRepository,
+    private readonly transport: AITransport,
+  ) {
+    this.storage = new AIProviderCatalogStorage(settingsRepo);
   }
 
-  return filtered;
-}
-
-export class AIProviderCatalogService {
-  constructor(
-    private readonly settingsRepo: SettingsRepository,
-    private readonly transport: AITransport,
-  ) {}
-
   public listConnections(): AIConnectionSummary[] {
-    return this.readStoredConnections().map((connection) => this.toConnectionSummary(connection));
+    return this.storage.readConnections().map((connection) => this.toConnectionSummary(connection));
   }
 
   public async testConnection(input: TestAIConnectionInput): Promise<AITestConnectionResult> {
@@ -205,7 +90,7 @@ export class AIProviderCatalogService {
       }
 
       const now = new Date().toISOString();
-      const storedConnections = this.readStoredConnections();
+      const storedConnections = this.storage.readConnections();
       const existing = normalized.connectionId
         ? storedConnections.find((connection) => connection.id === normalized.connectionId)
         : undefined;
@@ -215,7 +100,7 @@ export class AIProviderCatalogService {
         baseUrl: normalized.baseUrl,
         protocol: 'chat-completions',
         kind: 'openai-compatible',
-        ...this.optionalLast4(normalized.apiKey),
+        ...(last4(normalized.apiKey) ? { apiKeyLast4: last4(normalized.apiKey) } : {}),
         discoveredModels,
         lastTestedAt: now,
         lastRefreshedAt: now,
@@ -227,8 +112,8 @@ export class AIProviderCatalogService {
         ...storedConnections.filter((candidate) => candidate.id !== connection.id),
         connection,
       ];
-      this.settingsRepo.setSetting(this.buildConnectionKey(connection.id), normalized.apiKey);
-      this.writeStoredConnections(nextConnections);
+      this.storage.setConnectionApiKey(connection.id, normalized.apiKey);
+      this.storage.writeConnections(nextConnections);
 
       return {
         ok: true,
@@ -247,31 +132,24 @@ export class AIProviderCatalogService {
   }
 
   public listProviders(): AIProviderSummary[] {
-    return [
-      ...this.readConfiguredProviderSummaries(),
-      ...this.readLegacyProviderSummaries(),
-    ];
+    return [...this.readConfiguredProviderSummaries(), ...this.readLegacyProviderSummaries()];
   }
 
   public async addProvider(input: AddAIProviderInput): Promise<AIProviderSummary> {
     const normalized = validateProviderInput(input);
     this.assertUniqueProviderName(normalized.name);
-    const connection = this.readStoredConnections().find(
-      (candidate) => candidate.id === normalized.connectionId,
-    );
-    if (!connection) {
-      throw new Error('AI provider connection is missing.');
-    }
+    const connection = this.storage
+      .readConnections()
+      .find((candidate) => candidate.id === normalized.connectionId);
+    if (!connection) throw new Error('AI provider connection is missing.');
     if (!connection.discoveredModels.includes(normalized.model)) {
       throw new Error(
         `Model "${normalized.model}" was not discovered for connection "${connection.name}".`,
       );
     }
 
-    const apiKey = this.settingsRepo.getSetting(this.buildConnectionKey(connection.id));
-    if (!apiKey) {
-      throw new Error(`API key is missing for connection "${connection.name}".`);
-    }
+    const apiKey = this.storage.getConnectionApiKey(connection.id);
+    if (!apiKey) throw new Error(`API key is missing for connection "${connection.name}".`);
 
     await this.transport.testConnection({
       apiKey,
@@ -290,7 +168,7 @@ export class AIProviderCatalogService {
       createdAt: now,
       updatedAt: now,
     };
-    this.writeStoredProviders([...this.readStoredProviders(), provider]);
+    this.storage.writeProviders([...this.storage.readProviders(), provider]);
     return this.toProviderSummary(provider, connection);
   }
 
@@ -299,60 +177,48 @@ export class AIProviderCatalogService {
       throw new Error('Cannot delete an AI provider that is currently used by a project');
     }
 
-    const providers = this.readStoredProviders();
+    const providers = this.storage.readProviders();
     const nextProviders = providers.filter((provider) => provider.id !== providerId);
-    if (nextProviders.length === providers.length) {
-      throw new Error('AI provider not found');
-    }
-
-    this.writeStoredProviders(nextProviders);
+    if (nextProviders.length === providers.length) throw new Error('AI provider not found');
+    this.storage.writeProviders(nextProviders);
   }
 
   public deleteConnection(connectionId: string, isInUse: boolean): void {
     if (
       isInUse ||
-      this.readStoredProviders().some((provider) => provider.connectionId === connectionId)
+      this.storage.readProviders().some((provider) => provider.connectionId === connectionId)
     ) {
       throw new Error('Cannot delete an AI connection that has providers or is in use.');
     }
 
-    const connections = this.readStoredConnections();
+    const connections = this.storage.readConnections();
     const nextConnections = connections.filter((connection) => connection.id !== connectionId);
-    if (nextConnections.length === connections.length) {
-      throw new Error('AI connection not found');
-    }
+    if (nextConnections.length === connections.length) throw new Error('AI connection not found');
 
-    this.writeStoredConnections(nextConnections);
-    this.settingsRepo.setSetting(this.buildConnectionKey(connectionId), null);
+    this.storage.writeConnections(nextConnections);
+    this.storage.clearConnectionApiKey(connectionId);
   }
 
   public resolveProviderConfig(providerId?: string | null): ResolvedAIProviderConfig {
-    const storedProviders = this.readStoredProviders();
+    const storedProviders = this.storage.readProviders();
     const connectionsById = new Map(
-      this.readStoredConnections().map((connection) => [connection.id, connection]),
+      this.storage.readConnections().map((connection) => [connection.id, connection]),
     );
     const normalizedProviderId = normalizeProjectAIModel(providerId);
     const configuredProvider = storedProviders.find(
       (candidate) => candidate.id === normalizedProviderId,
     );
-    if (configuredProvider) {
-      return this.resolveConfiguredProvider(configuredProvider, connectionsById);
-    }
+    if (configuredProvider) return this.resolveConfiguredProvider(configuredProvider, connectionsById);
 
-    const legacyProvider = this.readLegacyProviders().find(
-      (candidate) => candidate.id === normalizedProviderId,
-    );
-    if (legacyProvider) {
-      return this.resolveLegacyProvider(legacyProvider);
-    }
+    const legacyProvider = this.storage
+      .readLegacyProviders()
+      .find((candidate) => candidate.id === normalizedProviderId);
+    if (legacyProvider) return this.resolveLegacyProvider(legacyProvider);
 
     const fallbackProvider = isLegacyOrMissingProviderId(normalizedProviderId)
       ? storedProviders.find((candidate) => connectionsById.has(candidate.connectionId))
       : undefined;
-
-    if (!fallbackProvider) {
-      throw new Error('AI provider is not configured.');
-    }
+    if (!fallbackProvider) throw new Error('AI provider is not configured.');
 
     return this.resolveConfiguredProvider(fallbackProvider, connectionsById);
   }
@@ -362,178 +228,28 @@ export class AIProviderCatalogService {
     const exists = this.listProviders().some(
       (provider) => provider.name.trim().toLowerCase() === loweredName,
     );
-    if (exists) {
-      throw new Error(`AI provider name "${name}" already exists`);
-    }
-  }
-
-  private readStoredConnections(): StoredAIConnection[] {
-    const raw = this.settingsRepo.getSetting(CONNECTION_CATALOG_KEY);
-    if (!raw) {
-      return [];
-    }
-
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed)) {
-        return [];
-      }
-
-      return parsed
-        .filter((value): value is StoredAIConnection => {
-          if (!value || typeof value !== 'object') {
-            return false;
-          }
-          const connection = value as Partial<StoredAIConnection>;
-          return (
-            connection.kind === 'openai-compatible' &&
-            connection.protocol === 'chat-completions' &&
-            typeof connection.id === 'string' &&
-            typeof connection.name === 'string' &&
-            typeof connection.baseUrl === 'string' &&
-            Array.isArray(connection.discoveredModels) &&
-            typeof connection.createdAt === 'string' &&
-            typeof connection.updatedAt === 'string'
-          );
-        })
-        .map((connection) => ({
-          id: connection.id,
-          name: connection.name.trim(),
-          baseUrl: normalizeBaseUrl(connection.baseUrl),
-          protocol: 'chat-completions',
-          kind: 'openai-compatible',
-          ...this.optionalLast4(connection.apiKeyLast4),
-          discoveredModels: filterDiscoveredModelIds(
-            connection.discoveredModels.filter(
-              (model): model is string => typeof model === 'string',
-            ),
-          ),
-          ...this.optionalTimestamp('lastTestedAt', connection.lastTestedAt),
-          ...this.optionalTimestamp('lastRefreshedAt', connection.lastRefreshedAt),
-          createdAt: connection.createdAt,
-          updatedAt: connection.updatedAt,
-        }));
-    } catch {
-      return [];
-    }
-  }
-
-  private writeStoredConnections(connections: StoredAIConnection[]): void {
-    this.settingsRepo.setSetting(CONNECTION_CATALOG_KEY, JSON.stringify(connections));
-  }
-
-  private readStoredProviders(): StoredAIProvider[] {
-    const raw = this.settingsRepo.getSetting(PROVIDER_CATALOG_KEY);
-    if (!raw) {
-      return [];
-    }
-
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed)) {
-        return [];
-      }
-
-      return parsed
-        .filter((value): value is StoredAIProvider => {
-          if (!value || typeof value !== 'object') {
-            return false;
-          }
-          const provider = value as Partial<StoredAIProvider>;
-          return (
-            provider.kind === 'configured' &&
-            provider.protocol === 'chat-completions' &&
-            typeof provider.id === 'string' &&
-            typeof provider.name === 'string' &&
-            typeof provider.connectionId === 'string' &&
-            typeof provider.model === 'string' &&
-            typeof provider.createdAt === 'string' &&
-            typeof provider.updatedAt === 'string'
-          );
-        })
-        .map((provider) => ({
-          id: provider.id,
-          name: provider.name.trim(),
-          connectionId: provider.connectionId.trim(),
-          model: provider.model.trim(),
-          protocol: 'chat-completions',
-          kind: 'configured',
-          createdAt: provider.createdAt,
-          updatedAt: provider.updatedAt,
-        }));
-    } catch {
-      return [];
-    }
-  }
-
-  private writeStoredProviders(providers: StoredAIProvider[]): void {
-    this.settingsRepo.setSetting(PROVIDER_CATALOG_KEY, JSON.stringify(providers));
+    if (exists) throw new Error(`AI provider name "${name}" already exists`);
   }
 
   private readConfiguredProviderSummaries(): AIProviderSummary[] {
     const connectionsById = new Map(
-      this.readStoredConnections().map((connection) => [connection.id, connection]),
+      this.storage.readConnections().map((connection) => [connection.id, connection]),
     );
-    return this.readStoredProviders().flatMap((provider) => {
+    return this.storage.readProviders().flatMap((provider) => {
       const connection = connectionsById.get(provider.connectionId);
       return connection ? [this.toProviderSummary(provider, connection)] : [];
     });
   }
 
   private readLegacyProviderSummaries(): AIProviderSummary[] {
-    const globalKeyLast4 = last4(this.settingsRepo.getSetting(OPENAI_API_KEY));
-    return this.readLegacyProviders().map((provider) => {
+    const globalKeyLast4 = last4(this.storage.getGlobalOpenAIApiKey());
+    return this.storage.readLegacyProviders().map((provider) => {
       const apiKeyLast4 =
-        last4(this.settingsRepo.getSetting(this.buildLegacyProviderKey(provider.id))) ??
+        last4(this.storage.getLegacyProviderApiKey(provider.id)) ??
         globalKeyLast4 ??
         provider.apiKeyLast4;
       return this.toLegacyProviderSummary(provider, apiKeyLast4);
     });
-  }
-
-  private readLegacyProviders(): LegacyCustomProvider[] {
-    const raw = this.settingsRepo.getSetting(LEGACY_PROVIDER_CATALOG_KEY);
-    if (!raw) {
-      return [];
-    }
-
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed)) {
-        return [];
-      }
-
-      return parsed
-        .filter((value): value is LegacyCustomProvider => {
-          if (!value || typeof value !== 'object') {
-            return false;
-          }
-          const provider = value as Partial<LegacyCustomProvider>;
-          return (
-            provider.kind === 'custom' &&
-            provider.protocol === 'chat-completions' &&
-            typeof provider.id === 'string' &&
-            typeof provider.name === 'string' &&
-            typeof provider.baseUrl === 'string' &&
-            typeof provider.model === 'string' &&
-            typeof provider.createdAt === 'string' &&
-            typeof provider.updatedAt === 'string'
-          );
-        })
-        .map((provider) => ({
-          id: provider.id,
-          name: provider.name.trim(),
-          baseUrl: normalizeBaseUrl(provider.baseUrl),
-          model: provider.model.trim(),
-          protocol: 'chat-completions',
-          kind: 'custom',
-          ...(provider.apiKeyLast4 ? { apiKeyLast4: provider.apiKeyLast4 } : {}),
-          createdAt: provider.createdAt,
-          updatedAt: provider.updatedAt,
-        }));
-    } catch {
-      return [];
-    }
   }
 
   private toConnectionSummary(connection: StoredAIConnection): AIConnectionSummary {
@@ -557,9 +273,8 @@ export class AIProviderCatalogService {
     connection?: StoredAIConnection,
   ): AIProviderSummary {
     const apiKeyLast4 =
-      last4(
-        connection ? this.settingsRepo.getSetting(this.buildConnectionKey(connection.id)) : undefined,
-      ) ?? connection?.apiKeyLast4;
+      last4(connection ? this.storage.getConnectionApiKey(connection.id) : undefined) ??
+      connection?.apiKeyLast4;
 
     return {
       id: provider.id,
@@ -600,52 +315,22 @@ export class AIProviderCatalogService {
     connectionsById: Map<string, StoredAIConnection>,
   ): ResolvedAIProviderConfig {
     const connection = connectionsById.get(provider.connectionId);
-    if (!connection) {
-      throw new Error('AI provider connection is missing.');
-    }
+    if (!connection) throw new Error('AI provider connection is missing.');
 
-    const apiKey = this.settingsRepo.getSetting(this.buildConnectionKey(connection.id));
-    if (!apiKey) {
-      throw new Error(`API key is missing for connection "${connection.name}".`);
-    }
+    const apiKey = this.storage.getConnectionApiKey(connection.id);
+    if (!apiKey) throw new Error(`API key is missing for connection "${connection.name}".`);
 
-    return {
-      provider: this.toProviderSummary(provider, connection),
-      apiKey,
-    };
+    return { provider: this.toProviderSummary(provider, connection), apiKey };
   }
 
   private resolveLegacyProvider(provider: LegacyCustomProvider): ResolvedAIProviderConfig {
     const apiKey =
-      this.settingsRepo.getSetting(this.buildLegacyProviderKey(provider.id)) ??
-      this.settingsRepo.getSetting(OPENAI_API_KEY);
-    if (!apiKey) {
-      throw new Error(`API key is missing for legacy provider "${provider.name}".`);
-    }
+      this.storage.getLegacyProviderApiKey(provider.id) ?? this.storage.getGlobalOpenAIApiKey();
+    if (!apiKey) throw new Error(`API key is missing for legacy provider "${provider.name}".`);
 
     return {
       provider: this.toLegacyProviderSummary(provider, last4(apiKey)),
       apiKey,
     };
-  }
-
-  private optionalLast4(apiKeyLast4: string | undefined): Pick<AIConnectionSummary, 'apiKeyLast4'> {
-    const value = last4(apiKeyLast4);
-    return value ? { apiKeyLast4: value } : {};
-  }
-
-  private optionalTimestamp<TName extends 'lastTestedAt' | 'lastRefreshedAt'>(
-    name: TName,
-    value: unknown,
-  ): Partial<Pick<AIConnectionSummary, TName>> {
-    return typeof value === 'string' ? { [name]: value } as Pick<AIConnectionSummary, TName> : {};
-  }
-
-  private buildConnectionKey(connectionId: string): string {
-    return `${CONNECTION_KEY_PREFIX}${connectionId}`;
-  }
-
-  private buildLegacyProviderKey(providerId: string): string {
-    return `${LEGACY_PROVIDER_KEY_PREFIX}${providerId}`;
   }
 }
