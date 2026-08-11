@@ -2,7 +2,7 @@
 
 ## Contract
 
-The canonical SQLite schema is owned by [`packages/db/src/currentSchema.ts`](../packages/db/src/currentSchema.ts). Repository behavior is owned by [`packages/db/src/repos`](../packages/db/src/repos), and [`CATDatabase`](../packages/db/src/index.ts) is the application-facing facade.
+The canonical SQLite schema is owned by [`packages/db/src/currentSchema.ts`](../packages/db/src/currentSchema.ts). Repository behavior is owned by [`packages/db/src/repos`](../packages/db/src/repos), and [`CATDatabase`](../packages/db/src/index.ts) is the application-facing facade. `TMRepo` preserves the TM facade while [`TMSyncRepo`](../packages/db/src/repos/TMSyncRepo.ts) owns external-file staging, diff, and apply SQL.
 
 The current schema marker is **v15**.
 
@@ -73,6 +73,8 @@ This is a JSON contract, not a separate schema column. Changes require model, re
 `tm_entries.ftsRowid` is an additive performance mapping to the matching FTS row. Current-v15 maintenance adds/backfills it when needed, removes duplicate/orphan FTS rows encountered during mapping, and uses `0` for a known entry with no FTS row.
 
 `tm_sync_staging` is not user data. Rows are scoped by `tmId` and `syncRunId`, cleared around sync runs, and may be dropped/recreated when an obsolete scratch shape is found.
+
+Sync transaction ownership remains above the repository collaborator: callers open the bounded transaction, `TMRepo` forwards the established public method, and `TMSyncRepo` updates entry and FTS rows within that transaction. Do not call the collaborator as a second public persistence API.
 
 ### Term bases
 

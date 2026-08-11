@@ -80,17 +80,19 @@ The root `package.json` is the command source of truth.
 
 Focused diagnostics:
 
-| Command                              | Purpose                                                    |
-| ------------------------------------ | ---------------------------------------------------------- |
-| `npm run test:tm-flow`               | Focused TM match-flow regression.                          |
-| `npm run trace:tm-flow -- …`         | Inspect mounted TMs, recall, scoring, and final selection. |
-| `npm run trace:tb-flow -- …`         | Inspect TB matching.                                       |
-| `npm run trace:ai-file -- …`         | Inspect desktop AI file-flow behavior.                     |
-| `npm run smoke:momocat -- --dry-run` | Preview standard CLI smoke commands.                       |
+| Command                              | Purpose                                                              |
+| ------------------------------------ | -------------------------------------------------------------------- |
+| `npm run test:references`            | Cross-layer TM/TB matching, Runtime TM, and sync regressions.        |
+| `npm run test:ai-translate`          | Cross-layer provider, MT, request-mode, engine, and job regressions. |
+| `npm run test:tm-flow`               | Focused TM match-flow regression.                                    |
+| `npm run trace:tm-flow -- …`         | Inspect mounted TMs, recall, scoring, and final selection.           |
+| `npm run trace:tb-flow -- …`         | Inspect TB matching.                                                 |
+| `npm run trace:ai-file -- …`         | Inspect desktop AI file-flow behavior.                               |
+| `npm run smoke:momocat -- --dry-run` | Preview standard CLI smoke commands.                                 |
 
 ## Diagnostic playbooks
 
-Use a trace after a focused test or reproducible project case shows which boundary is failing. Traces are evidence collectors, not substitutes for regression tests. Their output can contain source/target text, project and resource names, prompt references, and provider results; do not paste it into issues, docs, or commits without redaction.
+Use `test:references` or `test:ai-translate` after changes that cross their package boundaries. Use a trace only after a focused test or reproducible project case shows which boundary is failing. Traces are evidence collectors, not substitutes for regression tests. Their output can contain source/target text, project and resource names, prompt references, and provider results; do not paste it into issues, docs, or commits without redaction.
 
 TM and TB traces open the selected SQLite database and run the real desktop matching service without calling an AI provider. They are intended to inspect matching, not to update translations, but `CATDatabase` is not a forensic read-only connection. Prefer a copied database for irreplaceable or production-derived data. The AI file trace and non-dry-run CLI smoke are mutating workflows and may call a configured provider.
 
@@ -151,18 +153,20 @@ Use `npm run smoke:momocat -- --dry-run` to validate configuration and preview e
 
 Run the narrowest relevant check while developing. For broad or cross-boundary work, run the full audit before editing when practical and again before handoff so baseline failures can be distinguished from regressions.
 
-| Changed area                   | Minimum focused validation                                              |
-| ------------------------------ | ----------------------------------------------------------------------- |
-| Documentation only             | `npm run docs:check`                                                    |
-| Root automation/config/text    | `npm run gate:text`, `npm run format:check`, and `npm run test:scripts` |
-| Prompt Markdown/catalog        | `npm run ai-prompts:generate`, then `npm run ai-prompts:check`          |
-| `@cat/core` algorithm/contract | Adjacent Vitest file, then `npm test` when the contract is shared       |
-| DB schema/bootstrap            | `npm run test:db-schema`                                                |
-| DB repository                  | Its adjacent repository tests plus affected service tests               |
-| `@cat/localization` or CLI     | Affected tests and `npm run build:cli`                                  |
-| Desktop IPC/preload            | Handler tests, preload API tests, and `npm run typecheck`               |
-| Renderer/editor behavior       | Component/hook tests and desktop smoke e2e when interaction changed     |
-| Packaging/update behavior      | `npm run build`, then the platform-native pack command                  |
+| Changed area                     | Minimum focused validation                                                           |
+| -------------------------------- | ------------------------------------------------------------------------------------ |
+| Documentation only               | `npm run docs:check`                                                                 |
+| Root automation/config/text      | `npm run gate:text`, `npm run format:check`, and `npm run test:scripts`              |
+| Prompt Markdown/catalog          | `npm run ai-prompts:generate`, then `npm run ai-prompts:check`                       |
+| `@cat/core` algorithm/contract   | Adjacent Vitest file, then `npm test` when the contract is shared                    |
+| DB schema/bootstrap              | `npm run test:db-schema`                                                             |
+| DB repository                    | Its adjacent repository tests plus affected service tests                            |
+| TM/TB matching or sync           | `npm run test:references`                                                            |
+| AI translation/provider flow     | `npm run test:ai-translate`; add `npm run build:cli` when shared or CLI code changed |
+| Other `@cat/localization` or CLI | Affected tests and `npm run build:cli`                                               |
+| Desktop IPC/preload              | Handler tests, preload API tests, and `npm run typecheck`                            |
+| Renderer/editor behavior         | Component/hook tests and desktop smoke e2e when interaction changed                  |
+| Packaging/update behavior        | `npm run build`, then the platform-native pack command                               |
 
 The full repository audit is:
 
@@ -293,6 +297,7 @@ See [Documentation](README.md) for ownership and content rules.
 - `gate:arch`: compare the import/delegation with the guardrail file; change the guard only for an intentional new boundary.
 - `gate:file-size`: split by responsibility behind a stable facade; avoid allowlist growth.
 - DB startup: confirm the schema marker and required shape before treating it as data corruption.
-- TM/TB mismatch: use the trace scripts to separate resource mounting, recall, scoring, and final selection.
+- TM/TB mismatch: run `test:references`, then use the trace scripts to separate resource mounting, recall, scoring, and final selection.
+- AI translation mismatch: run `test:ai-translate`, then isolate provider transport, strict response validation, request planning, or job resume/retry before changing behavior.
 - CLI provider failure: run `momocat env` and inspect before sending real requests.
 - Pack failure: first confirm normal build/tests and native ABI, then debug the platform pack step.

@@ -57,13 +57,14 @@ The shared orchestration layer owns:
 - request-mode planning and resumable jobs;
 - checkpoints, events, snapshots, audit records, and optional artifacts;
 - `LocalizationEngine` plus TM, TB, MT, provider, and Runtime TM modules;
+- engine composition, unit preparation, and resume fingerprint collaborators behind the `LocalizationEngine` facade;
 - SQLite adapters used by command-facing APIs.
 
 It may depend on `@cat/db` and focused `@cat/core` entrypoints. It must not depend on either application.
 
 ### `packages/db`
 
-The persistence package owns the canonical current SQLite schema, schema validation/maintenance, repositories, and the `CATDatabase` facade. It depends on pure contracts from `@cat/core`, not on app or localization code.
+The persistence package owns the canonical current SQLite schema, schema validation/maintenance, repositories, and the `CATDatabase` facade. Large repository workflows may delegate to focused collaborators, such as `TMSyncRepo`, while `CATDatabase` and `TMRepo` preserve their public contracts. It depends on pure contracts from `@cat/core`, not on app or localization code.
 
 ### `packages/core`
 
@@ -88,7 +89,7 @@ For translation projects, the first confirmed occurrence of a repeated source in
 2. A localization command opens `CATDatabase`, resolves the project/provider, and reads the external workbook.
 3. File adapters create document-qualified units and resolve the target baseline.
 4. A request-mode strategy plans ordered tasks.
-5. `LocalizationEngine` obtains TM/TB context and asks `MTModule` for validated target tokens.
+5. `LocalizationEngine` delegates composition to its assembly, obtains TM/TB context, and asks the MT module boundary for validated target tokens.
 6. The job writes per-unit checkpoint/event state, throttled snapshots, and final workbook output.
 
 Resume truth is the checkpoint, not diagnostic artifacts or progress events.
@@ -99,7 +100,7 @@ TM/TB services provide the shared matching semantics. Desktop adapters may run r
 
 ### TM/TB external-file sync
 
-The desktop stores link configuration in `app_settings`. TB sync parses the linked sheet, then mirrors it by clearing and rewriting the TB in one transaction. Large TM sync runs in a worker, stages normalized rows in SQLite, diffs them against the TM, and applies bounded transactions. Missing-file, cancellation, and destructive-delete behavior stay explicit at the service/UI boundary.
+The desktop stores link configuration in `app_settings`. TB sync parses the linked sheet, then mirrors it by clearing and rewriting the TB in one transaction. Large TM sync runs in a worker, stages normalized rows in SQLite, diffs them against the TM, and applies bounded transactions. `TMRepo` keeps the facade methods while `TMSyncRepo` owns staging/diff/apply SQL. Missing-file, cancellation, and destructive-delete behavior stay explicit at the service/UI boundary.
 
 ## Stable boundary rules
 
@@ -116,17 +117,18 @@ The desktop stores link configuration in `app_settings`. TB sync parses the link
 
 ## Guardrails and entrypoints
 
-| Concern                      | Source                                                                                                                               |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Architecture rules           | [`DOCS/architecture/GATE05_GUARDRAILS.json`](architecture/GATE05_GUARDRAILS.json)                                                    |
-| Architecture gate            | [`scripts/gate-architecture-check.mjs`](../scripts/gate-architecture-check.mjs)                                                      |
-| Desktop composition root     | [`apps/desktop/src/main/index.ts`](../apps/desktop/src/main/index.ts)                                                                |
-| Typed desktop API            | [`apps/desktop/src/shared/ipc.ts`](../apps/desktop/src/shared/ipc.ts)                                                                |
-| Desktop service facade       | [`apps/desktop/src/main/services/ProjectService.ts`](../apps/desktop/src/main/services/ProjectService.ts)                            |
-| Segment transaction workflow | [`apps/desktop/src/main/services/SegmentService.ts`](../apps/desktop/src/main/services/SegmentService.ts)                            |
-| CLI dispatcher               | [`apps/cli/src/cli.ts`](../apps/cli/src/cli.ts)                                                                                      |
-| Shared engine                | [`packages/localization/src/LocalizationEngine.ts`](../packages/localization/src/LocalizationEngine.ts)                              |
-| DB facade/schema             | [`packages/db/src/index.ts`](../packages/db/src/index.ts), [`packages/db/src/currentSchema.ts`](../packages/db/src/currentSchema.ts) |
-| Core public slices           | [`packages/core/src`](../packages/core/src)                                                                                          |
+| Concern                      | Source                                                                                                                                |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Architecture rules           | [`DOCS/architecture/GATE05_GUARDRAILS.json`](architecture/GATE05_GUARDRAILS.json)                                                     |
+| Architecture gate            | [`scripts/gate-architecture-check.mjs`](../scripts/gate-architecture-check.mjs)                                                       |
+| Desktop composition root     | [`apps/desktop/src/main/index.ts`](../apps/desktop/src/main/index.ts)                                                                 |
+| Typed desktop API            | [`apps/desktop/src/shared/ipc.ts`](../apps/desktop/src/shared/ipc.ts)                                                                 |
+| Desktop service facade       | [`apps/desktop/src/main/services/ProjectService.ts`](../apps/desktop/src/main/services/ProjectService.ts)                             |
+| Segment transaction workflow | [`apps/desktop/src/main/services/SegmentService.ts`](../apps/desktop/src/main/services/SegmentService.ts)                             |
+| CLI dispatcher               | [`apps/cli/src/cli.ts`](../apps/cli/src/cli.ts)                                                                                       |
+| Shared engine facade         | [`packages/localization/src/LocalizationEngine.ts`](../packages/localization/src/LocalizationEngine.ts)                               |
+| Shared engine composition    | [`packages/localization/src/engine/LocalizationEngineAssembly.ts`](../packages/localization/src/engine/LocalizationEngineAssembly.ts) |
+| DB facade/schema             | [`packages/db/src/index.ts`](../packages/db/src/index.ts), [`packages/db/src/currentSchema.ts`](../packages/db/src/currentSchema.ts)  |
+| Core public slices           | [`packages/core/src`](../packages/core/src)                                                                                           |
 
 Run `npm run gate:arch` after changing any of these boundaries.

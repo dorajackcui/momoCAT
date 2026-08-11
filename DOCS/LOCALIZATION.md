@@ -12,6 +12,18 @@ Ownership by package:
 - `apps/desktop`: project editing, Working/Main TM lifecycle, repeated-segment behavior, resource UI, and external-file sync.
 - `apps/cli`: syntax and terminal behavior only.
 
+Stable facades keep cross-layer callers independent of maintenance-oriented splits:
+
+| Boundary                    | Stable entrypoint                      | Internal collaborators                                                                                            |
+| --------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Term matching               | `@cat/core/text` and `termMatching.ts` | normalization, search planning, and English inflection helpers                                                    |
+| Persistent TM matching      | desktop `TMService`                    | shared scoring and result-selection collaborators in `@cat/localization`; diagnostic traces still call the facade |
+| Persistent TM sync          | `CATDatabase` / `TMRepo`               | `TMSyncRepo`; the caller continues to own the transaction                                                         |
+| MT prompt/response handling | `MTModule`                             | prompt-parameter construction and batch-response processing                                                       |
+| Engine orchestration        | `LocalizationEngine`                   | assembly, unit preparation, resume fingerprinting, and option helpers                                             |
+
+Callers should use the stable entrypoint rather than importing these collaborators as alternate public APIs.
+
 ## Token and tag contract
 
 Segments store source and target as `Token[]`, not as display strings. Tags can be paired starts/ends or standalone tokens; tag metadata and order are part of translation correctness.
@@ -24,7 +36,7 @@ Three text forms must remain distinct:
 | Editor text          | Editable representation whose markers can map back to source tag tokens.             |
 | Protected MT payload | Numbered markers such as paired `{1>…<2}` and standalone `{3}` sent through prompts. |
 
-`MTModule` is the only layer that interprets provider output as editor-marker text. It parses the response back to tokens and validates tag integrity before request-mode strategies produce display-text `UnitResult.target` values.
+The MT module boundary (`MTModule` and its batch-response collaborator) is the only localization layer that interprets provider output as editor-marker text. It parses the response back to tokens and validates tag integrity before request-mode strategies produce display-text `UnitResult.target` values.
 
 A consumer persisting a `UnitResult.target` into a token store must use `parseDisplayTextToTokens()` (or preserve returned tokens if the API grows that field). Running `parseEditorTextToTokens()` a second time can reinterpret literal placeholder-like text and corrupt tag identity.
 
@@ -79,7 +91,7 @@ Only the `translations` field is allowed. Every requested id must appear exactly
 
 Two recovery layers have different jobs:
 
-- `MTModule` response repair handles malformed JSON, missing rows, and tag validation feedback for a provider request.
+- The MT module response processor handles malformed JSON, missing rows, and tag validation feedback for a provider request; request modes continue to call it through `MTModule`.
 - `TranslationJobRunner` task retry handles failed planned work, attempts, and resumable execution.
 
 Do not turn progress events or diagnostic artifacts into retry/resume truth.
@@ -210,20 +222,23 @@ Inspect and translate should use the same request mode, baseline, and tag policy
 
 ## Key entrypoints
 
-| Concern                              | Source                                                                                                                                                                                                                                           |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Token/tag helpers                    | [`packages/core/src/tag`](../packages/core/src/tag)                                                                                                                                                                                              |
-| Prompt and strict response contracts | [`packages/core/src/project`](../packages/core/src/project)                                                                                                                                                                                      |
-| Localization engine                  | [`packages/localization/src/LocalizationEngine.ts`](../packages/localization/src/LocalizationEngine.ts)                                                                                                                                          |
-| Window request modes                 | [`packages/localization/src/requestModes`](../packages/localization/src/requestModes)                                                                                                                                                            |
-| MT module                            | [`packages/localization/src/modules/MTModule.ts`](../packages/localization/src/modules/MTModule.ts)                                                                                                                                              |
-| TM/TB prompt modules                 | [`packages/localization/src/modules/TMModule.ts`](../packages/localization/src/modules/TMModule.ts), [`TBModule.ts`](../packages/localization/src/modules/TBModule.ts)                                                                           |
-| Source terminology precheck          | [`packages/localization/src/SourceTerminologyExtractor.ts`](../packages/localization/src/SourceTerminologyExtractor.ts), [`LocalizationSourceTerminologyPrechecker.ts`](../packages/localization/src/LocalizationSourceTerminologyPrechecker.ts) |
-| Runtime TM merge                     | [`packages/localization/src/runtimeTm`](../packages/localization/src/runtimeTm)                                                                                                                                                                  |
-| Shared match services                | [`packages/localization/src/services`](../packages/localization/src/services)                                                                                                                                                                    |
-| TM/TB repositories                   | [`packages/db/src/repos/TMRepo.ts`](../packages/db/src/repos/TMRepo.ts), [`TBRepo.ts`](../packages/db/src/repos/TBRepo.ts)                                                                                                                       |
-| Desktop segment behavior             | [`apps/desktop/src/main/services/SegmentService.ts`](../apps/desktop/src/main/services/SegmentService.ts)                                                                                                                                        |
-| Desktop TM/TB modules                | [`apps/desktop/src/main/services/modules/TMModule.ts`](../apps/desktop/src/main/services/modules/TMModule.ts), [`TBModule.ts`](../apps/desktop/src/main/services/modules/TBModule.ts)                                                            |
+| Concern                               | Source                                                                                                                                                                                                                                                              |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Token/tag helpers                     | [`packages/core/src/tag`](../packages/core/src/tag)                                                                                                                                                                                                                 |
+| Prompt and strict response contracts  | [`packages/core/src/project`](../packages/core/src/project)                                                                                                                                                                                                         |
+| Localization engine facade            | [`packages/localization/src/LocalizationEngine.ts`](../packages/localization/src/LocalizationEngine.ts)                                                                                                                                                             |
+| Engine orchestration collaborators    | [`packages/localization/src/engine`](../packages/localization/src/engine)                                                                                                                                                                                           |
+| Window request modes                  | [`packages/localization/src/requestModes`](../packages/localization/src/requestModes)                                                                                                                                                                               |
+| MT module facade                      | [`packages/localization/src/modules/MTModule.ts`](../packages/localization/src/modules/MTModule.ts)                                                                                                                                                                 |
+| MT prompt/response collaborators      | [`packages/localization/src/modules/MTModulePromptParams.ts`](../packages/localization/src/modules/MTModulePromptParams.ts), [`MTBatchResponseProcessor.ts`](../packages/localization/src/modules/MTBatchResponseProcessor.ts)                                      |
+| TM/TB prompt modules                  | [`packages/localization/src/modules/TMModule.ts`](../packages/localization/src/modules/TMModule.ts), [`TBModule.ts`](../packages/localization/src/modules/TBModule.ts)                                                                                              |
+| Source terminology precheck           | [`packages/localization/src/SourceTerminologyExtractor.ts`](../packages/localization/src/SourceTerminologyExtractor.ts), [`LocalizationSourceTerminologyPrechecker.ts`](../packages/localization/src/LocalizationSourceTerminologyPrechecker.ts)                    |
+| Runtime TM merge                      | [`packages/localization/src/runtimeTm`](../packages/localization/src/runtimeTm)                                                                                                                                                                                     |
+| Shared match services                 | [`packages/localization/src/services`](../packages/localization/src/services)                                                                                                                                                                                       |
+| Desktop TM match facade/collaborators | [`apps/desktop/src/main/services/TMService.ts`](../apps/desktop/src/main/services/TMService.ts), [`TMMatchScoring.ts`](../packages/localization/src/services/TMMatchScoring.ts), [`TMMatchSelection.ts`](../packages/localization/src/services/TMMatchSelection.ts) |
+| TM/TB repositories                    | [`packages/db/src/repos/TMRepo.ts`](../packages/db/src/repos/TMRepo.ts), [`TMSyncRepo.ts`](../packages/db/src/repos/TMSyncRepo.ts), [`TBRepo.ts`](../packages/db/src/repos/TBRepo.ts)                                                                               |
+| Desktop segment behavior              | [`apps/desktop/src/main/services/SegmentService.ts`](../apps/desktop/src/main/services/SegmentService.ts)                                                                                                                                                           |
+| Desktop TM/TB modules                 | [`apps/desktop/src/main/services/modules/TMModule.ts`](../apps/desktop/src/main/services/modules/TMModule.ts), [`TBModule.ts`](../apps/desktop/src/main/services/modules/TBModule.ts)                                                                               |
 
 ## Change checklist
 
