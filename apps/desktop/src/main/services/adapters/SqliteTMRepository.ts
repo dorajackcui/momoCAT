@@ -113,10 +113,6 @@ export class SqliteTMRepository implements TMRepository {
     this.db.deleteTM(id);
   }
 
-  clearTMEntries(tmId: string): number {
-    return this.db.clearTMEntries(tmId);
-  }
-
   getTM(tmId: string): TMRecord | undefined {
     return this.db.getTM(tmId);
   }

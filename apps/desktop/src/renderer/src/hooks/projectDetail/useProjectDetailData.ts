@@ -12,6 +12,12 @@ import type {
 } from '../../../../shared/ipc';
 import { apiClient } from '../../services/apiClient';
 
+export type ProjectTMLoadState =
+  | { status: 'loading' }
+  | { status: 'refreshing' }
+  | { status: 'ready' }
+  | { status: 'error'; message: string; hasLoaded: boolean };
+
 export interface UseProjectDetailDataResult {
   project: Project | null;
   setProject: React.Dispatch<React.SetStateAction<Project | null>>;
@@ -19,7 +25,7 @@ export interface UseProjectDetailDataResult {
   setFiles: React.Dispatch<React.SetStateAction<ProjectFileRecord[]>>;
   mountedTMs: MountedTM[];
   allMainTMs: TMRecord[];
-  tmLoadState: { loading: boolean; loaded: boolean; error: string | null };
+  tmLoadState: ProjectTMLoadState;
   mountedTBs: MountedTB[];
   allTBs: TBWithStats[];
   loading: boolean;
@@ -59,82 +65,41 @@ type ProjectDetailDataApi = Pick<
 interface ProjectDetailDataLoaderDeps {
   projectId: number;
   api: ProjectDetailDataApi;
-  setProject: (project: Project | null) => void;
-  setFiles: (files: ProjectFileRecord[]) => void;
-  setMountedTMs: (mountedTMs: MountedTM[]) => void;
-  setAllMainTMs: (allMainTMs: TMRecord[]) => void;
-  setMountedTBs: (mountedTBs: MountedTB[]) => void;
-  setAllTBs: (allTBs: TBWithStats[]) => void;
-  setLoadingData: (loading: boolean) => void;
-  isCurrent?: () => boolean;
 }
 
-export function createProjectDetailDataLoaders({
-  projectId,
-  api,
-  setProject,
-  setFiles,
-  setMountedTMs,
-  setAllMainTMs,
-  setMountedTBs,
-  setAllTBs,
-  setLoadingData,
-  isCurrent = () => true,
-}: ProjectDetailDataLoaderDeps) {
-  const canApply = (requestIsCurrent: () => boolean) => isCurrent() && requestIsCurrent();
-  const loadMountedTMs = async (requestIsCurrent: () => boolean = () => true) => {
-    const mounted = await api.getProjectMountedTMs(projectId);
-    if (canApply(requestIsCurrent)) {
-      setMountedTMs(mounted);
-      return mounted;
-    }
-    return [];
-  };
-
+export function createProjectDetailDataLoaders({ projectId, api }: ProjectDetailDataLoaderDeps) {
   return {
     loadData: async () => {
-      if (!isCurrent()) return;
-      setLoadingData(true);
-      try {
-        const [p, f] = await Promise.all([
-          api.getProject(projectId),
-          api.getProjectFiles(projectId),
-        ]);
-
-        if (isCurrent()) {
-          setProject(p ?? null);
-          setFiles(f);
-        }
-      } finally {
-        if (isCurrent()) {
-          setLoadingData(false);
-        }
-      }
+      const [project, files] = await Promise.all([
+        api.getProject(projectId),
+        api.getProjectFiles(projectId),
+      ]);
+      return { project: project ?? null, files };
     },
-    loadMountedTMs,
-    loadTMData: async (requestIsCurrent: () => boolean = () => true) => {
-      const [mounted, allMain] = await Promise.all([
+    loadMountedTMs: () => api.getProjectMountedTMs(projectId),
+    loadTMData: async () => {
+      const [mountedTMs, allMainTMs] = await Promise.all([
         api.getProjectMountedTMs(projectId),
         api.listTMOptions('main'),
       ]);
-
-      if (canApply(requestIsCurrent)) {
-        setMountedTMs(mounted);
-        setAllMainTMs(allMain);
-      }
+      return { mountedTMs, allMainTMs };
     },
     loadTBData: async () => {
-      const [mountedTB, allTB] = await Promise.all([
+      const [mountedTBs, allTBs] = await Promise.all([
         api.getProjectMountedTBs(projectId),
         api.listTBs(),
       ]);
-
-      if (isCurrent()) {
-        setMountedTBs(mountedTB);
-        setAllTBs(allTB);
-      }
+      return { mountedTBs, allTBs };
     },
   };
+}
+
+function hasLoadedTMData(state: ProjectTMLoadState): boolean {
+  return (
+    state.status === 'ready' ||
+    state.status === 'refreshing' ||
+    (state.status === 'error' && state.hasLoaded)
+  );
 }
 
 interface ProjectDetailActionDeps {
@@ -208,17 +173,15 @@ export function useProjectDetailData(projectId: number): UseProjectDetailDataRes
   const [allTBs, setAllTBs] = useState<TBWithStats[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [mutating, setMutating] = useState(false);
-  const [tmLoading, setTmLoading] = useState(true);
-  const [tmLoaded, setTmLoaded] = useState(false);
-  const [tmError, setTmError] = useState<string | null>(null);
-  const activeProjectId = useRef(projectId);
-  const tmLoadGeneration = useRef(0);
-  const mounted = useRef(true);
-  activeProjectId.current = projectId;
+  const [tmLoadState, setTmLoadState] = useState<ProjectTMLoadState>({ status: 'loading' });
+  const activeProjectIdRef = useRef(projectId);
+  const tmLoadGenerationRef = useRef(0);
+  const isMountedRef = useRef(true);
+  activeProjectIdRef.current = projectId;
 
   const loading = loadingData || mutating;
   const isActiveProject = useCallback(
-    () => mounted.current && activeProjectId.current === projectId,
+    () => isMountedRef.current && activeProjectIdRef.current === projectId,
     [projectId],
   );
 
@@ -227,83 +190,94 @@ export function useProjectDetailData(projectId: number): UseProjectDetailDataRes
       createProjectDetailDataLoaders({
         projectId,
         api: apiClient,
-        setProject,
-        setFiles,
-        setMountedTMs,
-        setAllMainTMs,
-        setMountedTBs,
-        setAllTBs,
-        setLoadingData,
-        isCurrent: isActiveProject,
       }),
-    [isActiveProject, projectId],
+    [projectId],
   );
 
   const loadData = useCallback(async () => {
+    if (!isActiveProject()) return;
+    setLoadingData(true);
     try {
-      await dataLoaders.loadData();
+      const data = await dataLoaders.loadData();
+      if (!isActiveProject()) return;
+      setProject(data.project);
+      setFiles(data.files);
     } catch (error) {
       if (!isActiveProject()) return;
       console.error('Failed to load project details:', error);
-      setLoadingData(false);
+    } finally {
+      if (isActiveProject()) {
+        setLoadingData(false);
+      }
     }
   }, [dataLoaders, isActiveProject]);
 
   const loadMountedTMs = useCallback(async () => {
     try {
-      return await dataLoaders.loadMountedTMs();
+      const mounted = await dataLoaders.loadMountedTMs();
+      if (!isActiveProject()) return [];
+      setMountedTMs(mounted);
+      return mounted;
     } catch (error) {
+      if (!isActiveProject()) return [];
       console.error('Failed to load mounted TMs:', error);
       return [];
     }
-  }, [dataLoaders]);
+  }, [dataLoaders, isActiveProject]);
 
   const loadTMData = useCallback(async () => {
     if (!isActiveProject()) return;
-    const generation = ++tmLoadGeneration.current;
-    const isCurrent = () => isActiveProject() && tmLoadGeneration.current === generation;
-    setTmLoading(true);
-    setTmError(null);
+    const generation = ++tmLoadGenerationRef.current;
+    const isCurrent = () => isActiveProject() && tmLoadGenerationRef.current === generation;
+    setTmLoadState((current) =>
+      hasLoadedTMData(current) ? { status: 'refreshing' } : { status: 'loading' },
+    );
     try {
-      await dataLoaders.loadTMData(isCurrent);
+      const data = await dataLoaders.loadTMData();
       if (!isCurrent()) return;
-      setTmLoaded(true);
+      setMountedTMs(data.mountedTMs);
+      setAllMainTMs(data.allMainTMs);
+      setTmLoadState({ status: 'ready' });
     } catch (error) {
       if (!isCurrent()) return;
       console.error('Failed to load project TM details:', error);
-      setTmError(error instanceof Error ? error.message : 'Failed to load translation memories.');
-    } finally {
-      if (isCurrent()) {
-        setTmLoading(false);
-      }
+      const message =
+        error instanceof Error ? error.message : 'Failed to load translation memories.';
+      setTmLoadState((current) => ({
+        status: 'error',
+        message,
+        hasLoaded: hasLoadedTMData(current),
+      }));
     }
   }, [dataLoaders, isActiveProject]);
 
   const loadTBData = useCallback(async () => {
     try {
-      await dataLoaders.loadTBData();
+      const data = await dataLoaders.loadTBData();
+      if (!isActiveProject()) return;
+      setMountedTBs(data.mountedTBs);
+      setAllTBs(data.allTBs);
     } catch (error) {
+      if (!isActiveProject()) return;
       console.error('Failed to load project TB details:', error);
     }
-  }, [dataLoaders]);
+  }, [dataLoaders, isActiveProject]);
 
   useEffect(() => {
     setProject(null);
     setFiles([]);
     setMountedTMs([]);
     setAllMainTMs([]);
-    setTmLoading(true);
-    setTmLoaded(false);
-    setTmError(null);
+    setTmLoadState({ status: 'loading' });
     setMountedTBs([]);
     setAllTBs([]);
   }, [projectId]);
 
   useEffect(() => {
-    mounted.current = true;
+    isMountedRef.current = true;
     return () => {
-      mounted.current = false;
-      tmLoadGeneration.current += 1;
+      isMountedRef.current = false;
+      tmLoadGenerationRef.current += 1;
     };
   }, []);
 
@@ -340,7 +314,7 @@ export function useProjectDetailData(projectId: number): UseProjectDetailDataRes
     setFiles,
     mountedTMs,
     allMainTMs,
-    tmLoadState: { loading: tmLoading, loaded: tmLoaded, error: tmError },
+    tmLoadState,
     mountedTBs,
     allTBs,
     loading,

@@ -231,7 +231,11 @@ function broadcastAppUpdateStatus(status: AppUpdateStatusEvent) {
 
 function broadcastReferenceDataChanged(event: ReferenceDataChangedEvent) {
   BrowserWindow.getAllWindows().forEach((win) => {
-    win.webContents.send(IPC_CHANNELS.events.referenceDataChanged, event);
+    try {
+      win.webContents.send(IPC_CHANNELS.events.referenceDataChanged, event);
+    } catch (error) {
+      console.error('[ReferenceData] Failed to notify renderer:', error);
+    }
   });
 }
 

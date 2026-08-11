@@ -104,7 +104,7 @@ describe('Working TM actions', () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
-  it('refreshes the TM count when a bounded reset fails after a possible committed prefix', async () => {
+  it('does not refresh when an atomic reset fails', async () => {
     const reload = vi.fn(async () => {});
     const runMutation = vi.fn(async <T>(operation: () => Promise<T>) => operation());
 
@@ -123,6 +123,6 @@ describe('Working TM actions', () => {
       }),
     ).rejects.toThrow('reset failed');
 
-    expect(reload).toHaveBeenCalledTimes(1);
+    expect(reload).not.toHaveBeenCalled();
   });
 });

@@ -352,6 +352,9 @@ describe('TMRepo FTS replacement', () => {
     raw
       .prepare('INSERT INTO tm_fts (tmId, srcText, tgtText, tmEntryId) VALUES (?, ?, ?, ?)')
       .run(tmId, 'cross-TM source', 'cross-TM target', otherEntryId);
+    raw
+      .prepare('INSERT INTO tm_fts (tmId, srcText, tgtText, tmEntryId) VALUES (?, ?, ?, ?)')
+      .run(otherTmId, 'inverse cross-TM source', 'inverse cross-TM target', entryId);
 
     expect(db.clearTMEntries(tmId)).toBe(1);
 
@@ -369,9 +372,16 @@ describe('TMRepo FTS replacement', () => {
         }
       ).count,
     ).toBe(0);
+    expect(
+      (
+        raw.prepare('SELECT COUNT(*) AS count FROM tm_fts WHERE tmEntryId = ?').get(entryId) as {
+          count: number;
+        }
+      ).count,
+    ).toBe(0);
   });
 
-  it('clears large TMs in bounded write transactions', () => {
+  it('clears large TMs in one atomic transaction', () => {
     const tmId = db.createTM('Large Working TM', 'en', 'fr', 'working');
     const raw = (
       db as unknown as {
@@ -401,8 +411,64 @@ describe('TMRepo FTS replacement', () => {
     }) as typeof raw.transaction;
 
     expect(db.clearTMEntries(tmId)).toBe(501);
-    expect(transactionCount).toBe(2);
+    expect(transactionCount).toBe(1);
     expect(db.getTMStats(tmId).entryCount).toBe(0);
+  });
+
+  it('rolls back entry and FTS deletion when an atomic reset fails', () => {
+    const tmId = db.createTM('Rollback Working TM', 'en', 'fr', 'working');
+    const entryId = db.upsertTMEntryBySrcHash({
+      id: 'entry-rollback',
+      tmId,
+      projectId: 0,
+      srcLang: 'en',
+      tgtLang: 'fr',
+      srcHash: 'hash-rollback',
+      matchKey: 'rollback',
+      tagsSignature: '',
+      sourceTokens: [{ type: 'text', content: 'Rollback source' }],
+      targetTokens: [{ type: 'text', content: 'Rollback target' }],
+      createdAt: '2026-08-11T00:00:00.000Z',
+      updatedAt: '2026-08-11T00:00:00.000Z',
+      usageCount: 1,
+    });
+    db.insertTMFts(tmId, 'Rollback source', 'Rollback target', entryId);
+    const raw = (
+      db as unknown as {
+        db: {
+          prepare(sql: string): {
+            get(...args: unknown[]): unknown;
+            run(...args: unknown[]): unknown;
+          };
+        };
+      }
+    ).db;
+    raw
+      .prepare(
+        `
+        CREATE TEMP TRIGGER fail_working_tm_reset
+        BEFORE DELETE ON tm_entries
+        BEGIN
+          SELECT RAISE(ABORT, 'forced reset failure');
+        END
+      `,
+      )
+      .run();
+
+    try {
+      expect(() => db.clearTMEntries(tmId)).toThrow('forced reset failure');
+    } finally {
+      raw.prepare('DROP TRIGGER fail_working_tm_reset').run();
+    }
+
+    expect(db.getTMStats(tmId).entryCount).toBe(1);
+    expect(
+      (
+        raw.prepare('SELECT COUNT(*) AS count FROM tm_fts WHERE tmEntryId = ?').get(entryId) as {
+          count: number;
+        }
+      ).count,
+    ).toBe(1);
   });
 });
 

@@ -1,10 +1,11 @@
 import type { MountedTM, TMRecord } from '../../../../shared/ipc';
+import type { ProjectTMLoadState } from '../../hooks/projectDetail/useProjectDetailData';
 import { Button, Card, IconButton, Select } from '../ui';
 
 interface ProjectTMPaneProps {
   mountedTMs: MountedTM[];
   allMainTMs: TMRecord[];
-  loadState: { loading: boolean; loaded: boolean; error: string | null };
+  loadState: ProjectTMLoadState;
   onRetry: () => void;
   onMountTM: (tmId: string) => void;
   onUnmountTM: (tmId: string) => void;
@@ -24,23 +25,23 @@ export function ProjectTMPane({
   onResetWorkingTM,
   disabled = false,
 }: ProjectTMPaneProps) {
-  const { loading, loaded, error } = loadState;
   const workingTMs = mountedTMs.filter((tm) => tm.type === 'working');
   const mountedMainTMs = mountedTMs.filter((tm) => tm.type === 'main');
+  const initialError = loadState.status === 'error' && !loadState.hasLoaded;
 
-  if ((loading || error) && !loaded) {
+  if (loadState.status === 'loading' || initialError) {
     return (
       <div className="max-w-4xl mx-auto">
         <Card variant="surface" className="p-8 text-center">
           <p
-            className={error ? 'text-sm text-danger' : 'text-sm text-text-muted'}
-            role={error ? 'alert' : 'status'}
+            className={initialError ? 'text-sm text-danger' : 'text-sm text-text-muted'}
+            role={initialError ? 'alert' : 'status'}
           >
-            {error
-              ? `Could not load translation memories: ${error}`
+            {initialError
+              ? `Could not load translation memories: ${loadState.message}`
               : 'Loading translation memories…'}
           </p>
-          {error ? (
+          {initialError ? (
             <Button type="button" size="sm" variant="secondary" className="mt-4" onClick={onRetry}>
               Retry
             </Button>
@@ -52,10 +53,10 @@ export function ProjectTMPane({
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
-      {error ? (
+      {loadState.status === 'error' ? (
         <Card variant="surface" className="p-4 flex items-center justify-between gap-4">
           <p className="text-sm text-danger" role="alert">
-            Could not refresh translation memories: {error}
+            Could not refresh translation memories: {loadState.message}
           </p>
           <Button type="button" size="sm" variant="secondary" onClick={onRetry}>
             Retry

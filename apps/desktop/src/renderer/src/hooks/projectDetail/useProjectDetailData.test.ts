@@ -76,14 +76,12 @@ function createMutationHarness() {
 
 describe('useProjectDetailData behavior helpers', () => {
   it('loads only project and files for the initial files view', async () => {
-    const setters = createDataSetters();
     const loaders = createProjectDetailDataLoaders({
       projectId: 7,
       api: apiClientMock,
-      ...setters,
     });
 
-    await loaders.loadData();
+    await expect(loaders.loadData()).resolves.toEqual({ project, files: [] });
 
     expect(apiClientMock.getProject).toHaveBeenCalledWith(7);
     expect(apiClientMock.getProjectFiles).toHaveBeenCalledWith(7);
@@ -91,58 +89,23 @@ describe('useProjectDetailData behavior helpers', () => {
     expect(apiClientMock.listTMOptions).not.toHaveBeenCalled();
     expect(apiClientMock.getProjectMountedTBs).not.toHaveBeenCalled();
     expect(apiClientMock.listTBs).not.toHaveBeenCalled();
-    expect(setters.setProject).toHaveBeenCalledWith(project);
-    expect(setters.setFiles).toHaveBeenCalledWith([]);
   });
 
   it('loads TM and TB reference data on demand', async () => {
-    const setters = createDataSetters();
     const loaders = createProjectDetailDataLoaders({
       projectId: 7,
       api: apiClientMock,
-      ...setters,
     });
 
-    await loaders.loadTMData();
+    await expect(loaders.loadTMData()).resolves.toEqual({ mountedTMs: [], allMainTMs: [] });
 
     expect(apiClientMock.getProjectMountedTMs).toHaveBeenCalledWith(7);
     expect(apiClientMock.listTMOptions).toHaveBeenCalledWith('main');
-    expect(setters.setMountedTMs).toHaveBeenCalledWith([]);
-    expect(setters.setAllMainTMs).toHaveBeenCalledWith([]);
 
-    await loaders.loadTBData();
+    await expect(loaders.loadTBData()).resolves.toEqual({ mountedTBs: [], allTBs: [] });
 
     expect(apiClientMock.getProjectMountedTBs).toHaveBeenCalledWith(7);
     expect(apiClientMock.listTBs).toHaveBeenCalledWith();
-    expect(setters.setMountedTBs).toHaveBeenCalledWith([]);
-    expect(setters.setAllTBs).toHaveBeenCalledWith([]);
-  });
-
-  it('does not apply TM data after its project or request becomes stale', async () => {
-    const setters = createDataSetters();
-    let resolveMounted: ((value: []) => void) | undefined;
-    apiClientMock.getProjectMountedTMs.mockReturnValueOnce(
-      new Promise<[]>((resolve) => {
-        resolveMounted = resolve;
-      }),
-    );
-    let projectIsCurrent = true;
-    let requestIsCurrent = true;
-    const loaders = createProjectDetailDataLoaders({
-      projectId: 7,
-      api: apiClientMock,
-      ...setters,
-      isCurrent: () => projectIsCurrent,
-    });
-
-    const load = loaders.loadTMData(() => requestIsCurrent);
-    projectIsCurrent = false;
-    requestIsCurrent = false;
-    resolveMounted?.([]);
-    await load;
-
-    expect(setters.setMountedTMs).not.toHaveBeenCalled();
-    expect(setters.setAllMainTMs).not.toHaveBeenCalled();
   });
 
   it('mountTM runs inside mutation and refreshes data', async () => {
@@ -242,15 +205,3 @@ describe('useProjectDetailData behavior helpers', () => {
     expect(loadData).not.toHaveBeenCalled();
   });
 });
-
-function createDataSetters() {
-  return {
-    setProject: vi.fn(),
-    setFiles: vi.fn(),
-    setMountedTMs: vi.fn(),
-    setAllMainTMs: vi.fn(),
-    setMountedTBs: vi.fn(),
-    setAllTBs: vi.fn(),
-    setLoadingData: vi.fn(),
-  };
-}

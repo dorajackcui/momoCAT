@@ -2,11 +2,12 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { MountedTM } from '../../../../shared/ipc';
+import type { ProjectTMLoadState } from '../../hooks/projectDetail/useProjectDetailData';
 import { ProjectTMPane } from './ProjectTMPane';
 
 function renderWorkingTM(
   entryCount: number,
-  state: { loading?: boolean; error?: string | null } = {},
+  loadState: ProjectTMLoadState = { status: 'ready' },
 ): string {
   const workingTM = {
     id: 'working-1',
@@ -26,7 +27,7 @@ function renderWorkingTM(
     React.createElement(ProjectTMPane, {
       mountedTMs: [workingTM],
       allMainTMs: [],
-      loadState: { loading: state.loading ?? false, loaded: true, error: state.error ?? null },
+      loadState,
       onRetry: vi.fn(),
       onMountTM: vi.fn(),
       onUnmountTM: vi.fn(),
@@ -57,7 +58,7 @@ describe('ProjectTMPane', () => {
       React.createElement(ProjectTMPane, {
         mountedTMs: [],
         allMainTMs: [],
-        loadState: { loading: true, loaded: false, error: null },
+        loadState: { status: 'loading' },
         onRetry: vi.fn(),
         onMountTM: vi.fn(),
         onUnmountTM: vi.fn(),
@@ -75,7 +76,7 @@ describe('ProjectTMPane', () => {
       React.createElement(ProjectTMPane, {
         mountedTMs: [],
         allMainTMs: [],
-        loadState: { loading: false, loaded: false, error: 'Database busy' },
+        loadState: { status: 'error', message: 'Database busy', hasLoaded: false },
         onRetry: vi.fn(),
         onMountTM: vi.fn(),
         onUnmountTM: vi.fn(),
@@ -89,11 +90,15 @@ describe('ProjectTMPane', () => {
   });
 
   it('keeps valid TM content visible during refreshes and refresh failures', () => {
-    const refreshing = renderWorkingTM(3, { loading: true });
+    const refreshing = renderWorkingTM(3, { status: 'refreshing' });
     expect(refreshing).toContain('Demo Working TM');
     expect(refreshing).not.toContain('Loading translation memories');
 
-    const failedRefresh = renderWorkingTM(3, { error: 'Database busy' });
+    const failedRefresh = renderWorkingTM(3, {
+      status: 'error',
+      message: 'Database busy',
+      hasLoaded: true,
+    });
     expect(failedRefresh).toContain('Demo Working TM');
     expect(failedRefresh).toContain('Could not refresh translation memories: Database busy');
     expect(failedRefresh).toContain('Retry');
@@ -104,7 +109,7 @@ describe('ProjectTMPane', () => {
       React.createElement(ProjectTMPane, {
         mountedTMs: [],
         allMainTMs: [],
-        loadState: { loading: true, loaded: true, error: null },
+        loadState: { status: 'refreshing' },
         onRetry: vi.fn(),
         onMountTM: vi.fn(),
         onUnmountTM: vi.fn(),

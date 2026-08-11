@@ -158,19 +158,9 @@ export function registerTMHandlers({
     IPC_CHANNELS.tm.resetWorking,
     async (_event, ...args) => {
       const [projectId, tmId] = args as [number, string];
-      try {
-        return await projectService.resetWorkingTM(projectId, tmId);
-      } finally {
-        // Reset uses bounded transactions, so an error can follow a committed
-        // prefix. Always invalidate readers so they observe the actual state.
-        try {
-          notifyReferenceDataChanged({ projectId, kind: 'tm', reason: 'working-tm-reset' });
-        } catch (error) {
-          // A closed renderer can make webContents.send throw. Notification is
-          // best effort and must not replace the reset's real result or error.
-          console.error('[WorkingTMReset] Failed to notify reference readers:', error);
-        }
-      }
+      const result = await projectService.resetWorkingTM(projectId, tmId);
+      notifyReferenceDataChanged({ projectId, kind: 'tm', reason: 'working-tm-reset' });
+      return result;
     },
   );
 

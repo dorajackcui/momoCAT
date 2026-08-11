@@ -76,20 +76,7 @@ export async function resetWorkingTMAction({
   if (!confirmed) return null;
 
   return runMutation(async () => {
-    let removed: number;
-    try {
-      removed = await resetWorkingTM(projectId, tmId);
-    } catch (error) {
-      // Bounded reset transactions may have committed before a later failure.
-      // Refresh the count while preserving the original operation error.
-      try {
-        await reload();
-      } catch {
-        // loadTMData surfaces refresh failures in the pane; the reset error is
-        // still the most useful failure to report from this action.
-      }
-      throw error;
-    }
+    const removed = await resetWorkingTM(projectId, tmId);
     await reload();
     return removed;
   });
