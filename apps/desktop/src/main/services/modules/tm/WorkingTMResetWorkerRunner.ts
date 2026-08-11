@@ -23,7 +23,6 @@ interface WorkingTMResetWorkerRunnerOptions {
 
 interface WorkingTMResetInput {
   tmId: string;
-  onProgress?: (current: number, total: number) => void;
 }
 
 export interface WorkingTMResetRunner {

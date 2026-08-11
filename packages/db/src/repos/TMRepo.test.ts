@@ -274,7 +274,9 @@ describe('TMRepo FTS replacement', () => {
   it('clears TM entries and FTS rows while preserving the TM and project mount', () => {
     const projectId = db.createProject('Reset Project', 'en', 'fr');
     const tmId = db.createTM('Working TM', 'en', 'fr', 'working');
+    const otherTmId = db.createTM('Other TM', 'en', 'fr', 'main');
     db.mountTMToProject(projectId, tmId, 0, 'readwrite');
+    db.mountTMToProject(projectId, otherTmId, 10, 'read');
     const entryId = db.upsertTMEntryBySrcHash({
       id: 'entry-reset',
       tmId,
@@ -291,6 +293,42 @@ describe('TMRepo FTS replacement', () => {
       usageCount: 1,
     });
     db.insertTMFts(tmId, 'Keep the TM', 'Garder la mémoire', entryId);
+    const otherEntryId = db.upsertTMEntryBySrcHash({
+      id: 'entry-other',
+      tmId: otherTmId,
+      projectId,
+      srcLang: 'en',
+      tgtLang: 'fr',
+      srcHash: 'hash-other',
+      matchKey: 'other',
+      tagsSignature: '',
+      sourceTokens: [{ type: 'text', content: 'Other TM' }],
+      targetTokens: [{ type: 'text', content: 'Keep this index row' }],
+      createdAt: '2026-08-11T00:00:00.000Z',
+      updatedAt: '2026-08-11T00:00:00.000Z',
+      usageCount: 1,
+    });
+    db.insertTMFts(otherTmId, 'Other TM', 'Keep this index row', otherEntryId);
+
+    const raw = (
+      db as unknown as {
+        db: {
+          prepare(sql: string): {
+            get(...args: unknown[]): unknown;
+            run(...args: unknown[]): unknown;
+          };
+        };
+      }
+    ).db;
+    const otherFts = raw
+      .prepare('SELECT rowid AS ftsRowid FROM tm_fts WHERE tmEntryId = ?')
+      .get(otherEntryId) as { ftsRowid: number };
+    // A stale mapping must not delete another TM's FTS row. A pre-existing
+    // orphan for the reset TM must not survive after its entries are gone.
+    raw.prepare('UPDATE tm_entries SET ftsRowid = ? WHERE id = ?').run(otherFts.ftsRowid, entryId);
+    raw
+      .prepare('INSERT INTO tm_fts (tmId, srcText, tgtText, tmEntryId) VALUES (?, ?, ?, ?)')
+      .run(tmId, 'orphan source', 'orphan target', 'missing-entry');
 
     expect(db.clearTMEntries(tmId)).toBe(1);
 
@@ -300,6 +338,48 @@ describe('TMRepo FTS replacement', () => {
       expect.objectContaining({ id: tmId, permission: 'readwrite' }),
     );
     expect(db.searchConcordance(projectId, 'Garder', [tmId])).toHaveLength(0);
+    expect(db.searchConcordance(projectId, 'Keep this index row', [otherTmId])).toHaveLength(1);
+    expect(
+      (
+        raw.prepare('SELECT COUNT(*) AS count FROM tm_fts WHERE tmId = ?').get(tmId) as {
+          count: number;
+        }
+      ).count,
+    ).toBe(0);
+  });
+
+  it('clears large TMs in bounded write transactions', () => {
+    const tmId = db.createTM('Large Working TM', 'en', 'fr', 'working');
+    const raw = (
+      db as unknown as {
+        db: {
+          prepare(sql: string): { run(...args: unknown[]): unknown };
+          transaction<T>(fn: () => T): () => T;
+        };
+      }
+    ).db;
+    const insert = raw.prepare(`
+      INSERT INTO tm_entries (
+        id, tmId, srcHash, matchKey, tagsSignature,
+        sourceTokensJson, targetTokensJson, ftsRowid
+      ) VALUES (?, ?, ?, ?, '', '[]', '[]', 0)
+    `);
+    raw.transaction(() => {
+      for (let index = 0; index < 501; index += 1) {
+        insert.run(`entry-${index}`, tmId, `hash-${index}`, `key-${index}`);
+      }
+    })();
+
+    const originalTransaction = raw.transaction.bind(raw);
+    let transactionCount = 0;
+    raw.transaction = ((fn: () => unknown) => {
+      transactionCount += 1;
+      return originalTransaction(fn);
+    }) as typeof raw.transaction;
+
+    expect(db.clearTMEntries(tmId)).toBe(501);
+    expect(transactionCount).toBe(2);
+    expect(db.getTMStats(tmId).entryCount).toBe(0);
   });
 });
 

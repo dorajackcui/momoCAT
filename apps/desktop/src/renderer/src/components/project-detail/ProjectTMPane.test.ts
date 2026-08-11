@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { MountedTM } from '../../../../shared/ipc';
 import { ProjectTMPane } from './ProjectTMPane';
 
-function renderWorkingTM(entryCount: number): string {
+function renderWorkingTM(
+  entryCount: number,
+  state: { loading?: boolean; error?: string | null } = {},
+): string {
   const workingTM = {
     id: 'working-1',
     name: 'Demo Working TM',
@@ -23,8 +26,8 @@ function renderWorkingTM(entryCount: number): string {
     React.createElement(ProjectTMPane, {
       mountedTMs: [workingTM],
       allMainTMs: [],
-      loading: false,
-      error: null,
+      loading: state.loading ?? false,
+      error: state.error ?? null,
       onRetry: vi.fn(),
       onMountTM: vi.fn(),
       onUnmountTM: vi.fn(),
@@ -86,5 +89,16 @@ describe('ProjectTMPane', () => {
 
     expect(html).toContain('Could not load translation memories: Database busy');
     expect(html).toContain('Retry');
+  });
+
+  it('keeps valid TM content visible during refreshes and refresh failures', () => {
+    const refreshing = renderWorkingTM(3, { loading: true });
+    expect(refreshing).toContain('Demo Working TM');
+    expect(refreshing).not.toContain('Loading translation memories');
+
+    const failedRefresh = renderWorkingTM(3, { error: 'Database busy' });
+    expect(failedRefresh).toContain('Demo Working TM');
+    expect(failedRefresh).toContain('Could not refresh translation memories: Database busy');
+    expect(failedRefresh).toContain('Retry');
   });
 });

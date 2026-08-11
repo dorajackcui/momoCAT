@@ -28,11 +28,7 @@ export type FileOperationWorkerFactory<TWorkerInput, TMessage> = (
   options: { workerData: TWorkerInput },
 ) => WorkerLike<TMessage>;
 
-interface WorkerBackedFileOperationRunnerOptions<
-  TInput extends ProgressInput,
-  TWorkerInput,
-  TResult,
-> {
+interface WorkerBackedFileOperationRunnerOptions<TInput extends object, TWorkerInput, TResult> {
   dbPath: string;
   operationLabel: string;
   workerDescription: string;
@@ -46,7 +42,7 @@ interface WorkerBackedFileOperationRunnerOptions<
   cancellationMessage?: unknown;
 }
 
-export class WorkerBackedFileOperationRunner<TInput extends ProgressInput, TWorkerInput, TResult> {
+export class WorkerBackedFileOperationRunner<TInput extends object, TWorkerInput, TResult> {
   private workerPath: string | null = null;
 
   constructor(
@@ -70,7 +66,7 @@ export class WorkerBackedFileOperationRunner<TInput extends ProgressInput, TWork
       );
     }
 
-    const { onProgress, cancellationToken, ...jobInput } = input;
+    const { onProgress, cancellationToken, ...jobInput } = input as TInput & ProgressInput;
     const workerFactory = this.options.workerFactory ?? this.createWorker;
 
     return new Promise<TResult>((resolve, reject) => {

@@ -153,7 +153,7 @@ Runtime TM never writes Working TM, Main TM, or the persistent project database 
 
 Every translation project has a mounted read/write Working TM. Confirming a translation segment normally updates that TM inside the same transaction as the segment/file state. Review and custom project types do not perform this commit.
 
-The Project Translation Memory tab keeps Working TM management intentionally narrow: users can export its source/target rows to XLSX or reset all entries after confirmation. Export reads one stable database snapshot and serializes the workbook in a background worker, writing the stored source/target content and original tag text into two visible columns. Reset also runs in a background worker, preserves the TM resource, project mount, project files, and translated segments, then invalidates TM reference caches.
+The Project Translation Memory tab keeps Working TM management intentionally narrow: users can export its source/target rows to XLSX or reset all entries after confirmation. Export reads one stable database snapshot and serializes the workbook in a background worker, writing the stored source/target content and original tag text into two visible columns. Reset also runs in a background worker, removes entries and FTS rows in bounded transactions, preserves the TM resource, project mount, project files, and translated segments, then publishes a project-wide `working-tm-reset` reference invalidation.
 
 Same-source repeats are scoped to the current file:
 

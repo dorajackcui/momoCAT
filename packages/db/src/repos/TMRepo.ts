@@ -17,6 +17,7 @@ import type {
   TMSyncStagedRow,
   TMType,
 } from '../types';
+import { clearTMEntriesInBatches } from './clearTMEntries';
 
 type TMEntryDbRow = Omit<TMEntryRow, 'sourceTokens' | 'targetTokens'> & {
   sourceTokensJson: string;
@@ -1544,25 +1545,9 @@ export class TMRepo {
   }
 
   public clearTMEntries(tmId: string): number {
-    const clearRows = () => {
-      this.db
-        .prepare(`
-          DELETE FROM tm_fts
-          WHERE rowid IN (
-            SELECT ftsRowid
-            FROM tm_entries
-            WHERE tmId = ? AND ftsRowid IS NOT NULL
-          )
-        `)
-        .run(tmId);
-      return this.db.prepare('DELETE FROM tm_entries WHERE tmId = ?').run(tmId).changes;
-    };
-
-    if (this.db.inTransaction) {
-      return clearRows();
-    }
-
-    return this.db.transaction(clearRows)();
+    return clearTMEntriesInBatches(this.db, tmId, (entryIds) =>
+      this.deleteTMEntriesWithFts(entryIds),
+    );
   }
 
   public mountTMToProject(projectId: number, tmId: string, priority: number = 10, permission: string = 'read') {

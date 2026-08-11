@@ -44,6 +44,13 @@ describe('subscribeToWorkingTMReferenceDataChanges', () => {
     expect(
       shouldInvalidateReferenceLookupWorkerCaches({
         projectId: 7,
+        kind: 'tm',
+        reason: 'working-tm-reset',
+      }),
+    ).toBe(true);
+    expect(
+      shouldInvalidateReferenceLookupWorkerCaches({
+        projectId: 7,
         kind: 'tb',
         reason: 'tb-synced',
       }),

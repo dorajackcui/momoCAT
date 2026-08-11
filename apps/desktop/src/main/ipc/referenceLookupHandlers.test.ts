@@ -186,7 +186,7 @@ describe('reference lookup IPC handlers', () => {
     {
       channel: IPC_CHANNELS.tm.resetWorking,
       args: [7, 'tm-1'],
-      expected: { projectId: 7, kind: 'tm', reason: 'working-tm-updated' },
+      expected: { projectId: 7, kind: 'tm', reason: 'working-tm-reset' },
     },
     {
       channel: IPC_CHANNELS.tm.commitFile,

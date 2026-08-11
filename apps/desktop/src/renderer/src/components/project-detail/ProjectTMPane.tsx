@@ -28,8 +28,9 @@ export function ProjectTMPane({
 }: ProjectTMPaneProps) {
   const workingTMs = mountedTMs.filter((tm) => tm.type === 'working');
   const mountedMainTMs = mountedTMs.filter((tm) => tm.type === 'main');
+  const hasVisibleData = mountedTMs.length > 0 || allMainTMs.length > 0;
 
-  if (loading || error) {
+  if ((loading || error) && !hasVisibleData) {
     return (
       <div className="max-w-4xl mx-auto">
         <Card variant="surface" className="p-8 text-center">
@@ -53,6 +54,17 @@ export function ProjectTMPane({
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
+      {error ? (
+        <Card variant="surface" className="p-4 flex items-center justify-between gap-4">
+          <p className="text-sm text-danger" role="alert">
+            Could not refresh translation memories: {error}
+          </p>
+          <Button type="button" size="sm" variant="secondary" onClick={onRetry}>
+            Retry
+          </Button>
+        </Card>
+      ) : null}
+
       <div>
         <h3 className="text-sm font-bold text-text-faint uppercase tracking-wider mb-4">
           Working Translation Memory

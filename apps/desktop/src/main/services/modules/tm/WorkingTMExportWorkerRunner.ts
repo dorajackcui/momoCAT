@@ -16,7 +16,6 @@ export type WorkingTMExportWorkerMessage = FileOperationWorkerMessage<number>;
 interface WorkingTMExportInput {
   tmId: string;
   outputPath: string;
-  onProgress?: (current: number, total: number) => void;
 }
 
 interface WorkingTMExportWorkerRunnerOptions {

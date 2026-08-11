@@ -387,6 +387,7 @@ export interface ReferenceDataChangedEvent {
     | 'tm-imported'
     | 'tm-committed'
     | 'working-tm-updated'
+    | 'working-tm-reset'
     | 'tm-batch-matched'
     | 'tm-synced'
     | 'tb-created'

@@ -159,7 +159,7 @@ export function registerTMHandlers({
     async (_event, ...args) => {
       const [projectId, tmId] = args as [number, string];
       const result = await projectService.resetWorkingTM(projectId, tmId);
-      notifyReferenceDataChanged({ projectId, kind: 'tm', reason: 'working-tm-updated' });
+      notifyReferenceDataChanged({ projectId, kind: 'tm', reason: 'working-tm-reset' });
       return result;
     },
   );
