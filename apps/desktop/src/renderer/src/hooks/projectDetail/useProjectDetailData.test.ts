@@ -8,7 +8,7 @@ const { apiClientMock } = vi.hoisted(() => ({
     getProject: vi.fn(),
     getProjectFiles: vi.fn(),
     getProjectMountedTMs: vi.fn(),
-    listTMs: vi.fn(),
+    listTMOptions: vi.fn(),
     getProjectMountedTBs: vi.fn(),
     listTBs: vi.fn(),
     mountTMToProject: vi.fn(),
@@ -44,7 +44,7 @@ beforeEach(() => {
   apiClientMock.getProject.mockResolvedValue(project);
   apiClientMock.getProjectFiles.mockResolvedValue([]);
   apiClientMock.getProjectMountedTMs.mockResolvedValue([]);
-  apiClientMock.listTMs.mockResolvedValue([]);
+  apiClientMock.listTMOptions.mockResolvedValue([]);
   apiClientMock.getProjectMountedTBs.mockResolvedValue([]);
   apiClientMock.listTBs.mockResolvedValue([]);
   apiClientMock.mountTMToProject.mockResolvedValue(undefined);
@@ -88,7 +88,7 @@ describe('useProjectDetailData behavior helpers', () => {
     expect(apiClientMock.getProject).toHaveBeenCalledWith(7);
     expect(apiClientMock.getProjectFiles).toHaveBeenCalledWith(7);
     expect(apiClientMock.getProjectMountedTMs).not.toHaveBeenCalled();
-    expect(apiClientMock.listTMs).not.toHaveBeenCalled();
+    expect(apiClientMock.listTMOptions).not.toHaveBeenCalled();
     expect(apiClientMock.getProjectMountedTBs).not.toHaveBeenCalled();
     expect(apiClientMock.listTBs).not.toHaveBeenCalled();
     expect(setters.setProject).toHaveBeenCalledWith(project);
@@ -106,7 +106,7 @@ describe('useProjectDetailData behavior helpers', () => {
     await loaders.loadTMData();
 
     expect(apiClientMock.getProjectMountedTMs).toHaveBeenCalledWith(7);
-    expect(apiClientMock.listTMs).toHaveBeenCalledWith('main');
+    expect(apiClientMock.listTMOptions).toHaveBeenCalledWith('main');
     expect(setters.setMountedTMs).toHaveBeenCalledWith([]);
     expect(setters.setAllMainTMs).toHaveBeenCalledWith([]);
 

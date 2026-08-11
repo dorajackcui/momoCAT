@@ -59,6 +59,15 @@ export function registerTMHandlers({
 
   registerHandle(
     { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.tm.listOptions,
+    (_event, ...args) => {
+      const [type] = args as [TMType | undefined];
+      return projectService.listTMOptions(type);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.preview,
     (_event, ...args) => {
       const [tmId] = args as [string];
@@ -131,6 +140,26 @@ export function registerTMHandlers({
       const [projectId, tmId] = args as [number, string];
       const result = await projectService.unmountTMFromProject(projectId, tmId);
       notifyReferenceDataChanged({ projectId, kind: 'tm', reason: 'tm-unmounted' });
+      return result;
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.tm.exportWorking,
+    (_event, ...args) => {
+      const [projectId, tmId, outputPath] = args as [number, string, string];
+      return projectService.exportWorkingTM(projectId, tmId, outputPath);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.tm.resetWorking,
+    async (_event, ...args) => {
+      const [projectId, tmId] = args as [number, string];
+      const result = await projectService.resetWorkingTM(projectId, tmId);
+      notifyReferenceDataChanged({ projectId, kind: 'tm', reason: 'working-tm-updated' });
       return result;
     },
   );

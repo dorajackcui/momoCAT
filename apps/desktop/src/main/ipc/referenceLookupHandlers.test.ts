@@ -35,11 +35,14 @@ function createDeps() {
       findMatches: vi.fn(),
       findTermMatches: vi.fn(),
       searchConcordance: vi.fn(),
+      listTMOptions: vi.fn().mockResolvedValue([{ id: 'main-1' }]),
       createTM: vi.fn().mockResolvedValue('tm-1'),
       renameTM: vi.fn().mockResolvedValue(undefined),
       deleteTM: vi.fn().mockResolvedValue(undefined),
       mountTMToProject: vi.fn().mockResolvedValue(undefined),
       unmountTMFromProject: vi.fn().mockResolvedValue(undefined),
+      exportWorkingTM: vi.fn().mockResolvedValue(3),
+      resetWorkingTM: vi.fn().mockResolvedValue(3),
       commitToMainTM: vi.fn().mockResolvedValue(undefined),
       batchMatchFileWithTM: vi.fn().mockResolvedValue(undefined),
       createTB: vi.fn().mockResolvedValue('tb-1'),
@@ -142,6 +145,18 @@ describe('reference lookup IPC handlers', () => {
     expect(deps.projectService.searchConcordance).not.toHaveBeenCalled();
   });
 
+  it('serves lightweight TM options without loading manager statistics', async () => {
+    const { handlers, ipcMain } = createIpcMainStub();
+    const deps = createDeps();
+
+    registerTMHandlers({ ipcMain, ...deps } as never);
+
+    await expect(handlers.get(IPC_CHANNELS.tm.listOptions)?.({}, 'main')).resolves.toEqual([
+      { id: 'main-1' },
+    ]);
+    expect(deps.projectService.listTMOptions).toHaveBeenCalledWith('main');
+  });
+
   it.each([
     {
       channel: IPC_CHANNELS.tm.create,
@@ -169,6 +184,11 @@ describe('reference lookup IPC handlers', () => {
       expected: { projectId: 7, kind: 'tm', reason: 'tm-unmounted' },
     },
     {
+      channel: IPC_CHANNELS.tm.resetWorking,
+      args: [7, 'tm-1'],
+      expected: { projectId: 7, kind: 'tm', reason: 'working-tm-updated' },
+    },
+    {
       channel: IPC_CHANNELS.tm.commitFile,
       args: ['tm-1', 11, undefined],
       expected: { projectId: null, kind: 'tm', reason: 'tm-committed' },
@@ -190,6 +210,19 @@ describe('reference lookup IPC handlers', () => {
       expect(deps.notifyReferenceDataChanged).toHaveBeenCalledWith(expected);
     },
   );
+
+  it('exports a Working TM without invalidating reference caches', async () => {
+    const { handlers, ipcMain } = createIpcMainStub();
+    const deps = createDeps();
+
+    registerTMHandlers({ ipcMain, ...deps } as never);
+
+    await expect(
+      handlers.get(IPC_CHANNELS.tm.exportWorking)?.({}, 7, 'tm-1', 'working.xlsx'),
+    ).resolves.toBe(3);
+    expect(deps.projectService.exportWorkingTM).toHaveBeenCalledWith(7, 'tm-1', 'working.xlsx');
+    expect(deps.notifyReferenceDataChanged).not.toHaveBeenCalled();
+  });
 
   it.each([
     {

@@ -324,15 +324,15 @@ export class ProjectService {
   public async searchConcordance(projectId: number, query: string) {
     return this.tmModule.searchConcordance(projectId, query);
   }
-
   public async listTMs(type?: 'working' | 'main') {
     return this.tmModule.listTMs(type);
   }
-
+  public async listTMOptions(type?: 'working' | 'main') {
+    return this.tmModule.listTMOptions(type);
+  }
   public async getTMPreview(tmId: string) {
     return this.tmModule.getTMPreview(tmId);
   }
-
   public async createTM(
     name: string,
     srcLang: string,
@@ -365,6 +365,13 @@ export class ProjectService {
 
   public async unmountTMFromProject(projectId: number, tmId: string) {
     return this.tmModule.unmountTMFromProject(projectId, tmId);
+  }
+
+  public async exportWorkingTM(projectId: number, tmId: string, outputPath: string) {
+    return this.tmModule.exportWorkingTM(projectId, tmId, outputPath);
+  }
+  public async resetWorkingTM(projectId: number, tmId: string) {
+    return this.tmModule.resetWorkingTM(projectId, tmId);
   }
 
   public async listTBs() {

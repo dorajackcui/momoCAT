@@ -7,6 +7,7 @@ type TMApiKeys =
   | 'prefetchMatches'
   | 'searchConcordance'
   | 'listTMs'
+  | 'listTMOptions'
   | 'getTMPreview'
   | 'createTM'
   | 'renameTM'
@@ -14,6 +15,8 @@ type TMApiKeys =
   | 'getProjectMountedTMs'
   | 'mountTMToProject'
   | 'unmountTMFromProject'
+  | 'exportWorkingTM'
+  | 'resetWorkingTM'
   | 'commitToMainTM'
   | 'matchFileWithTM'
   | 'getTMImportPreview'
@@ -38,6 +41,10 @@ export function createTMApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<TMApi
       >,
     listTMs: (type) =>
       ipcRenderer.invoke(IPC_CHANNELS.tm.list, type) as ReturnType<DesktopApi['listTMs']>,
+    listTMOptions: (type) =>
+      ipcRenderer.invoke(IPC_CHANNELS.tm.listOptions, type) as ReturnType<
+        DesktopApi['listTMOptions']
+      >,
     getTMPreview: (tmId) =>
       ipcRenderer.invoke(IPC_CHANNELS.tm.preview, tmId) as ReturnType<DesktopApi['getTMPreview']>,
     createTM: (name, srcLang, tgtLang, type) =>
@@ -63,6 +70,14 @@ export function createTMApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<TMApi
     unmountTMFromProject: (projectId, tmId) =>
       ipcRenderer.invoke(IPC_CHANNELS.tm.unmount, projectId, tmId) as ReturnType<
         DesktopApi['unmountTMFromProject']
+      >,
+    exportWorkingTM: (projectId, tmId, outputPath) =>
+      ipcRenderer.invoke(IPC_CHANNELS.tm.exportWorking, projectId, tmId, outputPath) as ReturnType<
+        DesktopApi['exportWorkingTM']
+      >,
+    resetWorkingTM: (projectId, tmId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.tm.resetWorking, projectId, tmId) as ReturnType<
+        DesktopApi['resetWorkingTM']
       >,
     commitToMainTM: (tmId, fileId, options) =>
       ipcRenderer.invoke(IPC_CHANNELS.tm.commitFile, tmId, fileId, options) as ReturnType<

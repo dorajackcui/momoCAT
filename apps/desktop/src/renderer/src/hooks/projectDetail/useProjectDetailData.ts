@@ -8,7 +8,7 @@ import type {
   TBWithStats,
   TMBatchMatchResult,
   TMCommitOptions,
-  TMWithStats,
+  TMRecord,
 } from '../../../../shared/ipc';
 import { apiClient } from '../../services/apiClient';
 
@@ -18,7 +18,9 @@ export interface UseProjectDetailDataResult {
   files: ProjectFileRecord[];
   setFiles: React.Dispatch<React.SetStateAction<ProjectFileRecord[]>>;
   mountedTMs: MountedTM[];
-  allMainTMs: TMWithStats[];
+  allMainTMs: TMRecord[];
+  tmLoading: boolean;
+  tmError: string | null;
   mountedTBs: MountedTB[];
   allTBs: TBWithStats[];
   loading: boolean;
@@ -50,7 +52,7 @@ type ProjectDetailDataApi = Pick<
   | 'getProject'
   | 'getProjectFiles'
   | 'getProjectMountedTMs'
-  | 'listTMs'
+  | 'listTMOptions'
   | 'getProjectMountedTBs'
   | 'listTBs'
 >;
@@ -61,7 +63,7 @@ interface ProjectDetailDataLoaderDeps {
   setProject: (project: Project | null) => void;
   setFiles: (files: ProjectFileRecord[]) => void;
   setMountedTMs: (mountedTMs: MountedTM[]) => void;
-  setAllMainTMs: (allMainTMs: TMWithStats[]) => void;
+  setAllMainTMs: (allMainTMs: TMRecord[]) => void;
   setMountedTBs: (mountedTBs: MountedTB[]) => void;
   setAllTBs: (allTBs: TBWithStats[]) => void;
   setLoadingData: (loading: boolean) => void;
@@ -103,7 +105,7 @@ export function createProjectDetailDataLoaders({
     loadTMData: async () => {
       const [mounted, allMain] = await Promise.all([
         api.getProjectMountedTMs(projectId),
-        api.listTMs('main'),
+        api.listTMOptions('main'),
       ]);
 
       setMountedTMs(mounted);
@@ -187,11 +189,13 @@ export function useProjectDetailData(projectId: number): UseProjectDetailDataRes
   const [project, setProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<ProjectFileRecord[]>([]);
   const [mountedTMs, setMountedTMs] = useState<MountedTM[]>([]);
-  const [allMainTMs, setAllMainTMs] = useState<TMWithStats[]>([]);
+  const [allMainTMs, setAllMainTMs] = useState<TMRecord[]>([]);
   const [mountedTBs, setMountedTBs] = useState<MountedTB[]>([]);
   const [allTBs, setAllTBs] = useState<TBWithStats[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [mutating, setMutating] = useState(false);
+  const [tmLoading, setTmLoading] = useState(true);
+  const [tmError, setTmError] = useState<string | null>(null);
 
   const loading = loadingData || mutating;
 
@@ -230,10 +234,15 @@ export function useProjectDetailData(projectId: number): UseProjectDetailDataRes
   }, [dataLoaders]);
 
   const loadTMData = useCallback(async () => {
+    setTmLoading(true);
+    setTmError(null);
     try {
       await dataLoaders.loadTMData();
     } catch (error) {
       console.error('Failed to load project TM details:', error);
+      setTmError(error instanceof Error ? error.message : 'Failed to load translation memories.');
+    } finally {
+      setTmLoading(false);
     }
   }, [dataLoaders]);
 
@@ -250,6 +259,8 @@ export function useProjectDetailData(projectId: number): UseProjectDetailDataRes
     setFiles([]);
     setMountedTMs([]);
     setAllMainTMs([]);
+    setTmLoading(true);
+    setTmError(null);
     setMountedTBs([]);
     setAllTBs([]);
   }, [projectId]);
@@ -287,6 +298,8 @@ export function useProjectDetailData(projectId: number): UseProjectDetailDataRes
     setFiles,
     mountedTMs,
     allMainTMs,
+    tmLoading,
+    tmError,
     mountedTBs,
     allTBs,
     loading,

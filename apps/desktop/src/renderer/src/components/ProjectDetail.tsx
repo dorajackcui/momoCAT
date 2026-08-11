@@ -21,6 +21,7 @@ import { runFileQaWithRefresh } from './project-detail/runFileQaWithRefresh';
 import { buildFileQaFeedback } from './project-detail/fileQaFeedback';
 import { useProjectReferenceActions } from './project-detail/useProjectReferenceActions';
 import { hasMatchingLanguagePair } from './languageOptions';
+import { createProjectWorkingTMActions } from './project-detail/workingTMActions';
 
 interface ProjectDetailProps {
   projectId: number;
@@ -56,6 +57,8 @@ export function ProjectDetail({
     setFiles,
     mountedTMs,
     allMainTMs,
+    tmLoading,
+    tmError,
     mountedTBs,
     allTBs,
     loading,
@@ -87,6 +90,16 @@ export function ProjectDetail({
     runMutation,
     fileJobTracker: aiFileJobTracker,
   });
+  const workingTMActions = project
+    ? createProjectWorkingTMActions({
+        projectId,
+        projectName: project.name,
+        api: apiClient,
+        feedback: feedbackService,
+        reload: loadTMData,
+        runMutation,
+      })
+    : null;
 
   useEffect(() => {
     if (activeTab === 'tm') {
@@ -562,8 +575,14 @@ export function ProjectDetail({
           <ProjectTMPane
             mountedTMs={mountedTMs}
             allMainTMs={allMainTMs.filter((tm) => hasMatchingLanguagePair(tm, project))}
+            loading={tmLoading}
+            error={tmError}
+            onRetry={() => void loadTMData()}
             onMountTM={(tmId) => void handleMountTM(tmId)}
             onUnmountTM={(tmId) => void handleUnmountTM(tmId)}
+            onExportWorkingTM={(tm) => void workingTMActions?.export(tm)}
+            onResetWorkingTM={(tm) => void workingTMActions?.reset(tm)}
+            disabled={loading}
           />
         ) : (
           <ProjectTBPane

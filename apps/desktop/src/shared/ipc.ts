@@ -479,6 +479,7 @@ export interface DesktopApi extends AssetRenameApi, AISettingsApi {
   prefetchTermMatches: (projectId: number, segment: Segment) => Promise<TBMatch[]>;
 
   listTMs: (type?: TMType) => Promise<TMWithStats[]>;
+  listTMOptions: (type?: TMType) => Promise<TMRecord[]>;
   getTMPreview: (tmId: string) => Promise<TMAssetPreview>;
   createTM: (name: string, srcLang: string, tgtLang: string, type?: TMType) => Promise<string>;
   deleteTM: (tmId: string) => Promise<void>;
@@ -490,6 +491,8 @@ export interface DesktopApi extends AssetRenameApi, AISettingsApi {
     permission?: string,
   ) => Promise<void>;
   unmountTMFromProject: (projectId: number, tmId: string) => Promise<void>;
+  exportWorkingTM: (projectId: number, tmId: string, outputPath: string) => Promise<number>;
+  resetWorkingTM: (projectId: number, tmId: string) => Promise<number>;
   commitToMainTM: (tmId: string, fileId: number, options?: TMCommitOptions) => Promise<number>;
   matchFileWithTM: (fileId: number, tmId: string) => Promise<TMBatchMatchResult>;
   getTMImportPreview: (filePath: string) => Promise<SpreadsheetPreviewData>;

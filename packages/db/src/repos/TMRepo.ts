@@ -1543,6 +1543,28 @@ export class TMRepo {
     this.db.transaction(deleteRows)();
   }
 
+  public clearTMEntries(tmId: string): number {
+    const clearRows = () => {
+      this.db
+        .prepare(`
+          DELETE FROM tm_fts
+          WHERE rowid IN (
+            SELECT ftsRowid
+            FROM tm_entries
+            WHERE tmId = ? AND ftsRowid IS NOT NULL
+          )
+        `)
+        .run(tmId);
+      return this.db.prepare('DELETE FROM tm_entries WHERE tmId = ?').run(tmId).changes;
+    };
+
+    if (this.db.inTransaction) {
+      return clearRows();
+    }
+
+    return this.db.transaction(clearRows)();
+  }
+
   public mountTMToProject(projectId: number, tmId: string, priority: number = 10, permission: string = 'read') {
     this.db
       .prepare(`

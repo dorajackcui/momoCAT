@@ -18,8 +18,11 @@ describe('createDesktopApi smoke', () => {
 
     await api.listProjects();
     await api.listTMs();
+    await api.listTMOptions('main');
     await api.getTMPreview('tm-1');
     await api.renameTM('tm-1', 'Renamed TM');
+    await api.exportWorkingTM(7, 'working-1', 'working-tm.xlsx');
+    await api.resetWorkingTM(7, 'working-1');
     await api.listTBs();
     await api.getTBPreview('tb-1');
     await api.renameTB('tb-1', 'Renamed TB');
@@ -72,8 +75,16 @@ describe('createDesktopApi smoke', () => {
 
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.project.list);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tm.list, undefined);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tm.listOptions, 'main');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tm.preview, 'tm-1');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tm.rename, 'tm-1', 'Renamed TM');
+    expect(invoke).toHaveBeenCalledWith(
+      IPC_CHANNELS.tm.exportWorking,
+      7,
+      'working-1',
+      'working-tm.xlsx',
+    );
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tm.resetWorking, 7, 'working-1');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tb.list);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tb.preview, 'tb-1');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.tb.rename, 'tb-1', 'Renamed TB');

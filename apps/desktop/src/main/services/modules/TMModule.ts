@@ -22,6 +22,8 @@ import { TMImportService } from './tm/TMImportService';
 import { TMBatchOpsService } from './tm/TMBatchOpsService';
 import { TMQueryService } from './tm/TMQueryService';
 import { TMSyncService } from './tm/TMSyncService';
+import { WorkingTMService } from './tm/WorkingTMService';
+import { WorkingTMResetWorkerRunner } from './tm/WorkingTMResetWorkerRunner';
 import type { ImportProgress, ImportProgressCallback } from './tm/types';
 
 export type { ImportProgress };
@@ -31,6 +33,7 @@ export class TMModule {
   private readonly importService: TMImportService;
   private readonly batchOpsService: TMBatchOpsService;
   private readonly syncService: TMSyncService;
+  private readonly workingTMService: WorkingTMService;
 
   constructor(
     projectRepo: ProjectRepository,
@@ -47,6 +50,10 @@ export class TMModule {
     this.importService = new TMImportService(tmRepo, tx, dbPath, emitProgress);
     this.batchOpsService = new TMBatchOpsService(projectRepo, segmentRepo, tmRepo, segmentService);
     this.syncService = new TMSyncService(tmRepo, settingsRepo, dbPath, emitProgress);
+    this.workingTMService = new WorkingTMService(
+      tmRepo,
+      new WorkingTMResetWorkerRunner({ dbPath }),
+    );
   }
 
   public async findMatches(projectId: number, segment: Segment) {
@@ -63,6 +70,10 @@ export class TMModule {
       ...tm,
       syncConfig: this.syncService.getTMSyncConfig(tm.id),
     }));
+  }
+
+  public async listTMOptions(type?: 'working' | 'main') {
+    return this.queryService.listTMOptions(type);
   }
 
   public async getTMPreview(tmId: string) {
@@ -106,6 +117,14 @@ export class TMModule {
 
   public async unmountTMFromProject(projectId: number, tmId: string) {
     return this.queryService.unmountTMFromProject(projectId, tmId);
+  }
+
+  public async exportWorkingTM(projectId: number, tmId: string, outputPath: string) {
+    return this.workingTMService.exportToExcel(projectId, tmId, outputPath);
+  }
+
+  public async resetWorkingTM(projectId: number, tmId: string) {
+    return this.workingTMService.reset(projectId, tmId);
   }
 
   public async getTMImportPreview(filePath: string): Promise<SpreadsheetPreviewData> {

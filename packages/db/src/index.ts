@@ -479,11 +479,9 @@ export class CATDatabase {
   public listTMEntries(tmId: string, limit: number = 500, offset: number = 0): TMEntryRow[] {
     return this.tmRepo.listTMEntries(tmId, limit, offset);
   }
-
   public createTM(name: string, srcLang: string, tgtLang: string, type: TMType): string {
     return this.tmRepo.createTM(name, srcLang, tgtLang, type);
   }
-
   public renameTM(id: string, name: string) {
     this.tmRepo.renameTM(id, name);
   }
@@ -491,7 +489,9 @@ export class CATDatabase {
   public deleteTM(id: string) {
     this.tmRepo.deleteTM(id);
   }
-
+  public clearTMEntries(tmId: string): number {
+    return this.tmRepo.clearTMEntries(tmId);
+  }
   public mountTMToProject(
     projectId: number,
     tmId: string,

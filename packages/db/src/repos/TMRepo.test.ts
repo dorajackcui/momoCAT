@@ -270,6 +270,37 @@ describe('TMRepo FTS replacement', () => {
       .get(tmId) as { count: number };
     expect(row.count).toBe(0);
   });
+
+  it('clears TM entries and FTS rows while preserving the TM and project mount', () => {
+    const projectId = db.createProject('Reset Project', 'en', 'fr');
+    const tmId = db.createTM('Working TM', 'en', 'fr', 'working');
+    db.mountTMToProject(projectId, tmId, 0, 'readwrite');
+    const entryId = db.upsertTMEntryBySrcHash({
+      id: 'entry-reset',
+      tmId,
+      projectId,
+      srcLang: 'en',
+      tgtLang: 'fr',
+      srcHash: 'hash-reset',
+      matchKey: 'reset',
+      tagsSignature: '',
+      sourceTokens: [{ type: 'text', content: 'Keep the TM' }],
+      targetTokens: [{ type: 'text', content: 'Garder la mémoire' }],
+      createdAt: '2026-08-11T00:00:00.000Z',
+      updatedAt: '2026-08-11T00:00:00.000Z',
+      usageCount: 1,
+    });
+    db.insertTMFts(tmId, 'Keep the TM', 'Garder la mémoire', entryId);
+
+    expect(db.clearTMEntries(tmId)).toBe(1);
+
+    expect(db.getTMStats(tmId).entryCount).toBe(0);
+    expect(db.getTM(tmId)?.type).toBe('working');
+    expect(db.getProjectMountedTMs(projectId)).toContainEqual(
+      expect.objectContaining({ id: tmId, permission: 'readwrite' }),
+    );
+    expect(db.searchConcordance(projectId, 'Garder', [tmId])).toHaveLength(0);
+  });
 });
 
 describe('TMRepo optimizeTMFts', () => {

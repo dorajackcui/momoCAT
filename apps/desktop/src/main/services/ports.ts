@@ -157,6 +157,7 @@ export interface TMRepository {
   createTM(name: string, srcLang: string, tgtLang: string, type: TMType): string;
   renameTM(id: string, name: string): void;
   deleteTM(id: string): void;
+  clearTMEntries(tmId: string): number;
   getTM(tmId: string): TMRecord | undefined;
   getTMStats(tmId: string): { entryCount: number; maxEntryUpdatedAt?: string | null };
   getProjectMountedTMs(projectId: number): MountedTMRecord[];

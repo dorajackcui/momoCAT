@@ -1,21 +1,55 @@
-import type { MountedTM, TMWithStats } from '../../../../shared/ipc';
-import { Card, IconButton, Select } from '../ui';
+import type { MountedTM, TMRecord } from '../../../../shared/ipc';
+import { Button, Card, IconButton, Select } from '../ui';
 
 interface ProjectTMPaneProps {
   mountedTMs: MountedTM[];
-  allMainTMs: TMWithStats[];
+  allMainTMs: TMRecord[];
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
   onMountTM: (tmId: string) => void;
   onUnmountTM: (tmId: string) => void;
+  onExportWorkingTM: (tm: MountedTM) => void;
+  onResetWorkingTM: (tm: MountedTM) => void;
+  disabled?: boolean;
 }
 
 export function ProjectTMPane({
   mountedTMs,
   allMainTMs,
+  loading,
+  error,
+  onRetry,
   onMountTM,
   onUnmountTM,
+  onExportWorkingTM,
+  onResetWorkingTM,
+  disabled = false,
 }: ProjectTMPaneProps) {
   const workingTMs = mountedTMs.filter((tm) => tm.type === 'working');
   const mountedMainTMs = mountedTMs.filter((tm) => tm.type === 'main');
+
+  if (loading || error) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <Card variant="surface" className="p-8 text-center">
+          <p
+            className={error ? 'text-sm text-danger' : 'text-sm text-text-muted'}
+            role={error ? 'alert' : 'status'}
+          >
+            {error
+              ? `Could not load translation memories: ${error}`
+              : 'Loading translation memories…'}
+          </p>
+          {error ? (
+            <Button type="button" size="sm" variant="secondary" className="mt-4" onClick={onRetry}>
+              Retry
+            </Button>
+          ) : null}
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -23,23 +57,52 @@ export function ProjectTMPane({
         <h3 className="text-sm font-bold text-text-faint uppercase tracking-wider mb-4">
           Working Translation Memory
         </h3>
-        <Card variant="subtle" className="p-6 border-brand/20 bg-brand-soft/50">
-          {workingTMs.map((tm) => (
-            <div key={tm.id} className="flex justify-between items-center">
-              <div>
-                <h4 className="font-bold text-brand">{tm.name}</h4>
-                <p className="text-xs text-brand mt-1">
-                  Automatic updates on segment confirmation. Read/Write enabled.
-                </p>
+        <Card variant="surface" className="p-6 border-brand/20">
+          {workingTMs.length === 0 ? (
+            <p className="text-xs text-text-faint text-center">
+              No Working TM is mounted to this project.
+            </p>
+          ) : (
+            workingTMs.map((tm) => (
+              <div key={tm.id} className="flex flex-wrap justify-between items-center gap-5">
+                <div>
+                  <h4 className="font-bold text-brand">{tm.name}</h4>
+                  <p className="text-xs text-brand mt-1">
+                    Automatic updates on segment confirmation. Read/Write enabled.
+                  </p>
+                </div>
+                <div className="flex items-center gap-5">
+                  <div className="text-right min-w-14">
+                    <span className="block text-lg font-bold text-brand">{tm.entryCount || 0}</span>
+                    <span className="text-[10px] font-bold text-brand/80 uppercase tracking-tight">
+                      Segments
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={disabled || !tm.entryCount}
+                      onClick={() => onExportWorkingTM(tm)}
+                    >
+                      Export
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="!text-danger hover:!bg-danger-soft"
+                      disabled={disabled || !tm.entryCount}
+                      onClick={() => onResetWorkingTM(tm)}
+                    >
+                      Reset
+                    </Button>
+                  </div>
+                </div>
               </div>
-              <div className="text-right">
-                <span className="block text-lg font-bold text-brand">{tm.entryCount || 0}</span>
-                <span className="text-[10px] font-bold text-brand/80 uppercase tracking-tight">
-                  Segments
-                </span>
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </Card>
       </div>
 

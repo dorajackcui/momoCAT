@@ -18,6 +18,7 @@ export default defineConfig({
           index: resolve('src/main/index.ts'),
           tmImportWorker: resolve('src/main/tmImportWorker.ts'),
           tmSyncWorker: resolve('src/main/tmSyncWorker.ts'),
+          workingTMResetWorker: resolve('src/main/workingTMResetWorker.ts'),
           referenceLookupWorker: resolve('src/main/referenceLookupWorker.ts'),
           referenceExportWorker: resolve('src/main/referenceExportWorker.ts'),
           sourceTerminologyPrecheckWorker: resolve('src/main/sourceTerminologyPrecheckWorker.ts'),

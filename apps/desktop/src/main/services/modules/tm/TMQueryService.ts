@@ -39,6 +39,10 @@ export class TMQueryService {
     }));
   }
 
+  public async listTMOptions(type?: 'working' | 'main') {
+    return this.tmRepo.listTMs(type);
+  }
+
   public async getTMPreview(tmId: string): Promise<TMAssetPreview> {
     const entries = this.tmRepo.listTMEntries(tmId, ASSET_PREVIEW_ROW_LIMIT, 0);
 

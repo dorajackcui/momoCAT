@@ -12,6 +12,7 @@
   "catDatabase": {
     "publicMethods": [
       "bulkInsertSegments",
+      "clearTMEntries",
       "clearTermBaseEntries",
       "close",
       "createFile",
