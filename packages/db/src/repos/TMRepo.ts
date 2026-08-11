@@ -17,6 +17,7 @@ import type {
   TMSyncStagedRow,
   TMType,
 } from '../types';
+import { TMSyncRepo } from './TMSyncRepo';
 
 type TMEntryDbRow = Omit<TMEntryRow, 'sourceTokens' | 'targetTokens'> & {
   sourceTokensJson: string;
@@ -90,16 +91,12 @@ const TM_CONCORDANCE_RECALL_EXACT_SOURCE_LIMIT = 64;
 const TM_CONCORDANCE_RECALL_ENGLISH_EXACT_PHRASE_RAW_LIMIT = 8;
 const TM_RECALL_DIVERSITY_MAX_PER_BUCKET = 2;
 const TM_RECALL_DIVERSITY_MIN_CJK_BUCKET_LENGTH = 4;
-const TM_FTS_REPLACE_DELETE_BATCH_SIZE = 900;
 // FTS5 incremental merge: pages written per 'merge' step, and the max steps
 // one optimizeTMFts call may run. 16 pages/step keeps each step a few ms;
 // 64 rounds bounds a single call to ~1k pages of work regardless of how
 // fragmented the index is (leftovers roll over to the next call).
 const TM_FTS_MERGE_STEP_PAGES = 16;
 const TM_FTS_MERGE_MAX_ROUNDS = 64;
-// Rows per multi-row VALUES in sync staging/insert batches. 9 bind params per
-// staging row keeps 500 rows well under SQLITE_MAX_VARIABLE_NUMBER (32766).
-const TM_SYNC_INSERT_BATCH_SIZE = 500;
 const ONLY_CJK_RE = /^[一-龥]+$/;
 const WEAK_SHORT_CJK_TERMS = new Set(['前往', '可选']);
 
@@ -111,6 +108,7 @@ export class TMRepo {
   private stmtInsertTMFts: Database.Statement;
   private stmtFindTMEntryByHash: Database.Statement;
   private stmtFindTMEntryMetaByHash: Database.Statement;
+  private readonly syncRepo: TMSyncRepo;
 
   constructor(private readonly db: Database.Database) {
     this.stmtUpsertTMEntry = this.db.prepare(`
@@ -151,12 +149,19 @@ export class TMRepo {
 
     this.stmtDeleteTMFtsByEntryId = this.db.prepare('DELETE FROM tm_fts WHERE tmEntryId = ?');
     this.stmtInsertTMFts = this.db.prepare(
-      'INSERT INTO tm_fts (tmId, srcText, tgtText, tmEntryId) VALUES (?, ?, ?, ?)'
+      'INSERT INTO tm_fts (tmId, srcText, tgtText, tmEntryId) VALUES (?, ?, ?, ?)',
     );
-    this.stmtFindTMEntryByHash = this.db.prepare('SELECT * FROM tm_entries WHERE tmId = ? AND srcHash = ?');
+    this.stmtFindTMEntryByHash = this.db.prepare(
+      'SELECT * FROM tm_entries WHERE tmId = ? AND srcHash = ?',
+    );
     this.stmtFindTMEntryMetaByHash = this.db.prepare(
-      'SELECT id, usageCount, createdAt FROM tm_entries WHERE tmId = ? AND srcHash = ?'
+      'SELECT id, usageCount, createdAt FROM tm_entries WHERE tmId = ? AND srcHash = ?',
     );
+    this.syncRepo = new TMSyncRepo(this.db, {
+      deleteForEntry: (entryId) => this.deleteTMFtsForEntry(entryId),
+      insertForEntry: (tmId, srcText, tgtText, entryId) =>
+        this.insertTMFtsForEntry(tmId, srcText, tgtText, entryId),
+    });
   }
 
   // --- tm_fts row bookkeeping ---
@@ -185,9 +190,7 @@ export class TMRepo {
   }
 
   private deleteTMFtsForEntry(tmEntryId: string): void {
-    this.stmtGetTMEntryFtsRowid ??= this.db.prepare(
-      'SELECT ftsRowid FROM tm_entries WHERE id = ?',
-    );
+    this.stmtGetTMEntryFtsRowid ??= this.db.prepare('SELECT ftsRowid FROM tm_entries WHERE id = ?');
     const row = this.stmtGetTMEntryFtsRowid.get(tmEntryId) as
       | { ftsRowid: number | null }
       | undefined;
@@ -216,7 +219,7 @@ export class TMRepo {
       JSON.stringify(entry.sourceTokens),
       JSON.stringify(entry.targetTokens),
       entry.originSegmentId,
-      entry.usageCount
+      entry.usageCount,
     );
 
     const srcText = entry.sourceTokens.map((token: Token) => token.content).join('');
@@ -236,7 +239,7 @@ export class TMRepo {
       JSON.stringify(entry.sourceTokens),
       JSON.stringify(entry.targetTokens),
       entry.originSegmentId,
-      entry.usageCount
+      entry.usageCount,
     ) as { id: string } | undefined;
 
     return row?.id;
@@ -252,7 +255,7 @@ export class TMRepo {
       JSON.stringify(entry.sourceTokens),
       JSON.stringify(entry.targetTokens),
       entry.originSegmentId,
-      entry.usageCount
+      entry.usageCount,
     ) as { id: string } | undefined;
 
     if (!row?.id) {
@@ -300,13 +303,13 @@ export class TMRepo {
     return {
       ...row,
       sourceTokens: JSON.parse(row.sourceTokensJson),
-      targetTokens: JSON.parse(row.targetTokensJson)
+      targetTokens: JSON.parse(row.targetTokensJson),
     };
   }
 
   public findTMEntryMetaByHash(
     tmId: string,
-    srcHash: string
+    srcHash: string,
   ): { id: string; usageCount: number; createdAt: string } | undefined {
     const row = this.stmtFindTMEntryMetaByHash.get(tmId, srcHash) as
       | { id: string; usageCount: number; createdAt: string }
@@ -316,13 +319,15 @@ export class TMRepo {
 
   public getProjectMountedTMs(projectId: number): MountedTMRecord[] {
     return this.db
-      .prepare(`
+      .prepare(
+        `
       SELECT tms.*, project_tms.priority, project_tms.permission, project_tms.isEnabled
       FROM project_tms
       JOIN tms ON project_tms.tmId = tms.id
       WHERE project_tms.projectId = ? AND project_tms.isEnabled = 1
       ORDER BY project_tms.priority ASC
-    `)
+    `,
+      )
       .all(projectId) as MountedTMRecord[];
   }
 
@@ -490,7 +495,9 @@ export class TMRepo {
     profile?: 'english',
   ): TMConcordanceRecallQueryPlan {
     const terms = this.extractSearchTerms(queryText);
-    const cjkComponents = this.uniqueTerms(terms.flatMap((term) => this.extractCjkComponents(term)));
+    const cjkComponents = this.uniqueTerms(
+      terms.flatMap((term) => this.extractCjkComponents(term)),
+    );
     const cjk3 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 3));
     const cjk4 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 4));
     const cjk5 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 5));
@@ -672,14 +679,16 @@ export class TMRepo {
     if (remainingRaw <= 0) return;
 
     const rows = this.db
-      .prepare(`
+      .prepare(
+        `
         SELECT tm_entries.*, tm_fts.srcText AS ftsSrcText, tm_fts.tgtText AS ftsTgtText
         FROM tm_fts
         JOIN tm_entries ON tm_fts.tmEntryId = tm_entries.id
         WHERE tm_fts.tmId IN (${placeholders}) AND tm_fts.srcText IN (${termPlaceholders})
         ORDER BY length(tm_fts.srcText) ASC, tm_entries.usageCount DESC, tm_entries.updatedAt DESC, tm_entries.id ASC
         LIMIT ?
-      `)
+      `,
+      )
       .all(...params.tmIds, ...terms, remainingRaw) as TMRecallDbRow[];
 
     params.stats.rawRows += rows.length;
@@ -728,10 +737,7 @@ export class TMRepo {
       if (params.accepted.length >= params.maxResults || params.stats.rawRows >= params.rawLimit) {
         break;
       }
-      if (
-        batchIndex > 0 &&
-        Date.now() - params.startedAt > TM_CONCORDANCE_RECALL_SOFT_BUDGET_MS
-      ) {
+      if (batchIndex > 0 && Date.now() - params.startedAt > TM_CONCORDANCE_RECALL_SOFT_BUDGET_MS) {
         params.stats.degraded = true;
         break;
       }
@@ -746,14 +752,16 @@ export class TMRepo {
       if (remainingRaw <= 0) break;
       params.stats.ftsQueryCount += 1;
       const rows = this.db
-        .prepare(`
+        .prepare(
+          `
           SELECT tm_entries.*, tm_fts.srcText AS ftsSrcText, tm_fts.tgtText AS ftsTgtText
           FROM tm_fts
           JOIN tm_entries ON tm_fts.tmEntryId = tm_entries.id
           WHERE tm_fts.tmId IN (${placeholders}) AND tm_fts MATCH ?
           ORDER BY rank, tm_entries.updatedAt DESC, tm_entries.id ASC
           LIMIT ?
-        `)
+        `,
+        )
         .all(...params.tmIds, ftsQuery, remainingRaw) as TMRecallDbRow[];
 
       params.stats.rawRows += rows.length;
@@ -799,16 +807,13 @@ export class TMRepo {
       if (params.accepted.length >= params.maxResults || params.stats.rawRows >= params.rawLimit) {
         break;
       }
-      if (
-        batchIndex > 0 &&
-        Date.now() - params.startedAt > TM_CONCORDANCE_RECALL_SOFT_BUDGET_MS
-      ) {
+      if (batchIndex > 0 && Date.now() - params.startedAt > TM_CONCORDANCE_RECALL_SOFT_BUDGET_MS) {
         params.stats.degraded = true;
         break;
       }
 
       const batch = batches[batchIndex];
-      const likeClauses = batch.map(() => '(tm_fts.srcText LIKE ? ESCAPE \'/\')').join(' OR ');
+      const likeClauses = batch.map(() => "(tm_fts.srcText LIKE ? ESCAPE '/')").join(' OR ');
       const likeParams = batch.map((term) => `%${this.escapeLikePattern(term)}%`);
       const remainingRaw = Math.min(
         params.rawLimit - params.stats.rawRows,
@@ -816,14 +821,16 @@ export class TMRepo {
       );
       if (remainingRaw <= 0) break;
       const rows = this.db
-        .prepare(`
+        .prepare(
+          `
           SELECT tm_entries.*, tm_fts.srcText AS ftsSrcText, tm_fts.tgtText AS ftsTgtText
           FROM tm_fts
           JOIN tm_entries ON tm_fts.tmEntryId = tm_entries.id
           WHERE tm_fts.tmId IN (${placeholders}) AND (${likeClauses})
           ORDER BY tm_entries.usageCount DESC, tm_entries.updatedAt DESC, tm_entries.id ASC
           LIMIT ?
-        `)
+        `,
+        )
         .all(...params.tmIds, ...likeParams, remainingRaw) as TMRecallDbRow[];
 
       params.stats.rawRows += rows.length;
@@ -942,14 +949,16 @@ export class TMRepo {
     const rawLimit = Math.max(params.maxResults * 3, 20);
 
     const rows = this.db
-      .prepare(`
+      .prepare(
+        `
         SELECT tm_entries.*, tm_fts.srcText AS ftsSrcText, tm_fts.tgtText AS ftsTgtText
         FROM tm_fts
         JOIN tm_entries ON tm_fts.tmEntryId = tm_entries.id
         WHERE tm_fts.tmId IN (${placeholders}) AND tm_fts MATCH ?
         ORDER BY rank
         LIMIT ${rawLimit}
-      `)
+      `,
+      )
       .all(...params.tmIds, ftsQuery) as TMRecallDbRow[];
 
     for (const row of rows) {
@@ -993,14 +1002,16 @@ export class TMRepo {
     if (remaining <= 0) return;
 
     const rows = this.db
-      .prepare(`
+      .prepare(
+        `
         SELECT tm_entries.*, tm_fts.srcText AS ftsSrcText, tm_fts.tgtText AS ftsTgtText
         FROM tm_fts
         JOIN tm_entries ON tm_fts.tmEntryId = tm_entries.id
         WHERE tm_fts.tmId IN (${placeholders}) AND tm_fts.srcText IN (${formPlaceholders})
         ORDER BY length(tm_fts.srcText) ASC, tm_entries.usageCount DESC, tm_entries.updatedAt DESC, tm_entries.id ASC
         LIMIT ?
-      `)
+      `,
+      )
       .all(...params.tmIds, ...forms, remaining) as TMRecallDbRow[];
 
     for (const row of rows) {
@@ -1061,8 +1072,8 @@ export class TMRepo {
     const likeClauses = terms
       .map(() =>
         searchesTarget
-          ? '(tm_fts.srcText LIKE ? ESCAPE \'/\' OR tm_fts.tgtText LIKE ? ESCAPE \'/\')'
-          : '(tm_fts.srcText LIKE ? ESCAPE \'/\')',
+          ? "(tm_fts.srcText LIKE ? ESCAPE '/' OR tm_fts.tgtText LIKE ? ESCAPE '/')"
+          : "(tm_fts.srcText LIKE ? ESCAPE '/')",
       )
       .join(' OR ');
     const likeParams = terms.flatMap((term) => {
@@ -1071,14 +1082,16 @@ export class TMRepo {
     });
 
     const rows = this.db
-      .prepare(`
+      .prepare(
+        `
         SELECT tm_entries.*, tm_fts.srcText AS ftsSrcText, tm_fts.tgtText AS ftsTgtText
         FROM tm_fts
         JOIN tm_entries ON tm_fts.tmEntryId = tm_entries.id
         WHERE tm_fts.tmId IN (${placeholders}) AND (${likeClauses})
         ORDER BY tm_entries.usageCount DESC, tm_entries.updatedAt DESC
         LIMIT ${remaining * 3}
-      `)
+      `,
+      )
       .all(...params.tmIds, ...likeParams) as TMRecallDbRow[];
 
     for (const row of rows) {
@@ -1103,7 +1116,9 @@ export class TMRepo {
 
   private buildTMRecallQueryPlan(sourceText: string, profile?: 'english'): TMRecallQueryPlan {
     const terms = this.extractSearchTerms(sourceText);
-    const cjkComponents = this.uniqueTerms(terms.flatMap((term) => this.extractCjkComponents(term)));
+    const cjkComponents = this.uniqueTerms(
+      terms.flatMap((term) => this.extractCjkComponents(term)),
+    );
     const primary4 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 4));
     const primary5 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 5));
     const primary6 = cjkComponents.flatMap((component) => this.buildCjkWindows(component, 6));
@@ -1175,7 +1190,9 @@ export class TMRepo {
     }
 
     if (
-      plan.latinTerms.some((term) => term.length >= 3 && normalizedCandidate.includes(term.toLowerCase()))
+      plan.latinTerms.some(
+        (term) => term.length >= 3 && normalizedCandidate.includes(term.toLowerCase()),
+      )
     ) {
       return true;
     }
@@ -1190,7 +1207,9 @@ export class TMRepo {
 
     const sourceComponents = this.extractCjkComponents(sourceText);
     const candidateComponents = this.extractCjkComponents(candidateText);
-    const sharedShortTerms = plan.shortCjkTerms.filter((term) => normalizedCandidate.includes(term));
+    const sharedShortTerms = plan.shortCjkTerms.filter((term) =>
+      normalizedCandidate.includes(term),
+    );
     if (sharedShortTerms.length >= 2) {
       return true;
     }
@@ -1231,11 +1250,7 @@ export class TMRepo {
     });
   }
 
-  private diversifyConcordanceRows(
-    query: string,
-    rows: TMEntryRow[],
-    limit: number,
-  ): TMEntryRow[] {
+  private diversifyConcordanceRows(query: string, rows: TMEntryRow[], limit: number): TMEntryRow[] {
     const accepted: TMEntryRow[] = [];
     const bucketCounts = new Map<string, number>();
     const rowBuckets = rows.map((row) => this.getConcordanceDiversityBucket(query, row));
@@ -1244,7 +1259,7 @@ export class TMRepo {
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index];
       const rawBucket = rowBuckets[index];
-      const bucket = rawBucket ? canonicalBuckets.get(rawBucket) ?? rawBucket : null;
+      const bucket = rawBucket ? (canonicalBuckets.get(rawBucket) ?? rawBucket) : null;
       if (!bucket) {
         accepted.push(row);
         continue;
@@ -1276,7 +1291,7 @@ export class TMRepo {
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index];
       const rawBucket = rowBuckets[index];
-      const bucket = rawBucket ? canonicalBuckets.get(rawBucket) ?? rawBucket : null;
+      const bucket = rawBucket ? (canonicalBuckets.get(rawBucket) ?? rawBucket) : null;
       if (!bucket) {
         accepted.push(row);
       } else {
@@ -1315,9 +1330,7 @@ export class TMRepo {
   ): string | null {
     const normalizedQuery = this.normalizeForOverlap(sourceText);
     const candidateTexts =
-      scope === 'source-and-target'
-        ? [row.ftsSrcText, row.ftsTgtText]
-        : [row.ftsSrcText];
+      scope === 'source-and-target' ? [row.ftsSrcText, row.ftsTgtText] : [row.ftsSrcText];
 
     return this.getBestDiversityBucket(normalizedQuery, candidateTexts);
   }
@@ -1335,7 +1348,10 @@ export class TMRepo {
     let best = '';
 
     for (const candidateText of candidateTexts) {
-      const overlap = this.findLongestCommonSubstring(query, this.normalizeForOverlap(candidateText));
+      const overlap = this.findLongestCommonSubstring(
+        query,
+        this.normalizeForOverlap(candidateText),
+      );
       if (Array.from(overlap).length > Array.from(best).length) {
         best = overlap;
       }
@@ -1451,10 +1467,7 @@ export class TMRepo {
     const candidate = Number.isFinite(rawLimit)
       ? Math.floor(rawLimit as number)
       : TM_CONCORDANCE_RECALL_RAW_LIMIT;
-    return Math.min(
-      Math.max(candidate, minResults),
-      TM_CONCORDANCE_RECALL_RAW_LIMIT_MAX,
-    );
+    return Math.min(Math.max(candidate, minResults), TM_CONCORDANCE_RECALL_RAW_LIMIT_MAX);
   }
 
   private mapTMEntryDbRow(row: TMEntryDbRow): TMEntryRow {
@@ -1488,20 +1501,24 @@ export class TMRepo {
 
   public listTMs(type?: TMType): TMRecord[] {
     if (type) {
-      return this.db.prepare('SELECT * FROM tms WHERE type = ? ORDER BY updatedAt DESC').all(type) as TMRecord[];
+      return this.db
+        .prepare('SELECT * FROM tms WHERE type = ? ORDER BY updatedAt DESC')
+        .all(type) as TMRecord[];
     }
     return this.db.prepare('SELECT * FROM tms ORDER BY updatedAt DESC').all() as TMRecord[];
   }
 
   public listTMEntries(tmId: string, limit: number = 500, offset: number = 0): TMEntryRow[] {
     const rows = this.db
-      .prepare(`
+      .prepare(
+        `
       SELECT *
       FROM tm_entries
       WHERE tmId = ?
       ORDER BY updatedAt DESC, id ASC
       LIMIT ? OFFSET ?
-    `)
+    `,
+      )
       .all(tmId, limit, offset) as TMEntryDbRow[];
 
     return rows.map((row) => this.mapTMEntryDbRow(row));
@@ -1510,10 +1527,12 @@ export class TMRepo {
   public createTM(name: string, srcLang: string, tgtLang: string, type: TMType): string {
     const id = randomUUID();
     this.db
-      .prepare(`
+      .prepare(
+        `
       INSERT INTO tms (id, name, srcLang, tgtLang, type)
       VALUES (?, ?, ?, ?, ?)
-    `)
+    `,
+      )
       .run(id, name, srcLang, tgtLang, type);
     return id;
   }
@@ -1556,26 +1575,37 @@ export class TMRepo {
     return this.db.inTransaction ? clearRows() : this.db.transaction(clearRows)();
   }
 
-  public mountTMToProject(projectId: number, tmId: string, priority: number = 10, permission: string = 'read') {
+  public mountTMToProject(
+    projectId: number,
+    tmId: string,
+    priority: number = 10,
+    permission: string = 'read',
+  ) {
     this.db
-      .prepare(`
+      .prepare(
+        `
       INSERT INTO project_tms (projectId, tmId, priority, permission, isEnabled)
       VALUES (?, ?, ?, ?, 1)
       ON CONFLICT(projectId, tmId) DO UPDATE SET
         priority = excluded.priority,
         permission = excluded.permission,
         isEnabled = 1
-    `)
+    `,
+      )
       .run(projectId, tmId, priority, permission);
   }
 
   public unmountTMFromProject(projectId: number, tmId: string) {
-    this.db.prepare('DELETE FROM project_tms WHERE projectId = ? AND tmId = ?').run(projectId, tmId);
+    this.db
+      .prepare('DELETE FROM project_tms WHERE projectId = ? AND tmId = ?')
+      .run(projectId, tmId);
   }
 
   public getTMStats(tmId: string) {
     const row = this.db
-      .prepare('SELECT COUNT(*) as count, MAX(updatedAt) as maxUpdatedAt FROM tm_entries WHERE tmId = ?')
+      .prepare(
+        'SELECT COUNT(*) as count, MAX(updatedAt) as maxUpdatedAt FROM tm_entries WHERE tmId = ?',
+      )
       .get(tmId) as {
       count: number;
       maxUpdatedAt: string | null;
@@ -1591,24 +1621,13 @@ export class TMRepo {
   }
 
   // --- TM external-file sync (incremental diff over tm_sync_staging) ---
-  //
-  // Statements are prepared lazily: tm_sync_staging is an additive table
-  // created by schema maintenance, which readonly connections skip.
-
-  private stmtUpdateTMSyncTarget?: Database.Statement;
 
   public clearTMSyncStagingForTM(tmId: string, exceptRunId?: string): void {
-    if (exceptRunId) {
-      this.db
-        .prepare('DELETE FROM tm_sync_staging WHERE tmId = ? AND syncRunId != ?')
-        .run(tmId, exceptRunId);
-      return;
-    }
-    this.db.prepare('DELETE FROM tm_sync_staging WHERE tmId = ?').run(tmId);
+    this.syncRepo.clearStagingForTM(tmId, exceptRunId);
   }
 
   public clearTMSyncStagingRun(runId: string): void {
-    this.db.prepare('DELETE FROM tm_sync_staging WHERE syncRunId = ?').run(runId);
+    this.syncRepo.clearStagingRun(runId);
   }
 
   // Must be called inside a transaction owned by the caller. INSERT OR REPLACE
@@ -1616,37 +1635,11 @@ export class TMRepo {
   // file contains duplicate sources. Rows arrive in file order and multi-row
   // VALUES preserves it, so REPLACE semantics are unchanged by batching.
   public stageTMSyncRows(runId: string, tmId: string, rows: TMSyncStagedRow[]): void {
-    for (let index = 0; index < rows.length; index += TM_SYNC_INSERT_BATCH_SIZE) {
-      const batch = rows.slice(index, index + TM_SYNC_INSERT_BATCH_SIZE);
-      const values = batch.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
-      this.db
-        .prepare(`
-          INSERT OR REPLACE INTO tm_sync_staging (
-            tmId, syncRunId, srcHash, matchKey, tagsSignature,
-            sourceTokensJson, targetTokensJson, srcText, tgtText
-          ) VALUES ${values}
-        `)
-        .run(
-          ...batch.flatMap((row) => [
-            tmId,
-            runId,
-            row.srcHash,
-            row.matchKey,
-            row.tagsSignature,
-            row.sourceTokensJson,
-            row.targetTokensJson,
-            row.srcText,
-            row.tgtText,
-          ]),
-        );
-    }
+    this.syncRepo.stageRows(runId, tmId, rows);
   }
 
   public countTMSyncStagedRows(runId: string): number {
-    const row = this.db
-      .prepare('SELECT COUNT(*) as count FROM tm_sync_staging WHERE syncRunId = ?')
-      .get(runId) as { count: number };
-    return row.count;
+    return this.syncRepo.countStagedRows(runId);
   }
 
   public getTMSyncDiffSummary(
@@ -1654,98 +1647,15 @@ export class TMRepo {
     tmId: string,
     lastSyncedAt?: string,
   ): TMSyncDiffSummary {
-    const added = (
-      this.db
-        .prepare(`
-          SELECT COUNT(*) as count FROM tm_sync_staging s
-          LEFT JOIN tm_entries e ON e.tmId = ? AND e.srcHash = s.srcHash
-          WHERE s.syncRunId = ? AND e.id IS NULL
-        `)
-        .get(tmId, runId) as { count: number }
-    ).count;
-
-    const changed = (
-      this.db
-        .prepare(`
-          SELECT COUNT(*) as count FROM tm_sync_staging s
-          JOIN tm_entries e ON e.tmId = ? AND e.srcHash = s.srcHash
-          WHERE s.syncRunId = ?
-            AND (e.targetTokensJson != s.targetTokensJson
-              OR e.sourceTokensJson != s.sourceTokensJson)
-        `)
-        .get(tmId, runId) as { count: number }
-    ).count;
-
-    const deleted = (
-      this.db
-        .prepare(`
-          SELECT COUNT(*) as count FROM tm_entries e
-          WHERE e.tmId = ?
-            AND NOT EXISTS (
-              SELECT 1 FROM tm_sync_staging s
-              WHERE s.syncRunId = ? AND s.srcHash = e.srcHash
-            )
-        `)
-        .get(tmId, runId) as { count: number }
-    ).count;
-
-    const overwrittenLocalEdits = lastSyncedAt
-      ? (
-          this.db
-            .prepare(`
-              SELECT COUNT(*) as count FROM tm_sync_staging s
-              JOIN tm_entries e ON e.tmId = ? AND e.srcHash = s.srcHash
-              WHERE s.syncRunId = ?
-                AND (e.targetTokensJson != s.targetTokensJson
-                  OR e.sourceTokensJson != s.sourceTokensJson)
-                AND e.updatedAt > ?
-            `)
-            .get(tmId, runId, lastSyncedAt) as { count: number }
-        ).count
-      : 0;
-
-    // Entries missing from the file whose local edits postdate the last full
-    // sync: a prune-all run would silently destroy those edits, so they get
-    // their own warning count.
-    const deletedLocalEdits = lastSyncedAt
-      ? (
-          this.db
-            .prepare(`
-              SELECT COUNT(*) as count FROM tm_entries e
-              WHERE e.tmId = ?
-                AND NOT EXISTS (
-                  SELECT 1 FROM tm_sync_staging s
-                  WHERE s.syncRunId = ? AND s.srcHash = e.srcHash
-                )
-                AND e.updatedAt > ?
-            `)
-            .get(tmId, runId, lastSyncedAt) as { count: number }
-        ).count
-      : 0;
-
-    return { added, changed, deleted, overwrittenLocalEdits, deletedLocalEdits };
+    return this.syncRepo.getDiffSummary(runId, tmId, lastSyncedAt);
   }
-
-  // Keyset pagination (srcHash > afterSrcHash) keeps pages stable while the
-  // caller applies earlier pages between calls: applied rows drop out of the
-  // diff, but only at keys the cursor has already passed.
   public listTMSyncNewRows(
     runId: string,
     tmId: string,
     afterSrcHash: string,
     limit: number,
   ): TMSyncStagedRow[] {
-    return this.db
-      .prepare(`
-        SELECT s.srcHash, s.matchKey, s.tagsSignature,
-               s.sourceTokensJson, s.targetTokensJson, s.srcText, s.tgtText
-        FROM tm_sync_staging s
-        LEFT JOIN tm_entries e ON e.tmId = ? AND e.srcHash = s.srcHash
-        WHERE s.syncRunId = ? AND s.srcHash > ? AND e.id IS NULL
-        ORDER BY s.srcHash ASC
-        LIMIT ?
-      `)
-      .all(tmId, runId, afterSrcHash, limit) as TMSyncStagedRow[];
+    return this.syncRepo.listNewRows(runId, tmId, afterSrcHash, limit);
   }
 
   public listTMSyncChangedRows(
@@ -1754,20 +1664,7 @@ export class TMRepo {
     afterSrcHash: string,
     limit: number,
   ): TMSyncChangedRow[] {
-    return this.db
-      .prepare(`
-        SELECT s.srcHash, s.matchKey, s.tagsSignature,
-               s.sourceTokensJson, s.targetTokensJson, s.srcText, s.tgtText,
-               e.id AS entryId
-        FROM tm_sync_staging s
-        JOIN tm_entries e ON e.tmId = ? AND e.srcHash = s.srcHash
-        WHERE s.syncRunId = ? AND s.srcHash > ?
-          AND (e.targetTokensJson != s.targetTokensJson
-            OR e.sourceTokensJson != s.sourceTokensJson)
-        ORDER BY s.srcHash ASC
-        LIMIT ?
-      `)
-      .all(tmId, runId, afterSrcHash, limit) as TMSyncChangedRow[];
+    return this.syncRepo.listChangedRows(runId, tmId, afterSrcHash, limit);
   }
 
   public listTMSyncDeletedEntries(
@@ -1776,106 +1673,11 @@ export class TMRepo {
     afterId: string,
     limit: number,
   ): Array<{ id: string }> {
-    return this.db
-      .prepare(`
-        SELECT e.id FROM tm_entries e
-        WHERE e.tmId = ? AND e.id > ?
-          AND NOT EXISTS (
-            SELECT 1 FROM tm_sync_staging s
-            WHERE s.syncRunId = ? AND s.srcHash = e.srcHash
-          )
-        ORDER BY e.id ASC
-        LIMIT ?
-      `)
-      .all(tmId, afterId, runId, limit) as Array<{ id: string }>;
+    return this.syncRepo.listDeletedEntries(runId, tmId, afterId, limit);
   }
-
-  // Must be called inside a transaction owned by the caller. Entry and FTS
-  // rows are written as a pair so a rollback never leaves a dangling FTS row.
-  //
-  // Batched: one multi-row INSERT per table instead of three statements per
-  // row (entry INSERT + FTS INSERT + ftsRowid UPDATE), which dominated large
-  // sync applies. FTS rowids are assigned explicitly from MAX(rowid) — safe
-  // because the surrounding transaction holds the write lock — so the
-  // tm_entries.ftsRowid mapping can be written as one UPDATE ... FROM.
-  public applyTMSyncInserts(
-    tmId: string,
-    rows: Array<TMSyncStagedRow & { id: string }>,
-  ): number {
-    let inserted = 0;
-    for (let index = 0; index < rows.length; index += TM_SYNC_INSERT_BATCH_SIZE) {
-      inserted += this.applyTMSyncInsertBatch(
-        tmId,
-        rows.slice(index, index + TM_SYNC_INSERT_BATCH_SIZE),
-      );
-    }
-    return inserted;
+  public applyTMSyncInserts(tmId: string, rows: Array<TMSyncStagedRow & { id: string }>): number {
+    return this.syncRepo.applyInserts(tmId, rows);
   }
-
-  private applyTMSyncInsertBatch(
-    tmId: string,
-    rows: Array<TMSyncStagedRow & { id: string }>,
-  ): number {
-    if (rows.length === 0) return 0;
-
-    const entryValues = rows.map(() => '(?, ?, ?, ?, ?, ?, ?, NULL, 0)').join(', ');
-    const insertedRows = this.db
-      .prepare(`
-        INSERT INTO tm_entries (
-          id, tmId, srcHash, matchKey, tagsSignature,
-          sourceTokensJson, targetTokensJson, originSegmentId, usageCount
-        ) VALUES ${entryValues}
-        ON CONFLICT(tmId, srcHash) DO NOTHING
-        RETURNING id
-      `)
-      .all(
-        ...rows.flatMap((row) => [
-          row.id,
-          tmId,
-          row.srcHash,
-          row.matchKey,
-          row.tagsSignature,
-          row.sourceTokensJson,
-          row.targetTokensJson,
-        ]),
-      ) as Array<{ id: string }>;
-    if (insertedRows.length === 0) return 0;
-
-    // RETURNING row order is unspecified; filter the input by inserted id.
-    const insertedIds = new Set(insertedRows.map((row) => row.id));
-    const inserted = rows.filter((row) => insertedIds.has(row.id));
-
-    const baseRowid = (
-      this.db.prepare('SELECT COALESCE(MAX(rowid), 0) AS m FROM tm_fts').get() as { m: number }
-    ).m;
-    const ftsValues = inserted.map(() => '(?, ?, ?, ?, ?)').join(', ');
-    this.db
-      .prepare(`INSERT INTO tm_fts (rowid, tmId, srcText, tgtText, tmEntryId) VALUES ${ftsValues}`)
-      .run(
-        ...inserted.flatMap((row, offset) => [
-          baseRowid + 1 + offset,
-          tmId,
-          row.srcText,
-          row.tgtText,
-          row.id,
-        ]),
-      );
-
-    const mappingValues = inserted.map(() => '(?, ?)').join(', ');
-    this.db
-      .prepare(`
-        WITH v(rid, eid) AS (VALUES ${mappingValues})
-        UPDATE tm_entries SET ftsRowid = v.rid FROM v WHERE tm_entries.id = v.eid
-      `)
-      .run(...inserted.flatMap((row, offset) => [baseRowid + 1 + offset, row.id]));
-
-    return inserted.length;
-  }
-
-  // Must be called inside a transaction owned by the caller. Sync updates
-  // refresh both sides' display tokens (srcHash-identical sources can still
-  // differ in case/whitespace) but never touch usageCount/createdAt/
-  // originSegmentId: those are usage metadata the file must not reset.
   public applyTMSyncUpdates(
     tmId: string,
     rows: Array<{
@@ -1886,47 +1688,12 @@ export class TMRepo {
       tgtText: string;
     }>,
   ): number {
-    this.stmtUpdateTMSyncTarget ??= this.db.prepare(`
-      UPDATE tm_entries
-      SET sourceTokensJson = ?, targetTokensJson = ?,
-          updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-      WHERE id = ?
-    `);
-
-    let updated = 0;
-    for (const row of rows) {
-      const result = this.stmtUpdateTMSyncTarget.run(
-        row.sourceTokensJson,
-        row.targetTokensJson,
-        row.entryId,
-      );
-      if (result.changes === 0) continue;
-
-      this.deleteTMFtsForEntry(row.entryId);
-      this.insertTMFtsForEntry(tmId, row.srcText, row.tgtText, row.entryId);
-      updated += 1;
-    }
-    return updated;
+    return this.syncRepo.applyUpdates(tmId, rows);
   }
 
-  // Must be called inside a transaction owned by the caller. The FTS rows go
-  // first: deleteTMFtsForEntry reads ftsRowid from the entry row.
   public deleteTMEntriesWithFts(entryIds: string[]): number {
-    let deleted = 0;
-    for (let index = 0; index < entryIds.length; index += TM_FTS_REPLACE_DELETE_BATCH_SIZE) {
-      const batch = entryIds.slice(index, index + TM_FTS_REPLACE_DELETE_BATCH_SIZE);
-      for (const entryId of batch) {
-        this.deleteTMFtsForEntry(entryId);
-      }
-      const placeholders = batch.map(() => '?').join(',');
-      const result = this.db
-        .prepare(`DELETE FROM tm_entries WHERE id IN (${placeholders})`)
-        .run(...batch);
-      deleted += result.changes;
-    }
-    return deleted;
+    return this.syncRepo.deleteEntriesWithFts(entryIds);
   }
-
   // Incremental FTS maintenance with bounded cost per call. A full
   // 'optimize' rewrites the whole tm_fts index, so its latency grows with
   // TOTAL entries across all TMs (~9s at 460k entries) even when the sync
