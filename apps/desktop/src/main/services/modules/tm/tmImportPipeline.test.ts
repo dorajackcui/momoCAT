@@ -6,6 +6,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CATDatabase } from '../../../../../../../packages/db/src';
 import { runTMImportPipeline } from './tmImportPipeline';
 import type { TMImportOptions } from '../../../../shared/ipc';
+import {
+  serializeWorkingTMTokenMetadata,
+  WORKING_TM_SOURCE_TOKENS_HEADER,
+  WORKING_TM_TARGET_TOKENS_HEADER,
+} from './workingTMWorkbookFormat';
 
 describe('tmImportPipeline', () => {
   let root: string;
@@ -152,6 +157,30 @@ describe('tmImportPipeline', () => {
 
     expect(result).toEqual({ success: 1, skipped: 2 });
     expect(listEntries()).toHaveLength(1);
+  });
+
+  it('ignores stale token metadata when the visible cell was edited', async () => {
+    const filePath = writeWorkbook('edited-export.xlsx', [
+      ['Source', 'Target', WORKING_TM_SOURCE_TOKENS_HEADER, WORKING_TM_TARGET_TOKENS_HEADER],
+      [
+        'Edited {1}',
+        'Cible {2}',
+        serializeWorkingTMTokenMetadata([{ type: 'text', content: 'Original {1}' }]),
+        serializeWorkingTMTokenMetadata([{ type: 'text', content: 'Cible {2}' }]),
+      ],
+    ]);
+
+    await runTMImportPipeline(db, { tmId, filePath, options: importOptions() });
+
+    const [entry] = db.listTMEntries(tmId);
+    expect(entry?.sourceTokens).toEqual([
+      { type: 'text', content: 'Edited ' },
+      { type: 'tag', content: '{1}', meta: { id: '{1}' } },
+    ]);
+    expect(entry?.targetTokens).toEqual([
+      { type: 'text', content: 'Cible ' },
+      { type: 'tag', content: '{2}', meta: { id: '{2}' } },
+    ]);
   });
 
   it('last-wins across chunk boundaries keeps one entry and one FTS row', async () => {

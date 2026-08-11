@@ -22,6 +22,7 @@ import { TMImportService } from './tm/TMImportService';
 import { TMBatchOpsService } from './tm/TMBatchOpsService';
 import { TMQueryService } from './tm/TMQueryService';
 import { TMSyncService } from './tm/TMSyncService';
+import { WorkingTMExportWorkerRunner } from './tm/WorkingTMExportWorkerRunner';
 import { WorkingTMService } from './tm/WorkingTMService';
 import { WorkingTMResetWorkerRunner } from './tm/WorkingTMResetWorkerRunner';
 import type { ImportProgress, ImportProgressCallback } from './tm/types';
@@ -52,6 +53,7 @@ export class TMModule {
     this.syncService = new TMSyncService(tmRepo, settingsRepo, dbPath, emitProgress);
     this.workingTMService = new WorkingTMService(
       tmRepo,
+      new WorkingTMExportWorkerRunner({ dbPath }),
       new WorkingTMResetWorkerRunner({ dbPath }),
     );
   }

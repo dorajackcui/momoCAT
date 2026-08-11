@@ -1,21 +1,8 @@
-import { mkdtemp, rm } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import * as XLSX from 'xlsx';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { TMRepository } from '../../ports';
 import { WorkingTMService } from './WorkingTMService';
+import type { WorkingTMExportRunner } from './WorkingTMExportWorkerRunner';
 import type { WorkingTMResetRunner } from './WorkingTMResetWorkerRunner';
-
-const temporaryDirectories: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(
-    temporaryDirectories
-      .splice(0)
-      .map((directory) => rm(directory, { recursive: true, force: true })),
-  );
-});
 
 function createHarness(type: 'working' | 'main' = 'working') {
   const entries = [
@@ -53,36 +40,28 @@ function createHarness(type: 'working' | 'main' = 'working') {
         isEnabled: 1,
       },
     ]),
-    listTMEntries: vi.fn((_tmId: string, limit: number, offset: number) =>
-      entries.slice(offset, offset + limit),
-    ),
   } as unknown as TMRepository;
+  const exportRunner = {
+    run: vi.fn(async () => entries.length),
+  } as WorkingTMExportRunner;
   const resetRunner = {
     run: vi.fn(async () => entries.length),
   } as WorkingTMResetRunner;
 
-  return { service: new WorkingTMService(tmRepo, resetRunner), tmRepo, resetRunner };
+  return {
+    service: new WorkingTMService(tmRepo, exportRunner, resetRunner),
+    exportRunner,
+    resetRunner,
+  };
 }
 
 describe('WorkingTMService', () => {
-  it('exports a simple two-column workbook with display token text', async () => {
-    const { service, tmRepo } = createHarness();
-    const directory = await mkdtemp(join(tmpdir(), 'momocat-working-tm-'));
-    temporaryDirectories.push(directory);
-    const outputPath = join(directory, 'working-tm.xlsx');
+  it('delegates the complete export to the background runner', async () => {
+    const { service, exportRunner } = createHarness();
 
-    await expect(service.exportToExcel(7, 'tm-1', outputPath)).resolves.toBe(1);
+    await expect(service.exportToExcel(7, 'tm-1', 'working-tm.xlsx')).resolves.toBe(1);
 
-    const workbook = XLSX.readFile(outputPath);
-    const rows = XLSX.utils.sheet_to_json<string[]>(workbook.Sheets['Working TM'], {
-      header: 1,
-      raw: false,
-    });
-    expect(rows).toEqual([
-      ['Source', 'Target'],
-      ['Hello {1}', 'Bonjour {1}'],
-    ]);
-    expect(tmRepo.listTMEntries).toHaveBeenCalledWith('tm-1', 1_000, 0);
+    expect(exportRunner.run).toHaveBeenCalledWith('tm-1', 'working-tm.xlsx');
   });
 
   it('resets only a mounted writable Working TM in the background runner', async () => {
@@ -93,7 +72,7 @@ describe('WorkingTMService', () => {
   });
 
   it('rejects Main TMs', async () => {
-    const { service, resetRunner } = createHarness('main');
+    const { service, exportRunner, resetRunner } = createHarness('main');
 
     await expect(service.reset(7, 'tm-1')).rejects.toThrow(
       "The selected TM is not this project's writable Working TM.",
@@ -101,6 +80,7 @@ describe('WorkingTMService', () => {
     await expect(service.exportToExcel(7, 'tm-1', 'ignored.xlsx')).rejects.toThrow(
       "The selected TM is not this project's writable Working TM.",
     );
+    expect(exportRunner.run).not.toHaveBeenCalled();
     expect(resetRunner.run).not.toHaveBeenCalled();
   });
 });
