@@ -26,8 +26,7 @@ function renderWorkingTM(
     React.createElement(ProjectTMPane, {
       mountedTMs: [workingTM],
       allMainTMs: [],
-      loading: state.loading ?? false,
-      error: state.error ?? null,
+      loadState: { loading: state.loading ?? false, loaded: true, error: state.error ?? null },
       onRetry: vi.fn(),
       onMountTM: vi.fn(),
       onUnmountTM: vi.fn(),
@@ -58,8 +57,7 @@ describe('ProjectTMPane', () => {
       React.createElement(ProjectTMPane, {
         mountedTMs: [],
         allMainTMs: [],
-        loading: true,
-        error: null,
+        loadState: { loading: true, loaded: false, error: null },
         onRetry: vi.fn(),
         onMountTM: vi.fn(),
         onUnmountTM: vi.fn(),
@@ -77,8 +75,7 @@ describe('ProjectTMPane', () => {
       React.createElement(ProjectTMPane, {
         mountedTMs: [],
         allMainTMs: [],
-        loading: false,
-        error: 'Database busy',
+        loadState: { loading: false, loaded: false, error: 'Database busy' },
         onRetry: vi.fn(),
         onMountTM: vi.fn(),
         onUnmountTM: vi.fn(),
@@ -100,5 +97,24 @@ describe('ProjectTMPane', () => {
     expect(failedRefresh).toContain('Demo Working TM');
     expect(failedRefresh).toContain('Could not refresh translation memories: Database busy');
     expect(failedRefresh).toContain('Retry');
+  });
+
+  it('keeps a successfully loaded empty state visible during refresh', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ProjectTMPane, {
+        mountedTMs: [],
+        allMainTMs: [],
+        loadState: { loading: true, loaded: true, error: null },
+        onRetry: vi.fn(),
+        onMountTM: vi.fn(),
+        onUnmountTM: vi.fn(),
+        onExportWorkingTM: vi.fn(),
+        onResetWorkingTM: vi.fn(),
+      }),
+    );
+
+    expect(html).toContain('No Working TM is mounted');
+    expect(html).toContain('No Main TMs mounted');
+    expect(html).not.toContain('Loading translation memories');
   });
 });

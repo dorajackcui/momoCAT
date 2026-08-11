@@ -4,8 +4,7 @@ import { Button, Card, IconButton, Select } from '../ui';
 interface ProjectTMPaneProps {
   mountedTMs: MountedTM[];
   allMainTMs: TMRecord[];
-  loading: boolean;
-  error: string | null;
+  loadState: { loading: boolean; loaded: boolean; error: string | null };
   onRetry: () => void;
   onMountTM: (tmId: string) => void;
   onUnmountTM: (tmId: string) => void;
@@ -17,8 +16,7 @@ interface ProjectTMPaneProps {
 export function ProjectTMPane({
   mountedTMs,
   allMainTMs,
-  loading,
-  error,
+  loadState,
   onRetry,
   onMountTM,
   onUnmountTM,
@@ -26,11 +24,11 @@ export function ProjectTMPane({
   onResetWorkingTM,
   disabled = false,
 }: ProjectTMPaneProps) {
+  const { loading, loaded, error } = loadState;
   const workingTMs = mountedTMs.filter((tm) => tm.type === 'working');
   const mountedMainTMs = mountedTMs.filter((tm) => tm.type === 'main');
-  const hasVisibleData = mountedTMs.length > 0 || allMainTMs.length > 0;
 
-  if ((loading || error) && !hasVisibleData) {
+  if ((loading || error) && !loaded) {
     return (
       <div className="max-w-4xl mx-auto">
         <Card variant="surface" className="p-8 text-center">

@@ -118,6 +118,33 @@ describe('useProjectDetailData behavior helpers', () => {
     expect(setters.setAllTBs).toHaveBeenCalledWith([]);
   });
 
+  it('does not apply TM data after its project or request becomes stale', async () => {
+    const setters = createDataSetters();
+    let resolveMounted: ((value: []) => void) | undefined;
+    apiClientMock.getProjectMountedTMs.mockReturnValueOnce(
+      new Promise<[]>((resolve) => {
+        resolveMounted = resolve;
+      }),
+    );
+    let projectIsCurrent = true;
+    let requestIsCurrent = true;
+    const loaders = createProjectDetailDataLoaders({
+      projectId: 7,
+      api: apiClientMock,
+      ...setters,
+      isCurrent: () => projectIsCurrent,
+    });
+
+    const load = loaders.loadTMData(() => requestIsCurrent);
+    projectIsCurrent = false;
+    requestIsCurrent = false;
+    resolveMounted?.([]);
+    await load;
+
+    expect(setters.setMountedTMs).not.toHaveBeenCalled();
+    expect(setters.setAllMainTMs).not.toHaveBeenCalled();
+  });
+
   it('mountTM runs inside mutation and refreshes data', async () => {
     const { order, runMutation, loadData } = createMutationHarness();
     const api = {

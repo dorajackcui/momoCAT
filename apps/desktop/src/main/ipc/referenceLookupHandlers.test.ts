@@ -224,6 +224,58 @@ describe('reference lookup IPC handlers', () => {
     expect(deps.notifyReferenceDataChanged).not.toHaveBeenCalled();
   });
 
+  it('invalidates Working TM references when reset fails after a possible committed prefix', async () => {
+    const { handlers, ipcMain } = createIpcMainStub();
+    const deps = createDeps();
+    deps.projectService.resetWorkingTM.mockRejectedValueOnce(new Error('reset failed'));
+
+    registerTMHandlers({ ipcMain, ...deps } as never);
+
+    await expect(handlers.get(IPC_CHANNELS.tm.resetWorking)?.({}, 7, 'working-1')).rejects.toThrow(
+      'reset failed',
+    );
+    expect(deps.notifyReferenceDataChanged).toHaveBeenCalledWith({
+      projectId: 7,
+      kind: 'tm',
+      reason: 'working-tm-reset',
+    });
+  });
+
+  it.each([
+    { resetError: null, expected: 3 },
+    { resetError: new Error('reset failed'), expected: null },
+  ])(
+    'preserves the reset result when its reference notification throws',
+    async ({ resetError, expected }) => {
+      const { handlers, ipcMain } = createIpcMainStub();
+      const deps = createDeps();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      if (resetError) {
+        deps.projectService.resetWorkingTM.mockRejectedValueOnce(resetError);
+      }
+      deps.notifyReferenceDataChanged.mockImplementationOnce(() => {
+        throw new Error('renderer closed');
+      });
+
+      registerTMHandlers({ ipcMain, ...deps } as never);
+
+      try {
+        const result = handlers.get(IPC_CHANNELS.tm.resetWorking)?.({}, 7, 'working-1');
+        if (resetError) {
+          await expect(result).rejects.toBe(resetError);
+        } else {
+          await expect(result).resolves.toBe(expected);
+        }
+        expect(consoleError).toHaveBeenCalledWith(
+          '[WorkingTMReset] Failed to notify reference readers:',
+          expect.any(Error),
+        );
+      } finally {
+        consoleError.mockRestore();
+      }
+    },
+  );
+
   it.each([
     {
       channel: IPC_CHANNELS.tb.create,

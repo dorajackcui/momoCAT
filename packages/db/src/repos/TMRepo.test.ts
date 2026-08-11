@@ -31,9 +31,11 @@ describe('TMRepo FTS replacement', () => {
       updatedAt: '2026-06-15T00:00:00.000Z',
       usageCount: 1,
     });
-    const raw = (db as unknown as {
-      db: { prepare(sql: string): { run(...args: unknown[]): unknown } };
-    }).db;
+    const raw = (
+      db as unknown as {
+        db: { prepare(sql: string): { run(...args: unknown[]): unknown } };
+      }
+    ).db;
     const stableUpdatedAt = '2020-01-01T00:00:00.000Z';
     raw.prepare('UPDATE tms SET updatedAt = ? WHERE id = ?').run(stableUpdatedAt, tmId);
 
@@ -98,14 +100,18 @@ describe('TMRepo FTS replacement', () => {
       updatedAt: now,
       usageCount: 1,
     });
-    (db as unknown as {
-      replaceTMFtsBatch(rows: Array<{
-        tmId: string;
-        srcText: string;
-        tgtText: string;
-        tmEntryId: string;
-      }>): void;
-    }).replaceTMFtsBatch([
+    (
+      db as unknown as {
+        replaceTMFtsBatch(
+          rows: Array<{
+            tmId: string;
+            srcText: string;
+            tgtText: string;
+            tmEntryId: string;
+          }>,
+        ): void;
+      }
+    ).replaceTMFtsBatch([
       { tmId, srcText: 'Hello', tgtText: 'AncientZebra', tmEntryId: entryId },
       { tmId, srcText: 'Hello', tgtText: 'ModernQuartz', tmEntryId: entryId },
     ]);
@@ -113,9 +119,7 @@ describe('TMRepo FTS replacement', () => {
     expect(db.searchConcordance(projectId, 'AncientZebra', [tmId])).toHaveLength(0);
     const currentMatches = db.searchConcordance(projectId, 'ModernQuartz', [tmId]);
     expect(currentMatches).toHaveLength(1);
-    expect(currentMatches[0].targetTokens).toEqual([
-      { type: 'text', content: 'ModernQuartz' },
-    ]);
+    expect(currentMatches[0].targetTokens).toEqual([{ type: 'text', content: 'ModernQuartz' }]);
   });
 
   it('keeps existing FTS rows when batch replacement insert fails', () => {
@@ -140,9 +144,11 @@ describe('TMRepo FTS replacement', () => {
     });
     db.replaceTMFts(tmId, 'Atomic', 'OldNeedle', entryId);
 
-    const repo = (db as unknown as {
-      tmRepo: { stmtInsertTMFts: { run(...args: unknown[]): unknown } };
-    }).tmRepo;
+    const repo = (
+      db as unknown as {
+        tmRepo: { stmtInsertTMFts: { run(...args: unknown[]): unknown } };
+      }
+    ).tmRepo;
     const originalRun = repo.stmtInsertTMFts.run.bind(repo.stmtInsertTMFts);
     repo.stmtInsertTMFts.run = () => {
       throw new Error('forced insert failure');
@@ -185,11 +191,16 @@ describe('TMRepo FTS replacement', () => {
     db.upsertTMEntry(entry);
     db.upsertTMEntry({ ...entry, targetTokens: [{ type: 'text', content: 'SecondTarget' }] });
 
-    const raw = (db as unknown as {
-      db: {
-        prepare(sql: string): { get(...args: unknown[]): unknown; all(...args: unknown[]): unknown[] };
-      };
-    }).db;
+    const raw = (
+      db as unknown as {
+        db: {
+          prepare(sql: string): {
+            get(...args: unknown[]): unknown;
+            all(...args: unknown[]): unknown[];
+          };
+        };
+      }
+    ).db;
     const ftsRows = raw
       .prepare('SELECT rowid AS ftsRowid, tgtText FROM tm_fts WHERE tmEntryId = ?')
       .all('entry-rowid') as Array<{ ftsRowid: number; tgtText: string }>;
@@ -224,9 +235,16 @@ describe('TMRepo FTS replacement', () => {
     });
     db.insertTMFts(tmId, 'StaleSource', 'OldMeadow', entryId);
 
-    const raw = (db as unknown as {
-      db: { prepare(sql: string): { run(...args: unknown[]): unknown; all(...args: unknown[]): unknown[] } };
-    }).db;
+    const raw = (
+      db as unknown as {
+        db: {
+          prepare(sql: string): {
+            run(...args: unknown[]): unknown;
+            all(...args: unknown[]): unknown[];
+          };
+        };
+      }
+    ).db;
     // Simulate a mapping corrupted by an app version that predates ftsRowid.
     raw.prepare('UPDATE tm_entries SET ftsRowid = 999999 WHERE id = ?').run(entryId);
 
@@ -263,9 +281,11 @@ describe('TMRepo FTS replacement', () => {
 
     db.deleteTM(tmId);
 
-    const row = (db as unknown as {
-      db: { prepare(sql: string): { get(...args: unknown[]): unknown } };
-    }).db
+    const row = (
+      db as unknown as {
+        db: { prepare(sql: string): { get(...args: unknown[]): unknown } };
+      }
+    ).db
       .prepare('SELECT COUNT(*) AS count FROM tm_fts WHERE tmId = ?')
       .get(tmId) as { count: number };
     expect(row.count).toBe(0);
@@ -329,6 +349,9 @@ describe('TMRepo FTS replacement', () => {
     raw
       .prepare('INSERT INTO tm_fts (tmId, srcText, tgtText, tmEntryId) VALUES (?, ?, ?, ?)')
       .run(tmId, 'orphan source', 'orphan target', 'missing-entry');
+    raw
+      .prepare('INSERT INTO tm_fts (tmId, srcText, tgtText, tmEntryId) VALUES (?, ?, ?, ?)')
+      .run(tmId, 'cross-TM source', 'cross-TM target', otherEntryId);
 
     expect(db.clearTMEntries(tmId)).toBe(1);
 
@@ -395,9 +418,11 @@ describe('TMRepo optimizeTMFts', () => {
   });
 
   function ftsSegmentCount(): number {
-    const raw = (db as unknown as {
-      db: { prepare(sql: string): { get(...args: unknown[]): unknown } };
-    }).db;
+    const raw = (
+      db as unknown as {
+        db: { prepare(sql: string): { get(...args: unknown[]): unknown } };
+      }
+    ).db;
     // Every distinct segid in the %_idx shadow table is one b-tree segment
     // of the FTS index structure.
     return (raw.prepare('SELECT COUNT(DISTINCT segid) AS c FROM tm_fts_idx').get() as { c: number })

@@ -57,8 +57,7 @@ export function ProjectDetail({
     setFiles,
     mountedTMs,
     allMainTMs,
-    tmLoading,
-    tmError,
+    tmLoadState,
     mountedTBs,
     allTBs,
     loading,
@@ -575,8 +574,7 @@ export function ProjectDetail({
           <ProjectTMPane
             mountedTMs={mountedTMs}
             allMainTMs={allMainTMs.filter((tm) => hasMatchingLanguagePair(tm, project))}
-            loading={tmLoading}
-            error={tmError}
+            loadState={tmLoadState}
             onRetry={() => void loadTMData()}
             onMountTM={(tmId) => void handleMountTM(tmId)}
             onUnmountTM={(tmId) => void handleUnmountTM(tmId)}

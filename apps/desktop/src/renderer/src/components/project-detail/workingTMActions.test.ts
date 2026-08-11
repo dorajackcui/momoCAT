@@ -103,4 +103,26 @@ describe('Working TM actions', () => {
     expect(resetWorkingTM).not.toHaveBeenCalled();
     expect(reload).not.toHaveBeenCalled();
   });
+
+  it('refreshes the TM count when a bounded reset fails after a possible committed prefix', async () => {
+    const reload = vi.fn(async () => {});
+    const runMutation = vi.fn(async <T>(operation: () => Promise<T>) => operation());
+
+    await expect(
+      resetWorkingTMAction({
+        projectId: 7,
+        tmId: 'working-1',
+        tmName: 'Demo Working TM',
+        entryCount: 12,
+        confirm: vi.fn(async () => true),
+        resetWorkingTM: vi.fn(async () => {
+          throw new Error('reset failed');
+        }),
+        reload,
+        runMutation,
+      }),
+    ).rejects.toThrow('reset failed');
+
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
 });

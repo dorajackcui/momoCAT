@@ -4,7 +4,6 @@ const CLEAR_BATCH_SIZE = 500;
 
 interface ResetEntryRow {
   id: string;
-  entryRowid: number;
 }
 
 interface FtsRow {
@@ -20,26 +19,19 @@ export function clearTMEntriesInBatches(
     throw new Error('clearTMEntries must own its bounded transactions.');
   }
 
-  const boundary = db
-    .prepare('SELECT MAX(rowid) AS maxRowid FROM tm_entries WHERE tmId = ?')
-    .get(tmId) as { maxRowid: number | null };
-  const maxRowid = boundary.maxRowid ?? 0;
   const listEntries = db.prepare(`
-    SELECT id, rowid AS entryRowid
+    SELECT id
     FROM tm_entries
-    WHERE tmId = ? AND rowid > ? AND rowid <= ?
+    WHERE tmId = ?
     ORDER BY rowid ASC
     LIMIT ?
   `);
 
   let removed = 0;
-  let afterRowid = 0;
-  while (afterRowid < maxRowid) {
-    const rows = listEntries.all(tmId, afterRowid, maxRowid, CLEAR_BATCH_SIZE) as ResetEntryRow[];
-    if (rows.length === 0) break;
-
+  let rows = listEntries.all(tmId, CLEAR_BATCH_SIZE) as ResetEntryRow[];
+  while (rows.length > 0) {
     removed += db.transaction(() => deleteEntriesWithFts(rows.map((row) => row.id)))();
-    afterRowid = rows[rows.length - 1].entryRowid;
+    rows = listEntries.all(tmId, CLEAR_BATCH_SIZE) as ResetEntryRow[];
   }
 
   removeOrphanFtsRowsInBatches(db, tmId);
@@ -55,6 +47,7 @@ function removeOrphanFtsRowsInBatches(db: Database.Database, tmId: string): void
         SELECT 1
         FROM tm_entries
         WHERE tm_entries.id = tm_fts.tmEntryId
+          AND tm_entries.tmId = tm_fts.tmId
       )
     ORDER BY rowid ASC
     LIMIT ?
