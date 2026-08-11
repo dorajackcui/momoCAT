@@ -1,22 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DEFAULT_PROJECT_QA_SETTINGS, type ProjectQASettings } from '@cat/core/project';
 import type { ProjectFileRecord, TMCommitScope } from '../../../shared/ipc';
-import { ColumnSelector } from './ColumnSelector';
 import { apiClient } from '../services/apiClient';
 import { feedbackService } from '../services/feedbackService';
 import type { AIFileJobTracker } from '../hooks/aiFileJobs';
 import { useProjectDetailData } from '../hooks/projectDetail/useProjectDetailData';
 import { useProjectFileImport } from '../hooks/projectDetail/useProjectFileImport';
 import { useProjectAI } from '../hooks/projectDetail/useProjectAI';
-import { ProjectCommitModal } from './project-detail/ProjectCommitModal';
-import { ProjectMatchModal } from './project-detail/ProjectMatchModal';
-import { ProjectReferenceActionsModal } from './project-detail/ProjectReferenceActionsModal';
-import { ProjectReferenceOperationProgressModal } from './project-detail/ProjectReferenceOperationProgressModal';
+import { ProjectDetailDialogs } from './project-detail/ProjectDetailDialogs';
+import { ProjectDetailHeader, type ProjectDetailTab } from './project-detail/ProjectDetailHeader';
 import { ProjectFilesPane } from './project-detail/ProjectFilesPane';
 import { ProjectTMPane } from './project-detail/ProjectTMPane';
 import { ProjectTBPane } from './project-detail/ProjectTBPane';
-import { ProjectQASettingsModal } from './project-detail/ProjectQASettingsModal';
-import { PasteSourceModal } from './project-detail/PasteSourceModal';
 import { runFileQaWithRefresh } from './project-detail/runFileQaWithRefresh';
 import { buildFileQaFeedback } from './project-detail/fileQaFeedback';
 import { useProjectReferenceActions } from './project-detail/useProjectReferenceActions';
@@ -36,7 +31,7 @@ export function ProjectDetail({
   onOpenFile,
   aiFileJobTracker,
 }: ProjectDetailProps) {
-  const [activeTab, setActiveTab] = useState<'files' | 'tm' | 'tb'>('files');
+  const [activeTab, setActiveTab] = useState<ProjectDetailTab>('files');
   const [commitModalFile, setCommitModalFile] = useState<ProjectFileRecord | null>(null);
   const [commitTmId, setCommitTmId] = useState('');
   const [commitScope, setCommitScope] = useState<TMCommitScope>('confirmed-only');
@@ -48,7 +43,6 @@ export function ProjectDetail({
     DEFAULT_PROJECT_QA_SETTINGS,
   );
   const [aiSettingsExpanded, setAISettingsExpanded] = useState(false);
-  const addFileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const {
     project,
@@ -110,32 +104,6 @@ export function ProjectDetail({
       void loadTBData();
     }
   }, [activeTab, loadTBData, loadTMData]);
-
-  useEffect(() => {
-    if (!isAddFileMenuOpen) return;
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        closeAddFileMenu();
-      }
-    };
-
-    const closeOnOutsidePointer = (event: PointerEvent | MouseEvent) => {
-      const target = event.target;
-      if (target instanceof Node && addFileMenuRef.current?.contains(target)) return;
-      closeAddFileMenu();
-    };
-
-    document.addEventListener('keydown', closeOnEscape);
-    document.addEventListener('pointerdown', closeOnOutsidePointer);
-    document.addEventListener('mousedown', closeOnOutsidePointer);
-
-    return () => {
-      document.removeEventListener('keydown', closeOnEscape);
-      document.removeEventListener('pointerdown', closeOnOutsidePointer);
-      document.removeEventListener('mousedown', closeOnOutsidePointer);
-    };
-  }, [closeAddFileMenu, isAddFileMenuOpen]);
 
   const openCommitModal = async (file: ProjectFileRecord) => {
     const currentMountedTMs = await loadMountedTMs();
@@ -343,200 +311,51 @@ export function ProjectDetail({
 
   return (
     <div className="flex flex-col h-full bg-canvas">
-      <ColumnSelector
-        isOpen={fileImport.isSelectorOpen}
-        onClose={fileImport.closeSelector}
-        onConfirm={fileImport.confirmImport}
-        previewData={fileImport.previewData}
+      <ProjectDetailDialogs
+        fileImport={fileImport}
         projectType={project?.projectType || 'translation'}
-      />
-
-      <PasteSourceModal
-        open={fileImport.isPasteSourceOpen}
-        clipboard={fileImport.pasteClipboard}
-        creating={fileImport.pasteCreating}
-        onClose={fileImport.closePasteSource}
-        onCreate={(input) => void fileImport.confirmPasteSource(input)}
-      />
-
-      <ProjectCommitModal
-        file={commitModalFile}
         mountedTMs={mountedTMs}
-        selectedTmId={commitTmId}
+        commitFile={commitModalFile}
+        commitTmId={commitTmId}
         commitScope={commitScope}
-        onSelectedTmIdChange={setCommitTmId}
+        onCommitTmIdChange={setCommitTmId}
         onCommitScopeChange={setCommitScope}
-        onCancel={() => {
+        onCancelCommit={() => {
           setCommitModalFile(null);
           setCommitTmId('');
           setCommitScope('confirmed-only');
         }}
-        onConfirm={() => void confirmCommitModal()}
-      />
-
-      <ProjectMatchModal
-        file={matchModalFile}
-        mountedTMs={mountedTMs}
-        selectedTmId={matchTmId}
-        onSelectedTmIdChange={setMatchTmId}
-        onCancel={() => {
+        onConfirmCommit={() => void confirmCommitModal()}
+        matchFile={matchModalFile}
+        matchTmId={matchTmId}
+        onMatchTmIdChange={setMatchTmId}
+        onCancelMatch={() => {
           setMatchModalFile(null);
           setMatchTmId('');
         }}
-        onConfirm={() => void confirmMatchModal()}
+        onConfirmMatch={() => void confirmMatchModal()}
+        referenceActions={referenceActions}
+        qaSettingsOpen={qaSettingsOpen}
+        qaSettingsDraft={qaSettingsDraft}
+        qaSettingsSaving={qaSettingsSaving}
+        onQASettingsChange={setQaSettingsDraft}
+        onCloseQASettings={() => setQaSettingsOpen(false)}
+        onSaveQASettings={() => void saveQaSettings()}
       />
 
-      <ProjectReferenceActionsModal
-        file={referenceActions.file}
-        onClose={referenceActions.close}
-        onPrecheckSourceTerms={referenceActions.precheckSourceTerms}
-        onExportReferences={referenceActions.exportReferences}
+      <ProjectDetailHeader
+        project={project}
+        loading={loading}
+        activeTab={activeTab}
+        onBack={onBack}
+        onTabChange={setActiveTab}
+        onOpenQASettings={openQaSettings}
+        isAddFileMenuOpen={isAddFileMenuOpen}
+        onToggleAddFileMenu={fileImport.toggleAddFileMenu}
+        onCloseAddFileMenu={closeAddFileMenu}
+        onOpenFileImport={() => void fileImport.openFileImport()}
+        onOpenPasteSource={() => void fileImport.openPasteSource()}
       />
-
-      <ProjectQASettingsModal
-        isOpen={qaSettingsOpen}
-        draft={qaSettingsDraft}
-        onChange={setQaSettingsDraft}
-        onClose={() => setQaSettingsOpen(false)}
-        onSave={() => void saveQaSettings()}
-        saving={qaSettingsSaving}
-      />
-
-      <ProjectReferenceOperationProgressModal
-        progress={referenceActions.progress}
-        onCancelPrecheck={referenceActions.cancelPrecheck}
-      />
-
-      <div className="px-10 py-4 bg-surface/90 backdrop-blur border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={onBack}
-            className="p-2 text-text-faint hover:text-text-muted hover:bg-muted rounded-control transition-colors"
-            title="Back to Dashboard"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-          </button>
-          <div>
-            <h2 className="text-xl font-bold text-text">
-              {loading ? 'Loading...' : project?.name || 'Project Not Found'}
-            </h2>
-            {project && (
-              <div className="text-xs text-text-muted flex items-center gap-2">
-                <span>
-                  {project.srcLang} → {project.tgtLang}
-                </span>
-                <span
-                  className={`px-1.5 py-0.5 rounded-control font-semibold ${
-                    project.projectType === 'review'
-                      ? 'bg-warning-soft/80 text-warning'
-                      : project.projectType === 'custom'
-                        ? 'bg-success-soft/80 text-success'
-                        : 'bg-brand-soft text-brand'
-                  }`}
-                >
-                  {project.projectType === 'review'
-                    ? 'Review'
-                    : project.projectType === 'custom'
-                      ? 'Custom'
-                      : 'Translation'}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="flex surface-subtle p-1">
-            <button
-              onClick={() => setActiveTab('files')}
-              className={`px-4 py-1.5 text-xs font-semibold rounded-control transition-colors ${
-                activeTab === 'files'
-                  ? 'bg-surface text-brand shadow-panel'
-                  : 'text-text-muted hover:text-text hover:bg-surface'
-              }`}
-            >
-              Files
-            </button>
-            <button
-              onClick={() => setActiveTab('tm')}
-              className={`px-4 py-1.5 text-xs font-semibold rounded-control transition-colors ${
-                activeTab === 'tm'
-                  ? 'bg-surface text-brand shadow-panel'
-                  : 'text-text-muted hover:text-text hover:bg-surface'
-              }`}
-            >
-              Translation Memory
-            </button>
-            <button
-              onClick={() => setActiveTab('tb')}
-              className={`px-4 py-1.5 text-xs font-semibold rounded-control transition-colors ${
-                activeTab === 'tb'
-                  ? 'bg-surface text-brand shadow-panel'
-                  : 'text-text-muted hover:text-text hover:bg-surface'
-              }`}
-            >
-              Term Bases
-            </button>
-          </div>
-
-          <div className="h-6 w-[1px] bg-border" />
-
-          {project && activeTab === 'files' && (
-            <div className="flex items-center gap-2">
-              {project.projectType === 'translation' && (
-                <button
-                  onClick={openQaSettings}
-                  disabled={loading}
-                  className="btn-secondary !text-warning !bg-warning-soft hover:!bg-warning-soft/80"
-                >
-                  QA Settings
-                </button>
-              )}
-              <div className="relative" ref={addFileMenuRef}>
-                <button
-                  onClick={fileImport.toggleAddFileMenu}
-                  disabled={loading}
-                  className="btn-primary"
-                  aria-haspopup="menu"
-                  aria-expanded={fileImport.isAddFileMenuOpen}
-                >
-                  + Add File
-                </button>
-                {fileImport.isAddFileMenuOpen && (
-                  <div
-                    className="absolute right-0 mt-2 w-40 surface-card p-1 shadow-float z-20"
-                    role="menu"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => void fileImport.openFileImport()}
-                      className="w-full text-left px-3 py-2 text-sm font-semibold text-text-muted hover:text-text hover:bg-muted rounded-control"
-                      role="menuitem"
-                    >
-                      Import
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void fileImport.openPasteSource()}
-                      className="w-full text-left px-3 py-2 text-sm font-semibold text-text-muted hover:text-text hover:bg-muted rounded-control"
-                      role="menuitem"
-                    >
-                      Paste
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
 
       <div className="flex-1 overflow-auto p-10 custom-scrollbar">
         {!project ? (
