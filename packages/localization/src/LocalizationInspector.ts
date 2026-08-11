@@ -1,7 +1,6 @@
 import { writeFile } from 'fs/promises';
 import { basename, extname, join, parse } from 'path';
 import type { Segment } from '@cat/core/models';
-import type { Project } from '@cat/core/project';
 import { TagValidator } from '@cat/core/qa';
 import type { TagPolicy } from '@cat/core/tag';
 import type { CATDatabase } from '@cat/db';
@@ -17,11 +16,8 @@ import { SqliteTMRepository } from './adapters/sqlite/SqliteTMRepository';
 import { DefaultAIRuntimeConfigProvider } from './providers/AIRuntimeConfigService';
 import { AIProviderCatalogService } from './providers/AIProviderCatalogService';
 import { AIProviderTransport } from './providers/AIProviderTransport';
-import { computeSourceHash } from './job/sourceHash';
-import type { JobUnit, TranslationTask } from './job/types';
 import type { MTBatchCurrentUnitInput } from './modules/MTModule';
 import type { AIRuntimeConfigProvider, AITransport } from './ports';
-import { buildWindowModeContext } from './requestModes/shared/contextWindowBuilder';
 import { unitKey } from './requestModes/shared/unitIdentity';
 import { buildWindowPartialReadOnlyContextRows } from './requestModes/shared/windowPartialContextBuilder';
 import type {
@@ -48,6 +44,19 @@ import {
 import { createTransientSegment } from './transientSegment';
 import { resolveTagPolicy } from './tagPolicy';
 import { normalizeTargetForBaseline, resolveTargetBaseline } from './targetBaseline';
+import {
+  createProgressEmitter,
+  fileParseRowToUnit,
+  type ProgressEmitter,
+  validatePositiveInteger,
+} from './externalFileOperationSupport';
+import {
+  buildInspectWindowContext,
+  inspectRowsToJobUnits,
+  isInspectRequestRow,
+  type InspectReadyRow,
+  type InspectRowWithSegment,
+} from './LocalizationInspectorRows';
 import type {
   LocalizationEngineOptions,
   LocalizationMode,
@@ -83,16 +92,6 @@ export interface LocalizationInspectorOptions extends LocalizationEngineOptions 
 type ProjectRecord = NonNullable<
   ReturnType<SqliteProjectRepository['getProject']>
 >;
-type InspectRowWithSegment = {
-  row: FileParseRowArtifact;
-  segment: Segment;
-  sourceIndex: number;
-};
-type InspectReadyRow = InspectRowWithSegment & {
-  unit: InspectUnitArtifact;
-  unitIndex: number;
-};
-type ProgressEmitter = (current: number) => Promise<void>;
 
 export class LocalizationInspector {
   private readonly projectRepo: SqliteProjectRepository;
@@ -178,7 +177,7 @@ export class LocalizationInspector {
 
     const rowsWithSegments = limitedRows.map((row, index) => {
       const segment = createTransientSegment(
-        rowToUnit(row, project, parsed.inputPath),
+        fileParseRowToUnit(row, project, parsed.inputPath),
         index,
         {
           projectId: project.id,
@@ -477,7 +476,7 @@ export class LocalizationInspector {
     await emitProgress(0);
     for (const rowWithSegment of rows) {
       const current = rowWithSegment.sourceIndex + 1;
-      if (!isRequestRow(rowWithSegment.row)) {
+      if (!isInspectRequestRow(rowWithSegment.row)) {
         await emitProgress(current);
         continue;
       }
@@ -543,130 +542,6 @@ export class LocalizationInspector {
       status: 'ready',
     };
   }
-}
-
-function rowToUnit(
-  row: FileParseRowArtifact,
-  project: Project,
-  inputPath: string,
-) {
-  return {
-    id: row.unitId,
-    source: row.source,
-    target: row.target,
-    sourceLanguage: project.srcLang,
-    targetLanguage: project.tgtLang,
-    context: row.context,
-    fileName: basename(inputPath),
-    rowNumber: row.rowNumber,
-    metadata: {
-      rowIndex: row.rowIndex,
-      rowNumber: row.rowNumber,
-    },
-  };
-}
-
-function inspectRowsToJobUnits(
-  rows: FileParseRowArtifact[],
-  documentId: string,
-): JobUnit[] {
-  return rows
-    .filter((row) => row.source.trim())
-    .map((row) => ({
-      documentId,
-      unitId: row.unitId,
-      source: row.source,
-      target: row.target,
-      context: row.context,
-      rowNumber: row.rowNumber,
-      sourceHash: computeSourceHash({
-        source: row.source,
-        context: row.context,
-        resumeFingerprint: 'inspect',
-      }),
-      metadata: {
-        rowIndex: row.rowIndex,
-        rowNumber: row.rowNumber,
-      },
-    }));
-}
-
-function buildInspectWindowContext(
-  rows: FileParseRowArtifact[],
-  currentRows: InspectReadyRow[],
-  documentId: string,
-): ReturnType<typeof buildWindowModeContext> {
-  const jobUnits = inspectRowsToJobUnits(rows, documentId);
-  const jobUnitsByUnitId = new Map(jobUnits.map((unit) => [unit.unitId, unit]));
-  const currentUnits = currentRows.flatMap((row) => {
-    const unit = jobUnitsByUnitId.get(row.row.unitId);
-    return unit ? [unit] : [];
-  });
-  const completedResults = new Map(
-    jobUnits
-      .filter((unit) => unit.target?.trim())
-      .map((unit) => [
-        unitKey(unit),
-        {
-          jobId: 'inspect',
-          documentId: unit.documentId,
-          unitId: unit.unitId,
-          sourceHash: unit.sourceHash,
-          status: 'skipped' as const,
-          source: unit.source,
-          target: unit.target,
-          metadata: unit.metadata,
-        },
-      ]),
-  );
-  const task: TranslationTask = {
-    taskId: 'inspect-window-context',
-    units: currentUnits,
-  };
-
-  return buildWindowModeContext({
-    task,
-    jobUnits,
-    currentUnits,
-    completedResults,
-  });
-}
-
-function isRequestRow(row: FileParseRowArtifact): boolean {
-  return !row.target.trim();
-}
-
-function createProgressEmitter(
-  onProgress: ((current: number, total: number) => void) | undefined,
-  total: number,
-): ProgressEmitter {
-  let lastCurrent: number | undefined;
-
-  return async (current: number): Promise<void> => {
-    if (!onProgress || current === lastCurrent) return;
-    lastCurrent = current;
-    onProgress(current, total);
-    await yieldToEventLoop();
-  };
-}
-
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
-}
-
-function validatePositiveInteger(
-  value: number | undefined,
-  name: string,
-): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
-    throw new Error(`${name} must be a positive integer.`);
-  }
-
-  return value;
 }
 
 function inferJsonOutputPath(outputPath: string): string {

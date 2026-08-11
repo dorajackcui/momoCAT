@@ -1,6 +1,5 @@
 import { basename } from 'path';
 import type { Segment } from '@cat/core/models';
-import type { Project } from '@cat/core/project';
 import type { CATDatabase } from '@cat/db';
 import { SqliteProjectRepository } from './adapters/sqlite/SqliteProjectRepository';
 import { SqliteTBRepository } from './adapters/sqlite/SqliteTBRepository';
@@ -30,6 +29,11 @@ import { TMService } from './services/TMService';
 import { resolveTagPolicy } from './tagPolicy';
 import { createTransientSegment } from './transientSegment';
 import type { LocalizationEngineOptions, TranslateFileInput } from './types';
+import {
+  createProgressEmitter,
+  fileParseRowToUnit,
+  validatePositiveInteger,
+} from './externalFileOperationSupport';
 
 const DEFAULT_MAX_CELL_CHARS = 30000;
 
@@ -68,7 +72,6 @@ export interface LocalizationReferenceExporterOptions
 }
 
 type ProjectRecord = NonNullable<ReturnType<SqliteProjectRepository['getProject']>>;
-type ProgressEmitter = (current: number) => Promise<void>;
 
 interface ReferenceRowWithSegment {
   row: FileParseRowArtifact;
@@ -125,7 +128,7 @@ export class LocalizationReferenceExporter {
     const limitedRows = unitLimit === undefined ? sourceRows : sourceRows.slice(0, unitLimit);
     const rowsWithSegments = limitedRows.map((row, index) => {
       const segment = createTransientSegment(
-        rowToUnit(row, project, parsed.inputPath),
+        fileParseRowToUnit(row, project, parsed.inputPath),
         index,
         {
           projectId: project.id,
@@ -274,51 +277,4 @@ export class LocalizationReferenceExporter {
       };
     });
   }
-}
-
-function rowToUnit(row: FileParseRowArtifact, project: Project, inputPath: string) {
-  return {
-    id: row.unitId,
-    source: row.source,
-    target: row.target,
-    sourceLanguage: project.srcLang,
-    targetLanguage: project.tgtLang,
-    context: row.context,
-    fileName: basename(inputPath),
-    rowNumber: row.rowNumber,
-    metadata: {
-      rowIndex: row.rowIndex,
-      rowNumber: row.rowNumber,
-    },
-  };
-}
-
-function createProgressEmitter(
-  onProgress: ((current: number, total: number) => void) | undefined,
-  total: number,
-): ProgressEmitter {
-  let lastCurrent: number | undefined;
-
-  return async (current: number): Promise<void> => {
-    if (!onProgress || current === lastCurrent) return;
-    lastCurrent = current;
-    onProgress(current, total);
-    await yieldToEventLoop();
-  };
-}
-
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
-}
-
-function validatePositiveInteger(value: number | undefined, name: string): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
-    throw new Error(`${name} must be a positive integer.`);
-  }
-
-  return value;
 }
