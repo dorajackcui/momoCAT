@@ -1,5 +1,6 @@
 import { TagValidator } from '@cat/core/qa';
 import {
+  DefaultAIRuntimeConfigProvider,
   SourceTerminologyPromptSettingsService,
   type CancellationToken,
   type LocalizationEngine,
@@ -23,7 +24,6 @@ import type {
 import type { ProxySettingsApplier } from '../proxy/ProxySettingsManager';
 import { ProxySettingsManager } from '../proxy/ProxySettingsManager';
 import { SegmentService } from '../SegmentService';
-import { DefaultAIRuntimeConfigProvider } from './ai/AIRuntimeConfigService';
 import {
   AIProviderCatalogService,
   type AddAIProviderInput,

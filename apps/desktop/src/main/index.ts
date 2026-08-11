@@ -6,6 +6,7 @@ import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import electronUpdater from 'electron-updater';
 import { CATDatabase, UnsupportedDatabaseSchemaError } from '@cat/db';
+import { AIRuntimeConfigService } from '@cat/localization';
 import { ProjectService } from './services/ProjectService';
 import { JobManager } from './JobManager';
 import { createAppUpdateService, type AppUpdateService } from './services/AppUpdateService';
@@ -17,7 +18,6 @@ import {
   shouldInvalidateReferenceLookupWorkerCaches,
   subscribeToWorkingTMReferenceDataChanges,
 } from './referenceDataInvalidation';
-import { AIRuntimeConfigService } from './services/modules/ai/AIRuntimeConfigService';
 import {
   AI_PROMPT_DEBUG_ENV,
   AI_PROMPT_DEBUG_FILE_ENV,
