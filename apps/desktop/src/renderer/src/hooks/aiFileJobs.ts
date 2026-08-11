@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import type { JobProgressEvent } from '../../../shared/ipc';
 
 const UNKNOWN_FILE_ID = -1;
@@ -123,11 +123,7 @@ export function createAIFileJobTracker(): AIFileJobTrackerStore {
 }
 
 export function useAIFileJobTracker(): AIFileJobTracker {
-  const trackerRef = useRef<AIFileJobTrackerStore | null>(null);
-  if (trackerRef.current === null) {
-    trackerRef.current = createAIFileJobTracker();
-  }
-  const tracker = trackerRef.current;
+  const [tracker] = useState(createAIFileJobTracker);
 
   useEffect(() => {
     const unsubscribe = window.api.onJobProgress((progress) => {
@@ -139,18 +135,12 @@ export function useAIFileJobTracker(): AIFileJobTracker {
   return tracker;
 }
 
-export function useAIFileJobForFile(
-  tracker: AIFileJobTracker,
-  fileId: number,
-): AIFileJob | null {
+export function useAIFileJobForFile(tracker: AIFileJobTracker, fileId: number): AIFileJob | null {
   const getSnapshot = useCallback(() => tracker.getFileJob(fileId), [fileId, tracker]);
   return useSyncExternalStore(tracker.subscribe, getSnapshot, getSnapshot);
 }
 
 export function useAIJob(tracker: AIFileJobTracker, jobId: string | null): AIFileJob | null {
-  const getSnapshot = useCallback(
-    () => (jobId ? tracker.getJob(jobId) : null),
-    [jobId, tracker],
-  );
+  const getSnapshot = useCallback(() => (jobId ? tracker.getJob(jobId) : null), [jobId, tracker]);
   return useSyncExternalStore(tracker.subscribe, getSnapshot, getSnapshot);
 }
