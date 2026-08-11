@@ -2,11 +2,6 @@ import { writeFile } from 'fs/promises';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { TMEntry } from '@cat/core/models';
 import * as XLSX from 'xlsx';
-import {
-  serializeWorkingTMTokenMetadata,
-  WORKING_TM_SOURCE_TOKENS_HEADER,
-  WORKING_TM_TARGET_TOKENS_HEADER,
-} from './workingTMWorkbookFormat';
 
 const EXPORT_PAGE_SIZE = 1_000;
 
@@ -31,9 +26,7 @@ export async function runWorkingTMExportPipeline(
   // the same SQLite snapshot. Workbook serialization happens after the read
   // transaction, but still inside the dedicated export worker.
   const { worksheet, exported } = db.runInTransaction(() => {
-    const sheet = XLSX.utils.aoa_to_sheet([
-      ['Source', 'Target', WORKING_TM_SOURCE_TOKENS_HEADER, WORKING_TM_TARGET_TOKENS_HEADER],
-    ]);
+    const sheet = XLSX.utils.aoa_to_sheet([['Source', 'Target']]);
     let offset = 0;
     let hasMore = true;
 
@@ -43,11 +36,11 @@ export async function runWorkingTMExportPipeline(
 
       XLSX.utils.sheet_add_aoa(
         sheet,
+        // Two-column text interchange by design. Reimport follows the same
+        // normal tag-recognition rules as every other TM workbook.
         entries.map((entry) => [
           serializeTokensToDisplayText(entry.sourceTokens),
           serializeTokensToDisplayText(entry.targetTokens),
-          serializeWorkingTMTokenMetadata(entry.sourceTokens),
-          serializeWorkingTMTokenMetadata(entry.targetTokens),
         ]),
         { origin: { r: offset + 1, c: 0 } },
       );
@@ -58,7 +51,7 @@ export async function runWorkingTMExportPipeline(
     return { worksheet: sheet, exported: offset };
   });
 
-  worksheet['!cols'] = [{ wch: 48 }, { wch: 48 }, { hidden: true }, { hidden: true }];
+  worksheet['!cols'] = [{ wch: 48 }, { wch: 48 }];
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Working TM');
   const data = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }) as

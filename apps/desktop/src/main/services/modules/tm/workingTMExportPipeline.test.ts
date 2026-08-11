@@ -5,15 +5,10 @@ import type { TMEntry, Token } from '@cat/core/models';
 import { CATDatabase } from '@cat/db';
 import * as XLSX from 'xlsx';
 import { afterEach, describe, expect, it } from 'vitest';
-import { runTMImportPipeline } from './tmImportPipeline';
 import {
   runWorkingTMExportPipeline,
   type WorkingTMExportDatabasePort,
 } from './workingTMExportPipeline';
-import {
-  WORKING_TM_SOURCE_TOKENS_HEADER,
-  WORKING_TM_TARGET_TOKENS_HEADER,
-} from './workingTMWorkbookFormat';
 
 const temporaryDirectories: string[] = [];
 
@@ -55,16 +50,20 @@ describe('runWorkingTMExportPipeline', () => {
     expect(pageOffsets).toEqual([0, 1_000]);
   });
 
-  it('round-trips literal tag-like text without losing real token identity', async () => {
+  it('exports original tag text in two columns without editor markers', async () => {
     const db = new CATDatabase(':memory:');
-    const outputPath = await createOutputPath('round-trip.xlsx');
+    const outputPath = await createOutputPath('original-tags.xlsx');
     const sourceTokens: Token[] = [
       { type: 'text', content: 'Literal {1}; real tag: ' },
-      { type: 'tag', content: '{1}', meta: { id: '{1}' } },
+      { type: 'tag', content: '<b>', meta: { id: '<b>' } },
+      { type: 'text', content: 'bold' },
+      { type: 'tag', content: '</b>', meta: { id: '</b>' } },
     ];
     const targetTokens: Token[] = [
       { type: 'text', content: 'Texte {1}; balise réelle : ' },
-      { type: 'tag', content: '{1}', meta: { id: '{1}' } },
+      { type: 'tag', content: '<b>', meta: { id: '<b>' } },
+      { type: 'text', content: 'gras' },
+      { type: 'tag', content: '</b>', meta: { id: '</b>' } },
     ];
 
     try {
@@ -86,32 +85,13 @@ describe('runWorkingTMExportPipeline', () => {
 
       await runWorkingTMExportPipeline(db, { tmId: sourceTmId, outputPath });
 
-      const workbook = XLSX.readFile(outputPath, { cellStyles: true });
+      const workbook = XLSX.readFile(outputPath);
       const worksheet = workbook.Sheets['Working TM'];
       const rows = XLSX.utils.sheet_to_json<string[]>(worksheet, { header: 1, raw: false });
-      expect(rows[0]).toEqual([
-        'Source',
-        'Target',
-        WORKING_TM_SOURCE_TOKENS_HEADER,
-        WORKING_TM_TARGET_TOKENS_HEADER,
+      expect(rows).toEqual([
+        ['Source', 'Target'],
+        ['Literal {1}; real tag: <b>bold</b>', 'Texte {1}; balise réelle : <b>gras</b>'],
       ]);
-      expect(rows[1]?.slice(0, 2)).toEqual([
-        'Literal {1}; real tag: {1}',
-        'Texte {1}; balise réelle : {1}',
-      ]);
-      expect(worksheet['!cols']?.[2]?.hidden).toBe(true);
-      expect(worksheet['!cols']?.[3]?.hidden).toBe(true);
-
-      const importedTmId = db.createTM('Imported Main TM', 'en', 'fr', 'main');
-      await runTMImportPipeline(db, {
-        tmId: importedTmId,
-        filePath: outputPath,
-        options: { hasHeader: true, sourceCol: 0, targetCol: 1, overwrite: false },
-      });
-
-      const [imported] = db.listTMEntries(importedTmId);
-      expect(imported?.sourceTokens).toEqual(sourceTokens);
-      expect(imported?.targetTokens).toEqual(targetTokens);
     } finally {
       db.close();
     }

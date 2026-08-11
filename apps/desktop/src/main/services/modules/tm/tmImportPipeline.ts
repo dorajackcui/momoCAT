@@ -1,15 +1,10 @@
 import { createHash, randomUUID } from 'crypto';
 import { parseDisplayTextToTokens, computeTagsSignature } from '@cat/core/tag';
-import { computeMatchKey, computeSrcHash, serializeTokensToDisplayText } from '@cat/core/text';
+import { computeMatchKey, computeSrcHash } from '@cat/core/text';
 import type { TMEntry, Token } from '@cat/core/models';
 import { extractSheetRows, readFirstSheet } from '../../../filters/sheetRows';
 import { dedupeRowsLastWins } from '../resourceImportRows';
 import type { TMImportOptions } from '../../../../shared/ipc';
-import {
-  findWorkingTMMetadataColumns,
-  parseWorkingTMTokenMetadata,
-  type WorkingTMMetadataColumns,
-} from './workingTMWorkbookFormat';
 
 interface ParsedTMImportRow {
   srcHash: string;
@@ -64,29 +59,15 @@ export interface TMImportPipelineHooks {
 function parseTMImportRow(
   cells: Array<string | number | boolean | null | undefined>,
   options: TMImportOptions,
-  metadataColumns: WorkingTMMetadataColumns | null,
 ): ParsedTMImportRow | null {
-  const rawSrcText = cells[options.sourceCol] !== undefined ? String(cells[options.sourceCol]) : '';
-  const rawTgtText = cells[options.targetCol] !== undefined ? String(cells[options.targetCol]) : '';
-  const trimmedSrcText = rawSrcText.trim();
-  const trimmedTgtText = rawTgtText.trim();
-  if (!trimmedSrcText || !trimmedTgtText) return null;
+  const srcText =
+    cells[options.sourceCol] !== undefined ? String(cells[options.sourceCol]).trim() : '';
+  const tgtText =
+    cells[options.targetCol] !== undefined ? String(cells[options.targetCol]).trim() : '';
+  if (!srcText || !tgtText) return null;
 
-  const sourceMetadata = metadataColumns
-    ? parseWorkingTMTokenMetadata(cells[metadataColumns.sourceTokensCol])
-    : null;
-  const targetMetadata = metadataColumns
-    ? parseWorkingTMTokenMetadata(cells[metadataColumns.targetTokensCol])
-    : null;
-  const metadataMatches =
-    sourceMetadata &&
-    targetMetadata &&
-    serializeTokensToDisplayText(sourceMetadata) === rawSrcText &&
-    serializeTokensToDisplayText(targetMetadata) === rawTgtText;
-  const sourceTokens = metadataMatches ? sourceMetadata : parseDisplayTextToTokens(trimmedSrcText);
-  const targetTokens = metadataMatches ? targetMetadata : parseDisplayTextToTokens(trimmedTgtText);
-  const srcText = metadataMatches ? rawSrcText : trimmedSrcText;
-  const tgtText = metadataMatches ? rawTgtText : trimmedTgtText;
+  const sourceTokens = parseDisplayTextToTokens(srcText);
+  const targetTokens = parseDisplayTextToTokens(tgtText);
   const tagsSignature = computeTagsSignature(sourceTokens);
   const matchKey = computeMatchKey(sourceTokens);
   const srcHash = computeSrcHash(matchKey, tagsSignature);
@@ -120,16 +101,8 @@ export async function runTMImportPipeline(
 
   emitProgress(0, 1, 'Reading spreadsheet...');
   const worksheet = await readFirstSheet(input.filePath);
-  const headerRows = options.hasHeader ? extractSheetRows(worksheet, { maxRows: 1 }) : [];
-  const metadataColumns = findWorkingTMMetadataColumns(headerRows[0]?.cells ?? []);
   const sourceRows = extractSheetRows(worksheet, {
-    columnIndexes: [
-      options.sourceCol,
-      options.targetCol,
-      ...(metadataColumns
-        ? [metadataColumns.sourceTokensCol, metadataColumns.targetTokensCol]
-        : []),
-    ],
+    columnIndexes: [options.sourceCol, options.targetCol],
   });
   const rows = options.hasHeader ? sourceRows.slice(1) : sourceRows;
 
@@ -162,7 +135,7 @@ export async function runTMImportPipeline(
     // once per transaction (in-chunk duplicates never reach the DB).
     const chunkRows: Array<ParsedTMImportRow | null> = [];
     for (let j = i; j < end; j++) {
-      chunkRows.push(parseTMImportRow(rows[j].cells, options, metadataColumns));
+      chunkRows.push(parseTMImportRow(rows[j].cells, options));
     }
     const deduped = dedupeRowsLastWins(chunkRows, (row) => row?.srcHash ?? null);
     skipped += deduped.invalid + deduped.duplicates;

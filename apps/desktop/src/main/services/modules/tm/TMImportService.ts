@@ -11,10 +11,6 @@ import type {
 } from '../../ports';
 import type { TMImportOptions } from '../../../../shared/ipc';
 import type { ImportProgress, ImportProgressCallback, TMImportWorkerMessage } from './types';
-import {
-  findWorkingTMMetadataColumns,
-  stripWorkingTMMetadataColumns,
-} from './workingTMWorkbookFormat';
 
 export class TMImportService {
   constructor(
@@ -26,9 +22,7 @@ export class TMImportService {
 
   public async getTMImportPreview(filePath: string): Promise<SpreadsheetPreviewData> {
     const worksheet = await readFirstSheet(filePath);
-    const rows = extractSheetRows(worksheet, { maxRows: 10 });
-    const metadataColumns = findWorkingTMMetadataColumns(rows[0]?.cells ?? []);
-    return rows.map((row) => stripWorkingTMMetadataColumns(row.cells, metadataColumns));
+    return extractSheetRows(worksheet, { maxRows: 10 }).map((row) => row.cells);
   }
 
   public async importTMEntries(
