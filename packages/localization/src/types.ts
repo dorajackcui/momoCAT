@@ -1,6 +1,6 @@
 import type { TagPolicy } from '@cat/core/tag';
 import type { TranslationAuditSink } from './audit/TranslationAudit';
-import type { ReasoningEffort } from './ports';
+import type { AIRuntimeConfigProvider, AITransport, ReasoningEffort } from './ports';
 
 export type LocalizationTargetScope = 'blank-only' | 'overwrite-non-confirmed';
 
@@ -67,6 +67,12 @@ export interface LocalizationEngineOptions {
   defaultMode?: LocalizationMode;
   mt?: MTModuleOptions;
   auditSink?: TranslationAuditSink;
+}
+
+export interface LocalizationEngineConstructorOptions extends LocalizationEngineOptions {
+  dbPath: string;
+  aiTransport?: AITransport;
+  aiRuntimeConfigProvider?: AIRuntimeConfigProvider;
 }
 
 export interface EngineTMReference {

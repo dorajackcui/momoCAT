@@ -1,31 +1,26 @@
-import { createHash } from 'crypto';
-import type { Segment } from '@cat/core/models';
 import { normalizeProjectAIModel } from '@cat/core/project';
-import { TagValidator } from '@cat/core/qa';
-import type { TagPolicy } from '@cat/core/tag';
-import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { CATDatabase } from '@cat/db';
-import { MTModule } from './modules/MTModule';
-import { TBModule } from './modules/TBModule';
-import { TMModule } from './modules/TMModule';
-import { TBService } from './services/TBService';
-import { TMService } from './services/TMService';
-import { SqliteProjectRepository } from './adapters/sqlite/SqliteProjectRepository';
-import { SqliteSettingsRepository } from './adapters/sqlite/SqliteSettingsRepository';
-import { SqliteTBRepository } from './adapters/sqlite/SqliteTBRepository';
-import { SqliteTMRepository } from './adapters/sqlite/SqliteTMRepository';
-import { DefaultAIRuntimeConfigProvider } from './providers/AIRuntimeConfigService';
-import { AIProviderCatalogService } from './providers/AIProviderCatalogService';
-import { resolveBatchTargetScope } from './translationTargetScope';
-import { AIProviderTransport } from './providers/AIProviderTransport';
-import type { AIRuntimeConfigProvider, AITransport } from './ports';
+import { buildFileTranslationResumeFingerprint } from './engine/FileResumeFingerprint';
+import {
+  createLocalizationEngineAssembly,
+  type LocalizationEngineAssembly,
+} from './engine/LocalizationEngineAssembly';
+import {
+  mergeMTOptions,
+  normalizeWindowJobOptions,
+  resolveLocalizationMode,
+} from './engine/localizationEngineOptions';
+import {
+  prepareExternalTranslationUnit,
+  prepareJobTranslationUnit,
+  unitResultToPublicResult,
+} from './engine/LocalizationUnitPreparation';
 import { translateSpreadsheetFileJob } from './fileTranslationJobAdapter';
 import { translateProjectSegmentsJob } from './projectSegmentJobAdapter';
 import { translateSpreadsheetFile } from './spreadsheetFileAdapter';
 import { RuntimeTMContext, RuntimeTMReferenceResolver } from './runtimeTm';
-import { resolveTagPolicy, tagPolicyFingerprintValue } from './tagPolicy';
-import { resolveTargetBaseline } from './targetBaseline';
-import { createTransientSegment } from './transientSegment';
+import { resolveTagPolicy } from './tagPolicy';
+import { resolveBatchTargetScope } from './translationTargetScope';
 import { unitKey } from './requestModes/shared/unitIdentity';
 import type { RequestModeReferenceResolver } from './requestModes/shared/references';
 import {
@@ -35,9 +30,6 @@ import {
   toUnitResult,
 } from './requestModes/shared/results';
 import type { PreparedTranslatableJobUnit } from './requestModes/types';
-import { WindowModeSequentialBatchStrategy } from './requestModes/windowSequentialBatch/WindowModeSequentialBatchStrategy';
-import { WindowPartialSequentialBatchStrategy } from './requestModes/windowPartialSequentialBatch/WindowPartialSequentialBatchStrategy';
-import { LegacySingleUnitConcurrentStrategy } from './requestModes/legacySingleUnitConcurrent/LegacySingleUnitConcurrentStrategy';
 import type {
   ArtifactRecord,
   TaskExecutionContext,
@@ -47,106 +39,34 @@ import type {
   UnitResult,
 } from './job/types';
 import type {
-  ExternalTranslationUnit,
-  LocalizationEngineOptions,
+  LocalizationEngineConstructorOptions,
   LocalizationEngineProfile,
-  LocalizationMode,
   LocalizationTargetScope,
   TranslateFileInput,
   TranslateFileResult,
   TranslateProjectSegmentsInput,
   TranslateUnitResult,
   TranslateUnitsInput,
-  TranslateUnitsOptions,
   TranslateUnitsResult,
 } from './types';
 
-export interface LocalizationEngineConstructorOptions extends LocalizationEngineOptions {
-  dbPath: string;
-  aiTransport?: AITransport;
-  aiRuntimeConfigProvider?: AIRuntimeConfigProvider;
-}
-
-type ProjectRecord = NonNullable<ReturnType<SqliteProjectRepository['getProject']>>;
+export type { LocalizationEngineConstructorOptions } from './types';
 
 export interface LocalizationTaskExecutorOptions {
   referenceResolver?: RequestModeReferenceResolver;
 }
 
-type PreparedUnit =
-  | {
-      kind: 'skipped';
-      result: TranslateUnitResult;
-    }
-  | {
-      kind: 'translatable';
-      unit: ExternalTranslationUnit;
-      segment: Segment;
-    };
-
 export class LocalizationEngine {
-  private readonly projectRepo: SqliteProjectRepository;
-  private readonly settingsRepo: SqliteSettingsRepository;
-  private readonly tmRepo: SqliteTMRepository;
-  private readonly tbRepo: SqliteTBRepository;
-  private readonly tmService: TMService;
-  private readonly tbService: TBService;
-  private readonly providerCatalogService: AIProviderCatalogService;
-  private readonly aiRuntimeConfigProvider: AIRuntimeConfigProvider;
-  private readonly tmModule: TMModule;
-  private readonly tbModule: TBModule;
-  private readonly mtModule: MTModule;
-  private readonly windowModeStrategy: WindowModeSequentialBatchStrategy;
-  private readonly windowPartialStrategy: WindowPartialSequentialBatchStrategy;
-  private readonly legacyStrategy: LegacySingleUnitConcurrentStrategy;
+  private readonly assembly: LocalizationEngineAssembly;
   private readonly options: LocalizationEngineConstructorOptions;
 
   constructor(db: CATDatabase, options: LocalizationEngineConstructorOptions) {
     this.options = options;
-    this.projectRepo = new SqliteProjectRepository(db);
-    this.settingsRepo = new SqliteSettingsRepository(db);
-    this.tmRepo = new SqliteTMRepository(db);
-    this.tbRepo = new SqliteTBRepository(db);
-    this.tmService = new TMService(this.projectRepo, this.tmRepo);
-    this.tbService = new TBService(this.projectRepo, this.tbRepo);
-
-    const aiTransport = options.aiTransport ?? new AIProviderTransport();
-    this.providerCatalogService = new AIProviderCatalogService(this.settingsRepo, aiTransport);
-    this.aiRuntimeConfigProvider =
-      options.aiRuntimeConfigProvider ?? new DefaultAIRuntimeConfigProvider();
-    this.tmModule = new TMModule({
-      tmRepo: this.tmRepo,
-      tmService: this.tmService,
-    });
-    this.tbModule = new TBModule({
-      tbRepo: this.tbRepo,
-      tbService: this.tbService,
-    });
-    this.mtModule = new MTModule({
-      providerCatalogService: this.providerCatalogService,
-      aiRuntimeConfigProvider: this.aiRuntimeConfigProvider,
-      aiTransport,
-      tagValidator: new TagValidator(),
-    });
-    this.windowModeStrategy = new WindowModeSequentialBatchStrategy({
-      tmModule: this.tmModule,
-      tbModule: this.tbModule,
-      mtModule: this.mtModule,
-    });
-    this.windowPartialStrategy = new WindowPartialSequentialBatchStrategy({
-      tmModule: this.tmModule,
-      tbModule: this.tbModule,
-      mtModule: this.mtModule,
-    });
-    this.legacyStrategy = new LegacySingleUnitConcurrentStrategy({
-      tmModule: this.tmModule,
-      tbModule: this.tbModule,
-      mtModule: this.mtModule,
-    });
+    this.assembly = createLocalizationEngineAssembly(db, options);
   }
 
   public async inspectProject(projectId: number): Promise<LocalizationEngineProfile> {
-    const project = this.projectRepo.getProject(projectId);
+    const project = this.assembly.projectRepo.getProject(projectId);
     if (!project) {
       return {
         projectId,
@@ -169,13 +89,13 @@ export class LocalizationEngine {
     const providerId = this.options.mt?.providerId ?? project.aiModel;
 
     try {
-      const config = await this.mtModule.resolveConfig(project, this.options.mt);
+      const config = await this.assembly.mtModule.resolveConfig(project, this.options.mt);
       model = config.model;
       apiKeySet = config.apiKey.trim().length > 0;
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error));
       const normalizedProviderId = normalizeProjectAIModel(providerId);
-      const provider = this.providerCatalogService
+      const provider = this.assembly.providerCatalogService
         .listProviders()
         .find((candidate) => candidate.id === normalizedProviderId);
       model = this.options.mt?.model ?? provider?.model ?? null;
@@ -190,20 +110,20 @@ export class LocalizationEngine {
       promptChars: project.aiPrompt?.length ?? 0,
       model,
       apiKeySet,
-      mountedTMCount: this.tmRepo.getProjectMountedTMs(projectId).length,
-      mountedTBCount: this.tbRepo.getProjectMountedTermBases(projectId).length,
+      mountedTMCount: this.assembly.tmRepo.getProjectMountedTMs(projectId).length,
+      mountedTBCount: this.assembly.tbRepo.getProjectMountedTermBases(projectId).length,
       ready: errors.length === 0,
       errors,
     };
   }
 
   public async translateUnits(input: TranslateUnitsInput): Promise<TranslateUnitsResult> {
-    const project = this.projectRepo.getProject(input.projectId);
+    const project = this.assembly.projectRepo.getProject(input.projectId);
     if (!project) {
       throw new Error(`Project not found: ${input.projectId}`);
     }
 
-    const mode = this.resolveMode(input.options?.mode);
+    const mode = resolveLocalizationMode(input.options?.mode, this.options);
     if (mode === 'dialogue') {
       throw new Error('Dialogue mode is not supported for external translation units.');
     }
@@ -214,7 +134,7 @@ export class LocalizationEngine {
     const tagPolicy = resolveTagPolicy(input.options?.tagPolicy);
     const maxConcurrency = input.options?.maxConcurrency ?? this.options.maxConcurrency;
     const preparedUnits = input.units.map((unit, index) =>
-      this.prepareUnit(unit, index, project, targetScope, tagPolicy),
+      prepareExternalTranslationUnit(unit, index, project, targetScope, tagPolicy),
     );
     const hasTranslatableUnits = preparedUnits.some((prepared) => prepared.kind === 'translatable');
 
@@ -230,18 +150,16 @@ export class LocalizationEngine {
     }
 
     const mtOptions = mergeMTOptions(this.options.mt, input.options?.mt);
-    const mtConfig = await this.mtModule.resolveConfig(
+    const mtConfig = await this.assembly.mtModule.resolveConfig(
       project,
       mtOptions,
       input.options?.providerOverride,
     );
 
     const translatableUnits = preparedUnits.flatMap((prepared) =>
-      prepared.kind === 'translatable'
-        ? [{ unit: prepared.unit, segment: prepared.segment }]
-        : [],
+      prepared.kind === 'translatable' ? [{ unit: prepared.unit, segment: prepared.segment }] : [],
     );
-    const translated = await this.legacyStrategy.translateUnits({
+    const translated = await this.assembly.legacyStrategy.translateUnits({
       project,
       mtConfig,
       mtOptions,
@@ -267,7 +185,9 @@ export class LocalizationEngine {
     return buildTranslateUnitsResult(results);
   }
 
-  public createTaskExecutor(options: LocalizationTaskExecutorOptions = {}): TranslationTaskExecutor {
+  public createTaskExecutor(
+    options: LocalizationTaskExecutorOptions = {},
+  ): TranslationTaskExecutor {
     return (task, context) => this.executeTranslationTask(task, context, options);
   }
 
@@ -276,20 +196,20 @@ export class LocalizationEngine {
     context: TaskExecutionContext,
     options: LocalizationTaskExecutorOptions = {},
   ): Promise<TaskExecutionResult> {
-    const project = this.projectRepo.getProject(context.job.projectId);
+    const project = this.assembly.projectRepo.getProject(context.job.projectId);
     if (!project) {
       throw new Error(`Project not found: ${context.job.projectId}`);
     }
 
     const translationOptions = context.job.translationOptions;
-    const mode = this.resolveMode(translationOptions?.mode);
+    const mode = resolveLocalizationMode(translationOptions?.mode, this.options);
     if (mode === 'dialogue') {
       throw new Error('Dialogue mode is not supported for external translation units.');
     }
 
     const tagPolicy = resolveTagPolicy(translationOptions?.tagPolicy);
     const preparedUnits = task.units.map((unit, index) =>
-      this.prepareJobUnit(jobUnitToExternalUnit(unit), index, project, tagPolicy),
+      prepareJobTranslationUnit(jobUnitToExternalUnit(unit), index, project, tagPolicy),
     );
     const hasTranslatableUnits = preparedUnits.some((prepared) => prepared.kind === 'translatable');
     const captureArtifacts = context.captureArtifacts !== false;
@@ -322,14 +242,16 @@ export class LocalizationEngine {
     }
 
     const mtOptions = mergeMTOptions(this.options.mt, translationOptions?.mt);
-    const mtConfig = await this.mtModule.resolveConfig(
+    const mtConfig = await this.assembly.mtModule.resolveConfig(
       project,
       mtOptions,
       translationOptions?.providerOverride,
     );
     const requestMode = task.requestMode ?? translationOptions?.requestMode ?? 'window';
     const strategy =
-      requestMode === 'window-partial' ? this.windowPartialStrategy : this.windowModeStrategy;
+      requestMode === 'window-partial'
+        ? this.assembly.windowPartialStrategy
+        : this.assembly.windowModeStrategy;
     const translated = await strategy.translate({
       task,
       context,
@@ -361,22 +283,26 @@ export class LocalizationEngine {
 
   public async translateFile(input: TranslateFileInput): Promise<TranslateFileResult> {
     if (input.job) {
-      const mode = this.resolveMode(input.options?.mode);
+      const mode = resolveLocalizationMode(input.options?.mode, this.options);
       if (mode === 'dialogue') {
         throw new Error('Dialogue mode is not supported for external translation units.');
       }
       const tagPolicy = resolveTagPolicy(input.options?.tagPolicy);
 
-      const project = this.projectRepo.getProject(input.projectId);
+      const project = this.assembly.projectRepo.getProject(input.projectId);
       if (!project) {
         throw new Error(`Project not found: ${input.projectId}`);
       }
-      const normalizedOptions = this.normalizeWindowJobOptions(input.options);
+      const normalizedOptions = normalizeWindowJobOptions(input.options, this.options);
       const normalizedInput = { ...input, options: normalizedOptions };
-      const resumeFingerprint = await this.buildFileTranslationResumeFingerprint(
-        normalizedInput,
+      const resumeFingerprint = await buildFileTranslationResumeFingerprint({
+        input: normalizedInput,
         project,
-      );
+        options: this.options,
+        mtModule: this.assembly.mtModule,
+        tmRepo: this.assembly.tmRepo,
+        tbRepo: this.assembly.tbRepo,
+      });
       const runtimeTm =
         (project.projectType ?? 'translation') === 'translation'
           ? RuntimeTMContext.create({
@@ -432,12 +358,12 @@ export class LocalizationEngine {
   public async translateProjectSegments(
     input: TranslateProjectSegmentsInput,
   ): Promise<TranslateUnitsResult> {
-    const project = this.projectRepo.getProject(input.projectId);
+    const project = this.assembly.projectRepo.getProject(input.projectId);
     if (!project) {
       throw new Error(`Project not found: ${input.projectId}`);
     }
 
-    const mode = this.resolveMode(input.options?.mode);
+    const mode = resolveLocalizationMode(input.options?.mode, this.options);
     if (mode === 'dialogue') {
       throw new Error('Dialogue mode is not supported for project segment jobs.');
     }
@@ -454,7 +380,7 @@ export class LocalizationEngine {
     const referenceResolver = runtimeTm
       ? new RuntimeTMReferenceResolver(runtimeTm).resolve
       : undefined;
-    const normalizedOptions = this.normalizeWindowJobOptions(input.options);
+    const normalizedOptions = normalizeWindowJobOptions(input.options, this.options);
 
     try {
       return await translateProjectSegmentsJob(
@@ -493,281 +419,4 @@ export class LocalizationEngine {
       runtimeTm?.dispose();
     }
   }
-
-  private resolveMode(mode?: LocalizationMode): LocalizationMode {
-    return mode ?? this.options.defaultMode ?? 'standard';
-  }
-
-  private async buildFileTranslationResumeFingerprint(
-    input: TranslateFileInput,
-    project: ProjectRecord,
-  ): Promise<string> {
-    const targetBaseline = this.resolveWindowTargetBaseline(input.options);
-    const mode = this.resolveMode(input.options?.mode);
-    const mtOptions = mergeMTOptions(this.options.mt, input.options?.mt);
-    const mtConfig = await this.mtModule.resolvePromptConfig(
-      project,
-      mtOptions,
-      input.options?.providerOverride,
-    );
-    const mountedTMs = this.tmRepo
-      .getProjectMountedTMs(project.id)
-      .map((tm) => {
-        const stats = this.tmRepo.getTMStats(tm.id);
-        return {
-          id: tm.id,
-          srcLang: tm.srcLang,
-          tgtLang: tm.tgtLang,
-          type: tm.type,
-          priority: tm.priority,
-          permission: tm.permission,
-          isEnabled: tm.isEnabled,
-          updatedAt: tm.updatedAt,
-          entryCount: stats.entryCount,
-          maxEntryUpdatedAt: stats.maxEntryUpdatedAt,
-        };
-      })
-      .sort(compareResourceFingerprint);
-    const mountedTBs = this.tbRepo
-      .getProjectMountedTermBases(project.id)
-      .map((tb) => {
-        const stats = this.tbRepo.getTermBaseStats(tb.id);
-        return {
-          id: tb.id,
-          srcLang: tb.srcLang,
-          tgtLang: tb.tgtLang,
-          priority: tb.priority,
-          isEnabled: tb.isEnabled,
-          updatedAt: tb.updatedAt,
-          entryCount: stats.entryCount,
-          maxEntryUpdatedAt: stats.maxEntryUpdatedAt,
-        };
-      })
-      .sort(compareResourceFingerprint);
-
-    return hashCanonicalPayload([
-      ['project.id', project.id],
-      ['project.srcLang', project.srcLang],
-      ['project.tgtLang', project.tgtLang],
-      ['project.type', project.projectType ?? 'translation'],
-      ['targetBaseline', targetBaseline],
-      ['mode', mode],
-      ['requestMode', input.options?.requestMode ?? 'window-partial'],
-      ['tagPolicy', tagPolicyFingerprintValue(input.options?.tagPolicy)],
-      ['provider.id', mtConfig.provider.id],
-      ['provider.kind', mtConfig.provider.kind],
-      ['provider.protocol', mtConfig.provider.protocol],
-      ['provider.baseUrl', mtConfig.provider.baseUrl],
-      ['model', mtConfig.model],
-      ['reasoningEffort', mtConfig.reasoningEffort],
-      ['temperature', mtOptions.temperature],
-      ['projectPrompt', mtOptions.systemPrompt ?? project.aiPrompt ?? ''],
-      ['mountedTMs', mountedTMs],
-      ['mountedTBs', mountedTBs],
-    ]);
-  }
-
-  private prepareUnit(
-    unit: ExternalTranslationUnit,
-    index: number,
-    project: ProjectRecord,
-    targetScope: LocalizationTargetScope,
-    tagPolicy: TagPolicy,
-  ): PreparedUnit {
-    const source = unit.source;
-    if (!source.trim()) {
-      return {
-        kind: 'skipped',
-        result: {
-          id: unit.id,
-          source,
-          target: unit.target ?? '',
-          status: 'skipped',
-          metadata: unit.metadata,
-        },
-      };
-    }
-
-    if (unit.locked) {
-      return {
-        kind: 'skipped',
-        result: {
-          id: unit.id,
-          source,
-          target: unit.target ?? '',
-          status: 'skipped',
-          metadata: unit.metadata,
-        },
-      };
-    }
-
-    const segment = createTransientSegment(
-      unit,
-      index,
-      {
-        projectId: project.id,
-        sourceLanguage: project.srcLang,
-        targetLanguage: project.tgtLang,
-        fileName: unit.fileName,
-      },
-      { tagPolicy },
-    );
-    const existingTarget = serializeTokensToDisplayText(segment.targetTokens);
-    if (targetScope === 'blank-only' && existingTarget.trim()) {
-      return {
-        kind: 'skipped',
-        result: {
-          id: unit.id,
-          source,
-          target: existingTarget,
-          status: 'skipped',
-          metadata: unit.metadata,
-        },
-      };
-    }
-
-    return {
-      kind: 'translatable',
-      unit,
-      segment,
-    };
-  }
-
-  private normalizeWindowJobOptions(
-    options: TranslateUnitsOptions | undefined,
-  ): TranslateUnitsOptions {
-    const { targetScope: _legacyTargetScope, ...restOptions } = options ?? {};
-
-    return {
-      ...restOptions,
-      targetBaseline: this.resolveWindowTargetBaseline(options),
-    };
-  }
-
-  private resolveWindowTargetBaseline(
-    options: TranslateUnitsOptions | undefined,
-  ) {
-    return resolveTargetBaseline({
-      targetBaseline: options?.targetBaseline,
-      targetScope: options?.targetScope ?? this.options.defaultTargetScope,
-    });
-  }
-
-  private prepareJobUnit(
-    unit: ExternalTranslationUnit,
-    index: number,
-    project: ProjectRecord,
-    tagPolicy: TagPolicy,
-  ): PreparedUnit {
-    const source = unit.source;
-    if (!source.trim()) {
-      return {
-        kind: 'skipped',
-        result: {
-          id: unit.id,
-          source,
-          target: unit.target ?? '',
-          status: 'skipped',
-          metadata: unit.metadata,
-        },
-      };
-    }
-
-    if (unit.locked) {
-      return {
-        kind: 'skipped',
-        result: {
-          id: unit.id,
-          source,
-          target: unit.target ?? '',
-          status: 'skipped',
-          metadata: unit.metadata,
-        },
-      };
-    }
-
-    const segment = createTransientSegment(
-      unit,
-      index,
-      {
-        projectId: project.id,
-        sourceLanguage: project.srcLang,
-        targetLanguage: project.tgtLang,
-        fileName: unit.fileName,
-      },
-      { tagPolicy },
-    );
-    const existingTarget = serializeTokensToDisplayText(segment.targetTokens);
-    if (existingTarget.trim()) {
-      return {
-        kind: 'skipped',
-        result: {
-          id: unit.id,
-          source,
-          target: existingTarget,
-          status: 'skipped',
-          metadata: unit.metadata,
-        },
-      };
-    }
-
-    return {
-      kind: 'translatable',
-      unit,
-      segment,
-    };
-  }
-
-}
-
-function unitResultToPublicResult(result: UnitResult): TranslateUnitResult {
-  if (result.status === 'failed') {
-    return {
-      id: result.unitId,
-      source: result.source,
-      target: result.target,
-      status: 'failed',
-      error: result.error ?? 'Translation failed',
-      references: result.references,
-      metadata: result.metadata,
-    };
-  }
-
-  return {
-    id: result.unitId,
-    source: result.source,
-    target: result.target ?? '',
-    status:
-      result.status === 'translated' || result.status === 'reused'
-        ? result.status
-        : 'skipped',
-    references: result.references,
-    metadata: result.metadata,
-  };
-}
-
-function hashCanonicalPayload(entries: Array<[string, unknown]>): string {
-  const payload = entries.filter(([, value]) => value !== undefined);
-
-  return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
-}
-
-function compareResourceFingerprint(
-  left: { id: string; priority: number },
-  right: { id: string; priority: number },
-): number {
-  return left.priority - right.priority || left.id.localeCompare(right.id);
-}
-
-function mergeMTOptions(
-  defaults?: LocalizationEngineOptions['mt'],
-  overrides?: LocalizationEngineOptions['mt'],
-): NonNullable<LocalizationEngineOptions['mt']> {
-  return {
-    providerId: overrides?.providerId ?? defaults?.providerId,
-    model: overrides?.model ?? defaults?.model,
-    reasoningEffort: overrides?.reasoningEffort ?? defaults?.reasoningEffort,
-    systemPrompt: overrides?.systemPrompt ?? defaults?.systemPrompt,
-    temperature: overrides?.temperature ?? defaults?.temperature,
-  };
 }
