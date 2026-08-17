@@ -43,7 +43,11 @@ function createDeps() {
       unmountTMFromProject: vi.fn().mockResolvedValue(undefined),
       exportWorkingTM: vi.fn().mockResolvedValue(3),
       resetWorkingTM: vi.fn().mockResolvedValue(3),
-      commitToMainTM: vi.fn().mockResolvedValue(undefined),
+      commitFileToTM: vi.fn().mockResolvedValue({
+        committedCount: 4,
+        projectId: 7,
+        tmType: 'main',
+      }),
       batchMatchFileWithTM: vi.fn().mockResolvedValue(undefined),
       createTB: vi.fn().mockResolvedValue('tb-1'),
       renameTB: vi.fn().mockResolvedValue(undefined),
@@ -221,6 +225,40 @@ describe('reference lookup IPC handlers', () => {
       handlers.get(IPC_CHANNELS.tm.exportWorking)?.({}, 7, 'tm-1', 'working.xlsx'),
     ).resolves.toBe(3);
     expect(deps.projectService.exportWorkingTM).toHaveBeenCalledWith(7, 'tm-1', 'working.xlsx');
+    expect(deps.notifyReferenceDataChanged).not.toHaveBeenCalled();
+  });
+
+  it('emits a project-scoped Working TM invalidation after committing a file', async () => {
+    const { handlers, ipcMain } = createIpcMainStub();
+    const deps = createDeps();
+    deps.projectService.commitFileToTM.mockResolvedValueOnce({
+      committedCount: 2,
+      projectId: 7,
+      tmType: 'working',
+    });
+
+    registerTMHandlers({ ipcMain, ...deps } as never);
+
+    await expect(
+      handlers.get(IPC_CHANNELS.tm.commitFile)?.({}, 'working-1', 11, undefined),
+    ).resolves.toBe(2);
+    expect(deps.notifyReferenceDataChanged).toHaveBeenCalledWith({
+      projectId: 7,
+      kind: 'tm',
+      reason: 'working-tm-updated',
+    });
+  });
+
+  it('does not invalidate Working TM references when an atomic file commit fails', async () => {
+    const { handlers, ipcMain } = createIpcMainStub();
+    const deps = createDeps();
+    deps.projectService.commitFileToTM.mockRejectedValueOnce(new Error('commit failed'));
+
+    registerTMHandlers({ ipcMain, ...deps } as never);
+
+    await expect(
+      handlers.get(IPC_CHANNELS.tm.commitFile)?.({}, 'working-1', 11, undefined),
+    ).rejects.toThrow('commit failed');
     expect(deps.notifyReferenceDataChanged).not.toHaveBeenCalled();
   });
 

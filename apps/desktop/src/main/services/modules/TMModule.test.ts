@@ -99,8 +99,23 @@ class FailingSegmentRepository implements SegmentRepository {
   }
 }
 
-function createCommitHarness(segments: Segment[]) {
-  const projectRepo = {} as ProjectRepository;
+function createCommitHarness(
+  segments: Segment[],
+  options: {
+    tmType?: 'working' | 'main';
+    permission?: string;
+    projectType?: 'translation' | 'review' | 'custom';
+  } = {},
+) {
+  const tmType = options.tmType ?? 'main';
+  const tmId = tmType === 'working' ? 'tm-working' : 'tm-main';
+  const projectRepo = {
+    getFile: vi.fn().mockReturnValue({ id: 1, projectId: 7, name: 'demo.xlsx' }),
+    getProject: vi.fn().mockReturnValue({
+      id: 7,
+      projectType: options.projectType,
+    }),
+  } as unknown as ProjectRepository;
   const segmentRepo = {
     getSegmentsPage: vi.fn((fileId: number, offset: number) => {
       if (fileId !== 1 || offset > 0) return [];
@@ -108,7 +123,14 @@ function createCommitHarness(segments: Segment[]) {
     }),
   } as unknown as SegmentRepository;
   const tmRepo = {
-    getTM: vi.fn().mockReturnValue({ id: 'tm-main', srcLang: 'en', tgtLang: 'zh' }),
+    getTM: vi.fn().mockReturnValue({ id: tmId, type: tmType, srcLang: 'en', tgtLang: 'zh' }),
+    getProjectMountedTMs: vi.fn().mockReturnValue([
+      {
+        id: tmId,
+        type: tmType,
+        permission: options.permission ?? (tmType === 'working' ? 'readwrite' : 'read'),
+      },
+    ]),
     renameTM: vi.fn(),
     upsertTMEntryBySrcHash: vi.fn((entry: { srcHash: string }) => `entry-${entry.srcHash}`),
     replaceTMFts: vi.fn(),
@@ -229,6 +251,156 @@ describe('TMModule.commitToMainTM', () => {
     expect(committedHashes).not.toContain('hash-empty-target');
     expect(committedHashes).not.toContain('hash-empty-source');
     expect(tmRepo.replaceTMFts).toHaveBeenCalledTimes(5);
+  });
+});
+
+describe('TMModule.commitFileToTM', () => {
+  it('commits file segments to the project writable Working TM', async () => {
+    const segment = createSegment('seg-confirmed', 'hash-confirmed', 'confirmed', 'target');
+    const { module, tmRepo } = createCommitHarness([segment], { tmType: 'working' });
+
+    const result = await module.commitFileToTM('tm-working', 1);
+
+    expect(result).toEqual({ committedCount: 1, projectId: 7, tmType: 'working' });
+    expect(tmRepo.upsertTMEntryBySrcHash).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tmId: 'tm-working',
+        projectId: 7,
+        srcHash: 'hash-confirmed',
+        originSegmentId: 'seg-confirmed',
+      }),
+    );
+    expect(tmRepo.replaceTMFts).toHaveBeenCalledWith(
+      'tm-working',
+      'Hello',
+      'target',
+      'entry-hash-confirmed',
+    );
+  });
+
+  it('rejects a Working TM that is not writable for the file project', async () => {
+    const segment = createSegment('seg-confirmed', 'hash-confirmed', 'confirmed', 'target');
+    const { module, tmRepo } = createCommitHarness([segment], {
+      tmType: 'working',
+      permission: 'read',
+    });
+
+    await expect(module.commitFileToTM('tm-working', 1)).rejects.toThrow(
+      "Target TM is not this file project's writable Working TM",
+    );
+    expect(tmRepo.upsertTMEntryBySrcHash).not.toHaveBeenCalled();
+  });
+
+  it('does not allow review projects to commit to Working TM', async () => {
+    const segment = createSegment('seg-confirmed', 'hash-confirmed', 'confirmed', 'target');
+    const { module, tmRepo } = createCommitHarness([segment], {
+      tmType: 'working',
+      projectType: 'review',
+    });
+
+    await expect(module.commitFileToTM('tm-working', 1)).rejects.toThrow(
+      'Only translation projects can commit to Working TM',
+    );
+    expect(tmRepo.upsertTMEntryBySrcHash).not.toHaveBeenCalled();
+  });
+
+  it('atomically rolls back new entries, updates, usage counts, and FTS on commit failure', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Atomic Working Commit', 'en', 'zh');
+      const fileId = db.createFile(projectId, 'atomic-commit.xlsx');
+      const segments: Segment[] = [
+        createSegment('seg-new', 'hash-new', 'confirmed', 'new target'),
+        createSegment('seg-existing', 'hash-existing', 'confirmed', 'replacement target'),
+        createSegment('seg-fail', 'hash-fail', 'confirmed', 'failing target'),
+      ].map((segment, index) => ({ ...segment, fileId, orderIndex: index }));
+      db.bulkInsertSegments(segments);
+
+      const workingTM = db.getProjectMountedTMs(projectId).find((tm) => tm.type === 'working');
+      expect(workingTM).toBeDefined();
+      if (!workingTM) throw new Error('Expected working TM to exist');
+
+      const existingEntryId = db.upsertTMEntryBySrcHash({
+        id: 'working-existing',
+        tmId: workingTM.id,
+        projectId,
+        srcLang: 'en',
+        tgtLang: 'zh',
+        srcHash: 'hash-existing',
+        matchKey: 'hello',
+        tagsSignature: '',
+        sourceTokens: [{ type: 'text', content: 'Hello' }],
+        targetTokens: [{ type: 'text', content: 'original target' }],
+        originSegmentId: 'original-segment',
+        createdAt: '2026-08-17T00:00:00.000Z',
+        updatedAt: '2026-08-17T00:00:00.000Z',
+        usageCount: 3,
+      });
+      db.replaceTMFts(workingTM.id, 'Hello', 'original target', existingEntryId);
+
+      const raw = (
+        db as unknown as {
+          db: {
+            prepare(sql: string): {
+              get(...args: unknown[]): unknown;
+              run(...args: unknown[]): unknown;
+            };
+          };
+        }
+      ).db;
+      raw
+        .prepare(
+          `
+          CREATE TEMP TRIGGER fail_working_tm_file_commit
+          BEFORE INSERT ON tm_entries
+          WHEN NEW.srcHash = 'hash-fail'
+          BEGIN
+            SELECT RAISE(ABORT, 'forced Working TM commit failure');
+          END
+        `,
+        )
+        .run();
+
+      const projectRepo = new SqliteProjectRepository(db);
+      const segmentRepo = new SqliteSegmentRepository(db);
+      const tmRepo = new SqliteTMRepository(db);
+      const tx = new SqliteTransactionManager(db);
+      const tmService = new TMService(projectRepo, tmRepo);
+      const segmentService = new SegmentService(segmentRepo, tmService, tx);
+      const module = new TMModule(
+        projectRepo,
+        segmentRepo,
+        tmRepo,
+        tx,
+        tmService,
+        segmentService,
+        ':memory:',
+        vi.fn(),
+        fakeSettingsRepo(),
+      );
+
+      try {
+        await expect(module.commitFileToTM(workingTM.id, fileId)).rejects.toThrow(
+          'forced Working TM commit failure',
+        );
+      } finally {
+        raw.prepare('DROP TRIGGER fail_working_tm_file_commit').run();
+      }
+
+      expect(db.findTMEntryByHash(workingTM.id, 'hash-new')).toBeUndefined();
+      expect(db.findTMEntryByHash(workingTM.id, 'hash-fail')).toBeUndefined();
+      expect(db.findTMEntryByHash(workingTM.id, 'hash-existing')).toMatchObject({
+        targetTokens: [{ type: 'text', content: 'original target' }],
+        originSegmentId: 'original-segment',
+        usageCount: 3,
+      });
+      expect(
+        raw.prepare('SELECT tgtText FROM tm_fts WHERE tmEntryId = ?').get(existingEntryId),
+      ).toEqual({ tgtText: 'original target' });
+      expect(db.getTMStats(workingTM.id).entryCount).toBe(1);
+    } finally {
+      db.close();
+    }
   });
 });
 

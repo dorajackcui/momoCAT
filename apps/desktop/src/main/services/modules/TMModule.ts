@@ -49,7 +49,13 @@ export class TMModule {
   ) {
     this.queryService = new TMQueryService(tmRepo, tmService);
     this.importService = new TMImportService(tmRepo, tx, dbPath, emitProgress);
-    this.batchOpsService = new TMBatchOpsService(projectRepo, segmentRepo, tmRepo, segmentService);
+    this.batchOpsService = new TMBatchOpsService(
+      projectRepo,
+      segmentRepo,
+      tmRepo,
+      tx,
+      segmentService,
+    );
     this.syncService = new TMSyncService(tmRepo, settingsRepo, dbPath, emitProgress);
     this.workingTMService = new WorkingTMService(
       tmRepo,
@@ -163,6 +169,10 @@ export class TMModule {
 
   public async commitToMainTM(tmId: string, fileId: number, options?: TMCommitOptions) {
     return this.batchOpsService.commitToMainTM(tmId, fileId, options);
+  }
+
+  public async commitFileToTM(tmId: string, fileId: number, options?: TMCommitOptions) {
+    return this.batchOpsService.commitFileToTM(tmId, fileId, options);
   }
 
   public async batchMatchFileWithTM(

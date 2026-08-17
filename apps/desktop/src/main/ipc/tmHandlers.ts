@@ -169,9 +169,13 @@ export function registerTMHandlers({
     IPC_CHANNELS.tm.commitFile,
     async (_event, ...args) => {
       const [tmId, fileId, options] = args as [string, number, TMCommitOptions | undefined];
-      const result = await projectService.commitToMainTM(tmId, fileId, options);
-      notifyReferenceDataChanged({ projectId: null, kind: 'tm', reason: 'tm-committed' });
-      return result;
+      const result = await projectService.commitFileToTM(tmId, fileId, options);
+      notifyReferenceDataChanged(
+        result.tmType === 'working'
+          ? { projectId: result.projectId, kind: 'tm', reason: 'working-tm-updated' }
+          : { projectId: null, kind: 'tm', reason: 'tm-committed' },
+      );
+      return result.committedCount;
     },
   );
 

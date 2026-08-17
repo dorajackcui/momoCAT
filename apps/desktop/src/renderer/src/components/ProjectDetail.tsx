@@ -17,6 +17,7 @@ import { buildFileQaFeedback } from './project-detail/fileQaFeedback';
 import { useProjectReferenceActions } from './project-detail/useProjectReferenceActions';
 import { hasMatchingLanguagePair } from './languageOptions';
 import { createProjectWorkingTMActions } from './project-detail/workingTMActions';
+import { getDefaultMountedCommitTarget } from './project-detail/ProjectCommitModal';
 
 interface ProjectDetailProps {
   projectId: number;
@@ -107,13 +108,13 @@ export function ProjectDetail({
 
   const openCommitModal = async (file: ProjectFileRecord) => {
     const currentMountedTMs = await loadMountedTMs();
-    const mountedMainTMs = currentMountedTMs.filter((tm) => tm.type === 'main');
-    if (mountedMainTMs.length === 0) {
-      feedbackService.info('No mounted Main TM found. Please mount a Main TM first.');
+    const defaultTarget = getDefaultMountedCommitTarget(currentMountedTMs);
+    if (!defaultTarget) {
+      feedbackService.info('No writable Working TM or mounted Main TM found.');
       return;
     }
     setCommitModalFile(file);
-    setCommitTmId(mountedMainTMs[0].id);
+    setCommitTmId(defaultTarget.id);
     setCommitScope('confirmed-only');
   };
 
@@ -122,7 +123,11 @@ export function ProjectDetail({
     try {
       const count = await commitToMainTM(commitTmId, commitModalFile.id, { scope: commitScope });
       const committedLabel = commitScope === 'all' ? 'eligible segments' : 'confirmed segments';
-      feedbackService.success(`Successfully committed ${count} ${committedLabel} to Main TM.`);
+      const target = mountedTMs.find((tm) => tm.id === commitTmId);
+      const targetLabel = target?.type === 'working' ? 'Working TM' : 'Main TM';
+      feedbackService.success(
+        `Successfully committed ${count} ${committedLabel} to ${targetLabel}.`,
+      );
     } catch {
       feedbackService.error('Failed to commit segments');
     } finally {

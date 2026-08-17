@@ -165,6 +165,8 @@ Runtime TM never writes Working TM, Main TM, or the persistent project database 
 
 Every translation project has a mounted read/write Working TM. Confirming a translation segment normally updates that TM inside the same transaction as the segment/file state. Review and custom project types do not perform this commit.
 
+The Files tab `Commit` action can write a whole file to either its writable Working TM or a mounted Main TM. It defaults to confirmed segments; `All with translations` also includes other statuses when both source and target are non-empty. Entry and FTS updates for the file run in one transaction, so a failed commit leaves the target TM unchanged. A Working TM target must be the writable Working TM mounted to that file's translation project, and review/custom projects cannot use this route to populate a Working TM.
+
 The Project Translation Memory tab keeps Working TM management intentionally narrow: users can export its source/target rows to XLSX or reset all entries after confirmation. Export reads one stable database snapshot and serializes the workbook in a background worker, writing the stored source/target content and original tag text into two visible columns. Reset runs in a background worker and atomically removes the current entries plus their FTS rows, then reloads the pane and publishes a project-wide `working-tm-reset` invalidation. The TM resource, project mount, project files, and translated segments are preserved.
 
 Same-source repeats are scoped to the current file:
@@ -180,7 +182,7 @@ Same-source repeats are scoped to the current file:
 
 The editor marks every occurrence in a same-source repeat group. The first occurrence uses the same repeat icon with a small superscript `1`; later occurrences use the plain repeat icon. The `首次重复` quick filter isolates those first occurrences.
 
-Post-commit `working-tm-updated` and segment events refresh match/reference state. Batch workflows that deliberately should not pollute Working TM pass `commitToWorkingTM: false` while preserving their own propagation/event behavior.
+Post-commit `working-tm-updated` and segment events refresh match/reference state. Whole-file commits to Working TM publish a project-scoped `working-tm-updated` invalidation after the write succeeds. Batch workflows that deliberately should not pollute Working TM pass `commitToWorkingTM: false` while preserving their own propagation/event behavior.
 
 ## Persistent resource import and sync
 

@@ -470,6 +470,10 @@ export class ProjectService {
     return this.tmModule.commitToMainTM(tmId, fileId, options);
   }
 
+  public async commitFileToTM(tmId: string, fileId: number, options?: TMCommitOptions) {
+    return this.tmModule.commitFileToTM(tmId, fileId, options);
+  }
+
   public async batchMatchFileWithTM(
     fileId: number,
     tmId: string,
