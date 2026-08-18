@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Segment, Token } from '@cat/core/models';
 
-import { appendTermToTargetTokens, parseTargetEditorText } from './editorTokenPolicy';
+import {
+  appendTermToTargetTokens,
+  applyTermAtEditorSelection,
+  buildTermInsertionText,
+  parseTargetEditorText,
+} from './editorTokenPolicy';
 
 const sourceTokens: Token[] = [
   { type: 'text', content: 'Save ' },
@@ -55,5 +60,47 @@ describe('editorTokenPolicy', () => {
     expect(appendTermToTargetTokens(createSegment('Guardar.'), '<xxx>', 'none')).toEqual([
       { type: 'text', content: 'Guardar.<xxx>' },
     ]);
+  });
+
+  it('inserts a Latin term at the caret with boundary spacing', () => {
+    expect(buildTermInsertionText('Save file', 4, 4, 'document', 'default')).toBe(' document');
+    expect(buildTermInsertionText('Savefile', 4, 4, 'document', 'default')).toBe(' document ');
+  });
+
+  it('replaces the current selection instead of appending the term', () => {
+    const replaceSelection = vi.fn();
+
+    expect(
+      applyTermAtEditorSelection(
+        {
+          getSnapshot: () => ({
+            text: 'Save old file',
+            selectionFrom: 5,
+            selectionTo: 8,
+          }),
+          replaceSelection,
+        },
+        'document',
+        'default',
+      ),
+    ).toBe(true);
+    expect(replaceSelection).toHaveBeenCalledOnce();
+    expect(replaceSelection).toHaveBeenCalledWith('document');
+  });
+
+  it('falls back when the active editor has no mounted snapshot', () => {
+    const replaceSelection = vi.fn();
+
+    expect(
+      applyTermAtEditorSelection(
+        {
+          getSnapshot: () => null,
+          replaceSelection,
+        },
+        'document',
+        'default',
+      ),
+    ).toBe(false);
+    expect(replaceSelection).not.toHaveBeenCalled();
   });
 });

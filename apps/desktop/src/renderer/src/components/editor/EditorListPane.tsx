@@ -4,6 +4,7 @@ import type { SearchableEditorSegment } from '../editorFilterUtils';
 import { EditorRow } from '../EditorRow';
 import type { EditorMatchMode } from '../editorFilterUtils';
 import type { EditorSegmentStore } from '../../hooks/editor/editorSegmentStore';
+import type { TargetEditorController } from '../editor-row/useEditorRowDraftController';
 import {
   ESTIMATED_EDITOR_ROW_HEIGHT,
   getEditorVirtualizerInitialRect,
@@ -24,6 +25,10 @@ interface EditorListPaneProps {
   onTranslationChange: (segmentId: string, value: string) => void;
   onTranslationBlur: (segmentId: string) => Promise<void>;
   onSegmentEditStateChange: (segmentId: string, editing: boolean) => void;
+  onTargetEditorControllerChange: (
+    segmentId: string,
+    controller: TargetEditorController | null,
+  ) => void;
   onAITranslate: (segmentId: string) => void;
   onAIRefine: (segmentId: string, instruction: string) => void;
   onConfirm: (segmentId: string) => void;
@@ -85,6 +90,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
   onTranslationChange,
   onTranslationBlur,
   onSegmentEditStateChange,
+  onTargetEditorControllerChange,
   onAITranslate,
   onAIRefine,
   onConfirm,
@@ -120,6 +126,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
         onChange={onTranslationChange}
         onBlur={onTranslationBlur}
         onEditStateChange={onSegmentEditStateChange}
+        onTargetEditorControllerChange={onTargetEditorControllerChange}
         onAITranslate={onAITranslate}
         onAIRefine={onAIRefine}
         onConfirm={onConfirm}
@@ -144,6 +151,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
       onRowActivate,
       onRowAutoFocus,
       onSegmentEditStateChange,
+      onTargetEditorControllerChange,
       onTranslationBlur,
       onTranslationChange,
       segmentSaveErrors,

@@ -8,7 +8,10 @@ import { EditorRowNumberCell } from './editor-row/EditorRowNumberCell';
 import { EditorRowTargetActions } from './editor-row/EditorRowTargetActions';
 import { EditorRowFeedback } from './editor-row/EditorRowFeedback';
 import { EditorRowTargetCell } from './editor-row/EditorRowTargetCell';
-import { useEditorRowDraftController } from './editor-row/useEditorRowDraftController';
+import {
+  useEditorRowDraftController,
+  type TargetEditorController,
+} from './editor-row/useEditorRowDraftController';
 import { useEditorRowCommandHandlers } from './editor-row/useEditorRowCommandHandlers';
 import { useEditorRowDisplayModel } from './editor-row/useEditorRowDisplayModel';
 
@@ -28,6 +31,7 @@ interface EditorRowProps {
   onChange: (id: string, value: string) => void;
   onBlur?: (id: string) => Promise<void>;
   onEditStateChange?: (id: string, editing: boolean) => void;
+  onTargetEditorControllerChange: (id: string, controller: TargetEditorController | null) => void;
   onAITranslate: (id: string) => void;
   onAIRefine: (id: string, instruction: string) => void;
   onConfirm: (id: string) => void;
@@ -60,6 +64,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
   onChange,
   onBlur,
   onEditStateChange,
+  onTargetEditorControllerChange,
   onAITranslate,
   onAIRefine,
   onConfirm,
@@ -173,6 +178,15 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
     setShortcutActionHandler(handleShortcutAction);
   }, [handleShortcutAction, setShortcutActionHandler]);
 
+  useEffect(() => {
+    if (!isActive) return;
+
+    onTargetEditorControllerChange(segment.segmentId, editorController);
+    return () => {
+      onTargetEditorControllerChange(segment.segmentId, null);
+    };
+  }, [editorController, isActive, onTargetEditorControllerChange, segment.segmentId]);
+
   return (
     <div
       className={`group grid grid-cols-[30px_minmax(0,1fr)_4px_minmax(0,1fr)] border-b border-border transition-colors ${
@@ -274,6 +288,7 @@ const areEditorRowPropsEqual = (prev: EditorRowProps, next: EditorRowProps): boo
   prev.onChange === next.onChange &&
   prev.onBlur === next.onBlur &&
   prev.onEditStateChange === next.onEditStateChange &&
+  prev.onTargetEditorControllerChange === next.onTargetEditorControllerChange &&
   prev.onAITranslate === next.onAITranslate &&
   prev.onAIRefine === next.onAIRefine &&
   prev.onConfirm === next.onConfirm;

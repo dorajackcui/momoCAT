@@ -17,6 +17,8 @@ import {
 } from '../hooks/editor/useEditorBatchActions';
 import type { AIFileJobTracker } from '../hooks/aiFileJobs';
 import { feedbackService } from '../services/feedbackService';
+import type { TargetEditorController } from './editor-row/useEditorRowDraftController';
+import { applyTermAtEditorSelection } from '../hooks/editor/editorTokenPolicy';
 
 interface EditorProps {
   fileId: number;
@@ -45,6 +47,10 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
   const listScrollRef = useRef<HTMLDivElement>(null);
   const sourceSearchInputRef = useRef<HTMLInputElement>(null);
   const targetSearchInputRef = useRef<HTMLInputElement>(null);
+  const activeTargetEditorRef = useRef<{
+    segmentId: string;
+    controller: TargetEditorController;
+  } | null>(null);
   const isVirtualizedListEnabled = useMemo(
     () => isVirtualizedEditorListEnabled(window.localStorage),
     [],
@@ -82,6 +88,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
     segmentChangeHint,
     segmentIndexById,
     segmentStats,
+    fileTagPolicy,
   } = useEditor({ activeFileId: fileId, activeTab });
 
   const {
@@ -218,6 +225,34 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
     setSuppressAutoFocusSegmentId((prev) => (prev === segmentId ? null : prev));
   }, []);
 
+  const handleTargetEditorControllerChange = useCallback(
+    (segmentId: string, controller: TargetEditorController | null) => {
+      if (controller) {
+        activeTargetEditorRef.current = { segmentId, controller };
+        return;
+      }
+      if (activeTargetEditorRef.current?.segmentId === segmentId) {
+        activeTargetEditorRef.current = null;
+      }
+    },
+    [],
+  );
+
+  const handleSidebarApplyTerm = useCallback(
+    (term: string) => {
+      const activeTargetEditor = activeTargetEditorRef.current;
+      if (
+        activeSegmentId &&
+        activeTargetEditor?.segmentId === activeSegmentId &&
+        applyTermAtEditorSelection(activeTargetEditor.controller, term, fileTagPolicy)
+      ) {
+        return;
+      }
+      handleApplyTerm(term);
+    },
+    [activeSegmentId, fileTagPolicy, handleApplyTerm],
+  );
+
   useEffect(() => {
     const loadInfo = async () => {
       try {
@@ -352,6 +387,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
               onTranslationChange={handleTranslationChange}
               onTranslationBlur={flushSegmentDraft}
               onSegmentEditStateChange={handleSegmentEditStateChange}
+              onTargetEditorControllerChange={handleTargetEditorControllerChange}
               onAITranslate={translateSegmentWithAI}
               onAIRefine={refineSegmentWithAI}
               onConfirm={confirmSegment}
@@ -377,7 +413,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
           sourceLocale={project?.srcLang ?? null}
           referenceLoading={referenceLoading}
           onApplyMatch={handleApplyMatch}
-          onApplyTerm={handleApplyTerm}
+          onApplyTerm={handleSidebarApplyTerm}
           projectId={projectId || 0}
           concordanceFocusSignal={concordanceFocusSignal}
           concordanceQuery={concordanceQuery}

@@ -72,6 +72,7 @@ describe('EditorRow layout containment', () => {
         isActive: true,
         onActivate: () => undefined,
         onChange: () => undefined,
+        onTargetEditorControllerChange: () => undefined,
         onAITranslate: () => undefined,
         onAIRefine: () => undefined,
         onConfirm: () => undefined,

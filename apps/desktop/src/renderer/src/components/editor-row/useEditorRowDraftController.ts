@@ -18,22 +18,24 @@ interface UseEditorRowDraftControllerParams {
   onEditStateChange?: (id: string, editing: boolean) => void;
 }
 
+interface TargetEditorController {
+  getSnapshot: () => {
+    text: string;
+    selectionFrom: number;
+    selectionTo: number;
+  } | null;
+  setText: (nextText: string, preserveSelection?: boolean) => void;
+  replaceSelection: (insertText: string) => void;
+  focus: () => void;
+}
+
 interface EditorRowDraftControllerResult {
   editorHostRef: RefObject<HTMLDivElement | null>;
   draftText: string;
   emitTranslationChange: (nextText: string) => void;
   setShortcutActionHandler: (handler: (action: EditorShortcutAction) => void) => void;
   capturePendingCaretCoords: (coords: { x: number; y: number }) => void;
-  editorController: {
-    getSnapshot: () => {
-      text: string;
-      selectionFrom: number;
-      selectionTo: number;
-    } | null;
-    setText: (nextText: string, preserveSelection?: boolean) => void;
-    replaceSelection: (insertText: string) => void;
-    focus: () => void;
-  };
+  editorController: TargetEditorController;
 }
 
 interface SetEditorTextSilentlyParams {
@@ -304,4 +306,8 @@ export function useEditorRowDraftController({
   };
 }
 
-export type { EditorRowDraftControllerResult, UseEditorRowDraftControllerParams };
+export type {
+  EditorRowDraftControllerResult,
+  TargetEditorController,
+  UseEditorRowDraftControllerParams,
+};

@@ -511,6 +511,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     segmentChangeHint,
     segmentIndexById: segmentStore.getIndexById(),
     segmentStats,
+    fileTagPolicy,
     projectId,
     activeSegmentId,
     activeMatches,
