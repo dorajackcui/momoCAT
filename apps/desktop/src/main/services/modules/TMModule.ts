@@ -35,6 +35,7 @@ export class TMModule {
   private readonly batchOpsService: TMBatchOpsService;
   private readonly syncService: TMSyncService;
   private readonly workingTMService: WorkingTMService;
+  private readonly activeEntryMutations = new Map<string, string>();
 
   constructor(
     projectRepo: ProjectRepository,
@@ -106,8 +107,10 @@ export class TMModule {
   }
 
   public async deleteTM(tmId: string) {
-    await this.queryService.deleteTM(tmId);
-    this.syncService.clearTMSyncConfig(tmId);
+    return this.runEntryMutation(tmId, 'delete', async () => {
+      await this.queryService.deleteTM(tmId);
+      this.syncService.clearTMSyncConfig(tmId);
+    });
   }
 
   public async getProjectMountedTMs(projectId: number) {
@@ -145,7 +148,9 @@ export class TMModule {
     options: TMImportOptions,
     onProgress?: ImportProgressCallback,
   ): Promise<{ success: number; skipped: number }> {
-    return this.importService.importTMEntries(tmId, filePath, options, onProgress);
+    return this.runEntryMutation(tmId, 'import', () =>
+      this.importService.importTMEntries(tmId, filePath, options, onProgress),
+    );
   }
 
   public getTMSyncConfig(tmId: string): TMSyncConfig | null {
@@ -153,14 +158,18 @@ export class TMModule {
   }
 
   public async setTMSyncConfig(tmId: string, config: TMSyncConfigInput): Promise<void> {
-    return this.syncService.setTMSyncConfig(tmId, config);
+    return this.runEntryMutation(tmId, 'sync mapping update', () =>
+      this.syncService.setTMSyncConfig(tmId, config),
+    );
   }
 
   public async syncTMEntriesFromExcel(
     tmId: string,
     onProgress?: ImportProgressCallback,
   ): Promise<TMSyncReport> {
-    return this.syncService.syncTMEntriesFromExcel(tmId, onProgress);
+    return this.runEntryMutation(tmId, 'sync', () =>
+      this.syncService.syncTMEntriesFromExcel(tmId, onProgress),
+    );
   }
 
   public cancelTMSync(tmId: string): boolean {
@@ -168,11 +177,15 @@ export class TMModule {
   }
 
   public async commitToMainTM(tmId: string, fileId: number, options?: TMCommitOptions) {
-    return this.batchOpsService.commitToMainTM(tmId, fileId, options);
+    return this.runEntryMutation(tmId, 'file commit', () =>
+      this.batchOpsService.commitToMainTM(tmId, fileId, options),
+    );
   }
 
   public async commitFileToTM(tmId: string, fileId: number, options?: TMCommitOptions) {
-    return this.batchOpsService.commitFileToTM(tmId, fileId, options);
+    return this.runEntryMutation(tmId, 'file commit', () =>
+      this.batchOpsService.commitFileToTM(tmId, fileId, options),
+    );
   }
 
   public async batchMatchFileWithTM(
@@ -180,5 +193,24 @@ export class TMModule {
     tmId: string,
   ): Promise<{ total: number; matched: number; applied: number; skipped: number }> {
     return this.batchOpsService.batchMatchFileWithTM(fileId, tmId);
+  }
+
+  private async runEntryMutation<T>(
+    tmId: string,
+    operation: string,
+    task: () => Promise<T>,
+  ): Promise<T> {
+    const activeOperation = this.activeEntryMutations.get(tmId);
+    if (activeOperation) {
+      throw new Error(
+        `Cannot start TM ${operation} while ${activeOperation} is running for this TM.`,
+      );
+    }
+    this.activeEntryMutations.set(tmId, operation);
+    try {
+      return await task();
+    } finally {
+      this.activeEntryMutations.delete(tmId);
+    }
   }
 }

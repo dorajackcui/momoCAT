@@ -2,7 +2,9 @@ import { randomUUID } from 'crypto';
 import { parseDisplayTextToTokens, computeTagsSignature } from '@cat/core/tag';
 import { computeMatchKey, computeSrcHash } from '@cat/core/text';
 import { extractSheetRows, readFirstSheet } from '../../../filters/sheetRows';
-import type { TMSyncColumns, TMSyncDeletePolicy, TMSyncReport } from '../../../../shared/ipc';
+import type { SheetRow } from '../../../filters/sheetRows';
+import type { TMSyncColumnIdentity, TMSyncColumns, TMSyncReport } from '../../../../shared/ipc';
+import { TM_SYNC_MAPPING_REVIEW_REQUIRED } from '../../../../shared/ipc';
 
 export interface TMSyncStagedRow {
   srcHash: string;
@@ -45,13 +47,15 @@ export interface TMSyncDatabasePort {
     tmId: string,
     afterSrcHash: string,
     limit: number,
-  ): Array<TMSyncStagedRow & { entryId: string }>;
+    lastSyncedAt?: string,
+  ): Array<TMSyncStagedRow & { entryId: string; localEdit: number }>;
   listTMSyncDeletedEntries(
     runId: string,
     tmId: string,
     afterId: string,
     limit: number,
-  ): Array<{ id: string }>;
+    lastSyncedAt?: string,
+  ): Array<{ id: string; localEdit: number }>;
   applyTMSyncInserts(tmId: string, rows: Array<TMSyncStagedRow & { id: string }>): number;
   applyTMSyncUpdates(
     tmId: string,
@@ -71,7 +75,7 @@ export interface TMSyncPipelineInput {
   tmId: string;
   filePath: string;
   columns: TMSyncColumns;
-  deletePolicy: TMSyncDeletePolicy;
+  columnIdentity: TMSyncColumnIdentity;
   syncRunId: string;
   lastSyncedAt?: string;
 }
@@ -91,6 +95,89 @@ const FTS_OPTIMIZE_THRESHOLD = 20000;
 const PARSE_END = 40;
 const DIFF_END = 50;
 const APPLY_END = 100;
+
+function mappingReviewError(message: string): Error {
+  return new Error(`${TM_SYNC_MAPPING_REVIEW_REQUIRED}: ${message}`);
+}
+
+function mappedCellText(row: SheetRow | undefined, column: number): string {
+  const value = row?.cells[column];
+  return value === null || value === undefined ? '' : String(value).trim();
+}
+
+function assertMappedColumnsPresent(rows: SheetRow[], columns: TMSyncColumns): void {
+  const sourceExists = rows.some((row) => mappedCellText(row, columns.sourceCol) !== '');
+  const targetExists = rows.some((row) => mappedCellText(row, columns.targetCol) !== '');
+  if (!sourceExists || !targetExists) {
+    throw mappingReviewError(
+      'The selected source/target columns do not both exist in the current first sheet.',
+    );
+  }
+}
+
+export function deriveTMSyncColumnIdentity(
+  rows: SheetRow[],
+  columns: TMSyncColumns,
+): TMSyncColumnIdentity {
+  if (!columns.hasHeader) {
+    // Without headers there is no semantic identity to compare. Requiring
+    // observable values in both reviewed positions prevents a moved, blank,
+    // or out-of-range column from turning the staged set into an accidental
+    // whole-TM delete.
+    assertMappedColumnsPresent(rows, columns);
+    return {
+      kind: 'positions',
+      sourceCol: columns.sourceCol,
+      targetCol: columns.targetCol,
+    };
+  }
+
+  const sourceHeader = mappedCellText(rows[0], columns.sourceCol);
+  const targetHeader = mappedCellText(rows[0], columns.targetCol);
+  if (!sourceHeader || !targetHeader) {
+    throw mappingReviewError('The saved source/target header cells are missing.');
+  }
+  return {
+    kind: 'headers',
+    sourceCol: columns.sourceCol,
+    targetCol: columns.targetCol,
+    sourceHeader,
+    targetHeader,
+  };
+}
+
+export async function readTMSyncColumnIdentity(
+  filePath: string,
+  columns: TMSyncColumns,
+): Promise<TMSyncColumnIdentity> {
+  const worksheet = await readFirstSheet(filePath);
+  const rows = extractSheetRows(worksheet, {
+    columnIndexes: [columns.sourceCol, columns.targetCol],
+  });
+  return deriveTMSyncColumnIdentity(rows, columns);
+}
+
+function assertTMSyncColumnIdentity(
+  actual: TMSyncColumnIdentity,
+  expected: TMSyncColumnIdentity,
+): void {
+  if (
+    actual.kind !== expected.kind ||
+    actual.sourceCol !== expected.sourceCol ||
+    actual.targetCol !== expected.targetCol
+  ) {
+    throw mappingReviewError('The saved source/target column structure has changed.');
+  }
+  if (
+    actual.kind === 'headers' &&
+    expected.kind === 'headers' &&
+    (actual.sourceHeader !== expected.sourceHeader || actual.targetHeader !== expected.targetHeader)
+  ) {
+    throw mappingReviewError(
+      `The source/target headers changed from "${expected.sourceHeader}" / "${expected.targetHeader}" to "${actual.sourceHeader}" / "${actual.targetHeader}".`,
+    );
+  }
+}
 
 function parseRow(
   cells: Array<string | number | boolean | null | undefined>,
@@ -121,9 +208,9 @@ function parseRow(
 
 /**
  * Incremental TM file sync: stage the parsed file, diff against tm_entries in
- * SQL, then apply only new/changed/(optionally) deleted rows in small
- * transactions. Idempotent: a cancelled or failed run leaves a consistent
- * prefix applied, and re-running converges.
+ * SQL, then apply new/changed/deleted rows in small transactions so the TM
+ * strictly mirrors the valid deduplicated file rows. Idempotent: a cancelled
+ * or failed run leaves a consistent prefix applied, and re-running converges.
  */
 export async function runTMSyncPipeline(
   db: TMSyncDatabasePort,
@@ -152,10 +239,6 @@ export async function runTMSyncPipeline(
   }
 
   try {
-    // Leftovers from a crashed or cancelled earlier run of THIS TM. Scoped by
-    // tmId so concurrent syncs of other TMs keep their staged rows.
-    db.clearTMSyncStagingForTM(input.tmId, input.syncRunId);
-
     // --- Phase A: parse the file and stage rows ---
     emitProgress(0, 'Reading linked spreadsheet...');
     let rows: ReturnType<typeof extractSheetRows> | null = null;
@@ -164,8 +247,17 @@ export async function runTMSyncPipeline(
       const sourceRows = extractSheetRows(worksheet, {
         columnIndexes: [input.columns.sourceCol, input.columns.targetCol],
       });
+      assertTMSyncColumnIdentity(
+        deriveTMSyncColumnIdentity(sourceRows, input.columns),
+        input.columnIdentity,
+      );
       rows = input.columns.hasHeader ? sourceRows.slice(1) : sourceRows;
     }
+
+    // Do not touch even scratch state until the persisted mapping has been
+    // validated against the workbook. Cleanup remains scoped by tmId so a
+    // concurrent sync of another TM keeps its staged rows.
+    db.clearTMSyncStagingForTM(input.tmId, input.syncRunId);
 
     report.fileRows = rows.length;
     let validRows = 0;
@@ -209,11 +301,8 @@ export async function runTMSyncPipeline(
 
     const diff = db.getTMSyncDiffSummary(input.syncRunId, input.tmId, input.lastSyncedAt);
     report.unchanged = stagedCount - diff.added - diff.changed;
-    report.overwrittenLocalEdits = diff.overwrittenLocalEdits;
 
-    const deletesPlanned = input.deletePolicy === 'prune-all' ? diff.deleted : 0;
-    // Only a prune pass actually destroys locally edited missing entries.
-    report.deletedLocalEdits = input.deletePolicy === 'prune-all' ? diff.deletedLocalEdits : 0;
+    const deletesPlanned = diff.deleted;
     const totalApplyWork = diff.added + diff.changed + deletesPlanned;
     let applied = 0;
     const applyProgress = (message: string) => {
@@ -249,7 +338,13 @@ export async function runTMSyncPipeline(
       applyProgress(`Updating ${diff.changed} changed entries...`);
     }
     while (!isCancelled()) {
-      const page = db.listTMSyncChangedRows(input.syncRunId, input.tmId, cursor, APPLY_CHUNK_SIZE);
+      const page = db.listTMSyncChangedRows(
+        input.syncRunId,
+        input.tmId,
+        cursor,
+        APPLY_CHUNK_SIZE,
+        input.lastSyncedAt,
+      );
       if (page.length === 0) break;
       cursor = page[page.length - 1].srcHash;
 
@@ -265,33 +360,34 @@ export async function runTMSyncPipeline(
           })),
         ),
       );
+      report.overwrittenLocalEdits += page.filter((row) => row.localEdit === 1).length;
       applied += page.length;
       applyProgress(`Updated ${report.updated} of ${diff.changed} entries...`);
       await yieldBetweenChunks();
     }
 
-    if (input.deletePolicy === 'prune-all') {
-      cursor = '';
-      if (deletesPlanned > 0 && !isCancelled()) {
-        applyProgress(`Removing ${deletesPlanned} entries missing from the file...`);
-      }
-      while (!isCancelled()) {
-        const page = db.listTMSyncDeletedEntries(
-          input.syncRunId,
-          input.tmId,
-          cursor,
-          APPLY_CHUNK_SIZE,
-        );
-        if (page.length === 0) break;
-        cursor = page[page.length - 1].id;
+    cursor = '';
+    if (deletesPlanned > 0 && !isCancelled()) {
+      applyProgress(`Removing ${deletesPlanned} entries missing from the file...`);
+    }
+    while (!isCancelled()) {
+      const page = db.listTMSyncDeletedEntries(
+        input.syncRunId,
+        input.tmId,
+        cursor,
+        APPLY_CHUNK_SIZE,
+        input.lastSyncedAt,
+      );
+      if (page.length === 0) break;
+      cursor = page[page.length - 1].id;
 
-        report.deleted += db.runInTransaction(() =>
-          db.deleteTMEntriesWithFts(page.map((row) => row.id)),
-        );
-        applied += page.length;
-        applyProgress(`Removed ${report.deleted} of ${deletesPlanned} entries...`);
-        await yieldBetweenChunks();
-      }
+      report.deleted += db.runInTransaction(() =>
+        db.deleteTMEntriesWithFts(page.map((row) => row.id)),
+      );
+      report.deletedLocalEdits += page.filter((row) => row.localEdit === 1).length;
+      applied += page.length;
+      applyProgress(`Removed ${report.deleted} of ${deletesPlanned} entries...`);
+      await yieldBetweenChunks();
     }
 
     if (

@@ -100,7 +100,7 @@ TM/TB services provide the shared matching semantics. Desktop adapters may run r
 
 ### TM/TB external-file sync
 
-The desktop stores link configuration in `app_settings`. TB sync parses the linked sheet, then mirrors it by clearing and rewriting the TB in one transaction. Large TM sync runs in a worker, stages normalized rows in SQLite, diffs them against the TM, and applies bounded transactions. `TMRepo` keeps the facade methods while `TMSyncRepo` owns staging/diff/apply SQL. Missing-file, cancellation, and destructive-delete behavior stay explicit at the service/UI boundary.
+The desktop stores link configuration in `app_settings`. TB sync parses the linked sheet, then mirrors it by clearing and rewriting the TB in one transaction. Large TM sync validates the reviewed source/target mapping, then runs in a worker, stages normalized rows in SQLite, diffs them against the TM, and applies bounded transactions until it mirrors the linked file. `TMRepo` keeps the facade methods while `TMSyncRepo` owns staging/diff/apply SQL. The desktop service boundary excludes concurrent same-TM entry mutations during sync; missing-file, mapping-review, cancellation, and deletion warnings stay explicit at the service/UI boundary.
 
 ## Stable boundary rules
 

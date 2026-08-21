@@ -1,5 +1,10 @@
 import type Database from 'better-sqlite3';
-import type { TMSyncChangedRow, TMSyncDiffSummary, TMSyncStagedRow } from '../types';
+import type {
+  TMSyncChangedRow,
+  TMSyncDeletedRow,
+  TMSyncDiffSummary,
+  TMSyncStagedRow,
+} from '../types';
 
 const TM_SYNC_INSERT_BATCH_SIZE = 500;
 const TM_FTS_DELETE_BATCH_SIZE = 900;
@@ -136,8 +141,7 @@ export class TMSyncRepo {
       : 0;
 
     // Entries missing from the file whose local edits postdate the last full
-    // sync: a prune-all run would silently destroy those edits, so they get
-    // their own warning count.
+    // sync are removed by strict mirroring, so expose their own warning count.
     const deletedLocalEdits = lastSyncedAt
       ? (
           this.db
@@ -187,13 +191,15 @@ export class TMSyncRepo {
     tmId: string,
     afterSrcHash: string,
     limit: number,
+    lastSyncedAt?: string,
   ): TMSyncChangedRow[] {
     return this.db
       .prepare(
         `
         SELECT s.srcHash, s.matchKey, s.tagsSignature,
                s.sourceTokensJson, s.targetTokensJson, s.srcText, s.tgtText,
-               e.id AS entryId
+               e.id AS entryId,
+               CASE WHEN ? IS NOT NULL AND e.updatedAt > ? THEN 1 ELSE 0 END AS localEdit
         FROM tm_sync_staging s
         JOIN tm_entries e ON e.tmId = ? AND e.srcHash = s.srcHash
         WHERE s.syncRunId = ? AND s.srcHash > ?
@@ -203,7 +209,14 @@ export class TMSyncRepo {
         LIMIT ?
       `,
       )
-      .all(tmId, runId, afterSrcHash, limit) as TMSyncChangedRow[];
+      .all(
+        lastSyncedAt ?? null,
+        lastSyncedAt ?? null,
+        tmId,
+        runId,
+        afterSrcHash,
+        limit,
+      ) as TMSyncChangedRow[];
   }
 
   public listDeletedEntries(
@@ -211,11 +224,14 @@ export class TMSyncRepo {
     tmId: string,
     afterId: string,
     limit: number,
-  ): Array<{ id: string }> {
+    lastSyncedAt?: string,
+  ): TMSyncDeletedRow[] {
     return this.db
       .prepare(
         `
-        SELECT e.id FROM tm_entries e
+        SELECT e.id,
+               CASE WHEN ? IS NOT NULL AND e.updatedAt > ? THEN 1 ELSE 0 END AS localEdit
+        FROM tm_entries e
         WHERE e.tmId = ? AND e.id > ?
           AND NOT EXISTS (
             SELECT 1 FROM tm_sync_staging s
@@ -225,7 +241,14 @@ export class TMSyncRepo {
         LIMIT ?
       `,
       )
-      .all(tmId, afterId, runId, limit) as Array<{ id: string }>;
+      .all(
+        lastSyncedAt ?? null,
+        lastSyncedAt ?? null,
+        tmId,
+        afterId,
+        runId,
+        limit,
+      ) as TMSyncDeletedRow[];
   }
 
   // Must be called inside a transaction owned by the caller. Entry and FTS

@@ -1,6 +1,23 @@
-import { describe, expect, it } from 'vitest';
-import type { TMSyncReport } from '../../../../shared/ipc';
-import { tmSyncReportMessage } from './tmSyncActions';
+import { describe, expect, it, vi } from 'vitest';
+import type { TMSyncReport, TMWithStats } from '../../../../shared/ipc';
+import { runTMSyncNow, tmSyncReportMessage } from './tmSyncActions';
+
+function tm(): TMWithStats {
+  return {
+    id: 'tm-1',
+    name: 'Main TM',
+    srcLang: 'en',
+    tgtLang: 'fr',
+    type: 'main',
+    createdAt: '2026-08-01T00:00:00.000Z',
+    updatedAt: '2026-08-01T00:00:00.000Z',
+    stats: { entryCount: 2 },
+    syncConfig: {
+      filePath: 'D:/tm/main.xlsx',
+      columns: { sourceCol: 0, targetCol: 1, hasHeader: true },
+    },
+  };
+}
 
 function report(overrides: Partial<TMSyncReport> = {}): TMSyncReport {
   return {
@@ -54,5 +71,23 @@ describe('tmSyncReportMessage', () => {
     expect(both).toContain(
       'Warning: 3 locally edited entries deleted because they are missing from the file.',
     );
+  });
+});
+
+describe('runTMSyncNow', () => {
+  it('requests remapping when a legacy source/target mapping needs review', async () => {
+    const confirmRelink = vi.fn(async () => true);
+    const outcome = await runTMSyncNow(tm(), {
+      syncTMWithExcel: vi.fn(async () => ({
+        status: 'mapping-review-required',
+        filePath: 'D:/tm/main.xlsx',
+        reason: 'The saved mapping must be reviewed.',
+      })),
+      confirmRelink,
+      error: vi.fn(),
+    });
+
+    expect(confirmRelink).toHaveBeenCalledWith(expect.stringContaining('saved mapping'));
+    expect(outcome).toEqual({ kind: 'relink-requested' });
   });
 });

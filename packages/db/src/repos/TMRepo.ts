@@ -13,6 +13,7 @@ import type {
   TMRecallOptions,
   TMRecord,
   TMSyncChangedRow,
+  TMSyncDeletedRow,
   TMSyncDiffSummary,
   TMSyncStagedRow,
   TMType,
@@ -1663,8 +1664,9 @@ export class TMRepo {
     tmId: string,
     afterSrcHash: string,
     limit: number,
+    lastSyncedAt?: string,
   ): TMSyncChangedRow[] {
-    return this.syncRepo.listChangedRows(runId, tmId, afterSrcHash, limit);
+    return this.syncRepo.listChangedRows(runId, tmId, afterSrcHash, limit, lastSyncedAt);
   }
 
   public listTMSyncDeletedEntries(
@@ -1672,8 +1674,9 @@ export class TMRepo {
     tmId: string,
     afterId: string,
     limit: number,
-  ): Array<{ id: string }> {
-    return this.syncRepo.listDeletedEntries(runId, tmId, afterId, limit);
+    lastSyncedAt?: string,
+  ): TMSyncDeletedRow[] {
+    return this.syncRepo.listDeletedEntries(runId, tmId, afterId, limit, lastSyncedAt);
   }
   public applyTMSyncInserts(tmId: string, rows: Array<TMSyncStagedRow & { id: string }>): number {
     return this.syncRepo.applyInserts(tmId, rows);

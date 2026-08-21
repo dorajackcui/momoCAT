@@ -47,7 +47,13 @@ describe('tmSyncPipeline', () => {
       tmId,
       filePath,
       columns: { sourceCol: 0, targetCol: 1, hasHeader: true },
-      deletePolicy: 'never',
+      columnIdentity: {
+        kind: 'headers',
+        sourceCol: 0,
+        targetCol: 1,
+        sourceHeader: 'source',
+        targetHeader: 'target',
+      },
       syncRunId: `run-${runCounter}`,
       ...overrides,
     };
@@ -144,7 +150,7 @@ describe('tmSyncPipeline', () => {
     );
   });
 
-  it("deletePolicy 'never' keeps entries missing from the file; 'prune-all' removes them", async () => {
+  it('strictly mirrors the file by removing entries that disappeared', async () => {
     const filePath = writeWorkbook('tm.xlsx', [
       ['source', 'target'],
       ['Hello world', 'Bonjour le monde'],
@@ -158,21 +164,68 @@ describe('tmSyncPipeline', () => {
       ['Hello world', 'Bonjour le monde'],
     ]);
 
-    const keepReport = await runTMSyncPipeline(db, syncInput(shrunkPath));
-    expect(keepReport.deleted).toBe(0);
-    expect(keepReport.deletedLocalEdits).toBe(0);
-    expect(listEntries()).toHaveLength(2);
-
-    const pruneReport = await runTMSyncPipeline(
-      db,
-      syncInput(shrunkPath, { deletePolicy: 'prune-all' }),
-    );
-    expect(pruneReport.deleted).toBe(1);
+    const report = await runTMSyncPipeline(db, syncInput(shrunkPath));
+    expect(report.deleted).toBe(1);
     expect(listEntries()).toMatchObject([{ source: 'Hello world' }]);
     expect(db.searchConcordance(projectId, 'Entree historique', [tmId])).toHaveLength(0);
   });
 
-  it('a prune run reports locally edited entries it deletes', async () => {
+  it('clears the TM when a header-based linked file has no data rows', async () => {
+    const filePath = writeWorkbook('tm.xlsx', [
+      ['source', 'target'],
+      ['Hello world', 'Bonjour le monde'],
+    ]);
+    await runTMSyncPipeline(db, syncInput(filePath));
+
+    await unlink(filePath);
+    const emptyPath = writeWorkbook('tm.xlsx', [['source', 'target']]);
+    const report = await runTMSyncPipeline(db, syncInput(emptyPath));
+
+    expect(report.deleted).toBe(1);
+    expect(listEntries()).toHaveLength(0);
+  });
+
+  it('fails closed before mutation when saved source/target headers changed', async () => {
+    const filePath = writeWorkbook('tm.xlsx', [
+      ['source', 'target'],
+      ['Hello world', 'Bonjour le monde'],
+      ['Legacy entry', 'Entree historique'],
+    ]);
+    await runTMSyncPipeline(db, syncInput(filePath));
+
+    await unlink(filePath);
+    const movedPath = writeWorkbook('tm.xlsx', [
+      ['context', 'source', 'target'],
+      ['note', 'Hello world', 'Bonjour le monde'],
+    ]);
+
+    await expect(runTMSyncPipeline(db, syncInput(movedPath))).rejects.toThrow(
+      'source/target headers changed',
+    );
+    expect(listEntries()).toHaveLength(2);
+    expect(db.searchConcordance(projectId, 'Entree historique', [tmId])).toHaveLength(1);
+  });
+
+  it('fails closed before mutation when saved columns are absent', async () => {
+    const filePath = writeWorkbook('tm.xlsx', [
+      ['source', 'target'],
+      ['Hello world', 'Bonjour le monde'],
+    ]);
+    await runTMSyncPipeline(db, syncInput(filePath));
+
+    await expect(
+      runTMSyncPipeline(
+        db,
+        syncInput(filePath, {
+          columns: { sourceCol: 8, targetCol: 9, hasHeader: false },
+          columnIdentity: { kind: 'positions', sourceCol: 8, targetCol: 9 },
+        }),
+      ),
+    ).rejects.toThrow('do not both exist');
+    expect(listEntries()).toHaveLength(1);
+  });
+
+  it('reports locally edited entries removed by strict mirroring', async () => {
     const filePath = writeWorkbook('tm.xlsx', [
       ['source', 'target'],
       ['Hello world', 'Bonjour le monde'],
@@ -204,17 +257,65 @@ describe('tmSyncPipeline', () => {
       ['Hello world', 'Bonjour le monde'],
     ]);
 
-    const pruneReport = await runTMSyncPipeline(
+    const report = await runTMSyncPipeline(
       db,
       syncInput(shrunkPath, {
-        deletePolicy: 'prune-all',
         lastSyncedAt: '2020-01-01T00:00:00.000Z',
       }),
     );
 
-    expect(pruneReport.deleted).toBe(1);
-    expect(pruneReport.deletedLocalEdits).toBe(1);
+    expect(report.deleted).toBe(1);
+    expect(report.deletedLocalEdits).toBe(1);
     expect(listEntries()).toMatchObject([{ source: 'Hello world' }]);
+  });
+
+  it('reports only local edits actually applied before cancellation', async () => {
+    const filePath = writeWorkbook('tm.xlsx', [
+      ['source', 'target'],
+      ['Hello world', 'Bonjour le monde'],
+      ['Legacy entry', 'Entree historique'],
+    ]);
+    await runTMSyncPipeline(db, syncInput(filePath));
+
+    const entries = db.listTMEntries(tmId, 10, 0);
+    db.runInTransaction(() =>
+      db.applyTMSyncUpdates(
+        tmId,
+        entries.map((entry) => ({
+          entryId: entry.id,
+          sourceTokensJson: JSON.stringify(entry.sourceTokens),
+          targetTokensJson: JSON.stringify([{ type: 'text', content: 'Edition locale' }]),
+          srcText: entry.sourceTokens.map((token) => token.content).join(''),
+          tgtText: 'Edition locale',
+        })),
+      ),
+    );
+
+    await unlink(filePath);
+    const shrunkPath = writeWorkbook('tm.xlsx', [
+      ['source', 'target'],
+      ['Hello world', 'Bonjour le monde'],
+    ]);
+    let yields = 0;
+    const report = await runTMSyncPipeline(
+      db,
+      syncInput(shrunkPath, { lastSyncedAt: '2020-01-01T00:00:00.000Z' }),
+      {
+        isCancelled: () => yields >= 2,
+        yieldBetweenChunks: async () => {
+          yields += 1;
+        },
+      },
+    );
+
+    expect(report).toMatchObject({
+      cancelled: true,
+      updated: 1,
+      deleted: 0,
+      overwrittenLocalEdits: 1,
+      deletedLocalEdits: 0,
+    });
+    expect(listEntries()).toHaveLength(2);
   });
 
   it('cancellation before apply leaves the TM untouched and reports cancelled', async () => {

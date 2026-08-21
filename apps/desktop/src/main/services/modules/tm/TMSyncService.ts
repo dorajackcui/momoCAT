@@ -3,13 +3,29 @@ import { join } from 'path';
 import { Worker } from 'worker_threads';
 import { access } from 'fs/promises';
 import type { ProgressEmitter, SettingsRepository, TMRepository } from '../../ports';
-import type { TMSyncConfig, TMSyncConfigInput, TMSyncReport } from '../../../../shared/ipc';
+import type {
+  TMSyncColumnIdentity,
+  TMSyncColumns,
+  TMSyncConfig,
+  TMSyncConfigInput,
+  TMSyncReport,
+} from '../../../../shared/ipc';
+import { TM_SYNC_MAPPING_REVIEW_REQUIRED } from '../../../../shared/ipc';
 import type { ImportProgress, ImportProgressCallback, TMSyncWorkerMessage } from './types';
+import { readTMSyncColumnIdentity } from './tmSyncPipeline';
 
 const TM_SYNC_CONFIG_KEY_PREFIX = 'tm-sync-config:';
+type ColumnIdentityResolver = (
+  filePath: string,
+  columns: TMSyncColumns,
+) => Promise<TMSyncColumnIdentity>;
 
 export class TMSyncService {
   private readonly activeWorkers = new Map<string, Worker>();
+  // Headerless sheets have no semantic column identity. Re-saving their
+  // mapping authorizes exactly the next sync in this process; the authorization
+  // is deliberately not persisted across runs or app restarts.
+  private readonly reviewedHeaderlessMappings = new Set<string>();
   // Syncs are tracked from the first synchronous moment of
   // syncTMEntriesFromExcel, not from worker spawn: a cancel that lands in the
   // startup window (file precheck, worker path resolution) is remembered in
@@ -22,6 +38,7 @@ export class TMSyncService {
     private readonly settingsRepo: SettingsRepository,
     private readonly dbPath: string,
     private readonly emitProgress: ProgressEmitter,
+    private readonly resolveColumnIdentity: ColumnIdentityResolver = readTMSyncColumnIdentity,
   ) {}
 
   public getTMSyncConfig(tmId: string): TMSyncConfig | null {
@@ -29,9 +46,14 @@ export class TMSyncService {
     if (!raw) return null;
 
     try {
-      const parsed = JSON.parse(raw) as TMSyncConfig;
+      const parsed = JSON.parse(raw) as TMSyncConfig & { deletePolicy?: unknown };
       if (!parsed || typeof parsed.filePath !== 'string' || !parsed.columns) return null;
-      return parsed;
+      // Older builds persisted an optional delete policy. Sync is now always a
+      // strict mirror, so tolerate that legacy field without letting it alter
+      // behavior or survive the next config/outcome write.
+      const config = { ...parsed };
+      delete config.deletePolicy;
+      return config;
     } catch {
       return null;
     }
@@ -40,25 +62,36 @@ export class TMSyncService {
   public async setTMSyncConfig(tmId: string, input: TMSyncConfigInput): Promise<void> {
     const tm = this.tmRepo.getTM(tmId);
     if (!tm) throw new Error('Target TM not found');
+    if (tm.type !== 'main') throw new Error('Only Main TMs can be synced with an external file.');
     validateTMSyncConfigInput(input);
+    const columnIdentity = await this.resolveColumnIdentity(input.filePath, input.columns);
 
     const existing = this.getTMSyncConfig(tmId);
-    // Relinking to a different file starts a new sync relationship: the old
-    // history describes the previous file, and a destructive deletePolicy
-    // must not silently carry over to the new source.
-    const sameFile = existing?.filePath === input.filePath;
+    // A changed file or mapping starts a new sync relationship: the old
+    // history describes a different source projection and must not carry over.
+    const sameBinding =
+      existing?.filePath === input.filePath &&
+      existing.columns.sourceCol === input.columns.sourceCol &&
+      existing.columns.targetCol === input.columns.targetCol &&
+      existing.columns.hasHeader === input.columns.hasHeader &&
+      columnIdentitiesEqual(existing.columnIdentity, columnIdentity);
     const next: TMSyncConfig = {
-      ...(sameFile ? (existing ?? {}) : {}),
+      ...(sameBinding ? (existing ?? {}) : {}),
       filePath: input.filePath,
       columns: input.columns,
-      deletePolicy:
-        input.deletePolicy ?? (sameFile ? existing?.deletePolicy : undefined) ?? 'never',
+      columnIdentity,
     };
     this.settingsRepo.setSetting(tmSyncConfigKey(tmId), JSON.stringify(next));
+    if (columnIdentity.kind === 'positions') {
+      this.reviewedHeaderlessMappings.add(tmId);
+    } else {
+      this.reviewedHeaderlessMappings.delete(tmId);
+    }
   }
 
   public clearTMSyncConfig(tmId: string): void {
     this.settingsRepo.setSetting(tmSyncConfigKey(tmId), null);
+    this.reviewedHeaderlessMappings.delete(tmId);
   }
 
   public cancelSync(tmId: string): boolean {
@@ -66,6 +99,28 @@ export class TMSyncService {
     this.pendingCancels.add(tmId);
     this.activeWorkers.get(tmId)?.postMessage({ type: 'cancel' });
     return true;
+  }
+
+  public getSyncStartIssue(tmId: string): string | null {
+    const config = this.getTMSyncConfig(tmId);
+    if (!config) return 'This TM is not bound to a local Excel file.';
+    try {
+      validateTMSyncConfigInput(config);
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+    if (!config.columnIdentity) {
+      return 'The saved source/target mapping predates strict sync and must be reviewed.';
+    }
+    try {
+      validateTMSyncColumnIdentity(config.columnIdentity, config.columns);
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+    if (config.columnIdentity.kind === 'positions' && !this.reviewedHeaderlessMappings.has(tmId)) {
+      return 'Headerless source/target columns must be reviewed before every strict sync.';
+    }
+    return null;
   }
 
   public async syncTMEntriesFromExcel(
@@ -77,19 +132,26 @@ export class TMSyncService {
 
     const config = this.getTMSyncConfig(tmId);
     if (!config) throw new Error('This TM is not bound to a local Excel file.');
+    const startIssue = this.getSyncStartIssue(tmId);
+    if (startIssue) throw new Error(`${TM_SYNC_MAPPING_REVIEW_REQUIRED}: ${startIssue}`);
+    const columnIdentity = config.columnIdentity;
+    if (!columnIdentity) throw new Error('The saved source/target mapping must be reviewed.');
     if (this.activeSyncs.has(tmId)) {
       throw new Error('A sync for this TM is already running.');
     }
     // Claimed synchronously, before the first await, so a second call in the
     // same tick cannot double-start.
     this.activeSyncs.add(tmId);
+    if (columnIdentity.kind === 'positions') {
+      this.reviewedHeaderlessMappings.delete(tmId);
+    }
 
     try {
       // The bound file must be readable before we spin up the worker.
       await access(config.filePath);
 
       try {
-        const report = await this.runSyncWorker(tmId, config, onProgress);
+        const report = await this.runSyncWorker(tmId, { ...config, columnIdentity }, onProgress);
         this.recordSyncOutcome(tmId, config, {
           status: report.cancelled ? 'cancelled' : 'success',
           report,
@@ -112,7 +174,7 @@ export class TMSyncService {
   // would block the UI for minutes; failing loudly is the better outcome.
   private async runSyncWorker(
     tmId: string,
-    config: TMSyncConfig,
+    config: TMSyncConfig & { columnIdentity: TMSyncColumnIdentity },
     onProgress?: ImportProgressCallback,
   ): Promise<TMSyncReport> {
     const candidatePaths = [
@@ -132,7 +194,7 @@ export class TMSyncService {
           tmId,
           filePath: config.filePath,
           columns: config.columns,
-          deletePolicy: config.deletePolicy ?? 'never',
+          columnIdentity: config.columnIdentity,
           syncRunId: randomUUID(),
           lastSyncedAt: config.lastSyncedAt,
         },
@@ -251,10 +313,17 @@ function tmSyncConfigKey(tmId: string): string {
 // the main process is the trust boundary. A same-column mapping would bulk
 // rewrite every target to its source text on the next sync.
 function validateTMSyncConfigInput(input: TMSyncConfigInput): void {
+  if (!input || typeof input !== 'object') {
+    throw new Error('A TM sync configuration is required.');
+  }
   if (typeof input.filePath !== 'string' || input.filePath.trim() === '') {
     throw new Error('A file path is required for TM sync.');
   }
-  const { sourceCol, targetCol } = input.columns ?? { sourceCol: NaN, targetCol: NaN };
+  const columns = input.columns;
+  if (!columns || typeof columns !== 'object') {
+    throw new Error('Source and target columns are required.');
+  }
+  const { sourceCol, targetCol } = columns;
   if (
     !Number.isInteger(sourceCol) ||
     sourceCol < 0 ||
@@ -266,4 +335,42 @@ function validateTMSyncConfigInput(input: TMSyncConfigInput): void {
   if (sourceCol === targetCol) {
     throw new Error('Source and target columns must be different.');
   }
+  if (typeof columns.hasHeader !== 'boolean') {
+    throw new Error('The header setting must be true or false.');
+  }
+}
+
+function validateTMSyncColumnIdentity(
+  identity: TMSyncColumnIdentity,
+  columns: TMSyncColumns,
+): void {
+  if (!identity || (identity.kind !== 'headers' && identity.kind !== 'positions')) {
+    throw new Error('The saved source/target mapping identity is invalid and must be reviewed.');
+  }
+  if (identity.sourceCol !== columns.sourceCol || identity.targetCol !== columns.targetCol) {
+    throw new Error('The saved source/target column positions changed and must be reviewed.');
+  }
+  if (
+    identity.kind === 'headers' &&
+    (typeof identity.sourceHeader !== 'string' ||
+      identity.sourceHeader.trim() === '' ||
+      typeof identity.targetHeader !== 'string' ||
+      identity.targetHeader.trim() === '')
+  ) {
+    throw new Error('The saved source/target headers are invalid and must be reviewed.');
+  }
+}
+
+function columnIdentitiesEqual(
+  left: TMSyncColumnIdentity | undefined,
+  right: TMSyncColumnIdentity,
+): boolean {
+  if (!left || left.kind !== right.kind) return false;
+  if (left.sourceCol !== right.sourceCol || left.targetCol !== right.targetCol) return false;
+  return (
+    left.kind === 'positions' ||
+    (right.kind === 'headers' &&
+      left.sourceHeader === right.sourceHeader &&
+      left.targetHeader === right.targetHeader)
+  );
 }

@@ -18,6 +18,7 @@ import type {
 } from '../../../../packages/db/src/types';
 import type { AssetRenameApi } from './assetRenameApi';
 import type { AISettingsApi } from './aiSettingsApi';
+export const TM_SYNC_MAPPING_REVIEW_REQUIRED = 'TM_SYNC_MAPPING_REVIEW_REQUIRED';
 export type { ProjectFileRenameResult } from './assetRenameApi';
 export type {
   AddAIProviderInput,
@@ -72,14 +73,25 @@ export interface TMSyncColumns {
   hasHeader: boolean;
 }
 
-// 'never' keeps entries missing from the file (the TM also accumulates entries
-// from confirmed segments); 'prune-all' mirrors the file exactly.
-export type TMSyncDeletePolicy = 'never' | 'prune-all';
+export type TMSyncColumnIdentity =
+  | {
+      kind: 'headers';
+      sourceCol: number;
+      targetCol: number;
+      sourceHeader: string;
+      targetHeader: string;
+    }
+  | {
+      // Headerless files have no stable semantic column identity. The sync
+      // still verifies that the persisted positions match the reviewed mapping.
+      kind: 'positions';
+      sourceCol: number;
+      targetCol: number;
+    };
 
 export interface TMSyncConfigInput {
   filePath: string;
   columns: TMSyncColumns;
-  deletePolicy?: TMSyncDeletePolicy;
 }
 
 export interface TMSyncReport {
@@ -91,12 +103,14 @@ export interface TMSyncReport {
   deleted: number;
   unchanged: number;
   overwrittenLocalEdits: number;
-  /** Locally edited entries removed by a prune-all delete pass. */
+  /** Locally edited entries removed because they are missing from the synced file. */
   deletedLocalEdits: number;
   cancelled?: boolean;
 }
 
 export interface TMSyncConfig extends TMSyncConfigInput {
+  /** Missing only on legacy configs that must be remapped before strict sync. */
+  columnIdentity?: TMSyncColumnIdentity;
   /** Baseline for overwrittenLocalEdits: only advanced by a full success. */
   lastSyncedAt?: string;
   /** Timestamp of the latest run regardless of outcome (drives UI status). */
@@ -108,7 +122,8 @@ export interface TMSyncConfig extends TMSyncConfigInput {
 
 export type TMSyncStartResult =
   | { status: 'started'; jobId: string }
-  | { status: 'file-missing'; filePath: string };
+  | { status: 'file-missing'; filePath: string }
+  | { status: 'mapping-review-required'; filePath: string; reason: string };
 
 export interface TBImportOptions {
   sourceCol: number;

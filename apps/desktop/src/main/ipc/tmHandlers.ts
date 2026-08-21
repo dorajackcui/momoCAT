@@ -9,6 +9,7 @@ import type {
   TMSyncStartResult,
   TMType,
 } from '../../shared/ipc';
+import { TM_SYNC_MAPPING_REVIEW_REQUIRED } from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import { registerHandle } from './registerHandle';
 import type { ReferenceBackedHandlerDeps } from './types';
@@ -260,6 +261,13 @@ export function registerTMHandlers({
       if (!config) {
         throw new Error('This TM is not bound to a local Excel file.');
       }
+      if (!config.columnIdentity) {
+        return {
+          status: 'mapping-review-required',
+          filePath: config.filePath,
+          reason: 'The saved source/target mapping must be reviewed before strict sync.',
+        };
+      }
 
       try {
         await access(config.filePath);
@@ -323,9 +331,12 @@ export function registerTMHandlers({
 
 function toStructuredJobError(error: unknown, code: string): StructuredJobError {
   if (error instanceof Error) {
+    const mappingPrefix = `${TM_SYNC_MAPPING_REVIEW_REQUIRED}:`;
+    const mappingReviewRequired = error.message.startsWith(mappingPrefix);
+    const mappingMessage = error.message.slice(mappingPrefix.length).split('\n', 1)[0].trim();
     return {
-      code,
-      message: error.message,
+      code: mappingReviewRequired ? TM_SYNC_MAPPING_REVIEW_REQUIRED : code,
+      message: mappingReviewRequired ? mappingMessage : error.message,
       details: error.stack,
     };
   }

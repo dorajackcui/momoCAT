@@ -8,12 +8,7 @@ import {
   TMEntry,
   Token,
 } from "@cat/core/models";
-import {
-  Project,
-  ProjectAIModel,
-  ProjectQASettings,
-  ProjectType,
-} from "@cat/core/project";
+import { Project, ProjectAIModel, ProjectQASettings, ProjectType } from "@cat/core/project";
 import {
   MountedTBRecord,
   MountedTMRecord,
@@ -551,8 +546,9 @@ export class CATDatabase {
     tmId: string,
     afterSrcHash: string,
     limit: number,
+    lastSyncedAt?: string,
   ): TMSyncChangedRow[] {
-    return this.tmRepo.listTMSyncChangedRows(runId, tmId, afterSrcHash, limit);
+    return this.tmRepo.listTMSyncChangedRows(runId, tmId, afterSrcHash, limit, lastSyncedAt);
   }
 
   public listTMSyncDeletedEntries(
@@ -560,8 +556,9 @@ export class CATDatabase {
     tmId: string,
     afterId: string,
     limit: number,
-  ): Array<{ id: string }> {
-    return this.tmRepo.listTMSyncDeletedEntries(runId, tmId, afterId, limit);
+    lastSyncedAt?: string,
+  ): Array<{ id: string; localEdit: number }> {
+    return this.tmRepo.listTMSyncDeletedEntries(runId, tmId, afterId, limit, lastSyncedAt);
   }
 
   public applyTMSyncInserts(

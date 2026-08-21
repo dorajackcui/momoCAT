@@ -1,5 +1,6 @@
 import type { Segment } from '@cat/core/models';
 import { describe, expect, it, vi } from 'vitest';
+import { TM_SYNC_MAPPING_REVIEW_REQUIRED } from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import { registerTBHandlers } from './tbHandlers';
 import { registerTMHandlers } from './tmHandlers';
@@ -49,6 +50,29 @@ function createDeps() {
         tmType: 'main',
       }),
       batchMatchFileWithTM: vi.fn().mockResolvedValue(undefined),
+      getTMSyncConfig: vi.fn().mockReturnValue({
+        filePath: __filename,
+        columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+        columnIdentity: {
+          kind: 'headers',
+          sourceCol: 0,
+          targetCol: 1,
+          sourceHeader: 'source',
+          targetHeader: 'target',
+        },
+      }),
+      setTMSyncConfig: vi.fn().mockResolvedValue(undefined),
+      syncTMEntriesFromExcel: vi.fn().mockResolvedValue({
+        fileRows: 1,
+        duplicates: 0,
+        skipped: 0,
+        added: 0,
+        updated: 0,
+        deleted: 0,
+        unchanged: 1,
+        overwrittenLocalEdits: 0,
+        deletedLocalEdits: 0,
+      }),
       createTB: vi.fn().mockResolvedValue('tb-1'),
       renameTB: vi.fn().mockResolvedValue(undefined),
       deleteTB: vi.fn().mockResolvedValue(undefined),
@@ -120,6 +144,55 @@ describe('reference lookup IPC handlers', () => {
     ]);
     expect(deps.referenceLookupPrefetch.findTmMatches).toHaveBeenCalledWith(7, segment);
     expect(deps.referenceLookup.findTmMatches).not.toHaveBeenCalled();
+  });
+
+  it('tm-sync-execute requires legacy source/target mappings to be reviewed before a job starts', async () => {
+    const { handlers, ipcMain } = createIpcMainStub();
+    const deps = createDeps();
+    deps.projectService.getTMSyncConfig.mockReturnValue({
+      filePath: 'D:/tm/main.xlsx',
+      columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+    });
+
+    registerTMHandlers({ ipcMain, ...deps } as never);
+
+    await expect(handlers.get(IPC_CHANNELS.tm.syncExecute)?.({}, 'tm-1')).resolves.toEqual({
+      status: 'mapping-review-required',
+      filePath: 'D:/tm/main.xlsx',
+      reason: 'The saved source/target mapping must be reviewed before strict sync.',
+    });
+    expect(deps.jobManager.startJob).not.toHaveBeenCalled();
+    expect(deps.projectService.syncTMEntriesFromExcel).not.toHaveBeenCalled();
+  });
+
+  it('tm-sync-execute preserves the mapping-review error code from worker preflight', async () => {
+    const { handlers, ipcMain } = createIpcMainStub();
+    const deps = createDeps();
+    deps.projectService.syncTMEntriesFromExcel.mockRejectedValue(
+      new Error(
+        `${TM_SYNC_MAPPING_REVIEW_REQUIRED}: source/target headers changed\nError: worker stack`,
+      ),
+    );
+
+    registerTMHandlers({ ipcMain, ...deps } as never);
+
+    const result = (await handlers.get(IPC_CHANNELS.tm.syncExecute)?.({}, 'tm-1')) as {
+      status: string;
+      jobId: string;
+    };
+    expect(result.status).toBe('started');
+    await vi.waitFor(() => {
+      expect(deps.jobManager.updateProgress).toHaveBeenCalledWith(
+        result.jobId,
+        expect.objectContaining({
+          status: 'failed',
+          error: expect.objectContaining({
+            code: TM_SYNC_MAPPING_REVIEW_REQUIRED,
+            message: 'source/target headers changed',
+          }),
+        }),
+      );
+    });
   });
 
   it('delegates TB prefetch to the dedicated prefetch service, not the active one', async () => {

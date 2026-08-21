@@ -204,12 +204,14 @@ TM sync is incremental and worker-only for large-file safety:
 
 1. Parse the first sheet and stage valid normalized rows in `tm_sync_staging` by sync run.
 2. Diff staged rows against existing entries in SQL.
-3. Apply additions/changes and optional deletions in bounded transactions.
+3. Apply additions, changes, and deletions in bounded transactions.
 4. Maintain base rows and FTS rows together, then clean staging.
 
-The default deletion policy is `never`. A stored `prune-all` policy removes TM entries missing from the linked file and can delete local edits; the completed/partial sync report includes overwritten and deleted-local-edit counts. Relinking a TM to a different file resets inherited destructive policy/history to the safe default. Cancellation can leave a consistent applied prefix; rerunning converges, and only a full success advances the conflict baseline.
+TM sync strictly mirrors the valid deduplicated rows in the linked file: entries missing from the file are removed, including local edits or entries committed through other workflows. A header-based file containing only its reviewed header row therefore clears the TM. The completed or partial report counts only overwritten/deleted local edits whose apply transaction completed. Cancellation can leave a consistent applied prefix; rerunning converges, and only a full success advances the conflict baseline.
 
-Source/target columns must be distinct nonnegative indexes at the main-process trust boundary. One active sync per TM is allowed; different TMs isolate their staging cleanup.
+Source/target columns must be distinct nonnegative indexes at the main-process trust boundary. Saving a binding persists the reviewed column positions and, for header-based files, the selected header text. Every sync revalidates that identity before staging or entry mutation; a legacy binding without identity, changed header/position, missing selected header, or invalid configuration requires mapping review instead of risking a whole-TM rewrite. Headerless files have no semantic header identity, so both reviewed positions must contain observable values and the user must review the mapping before every strict sync. That one-use review authorization is process-local and expires when the sync starts or the app restarts; this prevents a semantic column move from being accepted merely because the old numeric positions still contain data. Changing the file, positions, header mode, or header identity starts fresh sync history; re-saving the exact reviewed binding preserves it. Legacy deletion-policy fields no longer affect behavior and are removed on the next config or outcome write.
+
+Same-TM delete, import, file commit, mapping update, and sync operations are mutually exclusive in the desktop service so another writer cannot invalidate a successful strict-mirror result. Different TMs may sync independently and isolate their staging cleanup.
 
 ## Inspect, audit, artifacts, and resume
 

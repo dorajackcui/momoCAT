@@ -98,6 +98,8 @@ Durable key families include:
 - TM/TB external-file sync configuration and last outcome;
 - other app-level settings owned by repository/services.
 
+Each TM external-file sync value stores the linked file path, reviewed source/target columns, and a column identity. Header-based identities contain the reviewed positions and header text; headerless identities contain the reviewed positions, while their one-use review authorization remains process-local and is never persisted. Bindings created before this identity existed remain readable for UI display but must be reviewed and re-saved before strict sync. The same JSON also stores the latest run outcome and the last fully successful conflict baseline. A changed binding starts without the previous run history; legacy deletion-policy fields are tolerated on read but have no behavioral effect.
+
 AI runtime tuning is deliberately outside SQLite in `ai-runtime.json` next to the resolved user-data database (under `.cat_data/` in source development). Optional proxy values live in `proxy.env`. Neither belongs in tracked documentation or diagnostics.
 
 ## Required shape vs maintained shape

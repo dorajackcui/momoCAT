@@ -75,6 +75,12 @@ export interface TMSyncStagedRow {
 
 export interface TMSyncChangedRow extends TMSyncStagedRow {
   entryId: string;
+  localEdit: number;
+}
+
+export interface TMSyncDeletedRow {
+  id: string;
+  localEdit: number;
 }
 
 export interface TMSyncDiffSummary {

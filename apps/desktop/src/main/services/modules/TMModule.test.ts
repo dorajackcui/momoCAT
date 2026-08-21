@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RepeatPropagationState, Segment, Token } from '@cat/core/models';
+import { mkdtemp, rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { TMModule } from './TMModule';
 import {
   ProjectRepository,
@@ -161,21 +164,99 @@ function createCommitHarness(
 describe('TMModule.renameTM', () => {
   it('trims names, rejects empty names, and preserves the sync binding', async () => {
     const { module, tmRepo } = createCommitHarness([]);
-    await module.setTMSyncConfig('tm-main', {
-      filePath: 'D:/references/main-tm.xlsx',
-      columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+    const root = await mkdtemp(join(tmpdir(), 'cat-tm-rename-'));
+    const filePath = join(root, 'main-tm.csv');
+    try {
+      await writeFile(filePath, 'source,target\nHello,Bonjour\n', 'utf8');
+      await module.setTMSyncConfig('tm-main', {
+        filePath,
+        columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+      });
+
+      await module.renameTM('tm-main', '  Renamed TM  ');
+
+      expect(tmRepo.renameTM).toHaveBeenCalledWith('tm-main', 'Renamed TM');
+      expect(module.getTMSyncConfig('tm-main')).toMatchObject({
+        filePath,
+        columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+        columnIdentity: {
+          kind: 'headers',
+          sourceCol: 0,
+          targetCol: 1,
+          sourceHeader: 'source',
+          targetHeader: 'target',
+        },
+      });
+
+      await expect(module.renameTM('tm-main', '   ')).rejects.toThrow('TM name cannot be empty.');
+      expect(tmRepo.renameTM).toHaveBeenCalledTimes(1);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('TMModule entry mutation coordination', () => {
+  it('blocks another write to the same TM until sync finishes', async () => {
+    const { module } = createCommitHarness([]);
+    let finishSync:
+      | ((value: {
+          fileRows: number;
+          duplicates: number;
+          skipped: number;
+          added: number;
+          updated: number;
+          deleted: number;
+          unchanged: number;
+          overwrittenLocalEdits: number;
+          deletedLocalEdits: number;
+        }) => void)
+      | null = null;
+    const internals = module as unknown as {
+      syncService: { syncTMEntriesFromExcel: ReturnType<typeof vi.fn> };
+      importService: { importTMEntries: ReturnType<typeof vi.fn> };
+    };
+    internals.syncService.syncTMEntriesFromExcel = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finishSync = resolve;
+        }),
+    );
+    internals.importService.importTMEntries = vi.fn(async () => ({ success: 1, skipped: 0 }));
+
+    const sync = module.syncTMEntriesFromExcel('tm-main');
+    await expect(
+      module.importTMEntries('tm-main', 'tm.csv', {
+        sourceCol: 0,
+        targetCol: 1,
+        hasHeader: true,
+        overwrite: false,
+      }),
+    ).rejects.toThrow('while sync is running');
+    expect(internals.importService.importTMEntries).not.toHaveBeenCalled();
+
+    if (!finishSync) throw new Error('sync resolver was not captured');
+    finishSync({
+      fileRows: 0,
+      duplicates: 0,
+      skipped: 0,
+      added: 0,
+      updated: 0,
+      deleted: 0,
+      unchanged: 0,
+      overwrittenLocalEdits: 0,
+      deletedLocalEdits: 0,
     });
+    await sync;
 
-    await module.renameTM('tm-main', '  Renamed TM  ');
-
-    expect(tmRepo.renameTM).toHaveBeenCalledWith('tm-main', 'Renamed TM');
-    expect(module.getTMSyncConfig('tm-main')).toMatchObject({
-      filePath: 'D:/references/main-tm.xlsx',
-      columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
-    });
-
-    await expect(module.renameTM('tm-main', '   ')).rejects.toThrow('TM name cannot be empty.');
-    expect(tmRepo.renameTM).toHaveBeenCalledTimes(1);
+    await expect(
+      module.importTMEntries('tm-main', 'tm.csv', {
+        sourceCol: 0,
+        targetCol: 1,
+        hasHeader: true,
+        overwrite: false,
+      }),
+    ).resolves.toEqual({ success: 1, skipped: 0 });
   });
 });
 

@@ -43,7 +43,7 @@ const WIZARD_COPY: Record<
   },
   sync: {
     title: 'Sync with Excel',
-    subtitle: 'Map columns once. Each sync applies only new and changed rows from this Excel file.',
+    subtitle: 'Map columns once. Each sync mirrors this Excel file into the TM.',
     confirmLabel: 'Save & Sync',
     progressTitle: 'Syncing TM...',
     failCode: 'TM_SYNC_FAILED',

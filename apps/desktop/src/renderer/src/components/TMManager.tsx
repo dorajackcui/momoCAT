@@ -22,6 +22,7 @@ import type {
   TMSyncReport,
   TMWithStats,
 } from '../../../shared/ipc';
+import { TM_SYNC_MAPPING_REVIEW_REQUIRED } from '../../../shared/ipc';
 
 type ImportNotice = {
   tone: 'success' | 'error';
@@ -32,7 +33,7 @@ type CreateSource = 'upload' | 'sync';
 
 const CREATE_SOURCE_OPTIONS: Array<{ value: CreateSource; label: string; hint: string }> = [
   { value: 'upload', label: 'Standard TM', hint: 'Update by uploading Excel files' },
-  { value: 'sync', label: 'Sync with Excel', hint: 'Incrementally follow a linked local file' },
+  { value: 'sync', label: 'Sync with Excel', hint: 'Mirror a linked local file' },
 ];
 
 export const TMManager: React.FC = () => {
@@ -282,7 +283,10 @@ export const TMManager: React.FC = () => {
     void loadTMs();
   };
 
-  const handleImportFailed = (error: StructuredJobError) => {
+  const handleImportFailed = async (error: StructuredJobError) => {
+    const failedTMId = importingTMId;
+    const mappingReviewRequired =
+      wizardMode === 'sync' && error.code === TM_SYNC_MAPPING_REVIEW_REQUIRED;
     setImportNotice({
       tone: 'error',
       message:
@@ -292,6 +296,14 @@ export const TMManager: React.FC = () => {
     });
     resetWizardState();
     void loadTMs();
+    if (mappingReviewRequired && failedTMId) {
+      const relink = await feedbackService.confirm(
+        `${error.message}\n\nReview the source/target mapping now?`,
+      );
+      if (relink) {
+        await handleStartLink(failedTMId);
+      }
+    }
   };
 
   return (

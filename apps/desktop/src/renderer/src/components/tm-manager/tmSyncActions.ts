@@ -127,8 +127,10 @@ export async function runTMSyncNow(
     return { kind: 'started', jobId: result.jobId };
   }
 
-  const relink = await deps.confirmRelink(
-    `The linked Excel file could not be read:\n${result.filePath}\n\nIt may have been moved, renamed, or deleted. Relink to a new file?`,
-  );
+  const message =
+    result.status === 'file-missing'
+      ? `The linked Excel file could not be read:\n${result.filePath}\n\nIt may have been moved, renamed, or deleted. Relink to a new file?`
+      : `${result.reason}\n\nLinked file: ${result.filePath}\n\nReview the source/target mapping now?`;
+  const relink = await deps.confirmRelink(message);
   return relink ? { kind: 'relink-requested' } : { kind: 'cancelled' };
 }
