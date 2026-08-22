@@ -99,6 +99,7 @@ export class ProjectReferenceFileOperations {
     const progress = this.resolveProgress('reference-export', fileId, onProgress);
     const result = await runner({
       ...input,
+      currentTargetFileId: fileId,
       options: { tagPolicy },
       ...(progress ? { onProgress: progress } : {}),
     });

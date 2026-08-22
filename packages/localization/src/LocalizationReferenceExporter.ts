@@ -1,5 +1,6 @@
 import { basename } from 'path';
 import type { Segment } from '@cat/core/models';
+import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { CATDatabase } from '@cat/db';
 import { SqliteProjectRepository } from './adapters/sqlite/SqliteProjectRepository';
 import { SqliteTBRepository } from './adapters/sqlite/SqliteTBRepository';
@@ -36,11 +37,14 @@ import {
 } from './externalFileOperationSupport';
 
 const DEFAULT_MAX_CELL_CHARS = 30000;
+const CURRENT_TARGET_PAGE_SIZE = 2000;
 
 export interface ExportReferencesForMtInput extends TranslateFileInput {
   unitLimit?: number;
   maxCellChars?: number;
   maxConcurrency?: number;
+  /** Overlay output target cells from the persisted segments belonging to this database file. */
+  currentTargetFileId?: number;
   onProgress?: (current: number, total: number) => void;
 }
 
@@ -80,12 +84,14 @@ interface ReferenceRowWithSegment {
 }
 
 export class LocalizationReferenceExporter {
+  private readonly db: CATDatabase;
   private readonly projectRepo: SqliteProjectRepository;
   private readonly tmModule: TMModule;
   private readonly tbModule: TBModule;
   private readonly options: LocalizationReferenceExporterOptions;
 
   constructor(db: CATDatabase, options: LocalizationReferenceExporterOptions = {}) {
+    this.db = db;
     this.options = options;
     this.projectRepo = new SqliteProjectRepository(db);
 
@@ -122,7 +128,15 @@ export class LocalizationReferenceExporter {
     const maxConcurrency =
       validatePositiveInteger(input.maxConcurrency, 'maxConcurrency') ??
       validatePositiveInteger(this.options.maxConcurrency, 'maxConcurrency');
-    const parsed = await parseExternalSpreadsheet(input);
+    const currentTargetFileId = validatePositiveInteger(
+      input.currentTargetFileId,
+      'currentTargetFileId',
+    );
+    const parsed = this.applyCurrentTargets(
+      await parseExternalSpreadsheet(input),
+      project.id,
+      currentTargetFileId,
+    );
     const tagPolicy = resolveTagPolicy(input.options?.tagPolicy);
     const sourceRows = parsed.artifact.rows.filter((row) => row.source.trim());
     const limitedRows = unitLimit === undefined ? sourceRows : sourceRows.slice(0, unitLimit);
@@ -164,6 +178,57 @@ export class LocalizationReferenceExporter {
         total: units.length,
         ready: units.filter((unit) => unit.status === 'ready').length,
         error: units.filter((unit) => unit.status === 'error').length,
+      },
+    };
+  }
+
+  private applyCurrentTargets(
+    parsed: Awaited<ReturnType<typeof parseExternalSpreadsheet>>,
+    projectId: number,
+    fileId: number | undefined,
+  ): Awaited<ReturnType<typeof parseExternalSpreadsheet>> {
+    if (fileId === undefined) return parsed;
+
+    const fileProjectId = this.db.getProjectIdByFileId(fileId);
+    if (fileProjectId === undefined) {
+      throw new Error(`Current target file not found: ${fileId}`);
+    }
+    if (fileProjectId !== projectId) {
+      throw new Error(`Current target file ${fileId} does not belong to project ${projectId}.`);
+    }
+
+    const targetsByRowIndex = new Map<number, string>();
+    for (let offset = 0; ; offset += CURRENT_TARGET_PAGE_SIZE) {
+      const page = this.db.getSegmentsPage(fileId, offset, CURRENT_TARGET_PAGE_SIZE);
+      for (const segment of page) {
+        targetsByRowIndex.set(
+          segment.orderIndex,
+          serializeTokensToDisplayText(segment.targetTokens),
+        );
+      }
+      if (page.length < CURRENT_TARGET_PAGE_SIZE) break;
+    }
+
+    const firstDataRowIndex = parsed.columns.hasHeader ? 1 : 0;
+    const rawRows = parsed.rawRows.map((row) => [...row]);
+    for (const [rowIndex, target] of targetsByRowIndex) {
+      if (rowIndex < firstDataRowIndex || rowIndex >= rawRows.length) {
+        throw new Error(
+          `Stored segment row ${rowIndex + 1} is outside the retained source workbook rows.`,
+        );
+      }
+      rawRows[rowIndex][parsed.columns.targetCol] = target;
+    }
+
+    return {
+      ...parsed,
+      rawRows,
+      artifact: {
+        ...parsed.artifact,
+        rows: parsed.artifact.rows.map((row) => {
+          const target = targetsByRowIndex.get(row.rowIndex);
+          return target === undefined ? row : { ...row, target };
+        }),
       },
     };
   }

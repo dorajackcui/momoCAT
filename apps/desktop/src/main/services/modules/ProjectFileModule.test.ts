@@ -757,6 +757,7 @@ describe('ProjectFileModule.exportReferencesForMt', () => {
         inputPath: join(rootDir, '9', '12_demo.xlsx'),
         outputPath,
         columns: { hasHeader: true, sourceCol: 2, targetCol: 4, contextCol: 5 },
+        currentTargetFileId: 12,
         options: {
           tagPolicy: 'none',
         },

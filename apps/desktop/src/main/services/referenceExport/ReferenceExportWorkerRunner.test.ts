@@ -24,6 +24,7 @@ function createInput(
     inputPath: 'D:/in/source.xlsx',
     outputPath: 'D:/out/references.xlsx',
     columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+    currentTargetFileId: 11,
     onProgress,
   };
 }
@@ -71,6 +72,7 @@ describe('ReferenceExportWorkerRunner', () => {
         inputPath: 'D:/in/source.xlsx',
         outputPath: 'D:/out/references.xlsx',
         columns: { hasHeader: true, sourceCol: 0, targetCol: 1 },
+        currentTargetFileId: 11,
       },
     });
 

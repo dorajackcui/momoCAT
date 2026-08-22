@@ -17,12 +17,27 @@ import { TMService } from './services/TMService';
 import { createTransientSegment } from './transientSegment';
 
 describe('LocalizationReferenceExporter.exportReferencesForMtFile', () => {
-  it('exports source-only TM/TB references without full inspect artifacts', async () => {
+  it('exports source-only TM/TB references with current stored targets', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-reference-export-'));
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Reference Export', 'en', 'fr');
       mountDistinctReferenceData(db, projectId);
+      const currentTargetFileId = db.createFile(projectId, 'input.xlsx');
+      db.bulkInsertSegments([
+        createStoredSegment({
+          fileId: currentTargetFileId,
+          orderIndex: 1,
+          sourceText: 'Hello world',
+          targetText: 'Current target',
+        }),
+        createStoredSegment({
+          fileId: currentTargetFileId,
+          orderIndex: 2,
+          sourceText: 'Preferences',
+          targetText: '',
+        }),
+      ]);
       const inputPath = writeInputWorkbook(root, [
         ['source', 'target'],
         ['Hello world', ''],
@@ -36,6 +51,7 @@ describe('LocalizationReferenceExporter.exportReferencesForMtFile', () => {
         projectId,
         inputPath,
         outputPath,
+        currentTargetFileId,
         maxConcurrency: 2,
         onProgress: (current, total) => progress.push([current, total]),
       });
@@ -44,6 +60,7 @@ describe('LocalizationReferenceExporter.exportReferencesForMtFile', () => {
         outputPath,
         summary: { total: 2, ready: 2, error: 0 },
       });
+      expect(result.units.map((unit) => unit.unit.target)).toEqual(['Current target', '']);
       expect(progress).toEqual([
         [0, 2],
         [1, 2],
@@ -58,6 +75,8 @@ describe('LocalizationReferenceExporter.exportReferencesForMtFile', () => {
         defval: '',
       }) as string[][];
       expect(rows[0]).toEqual(['source', 'target', '_tm_for_mt', '_tb_for_mt']);
+      expect(rows[1][1]).toBe('Current target');
+      expect(rows[2][1]).toBe('');
       expect(rows[1][2]).toContain('Bonjour le monde');
       expect(rows[1][2]).not.toContain('Reglages');
       expect(rows[1][3]).toContain('world -> monde');
@@ -138,6 +157,27 @@ describe('LocalizationReferenceExporter.exportReferencesForMtFile', () => {
     }
   });
 });
+
+function createStoredSegment(params: {
+  fileId: number;
+  orderIndex: number;
+  sourceText: string;
+  targetText: string;
+}) {
+  const transient = createTransientSegment(
+    {
+      id: `stored-${params.orderIndex}`,
+      source: params.sourceText,
+      target: params.targetText,
+    },
+    params.orderIndex,
+  );
+  return {
+    ...transient,
+    segmentId: `stored-${params.orderIndex}`,
+    fileId: params.fileId,
+  };
+}
 
 function writeInputWorkbook(root: string, rows: unknown[][]): string {
   const inputPath = join(root, `input-${Math.random().toString(16).slice(2)}.xlsx`);
