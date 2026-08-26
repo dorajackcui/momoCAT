@@ -10,6 +10,8 @@ npm ci
 
 `postinstall` rebuilds `better-sqlite3` for Electron. Development data is written under `.cat_data/` and must remain untracked.
 
+Set `MOMOCAT_USER_DATA_DIR` before starting the desktop app to route its database, projects, runtime AI configuration, proxy file, and Chromium state to an isolated directory. Prefer an absolute path. The CLI recognizes the same variable, so a disposable demo or diagnostic environment can be shared deliberately without moving or deleting `.cat_data/`.
+
 Start the desktop app:
 
 ```bash

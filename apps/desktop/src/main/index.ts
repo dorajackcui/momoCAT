@@ -41,6 +41,7 @@ import { registerClipboardHandlers } from './ipc/clipboardHandlers';
 import { registerJobHandlers } from './ipc/jobHandlers';
 import { registerSystemHandlers } from './ipc/systemHandlers';
 import { focusPrimaryWindow } from './singleInstance';
+import { resolveDesktopUserDataPath } from './userDataPath';
 
 const { autoUpdater } = electronUpdater;
 
@@ -52,11 +53,12 @@ app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu');
 
 // Set UserData path early to avoid permission issues with Chromium cache
-const userDataPath = is.dev ? join(app.getAppPath(), '../../.cat_data') : app.getPath('userData');
-
-if (is.dev) {
-  app.setPath('userData', userDataPath);
-}
+const userDataPath = resolveDesktopUserDataPath({
+  appPath: app.getAppPath(),
+  defaultUserDataPath: app.getPath('userData'),
+  isDev: is.dev,
+});
+app.setPath('userData', userDataPath);
 
 const primaryInstanceReady = app.requestSingleInstanceLock() ? app.whenReady() : null;
 if (!primaryInstanceReady) {
