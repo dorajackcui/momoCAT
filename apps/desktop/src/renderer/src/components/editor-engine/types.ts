@@ -32,13 +32,18 @@ export interface EditorEngineCallbacks {
   onShortcutAction: (action: EditorShortcutAction) => void;
 }
 
+export interface EditorEngineSelection {
+  anchor: number;
+  head: number;
+}
+
 export interface EditorEngineAdapter {
   mount(container: HTMLElement, initialText: string): void;
   unmount(): void;
   setText(nextText: string, preserveSelection: boolean): void;
   setEditable(editable: boolean): void;
   setOptions(options: Partial<EditorEngineOptions>): void;
-  focus(caretCoords?: { x: number; y: number }): void;
+  focus(caretCoords?: { x: number; y: number }, selection?: EditorEngineSelection): void;
   replaceSelection(insertText: string): void;
   dispatchCommand(command: EditorCommand): boolean;
   getSnapshot(): EditorEngineSnapshot;

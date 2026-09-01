@@ -361,8 +361,15 @@ export function createCodeMirrorAdapter({
       applyOptions(nextOptions);
     },
 
-    focus: (caretCoords) => {
+    focus: (caretCoords, selection) => {
       if (!view) return;
+      if (selection) {
+        const anchor = Math.min(Math.max(selection.anchor, 0), view.state.doc.length);
+        const head = Math.min(Math.max(selection.head, 0), view.state.doc.length);
+        view.dispatch({ selection: { anchor, head }, scrollIntoView: true });
+        view.focus();
+        return;
+      }
       view.focus();
       if (!caretCoords) return;
       // Non-precise lookup snaps clicks in padding/short-line gaps to the

@@ -1,7 +1,9 @@
+// @vitest-environment jsdom
+
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { EditorRowTargetCell } from './EditorRowTargetCell';
+import { EditorRowTargetCell, resolvePreviewSelection } from './EditorRowTargetCell';
 
 function renderCell(overrides?: Partial<React.ComponentProps<typeof EditorRowTargetCell>>) {
   const props: React.ComponentProps<typeof EditorRowTargetCell> = {
@@ -79,5 +81,71 @@ describe('EditorRowTargetCell', () => {
     );
 
     expect(html).toContain('cm-target-highlight');
+  });
+
+  it('maps a highlighted preview DOM selection to editor text offsets', () => {
+    const root = document.createElement('div');
+    const prefix = document.createTextNode('Alpha ');
+    const mark = document.createElement('mark');
+    const markedText = document.createTextNode('beta');
+    mark.append(markedText);
+    root.append(prefix, mark, document.createTextNode(' gamma'));
+
+    expect(
+      resolvePreviewSelection(
+        root,
+        {
+          anchorNode: prefix,
+          anchorOffset: 2,
+          focusNode: markedText,
+          focusOffset: 2,
+          isCollapsed: false,
+        },
+        'Alpha beta gamma',
+        false,
+      ),
+    ).toEqual({ anchor: 2, head: 8 });
+  });
+
+  it('removes visual-only line break markers from preview selection offsets', () => {
+    const root = document.createElement('div');
+    const text = document.createTextNode('A·B↵\nC');
+    root.append(text);
+
+    expect(
+      resolvePreviewSelection(
+        root,
+        {
+          anchorNode: text,
+          anchorOffset: 2,
+          focusNode: text,
+          focusOffset: 5,
+          isCollapsed: false,
+        },
+        'A B\nC',
+        true,
+      ),
+    ).toEqual({ anchor: 2, head: 4 });
+  });
+
+  it('does not mistake literal non-printing glyphs for visualized whitespace', () => {
+    const root = document.createElement('div');
+    const text = document.createTextNode('A·⇥↵B');
+    root.append(text);
+
+    expect(
+      resolvePreviewSelection(
+        root,
+        {
+          anchorNode: text,
+          anchorOffset: 1,
+          focusNode: text,
+          focusOffset: 4,
+          isCollapsed: false,
+        },
+        'A·⇥↵B',
+        true,
+      ),
+    ).toEqual({ anchor: 1, head: 4 });
   });
 });

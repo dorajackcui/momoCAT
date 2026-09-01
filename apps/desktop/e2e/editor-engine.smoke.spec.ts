@@ -33,6 +33,7 @@ async function createSmokeSession(): Promise<SmokeSession> {
   const projectName = `cm6-smoke-${Date.now()}`;
   const launchEnv = { ...process.env };
   delete launchEnv.ELECTRON_RUN_AS_NODE;
+  launchEnv.MOMOCAT_USER_DATA_DIR = tempDir;
 
   const electronApp = await electron.launch({
     cwd: APP_ROOT,
@@ -149,6 +150,53 @@ test.describe('CodeMirror editor engine smoke', () => {
       await expect.poll(() => rows.count()).toBe(0);
       await targetFilter.fill('pomme');
       await expect.poll(() => rows.count()).toBe(1);
+    } finally {
+      await closeSmokeSession(session);
+    }
+  });
+
+  test('carries an inactive target preview selection into the activated editor', async () => {
+    const session = await createSmokeSession();
+
+    try {
+      const { page } = session;
+      const secondRow = page.locator('div.group.grid').nth(1);
+      const targetPreview = secondRow.locator('.editor-target-preview');
+      const previewBox = await targetPreview.boundingBox();
+      if (!previewBox) throw new Error('Expected inactive target preview bounds');
+
+      await page.mouse.move(previewBox.x + 4, previewBox.y + previewBox.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(
+        previewBox.x + previewBox.width * 0.8,
+        previewBox.y + previewBox.height / 2,
+        {
+          steps: 5,
+        },
+      );
+      await page.mouse.up();
+
+      const targetEditor = secondRow.locator('.editor-target-editor-host .cm-content');
+      await expect(targetEditor).toBeVisible();
+      await expect(targetEditor).toBeFocused();
+      await expect
+        .poll(() =>
+          targetEditor.evaluate((content) => {
+            const selection = content.ownerDocument.getSelection();
+            if (
+              !selection ||
+              selection.isCollapsed ||
+              !selection.anchorNode ||
+              !selection.focusNode ||
+              !content.contains(selection.anchorNode) ||
+              !content.contains(selection.focusNode)
+            ) {
+              return 0;
+            }
+            return selection.toString().length;
+          }),
+        )
+        .toBeGreaterThan(2);
     } finally {
       await closeSmokeSession(session);
     }

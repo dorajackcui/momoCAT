@@ -7,7 +7,7 @@ import { EditorRowSourceCell } from './editor-row/EditorRowSourceCell';
 import { EditorRowNumberCell } from './editor-row/EditorRowNumberCell';
 import { EditorRowTargetActions } from './editor-row/EditorRowTargetActions';
 import { EditorRowFeedback } from './editor-row/EditorRowFeedback';
-import { EditorRowTargetCell } from './editor-row/EditorRowTargetCell';
+import { EditorRowTargetCell, resolvePreviewSelection } from './editor-row/EditorRowTargetCell';
 import {
   useEditorRowDraftController,
   type TargetEditorController,
@@ -104,6 +104,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
     draftText,
     setShortcutActionHandler,
     capturePendingCaretCoords,
+    capturePendingSelection,
     editorController,
   } = useEditorRowDraftController({
     segmentId: segment.segmentId,
@@ -193,6 +194,17 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
         isActive ? 'bg-brand-soft/20' : 'hover:bg-muted/30'
       }`}
       onClick={(event) => {
+        const preview = event.currentTarget.querySelector<HTMLElement>('.editor-target-preview');
+        capturePendingSelection(
+          preview
+            ? resolvePreviewSelection(
+                preview,
+                preview.ownerDocument.defaultView?.getSelection() ?? null,
+                targetEditorText,
+                showNonPrintingSymbols,
+              )
+            : null,
+        );
         // Remember where the user clicked so activation can place the caret
         // there instead of resetting it to the start of the segment.
         capturePendingCaretCoords({ x: event.clientX, y: event.clientY });

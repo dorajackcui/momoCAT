@@ -17,6 +17,34 @@ describe('CodeMirror editor sizing', () => {
 });
 
 describe('CodeMirror term insertion', () => {
+  it('restores a preview text selection when focusing a newly active editor', () => {
+    const adapter = createCodeMirrorAdapter({
+      callbacks: {
+        onTextChange: vi.fn(),
+        onFocusChange: vi.fn(),
+        onShortcutAction: vi.fn(),
+      },
+    });
+    const host = document.createElement('div');
+    document.body.append(host);
+
+    try {
+      adapter.mount(host, 'abcdef');
+      adapter.focus(undefined, { anchor: 1, head: 4 });
+
+      const view = EditorView.findFromDOM(host);
+      expect(view?.state.selection.main).toMatchObject({ anchor: 1, head: 4 });
+      expect(adapter.getSnapshot()).toMatchObject({
+        selectionFrom: 1,
+        selectionTo: 4,
+        focused: true,
+      });
+    } finally {
+      adapter.destroy();
+      host.remove();
+    }
+  });
+
   it('preserves a middle caret across blur and moves it after the inserted term', () => {
     const onTextChange = vi.fn();
     const adapter = createCodeMirrorAdapter({
