@@ -50,13 +50,7 @@ export class TMModule {
   ) {
     this.queryService = new TMQueryService(tmRepo, tmService);
     this.importService = new TMImportService(tmRepo, tx, dbPath, emitProgress);
-    this.batchOpsService = new TMBatchOpsService(
-      projectRepo,
-      segmentRepo,
-      tmRepo,
-      tx,
-      segmentService,
-    );
+    this.batchOpsService = new TMBatchOpsService(projectRepo, segmentRepo, tmRepo, segmentService);
     this.syncService = new TMSyncService(tmRepo, settingsRepo, dbPath, emitProgress);
     this.workingTMService = new WorkingTMService(
       tmRepo,

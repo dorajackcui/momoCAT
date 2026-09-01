@@ -145,7 +145,25 @@ function createCommitHarness(
   const tx = {
     runInTransaction: <T>(fn: () => T) => fn(),
   } as TransactionManager;
-  const segmentService = {} as SegmentService;
+  const segmentService = {
+    runSegmentUpdatesAtomically: vi.fn(
+      (
+        operation: (
+          applyUpdate: (update: {
+            segmentId: string;
+            targetTokens: Token[];
+            status: Segment['status'];
+          }) => void,
+        ) => unknown,
+      ) =>
+        operation((update) => {
+          const segment = segments.find((candidate) => candidate.segmentId === update.segmentId);
+          if (!segment) throw new Error(`Segment not found: ${update.segmentId}`);
+          segment.targetTokens = update.targetTokens;
+          segment.status = update.status;
+        }),
+    ),
+  } as unknown as SegmentService;
   const module = new TMModule(
     projectRepo,
     segmentRepo,
@@ -332,30 +350,40 @@ describe('TMModule.commitToMainTM', () => {
     expect(committedHashes).not.toContain('hash-empty-target');
     expect(committedHashes).not.toContain('hash-empty-source');
     expect(tmRepo.replaceTMFts).toHaveBeenCalledTimes(5);
+    expect(rows.map((segment) => segment.status)).toEqual([
+      'confirmed',
+      'confirmed',
+      'confirmed',
+      'confirmed',
+      'confirmed',
+      'translated',
+      'translated',
+    ]);
   });
 });
 
 describe('TMModule.commitFileToTM', () => {
-  it('commits file segments to the project writable Working TM', async () => {
-    const segment = createSegment('seg-confirmed', 'hash-confirmed', 'confirmed', 'target');
+  it('commits and confirms translated file segments in the project writable Working TM', async () => {
+    const segment = createSegment('seg-translated', 'hash-translated', 'translated', 'target');
     const { module, tmRepo } = createCommitHarness([segment], { tmType: 'working' });
 
-    const result = await module.commitFileToTM('tm-working', 1);
+    const result = await module.commitFileToTM('tm-working', 1, { scope: 'all' });
 
     expect(result).toEqual({ committedCount: 1, projectId: 7, tmType: 'working' });
+    expect(segment.status).toBe('confirmed');
     expect(tmRepo.upsertTMEntryBySrcHash).toHaveBeenCalledWith(
       expect.objectContaining({
         tmId: 'tm-working',
         projectId: 7,
-        srcHash: 'hash-confirmed',
-        originSegmentId: 'seg-confirmed',
+        srcHash: 'hash-translated',
+        originSegmentId: 'seg-translated',
       }),
     );
     expect(tmRepo.replaceTMFts).toHaveBeenCalledWith(
       'tm-working',
       'Hello',
       'target',
-      'entry-hash-confirmed',
+      'entry-hash-translated',
     );
   });
 
@@ -385,15 +413,70 @@ describe('TMModule.commitFileToTM', () => {
     expect(tmRepo.upsertTMEntryBySrcHash).not.toHaveBeenCalled();
   });
 
+  it('persists eligible confirmations and emits their segment updates after commit', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Confirmed Working Commit', 'en', 'zh');
+      const fileId = db.createFile(projectId, 'confirm-commit.xlsx');
+      db.bulkInsertSegments(
+        [
+          createSegment('seg-translated', 'hash-translated', 'translated', 'translated target'),
+          createSegment('seg-confirmed', 'hash-confirmed', 'confirmed', 'confirmed target'),
+          createSegment('seg-empty', 'hash-empty', 'new'),
+        ].map((segment, index) => ({ ...segment, fileId, orderIndex: index })),
+      );
+
+      const workingTM = db.getProjectMountedTMs(projectId).find((tm) => tm.type === 'working');
+      expect(workingTM).toBeDefined();
+      if (!workingTM) throw new Error('Expected working TM to exist');
+
+      const projectRepo = new SqliteProjectRepository(db);
+      const segmentRepo = new SqliteSegmentRepository(db);
+      const tmRepo = new SqliteTMRepository(db);
+      const tx = new SqliteTransactionManager(db);
+      const tmService = new TMService(projectRepo, tmRepo);
+      const segmentService = new SegmentService(segmentRepo, tmService, tx);
+      const eventSpy = vi.fn();
+      segmentService.on('segments-updated', eventSpy);
+      const module = new TMModule(
+        projectRepo,
+        segmentRepo,
+        tmRepo,
+        tx,
+        tmService,
+        segmentService,
+        ':memory:',
+        vi.fn(),
+        fakeSettingsRepo(),
+      );
+
+      const result = await module.commitFileToTM(workingTM.id, fileId, { scope: 'all' });
+
+      expect(result).toEqual({ committedCount: 2, projectId, tmType: 'working' });
+      expect(db.getSegment('seg-translated')?.status).toBe('confirmed');
+      expect(db.getSegment('seg-confirmed')?.status).toBe('confirmed');
+      expect(db.getSegment('seg-empty')?.status).toBe('new');
+      expect(db.findTMEntryByHash(workingTM.id, 'hash-translated')).toBeDefined();
+      expect(db.findTMEntryByHash(workingTM.id, 'hash-confirmed')).toBeDefined();
+      expect(db.findTMEntryByHash(workingTM.id, 'hash-empty')).toBeUndefined();
+      expect(eventSpy).toHaveBeenCalledTimes(1);
+      expect(eventSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ segmentId: 'seg-translated', status: 'confirmed' }),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('atomically rolls back new entries, updates, usage counts, and FTS on commit failure', async () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Atomic Working Commit', 'en', 'zh');
       const fileId = db.createFile(projectId, 'atomic-commit.xlsx');
       const segments: Segment[] = [
-        createSegment('seg-new', 'hash-new', 'confirmed', 'new target'),
-        createSegment('seg-existing', 'hash-existing', 'confirmed', 'replacement target'),
-        createSegment('seg-fail', 'hash-fail', 'confirmed', 'failing target'),
+        createSegment('seg-new', 'hash-new', 'translated', 'new target'),
+        createSegment('seg-existing', 'hash-existing', 'translated', 'replacement target'),
+        createSegment('seg-fail', 'hash-fail', 'translated', 'failing target'),
       ].map((segment, index) => ({ ...segment, fileId, orderIndex: index }));
       db.bulkInsertSegments(segments);
 
@@ -448,6 +531,8 @@ describe('TMModule.commitFileToTM', () => {
       const tx = new SqliteTransactionManager(db);
       const tmService = new TMService(projectRepo, tmRepo);
       const segmentService = new SegmentService(segmentRepo, tmService, tx);
+      const eventSpy = vi.fn();
+      segmentService.on('segments-updated', eventSpy);
       const module = new TMModule(
         projectRepo,
         segmentRepo,
@@ -461,7 +546,7 @@ describe('TMModule.commitFileToTM', () => {
       );
 
       try {
-        await expect(module.commitFileToTM(workingTM.id, fileId)).rejects.toThrow(
+        await expect(module.commitFileToTM(workingTM.id, fileId, { scope: 'all' })).rejects.toThrow(
           'forced Working TM commit failure',
         );
       } finally {
@@ -479,6 +564,10 @@ describe('TMModule.commitFileToTM', () => {
         raw.prepare('SELECT tgtText FROM tm_fts WHERE tmEntryId = ?').get(existingEntryId),
       ).toEqual({ tgtText: 'original target' });
       expect(db.getTMStats(workingTM.id).entryCount).toBe(1);
+      expect(db.getSegment('seg-new')?.status).toBe('translated');
+      expect(db.getSegment('seg-existing')?.status).toBe('translated');
+      expect(db.getSegment('seg-fail')?.status).toBe('translated');
+      expect(eventSpy).not.toHaveBeenCalled();
     } finally {
       db.close();
     }

@@ -1,12 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { Segment } from '@cat/core/models';
 import { serializeTokensToDisplayText } from '@cat/core/text';
-import type {
-  ProjectRepository,
-  SegmentRepository,
-  TMRepository,
-  TransactionManager,
-} from '../../ports';
+import type { ProjectRepository, SegmentRepository, TMRepository } from '../../ports';
 import { SegmentService } from '../../SegmentService';
 import type { TMCommitOptions, TMCommitScope } from '../../../../shared/ipc';
 
@@ -23,7 +18,6 @@ export class TMBatchOpsService {
     private readonly projectRepo: ProjectRepository,
     private readonly segmentRepo: SegmentRepository,
     private readonly tmRepo: TMRepository,
-    private readonly tx: TransactionManager,
     private readonly segmentService: SegmentService,
   ) {}
 
@@ -57,37 +51,52 @@ export class TMBatchOpsService {
     }
 
     const scope = this.normalizeCommitScope(options);
-    const committedCount = this.tx.runInTransaction(() => {
-      let count = 0;
+    const committedCount = this.segmentService.runSegmentUpdatesAtomically(
+      (applyUpdate) => {
+        let count = 0;
 
-      this.forEachFileSegment(fileId, (segment) => {
-        const sourceText = serializeTokensToDisplayText(segment.sourceTokens);
-        const targetText = serializeTokensToDisplayText(segment.targetTokens);
-        if (!this.shouldCommitSegment(segment, scope, sourceText, targetText)) return;
+        this.forEachFileSegment(fileId, (segment) => {
+          const sourceText = serializeTokensToDisplayText(segment.sourceTokens);
+          const targetText = serializeTokensToDisplayText(segment.targetTokens);
+          if (!this.shouldCommitSegment(segment, scope, sourceText, targetText)) return;
 
-        const entryId = this.tmRepo.upsertTMEntryBySrcHash({
-          id: randomUUID(),
-          tmId,
-          projectId: file.projectId,
-          srcLang: tm.srcLang,
-          tgtLang: tm.tgtLang,
-          srcHash: segment.srcHash,
-          matchKey: segment.matchKey,
-          tagsSignature: segment.tagsSignature,
-          sourceTokens: segment.sourceTokens,
-          targetTokens: segment.targetTokens,
-          originSegmentId: segment.segmentId,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          usageCount: 1,
+          if (segment.status !== 'confirmed') {
+            applyUpdate({
+              segmentId: segment.segmentId,
+              targetTokens: segment.targetTokens,
+              status: 'confirmed',
+            });
+          }
+
+          const entryId = this.tmRepo.upsertTMEntryBySrcHash({
+            id: randomUUID(),
+            tmId,
+            projectId: file.projectId,
+            srcLang: tm.srcLang,
+            tgtLang: tm.tgtLang,
+            srcHash: segment.srcHash,
+            matchKey: segment.matchKey,
+            tagsSignature: segment.tagsSignature,
+            sourceTokens: segment.sourceTokens,
+            targetTokens: segment.targetTokens,
+            originSegmentId: segment.segmentId,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            usageCount: 1,
+          });
+
+          this.tmRepo.replaceTMFts(tmId, sourceText, targetText, entryId);
+          count += 1;
         });
 
-        this.tmRepo.replaceTMFts(tmId, sourceText, targetText, entryId);
-        count += 1;
-      });
-
-      return count;
-    });
+        return count;
+      },
+      {
+        commitToWorkingTM: false,
+        preserveRepeatLink: true,
+        propagateRepeats: false,
+      },
+    );
 
     return {
       committedCount,

@@ -26,6 +26,7 @@ interface SegmentUpdateInput {
 interface SegmentUpdateOptions {
   commitToWorkingTM?: boolean;
   preserveRepeatLink?: boolean;
+  propagateRepeats?: boolean;
 }
 
 interface SegmentUpdateEventPayload extends SegmentUpdateInput {
@@ -102,9 +103,25 @@ export class SegmentService extends EventEmitter {
   ): Promise<SegmentUpdateEventPayload[]> {
     if (updates.length === 0) return [];
 
+    return this.runSegmentUpdatesAtomically(
+      (applyUpdate) => updates.map((update) => applyUpdate(update)),
+      options,
+    );
+  }
+
+  /**
+   * Run a synchronous segment batch and any related persistence writes in one
+   * transaction. Segment events are emitted only after the whole operation
+   * commits successfully.
+   */
+  public runSegmentUpdatesAtomically<T>(
+    operation: (applyUpdate: (update: SegmentUpdateInput) => SegmentUpdateEventPayload) => T,
+    options: SegmentUpdateOptions = {},
+  ): T {
     const workingTMUpdates = new Map<string, WorkingTMUpdatedPayload>();
-    const events = this.tx.runInTransaction(() =>
-      updates.map((update) => {
+    const { result, events } = this.tx.runInTransaction(() => {
+      const pendingEvents: SegmentUpdateEventPayload[] = [];
+      const applyUpdate = (update: SegmentUpdateInput): SegmentUpdateEventPayload => {
         const { fileId, propagatedIds, workingTMUpdate } = this.updateSegmentInternal(
           update.segmentId,
           update.targetTokens,
@@ -117,14 +134,21 @@ export class SegmentService extends EventEmitter {
             workingTMUpdate,
           );
         }
-        return {
+        const event = {
           ...update,
           fileId,
           propagatedIds,
           serverAppliedAt: new Date().toISOString(),
         };
-      }),
-    );
+        pendingEvents.push(event);
+        return event;
+      };
+
+      return {
+        result: operation(applyUpdate),
+        events: pendingEvents,
+      };
+    });
 
     for (const event of events) {
       this.emitSegmentUpdated(event);
@@ -133,7 +157,7 @@ export class SegmentService extends EventEmitter {
       this.emitWorkingTMUpdated(update);
     }
 
-    return events;
+    return result;
   }
 
   private updateSegmentInternal(
@@ -205,7 +229,7 @@ export class SegmentService extends EventEmitter {
           this.tmService.upsertFromConfirmedSegment(projectId, segment);
           workingTMUpdate = { projectId, srcHash: segment.srcHash };
         }
-        if (nextRepeatState?.mode === 'leader') {
+        if (options.propagateRepeats !== false && nextRepeatState?.mode === 'leader') {
           propagatedIds = this.propagate(projectId, segment);
         }
       }
