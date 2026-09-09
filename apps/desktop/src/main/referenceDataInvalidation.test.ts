@@ -25,7 +25,6 @@ describe('subscribeToWorkingTMReferenceDataChanges', () => {
       projectId: 7,
       kind: 'tm',
       reason: 'working-tm-updated',
-      srcHash: 'hash-source',
     });
 
     dispose();
@@ -38,7 +37,6 @@ describe('subscribeToWorkingTMReferenceDataChanges', () => {
         projectId: 7,
         kind: 'tm',
         reason: 'working-tm-updated',
-        srcHash: 'hash-source',
       }),
     ).toBe(false);
     expect(

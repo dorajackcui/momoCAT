@@ -14,12 +14,13 @@ export function subscribeToWorkingTMReferenceDataChanges(
   source: WorkingTMUpdateSource,
   notifyReferenceDataChanged: (event: ReferenceDataChangedEvent) => void,
 ): () => void {
-  return source.onWorkingTMUpdated(({ projectId, srcHash }) => {
+  return source.onWorkingTMUpdated(({ projectId }) => {
+    // One Working TM entry can affect fuzzy and concordance results for
+    // every source in the project, so renderer caches must invalidate broadly.
     notifyReferenceDataChanged({
       projectId,
       kind: 'tm',
       reason: 'working-tm-updated',
-      srcHash,
     });
   });
 }
