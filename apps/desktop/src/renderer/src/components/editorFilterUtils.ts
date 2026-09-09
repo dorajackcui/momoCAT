@@ -3,7 +3,7 @@ import type { Segment } from '@cat/core/models';
 export type EditorStatusFilter = 'all' | 'new' | 'draft' | 'translated' | 'reviewed' | 'confirmed';
 export type EditorMatchMode = 'contains' | 'exact' | 'regex';
 export type EditorQualityFilter = 'qa_error' | 'qa_warning' | 'save_error';
-export type EditorQuickPreset = 'none' | 'untranslated' | 'confirmed' | 'first_repeat' | 'issues';
+export type EditorQuickPreset = 'none' | 'unconfirmed' | 'confirmed' | 'first_repeat' | 'issues';
 export type EditorSortBy = 'default' | 'source_length' | 'target_length';
 export type EditorSortDirection = 'asc' | 'desc';
 export type RepeatedSourceRole = 'first' | 'later';
@@ -16,7 +16,6 @@ export interface SearchableEditorSegment {
   hasQaError: boolean;
   hasQaWarning: boolean;
   hasSaveError: boolean;
-  isUntranslated: boolean;
   hasIssue: boolean;
   repeatedSourceRole?: RepeatedSourceRole;
 }
@@ -88,7 +87,7 @@ const qualityFilterPredicates: Record<
 const quickPresetPredicates: Record<EditorQuickPreset, (item: SearchableEditorSegment) => boolean> =
   {
     none: () => true,
-    untranslated: (item) => item.isUntranslated,
+    unconfirmed: (item) => item.segment.status !== 'confirmed',
     confirmed: (item) => item.segment.status === 'confirmed',
     first_repeat: (item) => item.repeatedSourceRole === 'first',
     issues: (item) => item.hasIssue,

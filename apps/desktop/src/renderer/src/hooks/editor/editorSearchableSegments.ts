@@ -67,7 +67,6 @@ function buildSearchableEditorSegment(
   const hasQaError = qaIssues.some((issue) => issue.severity === 'error');
   const hasQaWarning = qaIssues.some((issue) => issue.severity === 'warning');
   const hasSaveError = Boolean(segmentSaveErrors[segment.segmentId]);
-  const isUntranslated = targetText.trim().length === 0;
 
   return {
     segment,
@@ -77,7 +76,6 @@ function buildSearchableEditorSegment(
     hasQaError,
     hasQaWarning,
     hasSaveError,
-    isUntranslated,
     hasIssue: hasQaError || hasQaWarning || hasSaveError,
     repeatedSourceRole,
   };

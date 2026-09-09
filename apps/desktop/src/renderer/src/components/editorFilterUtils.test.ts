@@ -54,7 +54,6 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
       hasQaError: false,
       hasQaWarning: false,
       hasSaveError: false,
-      isUntranslated: true,
       hasIssue: false,
       repeatedSourceRole: 'first',
     },
@@ -66,7 +65,6 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
       hasQaError: true,
       hasQaWarning: false,
       hasSaveError: false,
-      isUntranslated: false,
       hasIssue: true,
       repeatedSourceRole: 'later',
     },
@@ -78,7 +76,6 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
       hasQaError: false,
       hasQaWarning: true,
       hasSaveError: true,
-      isUntranslated: false,
       hasIssue: true,
     },
   ];
@@ -151,6 +148,27 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
     });
 
     expect(filtered.map((item) => item.segment.segmentId)).toEqual(['s1']);
+  });
+
+  it('filters to every segment that has not been confirmed', () => {
+    const candidates = (['new', 'draft', 'translated', 'reviewed', 'confirmed'] as const).map(
+      (status, index) => ({
+        ...segments[0],
+        segment: makeSegment(`status-${status}`, status),
+        originalIndex: index,
+      }),
+    );
+    const filtered = filterSearchableSegments(candidates, {
+      ...createDefaultEditorFilterCriteria(),
+      quickPreset: 'unconfirmed',
+    });
+
+    expect(filtered.map((item) => item.segment.status)).toEqual([
+      'new',
+      'draft',
+      'translated',
+      'reviewed',
+    ]);
   });
 });
 
@@ -230,7 +248,6 @@ describe('editorFilterUtils.sortSearchableSegments', () => {
       hasQaError: false,
       hasQaWarning: false,
       hasSaveError: false,
-      isUntranslated: false,
       hasIssue: false,
     },
     {
@@ -241,7 +258,6 @@ describe('editorFilterUtils.sortSearchableSegments', () => {
       hasQaError: false,
       hasQaWarning: false,
       hasSaveError: false,
-      isUntranslated: false,
       hasIssue: false,
     },
     {
@@ -252,7 +268,6 @@ describe('editorFilterUtils.sortSearchableSegments', () => {
       hasQaError: false,
       hasQaWarning: false,
       hasSaveError: false,
-      isUntranslated: false,
       hasIssue: false,
     },
   ];

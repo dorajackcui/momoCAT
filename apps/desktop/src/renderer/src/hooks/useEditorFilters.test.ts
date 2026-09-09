@@ -231,6 +231,12 @@ describe('useEditorFilters helpers', () => {
     );
   });
 
+  it('clears the retired untranslated quick preset from persisted state', () => {
+    expect(sanitizePersistedEditorFilterState({ quickPreset: 'untranslated' }).quickPreset).toBe(
+      'none',
+    );
+  });
+
   it('builds searchable segment flags from segment and save errors', () => {
     const segments: Segment[] = [
       createSegment({
@@ -255,7 +261,6 @@ describe('useEditorFilters helpers', () => {
     expect(searchable[0]).toMatchObject({
       sourceText: 'Hello',
       targetText: '',
-      isUntranslated: true,
       hasIssue: false,
     });
     expect(searchable[1]).toMatchObject({
@@ -405,7 +410,6 @@ describe('useEditorFilters helpers', () => {
         hasQaError: false,
         hasQaWarning: false,
         hasSaveError: false,
-        isUntranslated: true,
         hasIssue: false,
       },
       {
@@ -416,7 +420,6 @@ describe('useEditorFilters helpers', () => {
         hasQaError: false,
         hasQaWarning: false,
         hasSaveError: false,
-        isUntranslated: true,
         hasIssue: false,
       },
     ];
