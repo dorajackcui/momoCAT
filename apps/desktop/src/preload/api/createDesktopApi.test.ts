@@ -5,6 +5,17 @@ import { createDesktopApi } from './createDesktopApi';
 import type { IpcRendererLike } from './types';
 
 describe('createDesktopApi smoke', () => {
+  it('preserves filtered translation IDs and baseline across preload', async () => {
+    const invoke = vi.fn().mockResolvedValue('job-filtered');
+    const api = createDesktopApi({ invoke } as unknown as IpcRendererLike);
+    const options = {
+      segmentIds: ['s10', 's30'],
+      targetBaseline: 'ignore-current-targets' as const,
+    };
+    expect(await api.aiTranslateFile(7, options)).toBe('job-filtered');
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.translateFile, 7, options);
+  });
+
   it('maps core domain methods to expected IPC channels', async () => {
     const invoke = vi.fn().mockResolvedValue(undefined);
     const on = vi.fn();

@@ -41,6 +41,33 @@ function createStoredFile(db: CATDatabase, projectsDir: string): number {
 }
 
 describe('ProjectService.inspectFile', () => {
+  it('forwards the filtered AI scope through the service facade', async () => {
+    const db = new CATDatabase(':memory:');
+    const aiTranslateFile = vi
+      .fn()
+      .mockResolvedValue({ translated: 2, skipped: 0, failed: 0, total: 2 });
+    try {
+      const service = new ProjectService(db, '.', ':memory:', {
+        tmModule: {} as never,
+        tbModule: {} as never,
+        aiModule: { applySavedProxySettings: vi.fn(), aiTranslateFile } as never,
+      });
+      const options = {
+        segmentIds: ['s10', 's80'],
+        targetBaseline: 'use-current-targets' as const,
+      };
+      expect(await service.aiTranslateFile(1, options)).toEqual({
+        translated: 2,
+        skipped: 0,
+        failed: 0,
+        total: 2,
+      });
+      expect(aiTranslateFile).toHaveBeenCalledWith(1, options);
+    } finally {
+      db.close();
+    }
+  });
+
   beforeEach(() => {
     localizationMocks.inspectFile.mockClear();
     localizationMocks.LocalizationEngine.mockClear();

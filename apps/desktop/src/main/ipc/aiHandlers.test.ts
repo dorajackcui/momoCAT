@@ -14,6 +14,25 @@ function createIpcMainStub() {
 }
 
 describe('ai handlers', () => {
+  it.each([[], null, 's1', [''], ['  '], [1]].map((segmentIds) => ({ segmentIds })))(
+    'rejects invalid segment scope $segmentIds before starting a job',
+    ({ segmentIds }) => {
+      const { handlers, ipcMain } = createIpcMainStub();
+      const startJob = vi.fn();
+      const aiTranslateFile = vi.fn();
+      registerAIHandlers({
+        ipcMain,
+        projectService: { aiTranslateFile } as never,
+        jobManager: { startJob } as never,
+      });
+      expect(() => handlers.get(IPC_CHANNELS.ai.translateFile)?.({}, 1, { segmentIds })).toThrow(
+        'non-empty list of segment IDs',
+      );
+      expect(startJob).not.toHaveBeenCalled();
+      expect(aiTranslateFile).not.toHaveBeenCalled();
+    },
+  );
+
   it('delegates source terminology prompt settings through the AI boundary', async () => {
     const { handlers, ipcMain } = createIpcMainStub();
     const settings = {
@@ -96,18 +115,20 @@ describe('ai handlers', () => {
     expect(handler).toBeDefined();
 
     const jobId = handler?.({}, 1, {
-      mode: 'dialogue',
+      mode: 'default',
       targetScope: 'overwrite-non-confirmed',
       targetBaseline: 'ignore-current-targets',
+      segmentIds: ['s10', 's30', 's10'],
     }) as string;
     expect(typeof jobId).toBe('string');
     expect(startJob).toHaveBeenCalledWith(jobId, 'AI translation started');
     expect(projectService.aiTranslateFile).toHaveBeenCalledWith(
       1,
       expect.objectContaining({
-        mode: 'dialogue',
+        mode: 'default',
         targetScope: 'overwrite-non-confirmed',
         targetBaseline: 'ignore-current-targets',
+        segmentIds: ['s10', 's30'],
         onProgress: expect.any(Function),
       }),
     );

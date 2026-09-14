@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import type { AITranslateFileOptions } from '../../shared/ipc';
+import { parseAITranslationSegmentIds } from '../../shared/aiTranslationScope';
 import { registerHandle } from './registerHandle';
 import type { AIHandlerDeps } from './types';
 
@@ -106,6 +107,7 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     IPC_CHANNELS.ai.translateFile,
     (_event, ...args) => {
       const [fileId, options] = args as [number, AITranslateFileOptions | undefined];
+      const segmentIds = parseAITranslationSegmentIds(options?.segmentIds);
       const jobId = randomUUID();
       jobManager.startJob(jobId, 'AI translation started');
       const cancellationToken = jobManager.getCancellationToken(jobId);
@@ -115,6 +117,7 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
           mode: options?.mode,
           targetScope: options?.targetScope,
           targetBaseline: options?.targetBaseline,
+          segmentIds,
           cancellationToken,
           onProgress: (data) => {
             if (jobManager.isCancellationRequested(jobId)) {

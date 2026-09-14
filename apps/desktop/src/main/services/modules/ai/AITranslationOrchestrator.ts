@@ -1,10 +1,10 @@
 import type { Segment } from '@cat/core/models';
 import type { CancellationToken, LocalizationEngine } from '@cat/localization';
 import type {
-  AIBatchMode,
+  AITranslateFileOptions as DesktopAITranslateFileOptions,
   AIBatchTargetBaseline,
-  AIBatchTargetScope,
 } from '../../../../shared/ipc';
+import { parseAITranslationSegmentIds } from '../../../../shared/aiTranslationScope';
 import { resolveFileTagPolicy } from '../../../../shared/fileTagPolicy';
 import type {
   AIRuntimeConfigProvider,
@@ -31,11 +31,8 @@ import {
 } from './segmentTranslationWorkflow';
 import { TagValidator } from '@cat/core/qa';
 
-export interface AITranslateFileOptions {
+export interface AITranslateFileOptions extends DesktopAITranslateFileOptions {
   model?: string;
-  mode?: AIBatchMode;
-  targetScope?: AIBatchTargetScope;
-  targetBaseline?: AIBatchTargetBaseline;
   onProgress?: (data: { current: number; total: number; message?: string }) => void;
   cancellationToken?: CancellationToken;
 }
@@ -71,6 +68,16 @@ export class AITranslationOrchestrator {
     const project = this.projectRepo.getProject(file.projectId);
     if (!project) throw new Error('Project not found');
 
+    const segmentIds = parseAITranslationSegmentIds(options?.segmentIds);
+    if (
+      segmentIds &&
+      ((project.projectType || 'translation') !== 'translation' ||
+        options?.mode === 'dialogue' ||
+        !this.localizationEngine)
+    ) {
+      throw new Error('Filtered AI translation requires the window translation workflow.');
+    }
+
     const tagPolicy = resolveFileTagPolicy(file);
     const { provider, apiKey } = this.providerCatalogService.resolveProviderConfig(
       options?.model ?? project.aiModel,
@@ -105,6 +112,7 @@ export class AITranslationOrchestrator {
       return runLocalizationFileTranslation({
         fileId,
         fileName: file.name,
+        segmentIds,
         project,
         targetBaseline: resolveTargetBaseline(options),
         tagPolicy,

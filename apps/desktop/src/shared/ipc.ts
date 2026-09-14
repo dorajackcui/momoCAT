@@ -342,6 +342,8 @@ export interface AITranslateFileOptions {
   mode?: AIBatchMode;
   targetScope?: AIBatchTargetScope;
   targetBaseline?: AIBatchTargetBaseline;
+  /** Omit for the entire file; selected rows form one context sequence in file order. */
+  segmentIds?: string[];
 }
 
 export interface SegmentsUpdatedEvent {

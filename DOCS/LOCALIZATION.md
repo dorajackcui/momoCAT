@@ -65,6 +65,8 @@ Target baseline is resolved before planning:
 
 Legacy `targetScope` belongs to single-unit concurrent translation and is not interpreted by window planners.
 
+The CAT editor toolbar's AI Translate action defaults to the current filtered results when filters are active, with an option to use the entire file. Opening the dialog snapshots all matching segment IDs using the latest filter input, including context searches; display sorting does not change translation order. The selected rows form a contiguous context sequence in original file order for `window-partial`: excluded rows do not enter its scan windows or neighboring context. Results retain their original segment IDs and are written back only to those segments. Progress counts the selected scope, and existing-target baseline and confirmed-row locking rules still apply. Empty scopes and IDs outside the current file are rejected. The Files tab continues to translate entire files.
+
 ### Partial-window prompt order
 
 ```text

@@ -10,6 +10,7 @@ interface UseEditorBatchActionsParams {
   fileId: number;
   fileName: string | null;
   supportsBatchActions: boolean;
+  getFilteredSegmentIds: () => string[] | null;
   reloadEditorData: () => Promise<void>;
   flushPendingSegmentUpdates: () => Promise<void>;
   aiFileJobTracker: AIFileJobTracker;
@@ -17,6 +18,7 @@ interface UseEditorBatchActionsParams {
 
 export interface EditorBatchActionsController {
   isBatchAIModalOpen: boolean;
+  batchAIFilteredCount: number | undefined;
   isBatchAITranslating: boolean;
   isBatchAIStopping: boolean;
   isBatchQARunning: boolean;
@@ -126,11 +128,13 @@ export function useEditorBatchActions({
   fileId,
   fileName,
   supportsBatchActions,
+  getFilteredSegmentIds,
   reloadEditorData,
   flushPendingSegmentUpdates,
   aiFileJobTracker,
 }: UseEditorBatchActionsParams): EditorBatchActionsController {
   const [isBatchAIModalOpen, setIsBatchAIModalOpen] = useState(false);
+  const [batchAISegmentIds, setBatchAISegmentIds] = useState<string[] | null>(null);
   const [trackedBatchAIJobId, setTrackedBatchAIJobId] = useState<string | null>(null);
   const [isBatchQARunning, setIsBatchQARunning] = useState(false);
   const activeBatchAIJob = useAIFileJobForFile(aiFileJobTracker, fileId);
@@ -140,6 +144,7 @@ export function useEditorBatchActions({
 
   useEffect(() => {
     setIsBatchAIModalOpen(false);
+    setBatchAISegmentIds(null);
     setTrackedBatchAIJobId(null);
     setIsBatchQARunning(false);
   }, [fileId]);
@@ -174,6 +179,12 @@ export function useEditorBatchActions({
     async (options: ProjectAITranslateSubmit) => {
       if (!supportsBatchActions) return;
 
+      const segmentIds = options.scope === 'file' ? null : batchAISegmentIds;
+      if (segmentIds?.length === 0) {
+        feedbackService.info('No segments match the current filters.');
+        return;
+      }
+
       setIsBatchAIModalOpen(false);
       const saved = await flushPendingSegmentUpdatesForAction({
         actionLabel: 'AI translation',
@@ -184,6 +195,7 @@ export function useEditorBatchActions({
       try {
         const jobId = await apiClient.aiTranslateFile(fileId, {
           targetBaseline: options.targetBaseline,
+          ...(segmentIds ? { segmentIds: [...segmentIds] } : {}),
         });
         aiFileJobTracker.trackFileJobStart(fileId, jobId);
         setTrackedBatchAIJobId(jobId);
@@ -193,7 +205,7 @@ export function useEditorBatchActions({
         feedbackService.error(`Failed to start AI translation: ${message}`);
       }
     },
-    [aiFileJobTracker, fileId, flushPendingSegmentUpdates, supportsBatchActions],
+    [aiFileJobTracker, batchAISegmentIds, fileId, flushPendingSegmentUpdates, supportsBatchActions],
   );
 
   const cancelBatchAITranslate = useCallback(async () => {
@@ -239,11 +251,16 @@ export function useEditorBatchActions({
     }
   }, [fileId, fileName, flushPendingSegmentUpdates, reloadEditorData]);
 
-  const openBatchAIModal = useCallback(() => setIsBatchAIModalOpen(true), []);
+  const openBatchAIModal = useCallback(() => {
+    const segmentIds = getFilteredSegmentIds();
+    setBatchAISegmentIds(segmentIds ? [...segmentIds] : null);
+    setIsBatchAIModalOpen(true);
+  }, [getFilteredSegmentIds]);
   const closeBatchAIModal = useCallback(() => setIsBatchAIModalOpen(false), []);
 
   return {
     isBatchAIModalOpen,
+    batchAIFilteredCount: batchAISegmentIds?.length,
     isBatchAITranslating,
     isBatchAIStopping,
     isBatchQARunning,

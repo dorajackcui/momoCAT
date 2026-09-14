@@ -92,6 +92,39 @@ async function closeSmokeSession(session: SmokeSession): Promise<void> {
 }
 
 test.describe('CodeMirror editor engine smoke', () => {
+  test('opens toolbar AI translation on the context-filtered scope and resets it on reopening', async () => {
+    const session = await createSmokeSession();
+    try {
+      const { page } = session;
+      await page.getByRole('button', { name: 'Search target text; switch to context' }).click();
+      await page.getByPlaceholder('Filter context').fill('ctx-2');
+      await expect(page.locator('div.group.grid')).toHaveCount(1);
+      await page.getByRole('button', { name: 'AI batch translate', exact: true }).click();
+      await expect(page.getByLabel('Translation Scope')).toHaveValue('filtered');
+      await expect(page.getByLabel('Translation Scope')).toContainText(
+        'Current filtered results (1 segment)',
+      );
+      await page.getByLabel('Translation Scope').selectOption('file');
+      await expect(page.getByLabel('Translation Scope')).toHaveValue('file');
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await page.getByRole('button', { name: 'AI batch translate', exact: true }).click();
+      await expect(page.getByLabel('Translation Scope')).toHaveValue('filtered');
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await page.getByPlaceholder('Filter context').fill('no matching context');
+      await expect(page.locator('div.group.grid')).toHaveCount(0);
+      await page.getByRole('button', { name: 'AI batch translate', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Start AI Translate' })).toBeDisabled();
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await page.getByPlaceholder('Filter context').fill('');
+      await expect(page.locator('div.group.grid')).toHaveCount(3);
+      await page.getByRole('button', { name: 'AI batch translate', exact: true }).click();
+      await expect(page.getByText('Entire file (3 segments)', { exact: true })).toBeVisible();
+      await expect(page.getByLabel('Translation Scope')).toHaveCount(0);
+    } finally {
+      await closeSmokeSession(session);
+    }
+  });
+
   test('keeps segment height stable when activation mounts CodeMirror', async () => {
     const session = await createSmokeSession();
 

@@ -106,6 +106,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
     filterMenuRef,
     sortMenuRef,
     filteredSegments,
+    getFilteredSegmentIds,
     activeFilteredIndex,
     activeFilterCount,
     hasActiveFilter,
@@ -138,6 +139,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
     fileId,
     fileName: file?.name || null,
     supportsBatchActions,
+    getFilteredSegmentIds,
     reloadEditorData,
     flushPendingSegmentUpdates,
     aiFileJobTracker,
@@ -285,10 +287,12 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-surface">
-      {supportsBatchActions && (
+      {supportsBatchActions && batchActions.isBatchAIModalOpen && (
         <ProjectAITranslateModal
           open={batchActions.isBatchAIModalOpen}
           fileName={file?.name || null}
+          filteredSegmentCount={batchActions.batchAIFilteredCount}
+          totalSegmentCount={totalSegments}
           onClose={batchActions.closeBatchAIModal}
           onConfirm={handleConfirmBatchAITranslate}
         />

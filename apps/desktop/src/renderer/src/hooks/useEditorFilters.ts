@@ -416,7 +416,31 @@ export function useEditorFilters({
     setActiveSegmentId(nextActiveSegmentId);
   }, [activeSegmentId, filteredSegments, segmentIndexById, segments, setActiveSegmentId]);
 
+  // Resolve on demand using the latest input, even before the display search debounce settles.
+  const getFilteredSegmentIds = useCallback((): string[] | null => {
+    if (activeFilterCount === 0) return null;
+    if (
+      filterState.sourceQuery === debouncedSourceQuery &&
+      filterState.targetQuery === debouncedTargetQuery
+    ) {
+      return filteredSegments.map(({ segment }) => segment.segmentId);
+    }
+    return filterSearchableSegments(
+      buildSearchableEditorSegments(segments, segmentSaveErrors),
+      filterState,
+    ).map(({ segment }) => segment.segmentId);
+  }, [
+    activeFilterCount,
+    debouncedSourceQuery,
+    debouncedTargetQuery,
+    filteredSegments,
+    filterState,
+    segments,
+    segmentSaveErrors,
+  ]);
+
   return {
+    getFilteredSegmentIds,
     sourceQueryInput: filterState.sourceQuery,
     targetQueryInput: filterState.targetQuery,
     targetSearchScope: filterState.targetSearchScope,

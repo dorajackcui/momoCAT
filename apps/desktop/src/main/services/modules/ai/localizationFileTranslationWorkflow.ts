@@ -9,6 +9,7 @@ import type {
   TranslateUnitResult,
 } from '@cat/localization';
 import type { AIBatchTargetBaseline } from '../../../../shared/ipc';
+import { parseAITranslationSegmentIds } from '../../../../shared/aiTranslationScope';
 import { SegmentService } from '../../SegmentService';
 import { getAIProgressVerb } from './aiProgressVerb';
 import { logAIBatchDebug } from './aiBatchDebug';
@@ -17,6 +18,7 @@ import { SegmentPagingIterator } from './SegmentPagingIterator';
 export interface LocalizationFileTranslationParams {
   fileId: number;
   fileName: string;
+  segmentIds?: string[];
   project: Project;
   targetBaseline: AIBatchTargetBaseline;
   tagPolicy: TagPolicy;
@@ -32,7 +34,14 @@ export interface LocalizationFileTranslationParams {
 export async function runLocalizationFileTranslation(
   params: LocalizationFileTranslationParams,
 ): Promise<{ translated: number; skipped: number; failed: number; total: number }> {
-  const segments = Array.from(params.segmentPagingIterator.iterateFileSegments(params.fileId));
+  const selectedIds = parseAITranslationSegmentIds(params.segmentIds);
+  const selectedIdSet = selectedIds ? new Set(selectedIds) : undefined;
+  const segments = Array.from(
+    params.segmentPagingIterator.iterateFileSegments(params.fileId),
+  ).filter((segment) => !selectedIdSet || selectedIdSet.has(segment.segmentId));
+  if (selectedIdSet && segments.length !== selectedIdSet.size) {
+    throw new Error('Some selected segments no longer belong to this file. Reopen AI translation.');
+  }
   const segmentsById = new Map(segments.map((segment) => [segment.segmentId, segment]));
   const units = segments.map(mapSegmentToLocalizationUnit);
   const providerId = params.providerId?.trim();

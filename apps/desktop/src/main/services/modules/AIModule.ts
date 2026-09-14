@@ -2,13 +2,9 @@ import { TagValidator } from '@cat/core/qa';
 import {
   DefaultAIRuntimeConfigProvider,
   SourceTerminologyPromptSettingsService,
-  type CancellationToken,
   type LocalizationEngine,
 } from '@cat/localization';
 import type {
-  AIBatchMode,
-  AIBatchTargetBaseline,
-  AIBatchTargetScope,
   ProxySettings,
   ProxySettingsInput,
   SourceTerminologyPromptSettings,
@@ -145,14 +141,7 @@ export class AIModule {
 
   public async aiTranslateFile(
     fileId: number,
-    options?: {
-      model?: string;
-      mode?: AIBatchMode;
-      targetScope?: AIBatchTargetScope;
-      targetBaseline?: AIBatchTargetBaseline;
-      onProgress?: (data: { current: number; total: number; message?: string }) => void;
-      cancellationToken?: CancellationToken;
-    },
+    options?: Parameters<AITranslationOrchestrator['aiTranslateFile']>[1],
   ): Promise<{ translated: number; skipped: number; failed: number; total: number }> {
     return this.translationOrchestrator.aiTranslateFile(fileId, options);
   }

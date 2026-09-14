@@ -6,7 +6,7 @@ import type {
   ProjectType,
 } from '@cat/core/project';
 import { CATDatabase } from '@cat/db';
-import { LocalizationEngine, type CancellationToken } from '@cat/localization';
+import { LocalizationEngine } from '@cat/localization';
 import { SpreadsheetFilter } from '../filters/SpreadsheetFilter';
 import { TMService } from './TMService';
 import { SegmentService, type WorkingTMUpdatedPayload } from './SegmentService';
@@ -31,9 +31,6 @@ import { SqliteTransactionManager } from './adapters/SqliteTransactionManager';
 import { createSourceTerminologyPrecheckRunner } from './sourceTerminologyPrecheck/createSourceTerminologyPrecheckRunner';
 import { ProxySettingsManager } from './proxy/ProxySettingsManager';
 import type {
-  AIBatchMode,
-  AIBatchTargetBaseline,
-  AIBatchTargetScope,
   FileInspectResult,
   FileReferenceExportResult,
   FileSourceTerminologyPrecheckResult,
@@ -565,14 +562,7 @@ export class ProjectService {
 
   public async aiTranslateFile(
     fileId: number,
-    options?: {
-      model?: string;
-      mode?: AIBatchMode;
-      targetScope?: AIBatchTargetScope;
-      targetBaseline?: AIBatchTargetBaseline;
-      onProgress?: (data: { current: number; total: number; message?: string }) => void;
-      cancellationToken?: CancellationToken;
-    },
+    options?: Parameters<AIModule['aiTranslateFile']>[1],
   ) {
     return this.aiModule.aiTranslateFile(fileId, options);
   }

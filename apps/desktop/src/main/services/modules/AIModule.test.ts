@@ -330,6 +330,16 @@ describe('AIModule.aiTranslateFile', () => {
       .calls[0][1];
     expect(serializeTokensToDisplayText(translatedTokens)).toBe('Bonjour <b>monde</b>');
     expect(transport.createResponse).not.toHaveBeenCalled();
+
+    vi.mocked(segmentRepo.getSegmentsPage).mockReturnValue([
+      segments[0],
+      createSegment({ segmentId: 'excluded', sourceText: 'Excluded dialogue' }),
+      segments[1],
+    ]);
+    await module.aiTranslateFile(1, {
+      segmentIds: ['loc-confirmed-1', 'loc-empty-1'],
+    });
+    expect(localizationEngine.translateProjectSegments.mock.calls[1][0].units).toEqual(input.units);
   });
 
   it('flushes translation audit after successful localization file translation', async () => {
