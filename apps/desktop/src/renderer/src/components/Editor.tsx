@@ -94,6 +94,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
   const {
     sourceQueryInput,
     targetQueryInput,
+    targetSearchScope,
     matchMode,
     statusFilter,
     qualityFilters,
@@ -112,6 +113,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
     toggleSortMenu,
     setSourceQueryInput,
     setTargetQueryInput,
+    toggleTargetSearchScope,
     handleStatusFilterChange,
     handleMatchModeChange,
     toggleQualityFilter,
@@ -351,6 +353,8 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
               targetQueryInput={targetQueryInput}
               setSourceQueryInput={setSourceQueryInput}
               setTargetQueryInput={setTargetQueryInput}
+              targetSearchScope={targetSearchScope}
+              toggleTargetSearchScope={toggleTargetSearchScope}
               sourceSearchInputRef={sourceSearchInputRef}
               targetSearchInputRef={targetSearchInputRef}
               onSearchInputFocus={handleSearchInputFocus}
@@ -394,7 +398,8 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
               aiTranslatingSegmentIds={aiTranslatingSegmentIds}
               segmentSaveErrors={segmentSaveErrors}
               sourceHighlightQuery={debouncedSourceQuery}
-              targetHighlightQuery={debouncedTargetQuery}
+              targetHighlightQuery={targetSearchScope === 'target' ? debouncedTargetQuery : ''}
+              contextHighlightQuery={targetSearchScope === 'context' ? debouncedTargetQuery : ''}
               highlightMode={matchMode}
               showNonPrintingSymbols={showNonPrintingSymbols}
             />

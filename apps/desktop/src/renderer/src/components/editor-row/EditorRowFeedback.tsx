@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Segment } from '@cat/core/models';
+import { buildHighlightChunks, type EditorMatchMode } from '../editorFilterUtils';
 
 interface EditorRowFeedbackProps {
   qaIssues: NonNullable<Segment['qaIssues']>;
   saveError?: string;
   contextText?: string;
+  contextHighlightQuery?: string;
+  highlightMode?: EditorMatchMode;
 }
 
 async function copyText(text: string): Promise<boolean> {
@@ -40,6 +43,8 @@ export const EditorRowFeedback: React.FC<EditorRowFeedbackProps> = ({
   qaIssues,
   saveError,
   contextText = '',
+  contextHighlightQuery = '',
+  highlightMode = 'contains',
 }) => {
   const [contextCopied, setContextCopied] = useState(false);
   const contextCopiedTimerRef = useRef<number | null>(null);
@@ -69,6 +74,17 @@ export const EditorRowFeedback: React.FC<EditorRowFeedbackProps> = ({
     },
     [contextText],
   );
+  const contextContent = contextHighlightQuery.trim()
+    ? buildHighlightChunks(contextText, contextHighlightQuery, highlightMode).map((chunk, index) =>
+        chunk.isMatch ? (
+          <mark key={index} className="cm-target-highlight">
+            {chunk.text}
+          </mark>
+        ) : (
+          <React.Fragment key={index}>{chunk.text}</React.Fragment>
+        ),
+      )
+    : contextText;
 
   return (
     <>
@@ -105,7 +121,7 @@ export const EditorRowFeedback: React.FC<EditorRowFeedbackProps> = ({
             className="flex min-w-0 max-w-full items-center gap-1 text-[10px] text-text-faint italic leading-4 cursor-copy hover:text-text-muted transition-colors"
           >
             <span className="block min-w-0 flex-1 truncate whitespace-nowrap">
-              {contextText}
+              {contextContent}
             </span>
             <span className="inline-flex h-3 w-3 shrink-0 items-center justify-center text-success">
               <svg

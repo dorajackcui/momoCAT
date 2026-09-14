@@ -23,4 +23,16 @@ describe('EditorRowFeedback', () => {
     expect(html).not.toContain('more');
     expect(html).not.toContain('Collapse');
   });
+
+  it('highlights context search matches', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(EditorRowFeedback, {
+        qaIssues: [],
+        contextText: 'menu.settings.audio',
+        contextHighlightQuery: 'settings',
+      }),
+    );
+
+    expect(html).toContain('<mark class="cm-target-highlight">settings</mark>');
+  });
 });

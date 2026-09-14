@@ -46,6 +46,7 @@ describe('editor filter storage behaviors', () => {
 
     expect(state.sourceQuery).toBe('abc');
     expect(state.targetQuery).toBe('xyz');
+    expect(state.targetSearchScope).toBe('target');
     expect(state.status).toBe('draft');
   });
 

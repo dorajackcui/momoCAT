@@ -36,6 +36,7 @@ interface EditorListPaneProps {
   segmentSaveErrors: Record<string, string>;
   sourceHighlightQuery: string;
   targetHighlightQuery: string;
+  contextHighlightQuery: string;
   highlightMode: EditorMatchMode;
   showNonPrintingSymbols: boolean;
 }
@@ -98,6 +99,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
   segmentSaveErrors,
   sourceHighlightQuery,
   targetHighlightQuery,
+  contextHighlightQuery,
   highlightMode,
   showNonPrintingSymbols,
 }) => {
@@ -135,6 +137,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
         saveError={segmentSaveErrors[item.segment.segmentId]}
         sourceHighlightQuery={sourceHighlightQuery}
         targetHighlightQuery={targetHighlightQuery}
+        contextHighlightQuery={contextHighlightQuery}
         highlightMode={highlightMode}
         showNonPrintingSymbols={showNonPrintingSymbols}
       />
@@ -142,6 +145,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
     [
       activeSegmentId,
       aiTranslatingSegmentIds,
+      contextHighlightQuery,
       highlightMode,
       isSearchInputFocused,
       manualActivationSegmentId,

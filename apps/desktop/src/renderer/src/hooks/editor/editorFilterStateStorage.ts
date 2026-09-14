@@ -6,6 +6,7 @@ import {
   EditorSortBy,
   EditorSortDirection,
   EditorStatusFilter,
+  EditorTargetSearchScope,
   createDefaultEditorFilterCriteria,
 } from '../../components/editorFilterUtils';
 
@@ -14,6 +15,7 @@ const FILTER_STATE_STORAGE_KEY_PREFIX = 'editor-filter-state:v1:file:';
 export interface PersistedFilterShape {
   sourceQuery: string;
   targetQuery: string;
+  targetSearchScope: EditorTargetSearchScope;
   status: EditorStatusFilter;
   matchMode: EditorMatchMode;
   qualityFilters: EditorQualityFilter[];
@@ -29,6 +31,7 @@ interface FilterStateGuards {
   quickPresetValues: Set<EditorQuickPreset>;
   sortByValues: Set<EditorSortBy>;
   sortDirectionValues: Set<EditorSortDirection>;
+  targetSearchScopeValues: Set<EditorTargetSearchScope>;
 }
 
 export function buildEditorFilterStorageKey(fileId: number): string {
@@ -50,6 +53,11 @@ export function sanitizePersistedEditorFilterState(params: {
     typeof parsed.sourceQuery === 'string' ? parsed.sourceQuery : defaults.sourceQuery;
   const targetQuery =
     typeof parsed.targetQuery === 'string' ? parsed.targetQuery : defaults.targetQuery;
+  const targetSearchScope = guards.targetSearchScopeValues.has(
+    parsed.targetSearchScope as EditorTargetSearchScope,
+  )
+    ? (parsed.targetSearchScope as EditorTargetSearchScope)
+    : defaults.targetSearchScope;
   const status = guards.statusValues.has(parsed.status as EditorStatusFilter)
     ? (parsed.status as EditorStatusFilter)
     : defaults.status;
@@ -74,6 +82,7 @@ export function sanitizePersistedEditorFilterState(params: {
   return {
     sourceQuery,
     targetQuery,
+    targetSearchScope,
     status,
     matchMode,
     qualityFilters,

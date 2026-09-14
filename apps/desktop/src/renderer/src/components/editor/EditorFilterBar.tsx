@@ -7,7 +7,7 @@ import {
   FILTER_SORT_OPTIONS,
   FILTER_STATUS_OPTIONS,
 } from '../../hooks/useEditorFilters';
-import type { EditorQuickPreset } from '../editorFilterUtils';
+import type { EditorQuickPreset, EditorTargetSearchScope } from '../editorFilterUtils';
 
 interface EditorFilterBarProps {
   supportsBatchActions: boolean;
@@ -32,6 +32,8 @@ interface EditorFilterBarProps {
   targetQueryInput: string;
   setSourceQueryInput: (value: string) => void;
   setTargetQueryInput: (value: string) => void;
+  targetSearchScope: EditorTargetSearchScope;
+  toggleTargetSearchScope: () => void;
   sourceSearchInputRef: React.RefObject<HTMLInputElement | null>;
   targetSearchInputRef: React.RefObject<HTMLInputElement | null>;
   onSearchInputFocus: () => void;
@@ -75,6 +77,8 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
   targetQueryInput,
   setSourceQueryInput,
   setTargetQueryInput,
+  targetSearchScope,
+  toggleTargetSearchScope,
   sourceSearchInputRef,
   targetSearchInputRef,
   onSearchInputFocus,
@@ -185,15 +189,16 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
           </span>
         </label>
 
-        <label className="relative flex-1 min-w-0">
+        <div className="relative flex-1 min-w-0">
           <input
             ref={targetSearchInputRef as React.RefObject<HTMLInputElement>}
             value={targetQueryInput}
             onChange={(event) => setTargetQueryInput(event.target.value)}
             onFocus={onSearchInputFocus}
             onBlur={onSearchInputBlur}
-            placeholder="Filter target text"
-            className="w-full rounded-xl border border-border bg-surface pl-8 pr-3 py-1.5 text-sm text-text-muted focus:border-brand/50 focus:outline-none focus:ring-1 focus:ring-brand/15"
+            aria-label={targetSearchScope === 'context' ? 'Filter context' : 'Filter target text'}
+            placeholder={targetSearchScope === 'context' ? 'Filter context' : 'Filter target text'}
+            className="w-full rounded-xl border border-border bg-surface pl-8 pr-12 py-1.5 text-sm text-text-muted focus:border-brand/50 focus:outline-none focus:ring-1 focus:ring-brand/15"
           />
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -205,7 +210,36 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
               />
             </svg>
           </span>
-        </label>
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              toggleTargetSearchScope();
+              targetSearchInputRef.current?.focus();
+            }}
+            aria-pressed={targetSearchScope === 'context'}
+            aria-label={
+              targetSearchScope === 'context'
+                ? 'Search context; switch to target text'
+                : 'Search target text; switch to context'
+            }
+            title={
+              targetSearchScope === 'context'
+                ? 'Switch to target text search'
+                : 'Switch to context search'
+            }
+            className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-text-faint transition-colors hover:bg-muted hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.8}
+                d="M8 7h11m0 0-4-4m4 4-4 4M16 17H5m0 0 4 4m-4-4 4-4"
+              />
+            </svg>
+          </button>
+        </div>
 
         <div ref={filterMenuRef as React.RefObject<HTMLDivElement>} className="relative shrink-0">
           <button

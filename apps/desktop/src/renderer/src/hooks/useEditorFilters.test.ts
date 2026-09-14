@@ -19,6 +19,7 @@ function createSegment(params: {
   status?: Segment['status'];
   source?: string;
   target?: string;
+  context?: string;
   qaSeverities?: Array<'error' | 'warning' | 'info'>;
 }): Segment {
   return {
@@ -32,6 +33,7 @@ function createSegment(params: {
     matchKey: params.id,
     srcHash: params.id,
     meta: {
+      context: params.context,
       updatedAt: new Date().toISOString(),
     },
     qaIssues: (params.qaSeverities ?? []).map((severity, index) => ({
@@ -117,6 +119,29 @@ describe('useEditorFilters helpers', () => {
         .resolve({ scopeKey: 1, segments: editedList, criteria, refreshToken: 2 })
         .map((item) => item.segment.segmentId),
     ).toEqual(['s1', 's2']);
+  });
+
+  it('refreshes a filter snapshot when the target search scope changes', () => {
+    const cache = createEditorFilterSnapshotCache();
+    const segments = buildSearchableEditorSegments(
+      [createSegment({ id: 's1', target: 'Settings', context: 'menu.settings.audio' })],
+      {},
+    );
+    const criteria = {
+      ...createDefaultEditorFilterCriteria(),
+      targetQuery: 'menu.settings',
+    };
+
+    expect(cache.resolve({ scopeKey: 1, segments, criteria })).toEqual([]);
+    expect(
+      cache
+        .resolve({
+          scopeKey: 1,
+          segments,
+          criteria: { ...criteria, targetSearchScope: 'context' },
+        })
+        .map((item) => item.segment.segmentId),
+    ).toEqual(['s1']);
   });
 
   it('reuses stale search text only when list membership and order ignore segment content', () => {
@@ -205,6 +230,7 @@ describe('useEditorFilters helpers', () => {
     const sanitized = sanitizePersistedEditorFilterState({
       sourceQuery: 'abc',
       targetQuery: 123,
+      targetSearchScope: 'context',
       status: 'draft',
       matchMode: 'regex',
       qualityFilters: ['qa_error', 'invalid'],
@@ -216,6 +242,7 @@ describe('useEditorFilters helpers', () => {
     expect(sanitized).toEqual({
       sourceQuery: 'abc',
       targetQuery: '',
+      targetSearchScope: 'context',
       status: 'draft',
       matchMode: 'regex',
       qualityFilters: ['qa_error'],

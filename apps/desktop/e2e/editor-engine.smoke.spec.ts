@@ -123,7 +123,7 @@ test.describe('CodeMirror editor engine smoke', () => {
     }
   });
 
-  test('keeps target filter results stable while editing until the query changes', async () => {
+  test('keeps target filters stable and switches to context search', async () => {
     const session = await createSmokeSession();
 
     try {
@@ -150,6 +150,12 @@ test.describe('CodeMirror editor engine smoke', () => {
       await expect.poll(() => rows.count()).toBe(0);
       await targetFilter.fill('pomme');
       await expect.poll(() => rows.count()).toBe(1);
+
+      await page.getByRole('button', { name: 'Search target text; switch to context' }).click();
+      const contextFilter = page.getByPlaceholder('Filter context');
+      await contextFilter.fill('ctx-2');
+      await expect.poll(() => rows.count()).toBe(1);
+      await expect(rows.first().locator('mark.cm-target-highlight')).toHaveText('ctx-2');
     } finally {
       await closeSmokeSession(session);
     }

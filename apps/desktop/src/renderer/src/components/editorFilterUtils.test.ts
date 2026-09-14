@@ -11,7 +11,7 @@ import {
   type SearchableEditorSegment,
 } from './editorFilterUtils';
 
-function makeSegment(segmentId: string, status: Segment['status']): Segment {
+function makeSegment(segmentId: string, status: Segment['status'], context?: string): Segment {
   return {
     segmentId,
     fileId: 1,
@@ -23,6 +23,7 @@ function makeSegment(segmentId: string, status: Segment['status']): Segment {
     matchKey: segmentId,
     srcHash: segmentId,
     meta: {
+      context,
       updatedAt: new Date().toISOString(),
     },
   };
@@ -99,6 +100,7 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
     const filtered = filterSearchableSegments(segments, {
       sourceQuery: 'order',
       targetQuery: '提交',
+      targetSearchScope: 'target',
       status: 'draft',
       matchMode: 'contains',
       qualityFilters: [],
@@ -115,6 +117,7 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
     const filtered = filterSearchableSegments(segments, {
       sourceQuery: 'order',
       targetQuery: '不存在',
+      targetSearchScope: 'target',
       status: 'all',
       matchMode: 'contains',
       qualityFilters: [],
@@ -130,6 +133,7 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
     const filtered = filterSearchableSegments(segments, {
       sourceQuery: '',
       targetQuery: '',
+      targetSearchScope: 'target',
       status: 'all',
       matchMode: 'contains',
       qualityFilters: ['qa_warning'],
@@ -169,6 +173,26 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
       'translated',
       'reviewed',
     ]);
+  });
+
+  it('uses the target query against context when that scope is selected', () => {
+    const contextSegment = {
+      ...segments[0],
+      segment: makeSegment('context-match', 'new', 'menu.settings.audio'),
+      targetText: 'Audio settings',
+    };
+    const criteria = {
+      ...createDefaultEditorFilterCriteria(),
+      targetQuery: 'menu.settings',
+    };
+
+    expect(filterSearchableSegments([contextSegment], criteria)).toHaveLength(0);
+    expect(
+      filterSearchableSegments([contextSegment], {
+        ...criteria,
+        targetSearchScope: 'context',
+      }),
+    ).toEqual([contextSegment]);
   });
 });
 
@@ -214,6 +238,7 @@ describe('editorFilterUtils helpers', () => {
     expect(defaults).toEqual({
       sourceQuery: '',
       targetQuery: '',
+      targetSearchScope: 'target',
       status: 'all',
       matchMode: 'contains',
       qualityFilters: [],

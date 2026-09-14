@@ -9,6 +9,7 @@ import {
   EditorSortBy,
   EditorSortDirection,
   EditorStatusFilter,
+  EditorTargetSearchScope,
   countActiveFilterFields,
   createDefaultEditorFilterCriteria,
   filterSearchableSegments,
@@ -90,6 +91,7 @@ const QUALITY_VALUES = new Set(FILTER_QUALITY_OPTIONS.map((item) => item.value))
 const QUICK_PRESET_VALUES = new Set(FILTER_QUICK_PRESET_OPTIONS.map((item) => item.value));
 const SORT_BY_VALUES = new Set<EditorSortBy>(['default', 'source_length', 'target_length']);
 const SORT_DIRECTION_VALUES = new Set<EditorSortDirection>(['asc', 'desc']);
+const TARGET_SEARCH_SCOPE_VALUES = new Set<EditorTargetSearchScope>(['target', 'context']);
 
 export {
   buildSearchableEditorSegments,
@@ -114,6 +116,7 @@ export function sanitizePersistedEditorFilterState(raw: unknown): EditorFilterCr
       quickPresetValues: QUICK_PRESET_VALUES,
       sortByValues: SORT_BY_VALUES,
       sortDirectionValues: SORT_DIRECTION_VALUES,
+      targetSearchScopeValues: TARGET_SEARCH_SCOPE_VALUES,
     },
   });
 }
@@ -148,6 +151,7 @@ function buildEditorFilterSnapshotKey(
     scopeKey,
     criteria.sourceQuery,
     criteria.targetQuery,
+    criteria.targetSearchScope,
     criteria.status,
     criteria.matchMode,
     criteria.qualityFilters,
@@ -297,6 +301,13 @@ export function useEditorFilters({
     setFilterState((prev) => ({ ...prev, targetQuery: value }));
   }, []);
 
+  const toggleTargetSearchScope = useCallback(() => {
+    setFilterState((prev) => ({
+      ...prev,
+      targetSearchScope: prev.targetSearchScope === 'target' ? 'context' : 'target',
+    }));
+  }, []);
+
   const handleStatusFilterChange = useCallback((nextStatus: EditorStatusFilter) => {
     setFilterState((prev) => ({
       ...prev,
@@ -408,6 +419,7 @@ export function useEditorFilters({
   return {
     sourceQueryInput: filterState.sourceQuery,
     targetQueryInput: filterState.targetQuery,
+    targetSearchScope: filterState.targetSearchScope,
     matchMode: filterState.matchMode,
     statusFilter: filterState.status,
     qualityFilters: filterState.qualityFilters,
@@ -426,6 +438,7 @@ export function useEditorFilters({
     toggleSortMenu,
     setSourceQueryInput,
     setTargetQueryInput,
+    toggleTargetSearchScope,
     handleStatusFilterChange,
     handleMatchModeChange,
     toggleQualityFilter,

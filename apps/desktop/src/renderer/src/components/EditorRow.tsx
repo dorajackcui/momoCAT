@@ -24,6 +24,7 @@ interface EditorRowProps {
   saveError?: string;
   sourceHighlightQuery?: string;
   targetHighlightQuery?: string;
+  contextHighlightQuery?: string;
   highlightMode?: EditorMatchMode;
   showNonPrintingSymbols?: boolean;
   onActivate: (id: string, options?: { autoFocusTarget?: boolean }) => void;
@@ -57,6 +58,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
   saveError,
   sourceHighlightQuery = '',
   targetHighlightQuery = '',
+  contextHighlightQuery = '',
   highlightMode = 'contains',
   showNonPrintingSymbols = false,
   onActivate,
@@ -276,6 +278,8 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
           qaIssues={qaIssues}
           saveError={saveError}
           contextText={segment.meta?.context}
+          contextHighlightQuery={contextHighlightQuery}
+          highlightMode={highlightMode}
         />
       </div>
     </div>
@@ -291,6 +295,7 @@ const areEditorRowPropsEqual = (prev: EditorRowProps, next: EditorRowProps): boo
   prev.saveError === next.saveError &&
   prev.sourceHighlightQuery === next.sourceHighlightQuery &&
   prev.targetHighlightQuery === next.targetHighlightQuery &&
+  prev.contextHighlightQuery === next.contextHighlightQuery &&
   prev.highlightMode === next.highlightMode &&
   prev.showNonPrintingSymbols === next.showNonPrintingSymbols &&
   prev.isAITranslating === next.isAITranslating &&

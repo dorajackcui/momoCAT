@@ -2,6 +2,7 @@ import type { Segment } from '@cat/core/models';
 
 export type EditorStatusFilter = 'all' | 'new' | 'draft' | 'translated' | 'reviewed' | 'confirmed';
 export type EditorMatchMode = 'contains' | 'exact' | 'regex';
+export type EditorTargetSearchScope = 'target' | 'context';
 export type EditorQualityFilter = 'qa_error' | 'qa_warning' | 'save_error';
 export type EditorQuickPreset = 'none' | 'unconfirmed' | 'confirmed' | 'first_repeat' | 'issues';
 export type EditorSortBy = 'default' | 'source_length' | 'target_length';
@@ -23,6 +24,7 @@ export interface SearchableEditorSegment {
 export interface EditorFilterCriteria {
   sourceQuery: string;
   targetQuery: string;
+  targetSearchScope: EditorTargetSearchScope;
   status: EditorStatusFilter;
   matchMode: EditorMatchMode;
   qualityFilters: EditorQualityFilter[];
@@ -42,6 +44,7 @@ export function createDefaultEditorFilterCriteria(): EditorFilterCriteria {
   return {
     sourceQuery: '',
     targetQuery: '',
+    targetSearchScope: 'target',
     status: 'all',
     matchMode: 'contains',
     qualityFilters: [],
@@ -147,7 +150,11 @@ export function filterSearchableSegments(
       return false;
     }
 
-    if (!textMatchesQuery(item.targetText, criteria.targetQuery, criteria.matchMode)) {
+    const targetSearchText =
+      criteria.targetSearchScope === 'context'
+        ? (item.segment.meta.context ?? '')
+        : item.targetText;
+    if (!textMatchesQuery(targetSearchText, criteria.targetQuery, criteria.matchMode)) {
       return false;
     }
 
