@@ -1,3 +1,4 @@
+import { STATUS_CODES } from 'node:http';
 import type { AITransport, ReasoningEffort } from '../ports';
 
 const ERROR_BODY_PREVIEW_LIMIT = 240;
@@ -142,16 +143,17 @@ export class AIProviderTransport implements AITransport {
       );
     }
 
-    const rawBody = await response.text();
     if (!response.ok) {
-      throw new Error(`AI provider model discovery failed: ${response.status} ${sanitizeErrorText(rawBody)}`);
+      await discardResponseBody(response);
+      throw new Error(`AI provider model discovery failed: ${describeHttpStatus(response.status)}`);
     }
 
+    const rawBody = await response.text();
     let data: unknown;
     try {
       data = JSON.parse(rawBody) as unknown;
     } catch {
-      throw new Error(`AI provider model discovery response is not valid JSON: ${sanitizeErrorText(rawBody)}`);
+      throw new Error(`AI provider model discovery response is not valid JSON: ${describeHttpStatus(response.status)}`);
     }
 
     return {
@@ -246,6 +248,7 @@ export class AIProviderTransport implements AITransport {
       }
 
       if (response.status === 429 && attempt < maxRetries) {
+        await discardResponseBody(response);
         const retryAfterSec = parseFloat(response.headers.get('retry-after') ?? '');
         const backoffMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
           ? retryAfterSec * 1000
@@ -258,17 +261,17 @@ export class AIProviderTransport implements AITransport {
         response.headers.get('x-request-id') ||
         response.headers.get('x-openai-request-id') ||
         undefined;
-      const rawBody = await response.text();
-
       if (!response.ok) {
-        throw new Error(`AI provider request failed: ${response.status} ${sanitizeErrorText(rawBody)}`);
+        await discardResponseBody(response);
+        throw new Error(`AI provider request failed: ${describeHttpStatus(response.status)}`);
       }
 
+      const rawBody = await response.text();
       let data: unknown;
       try {
         data = JSON.parse(rawBody) as unknown;
       } catch {
-        throw new Error(`AI provider response is not valid JSON: ${sanitizeErrorText(rawBody)}`);
+        throw new Error(`AI provider response is not valid JSON: ${describeHttpStatus(response.status)}`);
       }
 
       const content = extractMessageText(data);
@@ -292,4 +295,17 @@ export class AIProviderTransport implements AITransport {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function describeHttpStatus(status: number): string {
+  // Provider bodies and statusText can echo private request text into persisted errors.
+  return `${status} ${STATUS_CODES[status] ?? 'HTTP error'}`;
+}
+
+async function discardResponseBody(response: Response): Promise<void> {
+  try {
+    await response.body?.cancel();
+  } catch {
+    // Cleanup must not replace the HTTP failure or prevent a rate-limit retry.
+  }
 }

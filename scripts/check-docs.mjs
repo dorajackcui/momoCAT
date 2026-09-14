@@ -9,6 +9,7 @@ const allowedDocs = new Set([
   'DOCS/README.md',
   'DOCS/ARCHITECTURE.md',
   'DOCS/DEVELOPMENT.md',
+  'DOCS/DESKTOP.md',
   'DOCS/DATA_MODEL.md',
   'DOCS/CLI.md',
   'DOCS/LOCALIZATION.md',

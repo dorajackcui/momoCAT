@@ -2,14 +2,9 @@
 
 This directory documents the current, durable behavior of momoCAT. It is a navigation system for development and operation, not a storage area for implementation history. Repository agents enter through [`AGENTS.md`](../AGENTS.md).
 
-## Agent reading order
+## Agent entrypoint
 
-For every implementation task, read these two foundations first:
-
-1. [Architecture](ARCHITECTURE.md) for ownership and dependency direction.
-2. [Development](DEVELOPMENT.md) for commands, focused validation, native ABI, and handoff rules.
-
-Then read the owning domain document below. Documentation-only work may start here and proceed directly to the owning topic.
+Follow the startup and completion rules in [AGENTS.md](../AGENTS.md). After the architecture and development foundations, select only the topic needed for the task. Start at its linked implementation and adjacent behavior tests; expand to another topic when the change crosses its boundary.
 
 ## Choose a document
 
@@ -17,26 +12,27 @@ Then read the owning domain document below. Documentation-only work may start he
 | ---------------------------------------------------------------------- | ------------------------------- |
 | Understand packages, layers, or dependency direction                   | [Architecture](ARCHITECTURE.md) |
 | Set up the repo, choose tests, package, or troubleshoot tools          | [Development](DEVELOPMENT.md)   |
+| Change desktop editing, async UI state, IPC, or background jobs        | [Desktop](DESKTOP.md)           |
 | Change SQLite schema, repositories, or persistent JSON                 | [Data model](DATA_MODEL.md)     |
 | Build or operate the `momocat` CLI                                     | [CLI](CLI.md)                   |
 | Change MT requests, tags, TM/TB matching, Runtime TM, or resource sync | [Localization](LOCALIZATION.md) |
 
 ## Common task map
 
-| Task surface                          | Primary code home                                                                                                                                                   |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Renderer/editor behavior              | [`apps/desktop/src/renderer/src/components`](../apps/desktop/src/renderer/src/components), [`hooks/editor`](../apps/desktop/src/renderer/src/hooks/editor)          |
-| Desktop IPC and typed bridge          | [`apps/desktop/src/shared/ipc.ts`](../apps/desktop/src/shared/ipc.ts), [`main/ipc`](../apps/desktop/src/main/ipc), [`preload/api`](../apps/desktop/src/preload/api) |
-| Project file import/export/inspect    | [`ProjectFileModule.ts`](../apps/desktop/src/main/services/modules/ProjectFileModule.ts)                                                                            |
-| AI/provider and file translation      | [`modules/ai`](../apps/desktop/src/main/services/modules/ai), [`packages/localization`](../packages/localization/src)                                               |
-| TM/TB matching and resource lifecycle | [`LOCALIZATION.md`](LOCALIZATION.md) and its entrypoint table                                                                                                       |
-| SQLite/schema/repositories            | [`DATA_MODEL.md`](DATA_MODEL.md) and [`packages/db/src`](../packages/db/src)                                                                                        |
-| CLI parsing and operation             | [`CLI.md`](CLI.md), [`apps/cli/src`](../apps/cli/src)                                                                                                               |
-| TM/TB/AI flow diagnosis and CLI smoke | [`DEVELOPMENT.md`](DEVELOPMENT.md#diagnostic-playbooks)                                                                                                             |
-| Repository scripts and generators     | [`DEVELOPMENT.md`](DEVELOPMENT.md#script-ownership-and-maintenance)                                                                                                 |
-| Build, packaging, and updates         | [`DEVELOPMENT.md`](DEVELOPMENT.md), [`scripts/pack-platform.mjs`](../scripts/pack-platform.mjs)                                                                     |
+| Task surface                          | Primary code home                                                                                                     |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Renderer/editor state and behavior    | [Desktop ownership and tests](DESKTOP.md#ownership-and-tests)                                                         |
+| Desktop IPC and typed bridge          | [Desktop boundary changes](DESKTOP.md#changing-a-desktop-boundary)                                                    |
+| Project file import/export/inspect    | [Desktop files and background jobs](DESKTOP.md#files-and-background-jobs)                                             |
+| AI/provider and file translation      | [`modules/ai`](../apps/desktop/src/main/services/modules/ai), [`packages/localization`](../packages/localization/src) |
+| TM/TB matching and resource lifecycle | [`LOCALIZATION.md`](LOCALIZATION.md) and its entrypoint table                                                         |
+| SQLite/schema/repositories            | [`DATA_MODEL.md`](DATA_MODEL.md) and [`packages/db/src`](../packages/db/src)                                          |
+| CLI parsing and operation             | [`CLI.md`](CLI.md), [`apps/cli/src`](../apps/cli/src)                                                                 |
+| TM/TB/AI flow diagnosis and CLI smoke | [`DEVELOPMENT.md`](DEVELOPMENT.md#diagnostic-playbooks)                                                               |
+| Repository scripts and generators     | [`DEVELOPMENT.md`](DEVELOPMENT.md#script-ownership-and-maintenance)                                                   |
+| Build, packaging, and updates         | [`DEVELOPMENT.md`](DEVELOPMENT.md), [`scripts/pack-platform.mjs`](../scripts/pack-platform.mjs)                       |
 
-The root [README](../README.md) is the product entrypoint. `AGENTS.md` is the agent entrypoint. Package-specific READMEs may contain a short build/usage pointer, but the topic document above owns operational defaults and detailed contracts.
+The root [README](../README.md) is the product entrypoint. Package-specific READMEs contain short build/usage pointers; the topic document owns operational defaults and detailed contracts. Use the [validation matrix](DEVELOPMENT.md#validation-strategy) to choose commands, and the owning topic's code/test links to select the focused cases.
 
 ## Source-of-truth order
 

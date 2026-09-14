@@ -122,51 +122,66 @@ describe('TMRepo FTS replacement', () => {
     expect(currentMatches[0].targetTokens).toEqual([{ type: 'text', content: 'ModernQuartz' }]);
   });
 
-  it('keeps existing FTS rows when batch replacement insert fails', () => {
-    const projectId = db.createProject('Atomic Batch FTS Project', 'en', 'fr');
-    const tmId = db.createTM('Main TM', 'en', 'fr', 'main');
-    db.mountTMToProject(projectId, tmId, 10, 'read');
-    const now = '2026-06-15T00:00:00.000Z';
-    const entryId = db.upsertTMEntryBySrcHash({
-      id: 'entry-atomic',
-      tmId,
-      projectId: 0,
-      srcLang: 'en',
-      tgtLang: 'fr',
-      srcHash: 'hash-atomic',
-      matchKey: 'atomic',
-      tagsSignature: '',
-      sourceTokens: [{ type: 'text', content: 'Atomic' }],
-      targetTokens: [{ type: 'text', content: 'OldNeedle' }],
-      createdAt: now,
-      updatedAt: now,
-      usageCount: 1,
-    });
-    db.replaceTMFts(tmId, 'Atomic', 'OldNeedle', entryId);
+  it.each(['batch', 'single', 'upsert'] as const)(
+    'keeps entry and FTS rows when %s replacement insert fails',
+    (operation) => {
+      const projectId = db.createProject('Atomic Batch FTS Project', 'en', 'fr');
+      const tmId = db.createTM('Main TM', 'en', 'fr', 'main');
+      db.mountTMToProject(projectId, tmId, 10, 'read');
+      const now = '2026-06-15T00:00:00.000Z';
+      const entryId = db.upsertTMEntryBySrcHash({
+        id: 'entry-atomic',
+        tmId,
+        projectId: 0,
+        srcLang: 'en',
+        tgtLang: 'fr',
+        srcHash: 'hash-atomic',
+        matchKey: 'atomic',
+        tagsSignature: '',
+        sourceTokens: [{ type: 'text', content: 'Atomic' }],
+        targetTokens: [{ type: 'text', content: 'OldNeedle' }],
+        createdAt: now,
+        updatedAt: now,
+        usageCount: 1,
+      });
+      db.replaceTMFts(tmId, 'Atomic', 'OldNeedle', entryId);
+      const originalEntry = db.findTMEntryByHash(tmId, 'hash-atomic')!;
 
-    const repo = (
-      db as unknown as {
-        tmRepo: { stmtInsertTMFts: { run(...args: unknown[]): unknown } };
+      const repo = (
+        db as unknown as {
+          tmRepo: { stmtInsertTMFts: { run(...args: unknown[]): unknown } };
+        }
+      ).tmRepo;
+      const originalRun = repo.stmtInsertTMFts.run.bind(repo.stmtInsertTMFts);
+      repo.stmtInsertTMFts.run = () => {
+        throw new Error('forced insert failure');
+      };
+
+      try {
+        expect(() => {
+          if (operation === 'upsert') {
+            db.upsertTMEntry({
+              ...originalEntry,
+              tmId,
+              targetTokens: [{ type: 'text', content: 'NewNeedle' }],
+            });
+          } else if (operation === 'single') {
+            db.replaceTMFts(tmId, 'Atomic', 'NewNeedle', entryId);
+          } else {
+            db.replaceTMFtsBatch([
+              { tmId, srcText: 'Atomic', tgtText: 'NewNeedle', tmEntryId: entryId },
+            ]);
+          }
+        }).toThrow('forced insert failure');
+      } finally {
+        repo.stmtInsertTMFts.run = originalRun;
       }
-    ).tmRepo;
-    const originalRun = repo.stmtInsertTMFts.run.bind(repo.stmtInsertTMFts);
-    repo.stmtInsertTMFts.run = () => {
-      throw new Error('forced insert failure');
-    };
 
-    try {
-      expect(() =>
-        db.replaceTMFtsBatch([
-          { tmId, srcText: 'Atomic', tgtText: 'NewNeedle', tmEntryId: entryId },
-        ]),
-      ).toThrow('forced insert failure');
-    } finally {
-      repo.stmtInsertTMFts.run = originalRun;
-    }
-
-    expect(db.searchConcordance(projectId, 'OldNeedle', [tmId])).toHaveLength(1);
-    expect(db.searchConcordance(projectId, 'NewNeedle', [tmId])).toHaveLength(0);
-  });
+      expect(db.searchConcordance(projectId, 'OldNeedle', [tmId])).toHaveLength(1);
+      expect(db.searchConcordance(projectId, 'NewNeedle', [tmId])).toHaveLength(0);
+      expect(db.findTMEntryByHash(tmId, 'hash-atomic')).toEqual(originalEntry);
+    },
+  );
 
   it('keeps exactly one FTS row per entry and tracks its rowid across rewrites', () => {
     const projectId = db.createProject('Rowid Project', 'en', 'fr');

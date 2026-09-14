@@ -43,6 +43,7 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
   const inFlightPromiseBySegment = new Map<string, Promise<void>>();
   const inFlightRequestIdBySegment = new Map<string, string>();
   const editingSegments = new Set<string>();
+  let generation = 0;
 
   const notifyStateChange = () => {
     deps.onStateChange?.();
@@ -99,9 +100,10 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
     trackRequest(segmentId, clientRequestId, requestSeq);
     deps.clearSegmentSaveError(segmentId);
 
-    let persistError: unknown;
-
-    const requestTask = (async () => {
+    const requestGeneration = generation;
+    // Store the rejecting promise shared by every waiter. Deferring its start
+    // also installs the in-flight state before a synchronous adapter failure.
+    const requestTask = Promise.resolve().then(async () => {
       try {
         await deps.updateSegment(
           pending.segmentId,
@@ -109,15 +111,22 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
           pending.status,
           clientRequestId,
         );
-        if ((latestRequestSeqBySegment.get(segmentId) ?? 0) === requestSeq) {
+        if (
+          generation === requestGeneration &&
+          (latestRequestSeqBySegment.get(segmentId) ?? 0) === requestSeq
+        ) {
           deps.clearSegmentSaveError(segmentId);
         }
       } catch (error) {
-        persistError = error;
-        if ((latestRequestSeqBySegment.get(segmentId) ?? 0) === requestSeq) {
+        if (generation === requestGeneration) {
+          // Keep failed edits dirty and retryable without replacing a newer draft.
+          if (!pendingBySegment.has(segmentId)) {
+            pendingBySegment.set(segmentId, pending);
+          }
           const message = error instanceof Error ? error.message : String(error);
           deps.setSegmentSaveError(segmentId, `保存失败：${message}`);
         }
+        throw error;
       } finally {
         if (inFlightRequestIdBySegment.get(segmentId) === clientRequestId) {
           inFlightPromiseBySegment.delete(segmentId);
@@ -125,16 +134,12 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
         }
         notifyStateChange();
       }
-    })();
+    });
 
     inFlightPromiseBySegment.set(segmentId, requestTask);
     inFlightRequestIdBySegment.set(segmentId, clientRequestId);
     notifyStateChange();
     await requestTask;
-
-    if (persistError) {
-      throw persistError;
-    }
   };
 
   return {
@@ -227,6 +232,7 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
     },
 
     clear: () => {
+      generation += 1;
       for (const timerId of debounceTimerBySegment.values()) {
         clearTimeout(timerId);
       }

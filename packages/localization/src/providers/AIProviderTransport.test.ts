@@ -280,4 +280,84 @@ describe('AIProviderTransport', () => {
 
     expect(error.message).not.toMatch(/sk-header-secret|bearer-secret|basic-secret|header-token-secret/);
   });
+
+  it.each([
+    [400, '400 Bad Request'],
+    [401, '401 Unauthorized'],
+    [403, '403 Forbidden'],
+    [500, '500 Internal Server Error'],
+  ])('keeps HTTP %i errors useful without persisting echoed request text', async (status, expected) => {
+    const privateText = 'Private source sentence and project prompt';
+    global.fetch = vi.fn().mockImplementation(async () =>
+      new Response(JSON.stringify({ error: { message: privateText } }), {
+        status,
+        statusText: privateText,
+      }),
+    ) as typeof fetch;
+    const transport = new AIProviderTransport();
+    const config = { apiKey: 'secret', baseUrl: 'https://example.com/v1', model: 'gpt-demo' };
+
+    const connectionError = await captureError(() => transport.testConnection(config));
+    const modelsError = await captureError(() => transport.listModels(config));
+
+    expect(connectionError.message).toBe(`AI provider request failed: ${expected}`);
+    expect(modelsError.message).toBe(`AI provider model discovery failed: ${expected}`);
+  });
+
+  it('omits private invalid JSON bodies from translation and discovery errors', async () => {
+    global.fetch = vi.fn().mockImplementation(async () =>
+      new Response('Private source sentence echoed as an HTML error', { status: 200 }),
+    ) as typeof fetch;
+    const transport = new AIProviderTransport();
+    const config = { apiKey: 'secret', baseUrl: 'https://example.com/v1', model: 'gpt-demo' };
+
+    const connectionError = await captureError(() => transport.testConnection(config));
+    const modelsError = await captureError(() => transport.listModels(config));
+
+    expect(connectionError.message).toBe('AI provider response is not valid JSON: 200 OK');
+    expect(modelsError.message).toBe('AI provider model discovery response is not valid JSON: 200 OK');
+  });
+
+  it('retains bounded rate-limit retries and omits the final provider body', async () => {
+    vi.useFakeTimers();
+    try {
+      const cancel = vi.fn();
+      global.fetch = vi.fn().mockImplementation(async () =>
+        new Response(new ReadableStream({ cancel }), { status: 429, headers: { 'retry-after': '1' } }),
+      ) as typeof fetch;
+      const transport = new AIProviderTransport();
+      const pending = captureError(() => transport.testConnection({
+        apiKey: 'secret',
+        baseUrl: 'https://example.com/v1',
+        model: 'gpt-demo',
+      }));
+
+      await vi.runAllTimersAsync();
+      const error = await pending;
+
+      expect(global.fetch).toHaveBeenCalledTimes(4);
+      expect(cancel).toHaveBeenCalledTimes(4);
+      expect(error.message).toBe('AI provider request failed: 429 Too Many Requests');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([false, true])('releases error bodies without masking HTTP failures when cancellation rejects: %s', async (rejectCancel) => {
+    const cancel = rejectCancel
+      ? vi.fn().mockRejectedValue(new Error('Could not cancel response body'))
+      : vi.fn();
+    global.fetch = vi.fn().mockImplementation(async () =>
+      new Response(new ReadableStream({ cancel }), { status: 400 }),
+    ) as typeof fetch;
+    const transport = new AIProviderTransport();
+    const config = { apiKey: 'secret', baseUrl: 'https://example.com/v1', model: 'gpt-demo' };
+
+    const connectionError = await captureError(() => transport.testConnection(config));
+    const modelsError = await captureError(() => transport.listModels(config));
+
+    expect(cancel).toHaveBeenCalledTimes(2);
+    expect(connectionError.message).toBe('AI provider request failed: 400 Bad Request');
+    expect(modelsError.message).toBe('AI provider model discovery failed: 400 Bad Request');
+  });
 });

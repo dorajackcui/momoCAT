@@ -2,7 +2,7 @@
 
 momoCAT 是一个基于 Electron、React、TypeScript 和 SQLite 的桌面 CAT（计算机辅助翻译）工具，同时提供可独立运行的 `momocat` CLI 与共享本地化引擎。
 
-当前发布基线为 `1.1.0`。当前行为以代码、测试和 [`DOCS/`](DOCS/README.md) 中的主题文档为准；仓库不再维护容易失真的“当前状态”或长期 roadmap 文档。
+当前发布基线为 `1.1.0`。工程文档从 [`DOCS/`](DOCS/README.md) 进入，开发代理从 [`AGENTS.md`](AGENTS.md) 进入。
 
 ## 主要能力
 
@@ -16,18 +16,14 @@ momoCAT 是一个基于 Electron、React、TypeScript 和 SQLite 的桌面 CAT�
 
 ## 快速开始
 
-### 环境
-
-- 推荐使用 Volta；仓库固定 Node.js `20.19.0` 和 npm `10.8.2`
-- Git
-- Windows 或 macOS（桌面应用与安装包需要在目标原生平台验证）
+准备 Git 和 [开发环境要求](DOCS/DEVELOPMENT.md#prerequisites-and-setup) 中的 Node/npm，在 Windows 或 macOS 的仓库根目录运行：
 
 ```bash
 npm ci
 npm run dev
 ```
 
-`npm ci` 会执行 Electron 原生依赖重建；`npm run dev` 也会在启动前确保原生模块 ABI 正确。
+安装与启动命令会处理 Electron 原生依赖。切换到测试、CLI 或打包时，遵循 [开发与验证](DOCS/DEVELOPMENT.md)。
 
 ## 常用命令
 
@@ -36,19 +32,11 @@ npm run dev
 | 启动桌面开发环境     | `npm run dev`                         |
 | 运行全部 Vitest 测试 | `npm test`                            |
 | 运行跨仓库质量门     | `npm run gate:check`                  |
-| 仅检查文档系统       | `npm run docs:check`                  |
 | 构建桌面应用         | `npm run build`                       |
 | 构建共享引擎与 CLI   | `npm run build:cli`                   |
 | 运行源码版 CLI       | `npm --silent run cli -- <arguments>` |
-| Windows 原生打包     | `npm run pack:win`                    |
-| macOS 原生打包       | `npm run pack:mac`                    |
 
-桌面 smoke 与完整 e2e：
-
-```bash
-npm run test:e2e:smoke --workspace=apps/desktop
-npm run test:e2e --workspace=apps/desktop
-```
+完整命令、桌面 e2e 与平台打包步骤见 [Development](DOCS/DEVELOPMENT.md#command-map)；CLI 安装、自动化与续跑见 [CLI 操作手册](DOCS/CLI.md)。
 
 ## 仓库结构
 
@@ -66,11 +54,8 @@ DOCS/                  当前有效的工程文档
 
 - [Agent 工作要求与完成标准](AGENTS.md)
 - [文档入口与维护规则](DOCS/README.md)
-- [系统架构](DOCS/ARCHITECTURE.md)
-- [开发与验证](DOCS/DEVELOPMENT.md)
-- [数据模型](DOCS/DATA_MODEL.md)
-- [CLI 操作手册](DOCS/CLI.md)
-- [本地化引擎、MT、TM 与 TB](DOCS/LOCALIZATION.md)
+- [按任务查找所属文档、代码与测试](DOCS/README.md#common-task-map)
+- [桌面 GUI、编辑器状态与 IPC](DOCS/DESKTOP.md)
 
 ## 本地数据
 

@@ -168,6 +168,7 @@ describe('createSegmentPersistor', () => {
 
     const flushPromise = persistor.flushSegment('seg-4');
     expect(persistor.shouldDelayRemoteUpdate('seg-4')).toBe(true);
+    await Promise.resolve();
     resolveUpdate?.();
     await flushPromise;
     expect(persistor.shouldDelayRemoteUpdate('seg-4')).toBe(false);
@@ -285,6 +286,167 @@ describe('createSegmentPersistor', () => {
       'seg-debounce-err',
       expect.stringContaining('timeout'),
     );
+  });
+
+  it.each(['flushSegment', 'flushAll'] as const)(
+    '%s rejects when a save already started by debounce fails',
+    async (flushMethod) => {
+      vi.useFakeTimers();
+      let rejectUpdate!: (error: Error) => void;
+      const updateSegment = vi.fn(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            rejectUpdate = reject;
+          }),
+      );
+      const persistor = createSegmentPersistor({
+        updateSegment,
+        setSegmentSaveError: vi.fn(),
+        clearSegmentSaveError: vi.fn(),
+        debounceMs: 100,
+      });
+      persistor.queueSegmentUpdate({
+        segmentId: 'seg-in-flight-error',
+        targetTokens: [{ type: 'text', content: 'unsaved draft' }],
+        status: 'draft',
+      });
+      await vi.advanceTimersByTimeAsync(100);
+
+      const flushed = persistor[flushMethod]('seg-in-flight-error');
+      const assertion = expect(flushed).rejects.toThrow();
+      rejectUpdate(new Error('database busy'));
+      await assertion;
+      expect(persistor.shouldDelayRemoteUpdate('seg-in-flight-error')).toBe(true);
+    },
+  );
+
+  it('retries a failed debounced draft when the next action flushes pending edits', async () => {
+    vi.useFakeTimers();
+    const updateSegment = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('database busy'))
+      .mockResolvedValue(undefined);
+    const persistor = createSegmentPersistor({
+      updateSegment,
+      setSegmentSaveError: vi.fn(),
+      clearSegmentSaveError: vi.fn(),
+      debounceMs: 100,
+    });
+    const draft = {
+      segmentId: 'seg-retry',
+      targetTokens: [{ type: 'text' as const, content: 'keep this draft' }],
+      status: 'draft' as const,
+    };
+    persistor.queueSegmentUpdate(draft);
+    await vi.advanceTimersByTimeAsync(100);
+    await persistor.flushAll();
+
+    expect(updateSegment).toHaveBeenCalledTimes(2);
+    expect(updateSegment).toHaveBeenLastCalledWith(
+      draft.segmentId,
+      draft.targetTokens,
+      draft.status,
+      expect.any(String),
+    );
+    expect(persistor.shouldDelayRemoteUpdate(draft.segmentId)).toBe(false);
+  });
+
+  it('keeps a newer queued draft when an older in-flight save fails', async () => {
+    let rejectUpdate!: (error: Error) => void;
+    const updateSegment = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            rejectUpdate = reject;
+          }),
+      )
+      .mockResolvedValue(undefined);
+    const persistor = createSegmentPersistor({
+      updateSegment,
+      setSegmentSaveError: vi.fn(),
+      clearSegmentSaveError: vi.fn(),
+    });
+    persistor.queueSegmentUpdate({
+      segmentId: 'seg-newer',
+      targetTokens: [{ type: 'text', content: 'old' }],
+      status: 'draft',
+    });
+    const saving = persistor.flushSegment('seg-newer');
+    const assertion = expect(saving).rejects.toThrow('database busy');
+    await Promise.resolve();
+    persistor.queueSegmentUpdate({
+      segmentId: 'seg-newer',
+      targetTokens: [{ type: 'text', content: 'newest' }],
+      status: 'draft',
+    });
+    rejectUpdate(new Error('database busy'));
+    await assertion;
+    await persistor.flushAll();
+
+    expect(updateSegment).toHaveBeenLastCalledWith(
+      'seg-newer',
+      [{ type: 'text', content: 'newest' }],
+      'draft',
+      expect.any(String),
+    );
+  });
+
+  it('does not restore a failed draft after its editor queue has been cleared', async () => {
+    let rejectUpdate!: (error: Error) => void;
+    const updateSegment = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectUpdate = reject;
+        }),
+    );
+    const setSegmentSaveError = vi.fn();
+    const persistor = createSegmentPersistor({
+      updateSegment,
+      setSegmentSaveError,
+      clearSegmentSaveError: vi.fn(),
+    });
+    persistor.queueSegmentUpdate({
+      segmentId: 'seg-cleared',
+      targetTokens: [{ type: 'text', content: 'old file draft' }],
+      status: 'draft',
+    });
+    const saving = persistor.flushSegment('seg-cleared');
+    const assertion = expect(saving).rejects.toThrow('database busy');
+    await Promise.resolve();
+    persistor.clear();
+    rejectUpdate(new Error('database busy'));
+    await assertion;
+    await persistor.flushAll();
+
+    expect(updateSegment).toHaveBeenCalledOnce();
+    expect(setSegmentSaveError).not.toHaveBeenCalled();
+    expect(persistor.shouldDelayRemoteUpdate('seg-cleared')).toBe(false);
+  });
+
+  it('keeps a synchronously rejected adapter save retryable', async () => {
+    const updateSegment = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('bridge unavailable');
+      })
+      .mockResolvedValue(undefined);
+    const persistor = createSegmentPersistor({
+      updateSegment,
+      setSegmentSaveError: vi.fn(),
+      clearSegmentSaveError: vi.fn(),
+    });
+    persistor.queueSegmentUpdate({
+      segmentId: 'seg-sync-error',
+      targetTokens: [{ type: 'text', content: 'draft' }],
+      status: 'draft',
+    });
+
+    await expect(persistor.flushSegment('seg-sync-error')).rejects.toThrow('bridge unavailable');
+    await persistor.flushSegment('seg-sync-error');
+
+    expect(updateSegment).toHaveBeenCalledTimes(2);
+    expect(persistor.shouldDelayRemoteUpdate('seg-sync-error')).toBe(false);
   });
 
   it('exposes editor persistence controls in useEditor return type', () => {

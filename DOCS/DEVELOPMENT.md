@@ -176,19 +176,7 @@ The full repository audit is:
 npm run gate:check
 ```
 
-Its maintained order is:
-
-1. `docs:check`
-2. `gate:text`
-3. `format:check`
-4. `test:scripts`
-5. `ai-prompts:check`
-6. desktop `typecheck`
-7. `gate:arch`
-8. `gate:style`
-9. `gate:file-size`
-10. workspace `lint`
-11. large-file TM smoke test
+The `gate:check` script in [package.json](../package.json) owns the stage order. It stops at the first failing stage; successful earlier stages do not prove later stages ran. The focused commands above select checks during development, not an alternate definition of the full gate.
 
 Interpret the audit honestly:
 
@@ -213,6 +201,8 @@ There is currently no tracked `.github/workflows` directory. Do not assume a rem
 
 Electron and host Node use different ABIs for `better-sqlite3`.
 
+[`ensure-sqlite-abi.mjs`](../scripts/ensure-sqlite-abi.mjs) reads the requested runtime's ABI and checks that the native binding loads in that runtime. Cached binaries are keyed by package version, ABI, OS, and architecture and are validated again after restore; an incompatible cache triggers a rebuild, whose result must also load. An unknown installed ABI or old cache metadata is not proof of compatibility with the current Electron version.
+
 - Before desktop dev/build/pack: `npm run rebuild:electron`.
 - Before Node-based tests and DB scripts: `npm run rebuild:test`.
 - Root dev/build, tests/traces, and `gate:smoke:large-file` already choose the appropriate rebuild.
@@ -223,12 +213,15 @@ An installed `node_modules` tree is also OS- and architecture-specific. Do not m
 
 ## Desktop e2e and packaging
 
+Workspace e2e scripts build the desktop directly. Ensure the Electron ABI first, especially after Node/Vitest tests:
+
 ```bash
+npm run rebuild:electron
 npm run test:e2e:smoke --workspace=apps/desktop
 npm run test:e2e --workspace=apps/desktop
 ```
 
-Use smoke first for editor/renderer regressions. Full e2e is appropriate for broader cross-window or project workflows.
+Use smoke first for editor/renderer regressions. Full e2e is appropriate for broader cross-window or project workflows. The editor smoke suite creates an isolated temporary user-data directory; preserve that isolation when extending it. See [Desktop](DESKTOP.md#ownership-and-tests) for the UI and IPC test map. Switch back with `npm run rebuild:test` before returning to Node-based DB tests.
 
 Packaging must run on its target platform:
 
@@ -261,6 +254,8 @@ npm run worktree:deps:link
 ```
 
 If the worktree already has `node_modules`, `npm run worktree:deps:link:force` removes that physical dependency tree in the current worktree and replaces it with a link; it does not remove the source checkout's dependencies. On Windows the script can fall back from a directory symlink to a junction; macOS uses a directory symlink. The source checkout must already have installed dependencies and must match the current host OS, architecture, lockfile, and pinned runtime. Never use this helper to reuse dependencies across Windows and macOS.
+
+These compatibility checks are the caller's responsibility; the helper currently checks directory existence and link identity only. Linking the entire tree also shares npm workspace links and the active native binary. Workspace imports may resolve back to the source checkout, and switching Node/Electron ABI affects both checkouts. Prefer a separate `npm ci` for shared-package changes or concurrent desktop/test work; a passing Vitest run with local source aliases does not validate other commands' workspace resolution.
 
 ## Script ownership and maintenance
 

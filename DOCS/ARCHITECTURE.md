@@ -37,6 +37,8 @@ renderer -> typed preload API -> IPC handlers -> services/modules -> adapters/sh
 
 Desktop file translation has both legacy single-unit workflows and adapters over the shared localization engine. Keep the boundary explicit when moving behavior; do not silently give the desktop a second implementation of a shared request contract.
 
+[Desktop](DESKTOP.md) owns editor persistence, UI/event coordination, and the code/test map for changing these boundaries.
+
 ### `apps/cli`
 
 The `momocat` executable owns:
@@ -81,7 +83,7 @@ Repository code should prefer focused entrypoints (`@cat/core/models`, `/project
 3. `SegmentService` applies the segment update, file statistics, repeat propagation, and optional Working TM upsert in one transaction.
 4. Post-commit events refresh renderer state and invalidate reference caches when Working TM changed.
 
-For translation projects, the first confirmed occurrence of a repeated source in a file can lead later followers. A manual divergence detaches that later occurrence. Review/custom projects do not commit to Working TM or run translation repeat propagation.
+Repeat leadership and Working TM rules are owned by [Localization](LOCALIZATION.md#desktop-working-tm-and-repeated-segments); their persisted representation is owned by [Data model](DATA_MODEL.md#projects-and-files).
 
 ### Headless file translation
 

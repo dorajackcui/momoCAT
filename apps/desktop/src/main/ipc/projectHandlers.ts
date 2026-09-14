@@ -5,6 +5,64 @@ import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import { registerHandle } from './registerHandle';
 import type { MainHandlerDeps } from './types';
 
+const SEGMENT_STATUSES = {
+  new: true,
+  draft: true,
+  translated: true,
+  confirmed: true,
+  reviewed: true,
+} satisfies Record<SegmentStatus, true>;
+
+const TOKEN_TYPES = {
+  text: true,
+  tag: true,
+  locked: true,
+  ws: true,
+} satisfies Record<Token['type'], true>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isSegmentStatus(value: unknown): value is SegmentStatus {
+  return typeof value === 'string' && Object.hasOwn(SEGMENT_STATUSES, value);
+}
+
+function isToken(value: unknown): value is Token {
+  if (
+    !isRecord(value) ||
+    typeof value.type !== 'string' ||
+    !Object.hasOwn(TOKEN_TYPES, value.type) ||
+    typeof value.content !== 'string'
+  ) {
+    return false;
+  }
+  const meta = value.meta;
+  if (meta === undefined) return true;
+  return (
+    isRecord(meta) &&
+    (meta.id === undefined || typeof meta.id === 'string') &&
+    (meta.tagType === undefined ||
+      meta.tagType === 'paired-start' ||
+      meta.tagType === 'paired-end' ||
+      meta.tagType === 'standalone') &&
+    (meta.pairedIndex === undefined ||
+      (typeof meta.pairedIndex === 'number' && Number.isFinite(meta.pairedIndex))) &&
+    (meta.validationState === undefined ||
+      meta.validationState === 'valid' ||
+      meta.validationState === 'error' ||
+      meta.validationState === 'warning')
+  );
+}
+
+function isTokenArray(value: unknown): value is Token[] {
+  if (!Array.isArray(value)) return false;
+  for (const token of value) {
+    if (!isToken(token)) return false;
+  }
+  return true;
+}
+
 export function registerProjectHandlers({ ipcMain, projectService }: MainHandlerDeps): void {
   registerHandle({ ipcMain, projectService }, IPC_CHANNELS.project.list, () =>
     projectService.listProjects(),
@@ -138,12 +196,19 @@ export function registerProjectHandlers({ ipcMain, projectService }: MainHandler
   });
 
   registerHandle({ ipcMain, projectService }, IPC_CHANNELS.segment.update, (_event, ...args) => {
-    const [segmentId, targetTokens, status, clientRequestId] = args as [
-      string,
-      Token[],
-      SegmentStatus,
-      string | undefined,
-    ];
+    const [segmentId, targetTokens, status, clientRequestId] = args;
+    if (typeof segmentId !== 'string' || !segmentId.trim()) {
+      throw new Error('A non-empty segment ID is required.');
+    }
+    if (!isTokenArray(targetTokens)) {
+      throw new Error('Segment target must be an array of valid tokens.');
+    }
+    if (!isSegmentStatus(status)) {
+      throw new Error('Invalid segment status.');
+    }
+    if (clientRequestId !== undefined && typeof clientRequestId !== 'string') {
+      throw new Error('Segment client request ID must be a string.');
+    }
     return projectService.updateSegment(segmentId, targetTokens, status, clientRequestId);
   });
 

@@ -49,7 +49,7 @@ Desktop imports persist this policy in file import options and reuse it for edit
 
 ## MT request planning
 
-CLI inspect/translate defaults to `window-partial` with `use-current-targets`.
+Application defaults and option syntax are owned by [CLI](CLI.md#inspect-localization) and [Desktop](DESKTOP.md#files-and-background-jobs).
 
 | Mode             | Contract                                                                                                                                   |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -65,7 +65,7 @@ Target baseline is resolved before planning:
 
 Legacy `targetScope` belongs to single-unit concurrent translation and is not interpreted by window planners.
 
-The CAT editor toolbar's AI Translate action defaults to the current filtered results when filters are active, with an option to use the entire file. Opening the dialog snapshots all matching segment IDs using the latest filter input, including context searches; display sorting does not change translation order. The selected rows form a contiguous context sequence in original file order for `window-partial`: excluded rows do not enter its scan windows or neighboring context. Results retain their original segment IDs and are written back only to those segments. Progress counts the selected scope, and existing-target baseline and confirmed-row locking rules still apply. Empty scopes and IDs outside the current file are rejected. The Files tab continues to translate entire files.
+For a selected segment scope, rows form a contiguous context sequence in original file order for `window-partial`: excluded rows do not enter its scan windows or neighboring context. Results retain their original segment IDs and are written back only to those segments. Progress counts the selected scope, and existing-target baseline and confirmed-row locking rules still apply. Empty scopes and IDs outside the current file are rejected. [Desktop](DESKTOP.md#files-and-background-jobs) owns the UI selection behavior.
 
 ### Partial-window prompt order
 
@@ -93,8 +93,8 @@ Only the `translations` field is allowed. Every requested id must appear exactly
 
 Two recovery layers have different jobs:
 
-- The MT module response processor handles malformed JSON, missing rows, and tag validation feedback for a provider request; request modes continue to call it through `MTModule`.
-- `TranslationJobRunner` task retry handles failed planned work, attempts, and resumable execution.
+- The MT module response processor parses and validates the batch contract. Malformed JSON and missing/extra/duplicate ids fail the request; invalid tags in an otherwise valid batch receive per-unit repair feedback through `MTModule`.
+- `TranslationJobRunner` owns task attempts and retries, including batch parsing failures that escape the MT boundary, and resumable execution.
 
 Do not turn progress events or diagnostic artifacts into retry/resume truth.
 
@@ -145,9 +145,9 @@ The desktop `TM/TB` action offers source-term extraction alongside the existing 
 
 ## Runtime TM
 
-Runtime TM is an isolated in-memory SQLite TM for one headless file translation job. It reuses the normal repository/service/module recall path and is discarded when the job ends.
+Runtime TM is an isolated in-memory SQLite TM for one shared translation job. It reuses the normal repository/service/module recall path and is discarded when the job ends.
 
-It is enabled only for `translateFile()` with `window` or `window-partial`. It is not used by inspect, legacy concurrent `translateUnits()`, or legacy desktop flows.
+For translation projects, it is enabled for `LocalizationEngine.translateFile()` and `translateProjectSegments()` with `window` or `window-partial`, including the desktop adapter over the shared project-segment job. It is not used by review/custom projects, inspect, legacy concurrent `translateUnits()`, or legacy desktop translation workflows.
 
 Eligible non-empty `translated` and `skipped` results are appended after their task results have been persisted. On resume, compatible checkpoint results rebuild Runtime TM before new requests continue.
 
@@ -225,6 +225,8 @@ Same-TM delete, import, file commit, mapping update, and sync operations are mut
 - Full artifacts are opt-in prompt/TM/TB diagnostics and may contain private content.
 
 Inspect and translate should use the same request mode, baseline, and tag policy during diagnosis. Secrets must never be serialized into any of these outputs.
+
+Provider HTTP failures report the numeric status and a local standard status label. Untrusted response bodies and status text are excluded from transport errors, including malformed JSON responses, because errors can flow into checkpoints, events, audit, and terminal output.
 
 ## Key entrypoints
 

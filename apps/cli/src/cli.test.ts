@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import type { TranslateFileCommandConfig } from '@cat/localization';
 import { runCli } from './cli';
 import { isDirectRun } from './index';
 
@@ -29,8 +30,14 @@ function createHarness(
     runInspectLocalizationCommand: async (config: unknown) => {
       calls.push({ name: 'inspectLocalization', config });
     },
-    runTranslateFileCommand: async (config: unknown) => {
+    runTranslateFileCommand: async (config: TranslateFileCommandConfig) => {
       calls.push({ name: 'translateFile', config });
+      return {
+        inputPath: config.inputPath,
+        outputPath: config.outputPath,
+        summary: { total: 1, translated: 1, skipped: 0, failed: 0 },
+        results: [],
+      };
     },
   };
   const io = {
@@ -174,6 +181,57 @@ describe('momocat CLI dispatch', () => {
     expect(exitCode).toBe(1);
     expect(harness.stderr.join('')).toContain('Unknown command: nope');
     expect(harness.stderr.join('')).toContain('Run: momocat --help');
+  });
+
+  it.each([
+    ['inspect', 'localization'],
+    ['translate', 'file'],
+  ])('reports asynchronous %s %s failures through the CLI error boundary', async (domain, action) => {
+    const harness = createHarness();
+    const reject = async () => {
+      await Promise.resolve();
+      throw new Error('Could not open workbook');
+    };
+    const deps = {
+      ...harness.deps,
+      runInspectLocalizationCommand: reject,
+      runTranslateFileCommand: reject,
+    };
+
+    await expect(
+      runCli(
+        [domain, action, '--db', 'cat.db', '--project-id', '7', '--input', 'in.xlsx', '--output', 'out.xlsx'],
+        deps,
+        harness.io,
+      ),
+    ).resolves.toBe(1);
+    expect(harness.stderr.join('')).toBe(
+      `Could not open workbook\nRun: momocat ${domain} ${action} --help\n`,
+    );
+  });
+
+  it.each([1, 3])('returns a nonzero exit code when %i translation units fail', async (failed) => {
+    const harness = createHarness();
+    const deps = {
+      ...harness.deps,
+      runTranslateFileCommand: async (config: TranslateFileCommandConfig) => ({
+        inputPath: config.inputPath,
+        outputPath: config.outputPath,
+        summary: { total: 3, translated: 3 - failed, skipped: 0, failed },
+        results: [],
+      }),
+    };
+
+    const exitCode = await runCli(
+      ['translate', 'file', '--db', 'cat.db', '--project-id', '7', '--input', 'in.xlsx', '--output', 'out.xlsx'],
+      deps,
+      harness.io,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(harness.stderr.join('')).toBe(
+      `Translation failed for ${failed} of 3 units. Partial output: out.xlsx\n`,
+    );
   });
 
   it('prints inspect projects help', async () => {

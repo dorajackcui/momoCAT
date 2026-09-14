@@ -25,7 +25,15 @@ export function runTranslateFileCliCommand(
   }
 
   const config = parseTranslateFileArgs(argv, io);
-  return deps.runTranslateFileCommand(config).then(() => 0);
+  return deps.runTranslateFileCommand(config).then(({ summary }) => {
+    if (summary.failed > 0) {
+      io.stderr(
+        `Translation failed for ${summary.failed} of ${summary.total} units. Partial output: ${config.outputPath}\n`,
+      );
+      return 1;
+    }
+    return 0;
+  });
 }
 
 function parseTranslateFileArgs(argv: string[], io: CommandIO): TranslateFileCliConfig {

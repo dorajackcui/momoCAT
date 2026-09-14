@@ -80,6 +80,12 @@ momocat translate file
 
 Run any command with `--help` for the exact option set. Help text in [`apps/cli/src/commands`](../apps/cli/src/commands) is the syntax source of truth.
 
+### Automation result contract
+
+Exit code `0` means the command completed successfully (including help). Exit code `1` means invalid arguments, a command failure, or a completed translation with failed units. A partially successful translation still prints its summary and preserves output/checkpoints for inspection and resume; automation must check the exit code as well as the summary.
+
+The dispatcher owns the error boundary for synchronous parsing and asynchronous execution. Errors go to stderr; structured command output remains on stdout. `--progress-stdout` adds event lines before the final translation summary, so consumers enabling it must read a stream rather than assume one JSON document.
+
 ## Inspect projects
 
 ```bash
@@ -162,16 +168,7 @@ Audit records show request/repair/persist/Runtime-TM flow without full source, t
 
 ## Standard smoke helper
 
-The repository smoke script reads ignored `.momocat-smoke.local.json` configuration:
-
-```bash
-npm run smoke:momocat -- --dry-run
-npm run smoke:momocat -- --inspect-only
-npm run smoke:momocat -- --request-mode window-partial --prefix <prefix>
-```
-
-Use `--inspect-only` when provider calls are not intended. Never commit the local smoke config or generated workbooks/sidecars.
-The tracked example uses repository-relative placeholder paths so it works in both shells; replace them with existing files or absolute paths for the current host.
+The repository helper supports dry-run planning and inspect-only execution before a provider run. Configuration, side effects, and commands are owned by the [development smoke playbook](DEVELOPMENT.md#cli-smoke).
 
 ## Troubleshooting
 

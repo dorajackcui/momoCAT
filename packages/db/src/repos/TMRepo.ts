@@ -211,23 +211,25 @@ export class TMRepo {
   }
 
   public upsertTMEntry(entry: TMEntry & { tmId: string }) {
-    this.stmtUpsertTMEntry.run(
-      entry.id,
-      entry.tmId,
-      entry.srcHash,
-      entry.matchKey,
-      entry.tagsSignature,
-      JSON.stringify(entry.sourceTokens),
-      JSON.stringify(entry.targetTokens),
-      entry.originSegmentId,
-      entry.usageCount,
-    );
+    this.db.transaction(() => {
+      this.stmtUpsertTMEntry.run(
+        entry.id,
+        entry.tmId,
+        entry.srcHash,
+        entry.matchKey,
+        entry.tagsSignature,
+        JSON.stringify(entry.sourceTokens),
+        JSON.stringify(entry.targetTokens),
+        entry.originSegmentId,
+        entry.usageCount,
+      );
 
-    const srcText = entry.sourceTokens.map((token: Token) => token.content).join('');
-    const tgtText = entry.targetTokens.map((token: Token) => token.content).join('');
+      const srcText = entry.sourceTokens.map((token: Token) => token.content).join('');
+      const tgtText = entry.targetTokens.map((token: Token) => token.content).join('');
 
-    this.deleteTMFtsForEntry(entry.id);
-    this.insertTMFtsForEntry(entry.tmId, srcText, tgtText, entry.id);
+      this.deleteTMFtsForEntry(entry.id);
+      this.insertTMFtsForEntry(entry.tmId, srcText, tgtText, entry.id);
+    })();
   }
 
   public insertTMEntryIfAbsentBySrcHash(entry: TMEntry & { tmId: string }): string | undefined {
@@ -271,8 +273,7 @@ export class TMRepo {
   }
 
   public replaceTMFts(tmId: string, srcText: string, tgtText: string, tmEntryId: string) {
-    this.deleteTMFtsForEntry(tmEntryId);
-    this.insertTMFtsForEntry(tmId, srcText, tgtText, tmEntryId);
+    this.replaceTMFtsBatch([{ tmId, srcText, tgtText, tmEntryId }]);
   }
 
   public replaceTMFtsBatch(rows: TMFtsReplacementRow[]) {

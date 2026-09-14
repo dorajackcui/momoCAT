@@ -9,19 +9,6 @@ npm run build:cli
 npm --silent run cli -- --help
 ```
 
-Runtime support is declared by this package's [`package.json`](package.json). Exact command grammar and operational defaults are owned by [`DOCS/CLI.md`](../../DOCS/CLI.md).
+Runtime support is declared by this package's [package.json](package.json). Start with the [CLI operating manual](../../DOCS/CLI.md) for installation, environment resolution, commands, exit codes, resume, and privacy. Command-specific `--help` owns the exact option grammar.
 
-## Quick start
-
-```bash
-momocat env
-momocat inspect projects
-momocat inspect localization --project-id <id> --input <input.xlsx> --output <inspect.xlsx>
-momocat translate file --project-id <id> --input <input.xlsx> --output <translated.xlsx>
-```
-
-Run `momocat env` first on every machine. Use `--json` for machine-readable environment and project inspection.
-
-The CLI is installed separately from the desktop app. Open desktop once to create its user-data database and configure the project/provider before running translation.
-
-Use command-specific `--help` for the exact grammar. Read the maintained [CLI operating manual](../../DOCS/CLI.md) before automation, provider requests, resume, or artifact handling.
+For implementation changes, [cli.ts](src/cli.ts) owns dispatch and the common error boundary, [commands](src/commands) owns parsing/output, and [cli.test.ts](src/cli.test.ts) covers the command contract. Shared workflows stay in `@cat/localization`.

@@ -9,14 +9,13 @@ import {
 import type {
   InspectLocalizationCommandConfig,
   InspectProjectsCommandConfig,
-  TranslateFileCommandConfig,
 } from '@cat/localization';
 import type { CommandIO } from './parse/args';
 
 export interface CliDependencies {
   runInspectProjectsCommand: (config: InspectProjectsCommandConfig) => unknown;
   runInspectLocalizationCommand: (config: InspectLocalizationCommandConfig) => Promise<unknown>;
-  runTranslateFileCommand: (config: TranslateFileCommandConfig) => Promise<unknown>;
+  runTranslateFileCommand: typeof runTranslateFileCommand;
 }
 
 export const defaultDependencies: CliDependencies = {
@@ -63,11 +62,11 @@ export async function runCli(
       const { runInspectLocalizationCliCommand } = await import(
         './commands/inspectLocalizationCommand'
       );
-      return runInspectLocalizationCliCommand(rest, deps, io);
+      return await runInspectLocalizationCliCommand(rest, deps, io);
     }
     if (domain === 'translate' && action === 'file') {
       const { runTranslateFileCliCommand } = await import('./commands/translateFileCommand');
-      return runTranslateFileCliCommand(rest, deps, io);
+      return await runTranslateFileCliCommand(rest, deps, io);
     }
 
     const command = [domain, action].filter(Boolean).join(' ');
