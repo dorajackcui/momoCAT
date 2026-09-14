@@ -9,6 +9,37 @@ export interface CommandIO {
   resolvePath: (value: string) => string;
 }
 
+type CommandOption = { name: string; value: string | true };
+
+export function* readOptions(
+  argv: string[],
+  isKnownOption: (name: string) => boolean,
+  isBooleanOption: (name: string) => boolean = () => false,
+): Generator<CommandOption> {
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (!arg.startsWith('--')) throw new Error(`Unknown argument: ${arg}`);
+
+    const equalsIndex = arg.indexOf('=');
+    const flag = equalsIndex === -1 ? arg : arg.slice(0, equalsIndex);
+    const name = flag.slice(2);
+    if (!isKnownOption(name)) throw new Error(`Unknown argument: ${flag}`);
+
+    if (isBooleanOption(name)) {
+      const next = argv[index + 1];
+      if (equalsIndex !== -1 || (next && !next.startsWith('--'))) {
+        throw new Error(`${flag} does not accept a value.`);
+      }
+      yield { name, value: true };
+    } else if (equalsIndex !== -1) {
+      yield { name, value: requireOptionValue(flag, arg.slice(equalsIndex + 1)) };
+    } else {
+      yield { name, value: readValue(argv, index, flag) };
+      index += 1;
+    }
+  }
+}
+
 export function readValue(argv: string[], index: number, flag: string): string {
   const value = argv[index + 1];
   if (!value || value.startsWith('--')) {

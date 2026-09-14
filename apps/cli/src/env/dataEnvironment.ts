@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { CommandIO } from '../parse/args';
+import { assertExistingPath, type CommandIO } from '../parse/args';
 
 export type DataEnvironmentSource =
   | 'explicit'
@@ -26,6 +26,12 @@ export interface ResolveDataEnvironmentOptions {
   explicitDbPath?: string;
 }
 
+interface CommandDataEnvironment {
+  dbPath: string;
+  aiRuntimeConfigPath?: string;
+  proxyEnvPath?: string;
+}
+
 interface Candidate {
   path: string;
   source: Exclude<DataEnvironmentSource, 'missing'>;
@@ -36,6 +42,24 @@ const PACKAGE_USER_DATA_DIR = 'simple-cat-tool';
 const DB_FILE_NAME = 'cat_v1.db';
 const AI_RUNTIME_FILE_NAME = 'ai-runtime.json';
 const PROXY_ENV_FILE_NAME = 'proxy.env';
+
+export function resolveCommandDataEnvironment(
+  io: CommandIO,
+  explicitDbPath?: string,
+): CommandDataEnvironment {
+  const resolution = resolveDataEnvironment(io, { explicitDbPath });
+  if (explicitDbPath && resolution.source !== 'explicit') {
+    const dbPath = io.resolvePath(explicitDbPath);
+    assertExistingPath(io, dbPath, 'Database');
+    return { dbPath };
+  }
+  if (!resolution.dbPath) throw new Error(formatMissingDatabaseMessage(resolution));
+  return {
+    dbPath: resolution.dbPath,
+    aiRuntimeConfigPath: resolution.aiRuntimeConfigPath,
+    proxyEnvPath: resolution.proxyEnvPath,
+  };
+}
 
 export function resolveDataEnvironment(
   io: CommandIO,

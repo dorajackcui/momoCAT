@@ -12,7 +12,6 @@ const EXCLUDED_SUFFIXES = ['.test.ts', '.test.tsx', '.d.ts'];
 
 const LEGACY_ALLOWLIST = new Set([
   'packages/core/src/project/aiPromptTemplates.ts',
-  'packages/db/src/repos/TMRepo.ts',
   'packages/localization/src/LocalizationEngine.ts',
 ]);
 

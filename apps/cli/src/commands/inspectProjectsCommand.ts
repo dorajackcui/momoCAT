@@ -1,6 +1,6 @@
 import type { InspectProjectsResult } from '@cat/localization';
 import type { CliDependencies } from '../cli';
-import { formatMissingDatabaseMessage, resolveDataEnvironment } from '../env/dataEnvironment';
+import { resolveCommandDataEnvironment } from '../env/dataEnvironment';
 import {
   assertExistingPath,
   parsePositiveInteger,
@@ -87,16 +87,7 @@ function parseInspectProjectsArgs(argv: string[], io: CommandIO): InspectProject
     throw new Error(`Unknown argument: ${arg}`);
   }
 
-  const dataEnvironment = resolveDataEnvironment(io, { explicitDbPath });
-  if (explicitDbPath && dataEnvironment.source !== 'explicit') {
-    config.dbPath = io.resolvePath(explicitDbPath);
-    assertExistingPath(io, config.dbPath, 'Database');
-    return config;
-  }
-  if (!dataEnvironment.dbPath) {
-    throw new Error(formatMissingDatabaseMessage(dataEnvironment));
-  }
-  config.dbPath = dataEnvironment.dbPath;
+  config.dbPath = resolveCommandDataEnvironment(io, explicitDbPath).dbPath;
   assertExistingPath(io, config.dbPath, 'Database');
   return config;
 }

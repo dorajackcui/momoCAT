@@ -66,7 +66,7 @@ It may depend on `@cat/db` and focused `@cat/core` entrypoints. It must not depe
 
 ### `packages/db`
 
-The persistence package owns the canonical current SQLite schema, schema validation/maintenance, repositories, and the `CATDatabase` facade. Large repository workflows may delegate to focused collaborators, such as `TMSyncRepo`, while `CATDatabase` and `TMRepo` preserve their public contracts. It depends on pure contracts from `@cat/core`, not on app or localization code.
+The persistence package owns the canonical current SQLite schema, schema validation/maintenance, repositories, and the `CATDatabase` facade. `TMRepo` owns TM catalog/mount operations and composes internal entry/index, recall, and sync collaborators while preserving its public contract; their ownership is mapped in [Data model](DATA_MODEL.md#repository-ownership). The package depends on pure contracts from `@cat/core`, not on app or localization code.
 
 ### `packages/core`
 

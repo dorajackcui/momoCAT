@@ -2,7 +2,7 @@
 
 ## Contract
 
-The canonical SQLite schema is owned by [`packages/db/src/currentSchema.ts`](../packages/db/src/currentSchema.ts). Repository behavior is owned by [`packages/db/src/repos`](../packages/db/src/repos), and [`CATDatabase`](../packages/db/src/index.ts) is the application-facing facade. `TMRepo` preserves the TM facade while [`TMSyncRepo`](../packages/db/src/repos/TMSyncRepo.ts) owns external-file staging, diff, and apply SQL.
+The canonical SQLite schema is owned by [`packages/db/src/currentSchema.ts`](../packages/db/src/currentSchema.ts). Repository behavior is owned by [`packages/db/src/repos`](../packages/db/src/repos), and [`CATDatabase`](../packages/db/src/index.ts) is the application-facing facade.
 
 The current schema marker is **v15**.
 
@@ -14,6 +14,23 @@ Startup behavior is intentionally strict:
 4. A non-v15 or partial base schema is rejected; normal startup does not replay historical migrations.
 
 “Same-version maintenance” is narrower than a historical migration. It currently creates performance indexes and additive support structures used by features introduced while the marker remained v15. Code that needs a recovery/import path must implement it explicitly rather than weakening startup validation.
+
+## Repository ownership
+
+Applications and shared services continue to call `CATDatabase`; TM workflows enter through `TMRepo`. Internal collaborators share the same SQLite connection and are not alternate application APIs.
+
+| Responsibility                                                    | Owner                                                                                                                                                      |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TM catalog, mounts, and public delegation                         | [TMRepo.ts](../packages/db/src/repos/TMRepo.ts)                                                                                                            |
+| Entry writes/reads, FTS maintenance, and write transactions       | [TMEntryRepo.ts](../packages/db/src/repos/tm/TMEntryRepo.ts)                                                                                               |
+| Fuzzy recall SQL and its query plan                               | [TMFuzzyRecall.ts](../packages/db/src/repos/tm/TMFuzzyRecall.ts), [tmRecallQuery.ts](../packages/db/src/repos/tm/tmRecallQuery.ts)                         |
+| Source-side concordance recall, evidence gates, and query budgets | [TMConcordanceRecall.ts](../packages/db/src/repos/tm/TMConcordanceRecall.ts), [tmConcordancePolicy.ts](../packages/db/src/repos/tm/tmConcordancePolicy.ts) |
+| Row decoding and result diversity                                 | [tmEntryRows.ts](../packages/db/src/repos/tm/tmEntryRows.ts), [tmRecallDiversity.ts](../packages/db/src/repos/tm/tmRecallDiversity.ts)                     |
+| External-file staging, diff, and apply SQL                        | [TMSyncRepo.ts](../packages/db/src/repos/TMSyncRepo.ts)                                                                                                    |
+
+Explicit Concordance Search composes source-and-target recall through the facade; it remains distinct from source-side concordance references used during translation. Recall collaborators resolve mounted resources for each call, so mount changes remain visible without rebuilding the repository. Changes to scoring, language profiles, or result selection follow [Localization](LOCALIZATION.md#tm-matching-and-prompt-selection).
+
+Validate facade behavior in [TMRepo.test.ts](../packages/db/src/repos/TMRepo.test.ts) and [TMRepo.sync.test.ts](../packages/db/src/repos/TMRepo.sync.test.ts), then run the cross-layer reference checks from [Development](DEVELOPMENT.md#validation-strategy). Keep transaction, ordering, scope, limit, and diagnostic-event behavior stable when moving internals.
 
 ## Base tables
 

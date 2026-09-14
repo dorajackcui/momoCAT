@@ -219,6 +219,38 @@ describe('TMRepo external file sync primitives', () => {
     expect(db.searchConcordance(projectId, 'VanishingGlacier', [tmId])).toHaveLength(0);
   });
 
+  it('rolls back entry, sync, and FTS writes together in the caller transaction', () => {
+    const entryId = seedEntry('Stable', 'OldNeedle', 4);
+    const removedId = seedEntry('Removed', 'RetainedNeedle');
+    const originalEntry = db.findTMEntryByHash(tmId, 'hash-Stable')!;
+    const originalEntries = db.listTMEntries(tmId);
+
+    expect(() =>
+      db.runInTransaction(() => {
+        db.upsertTMEntry({
+          ...originalEntry,
+          tmId,
+          targetTokens: [{ type: 'text', content: 'EditedNeedle' }],
+        });
+        db.stageTMSyncRows(RUN_ID, tmId, [stagedRow('Added', 'InsertedNeedle')]);
+        db.applyTMSyncInserts(tmId, [{ ...stagedRow('Added', 'InsertedNeedle'), id: 'inserted' }]);
+        db.applyTMSyncUpdates(tmId, [{ ...stagedRow('Stable', 'SyncedNeedle'), entryId }]);
+        db.deleteTMEntriesWithFts([removedId]);
+        expect(db.searchConcordance(projectId, 'SyncedNeedle')).toHaveLength(1);
+        expect(db.searchConcordance(projectId, 'InsertedNeedle')).toHaveLength(1);
+        throw new Error('abort caller transaction');
+      }),
+    ).toThrow('abort caller transaction');
+
+    expect(db.listTMEntries(tmId)).toEqual(originalEntries);
+    expect(db.countTMSyncStagedRows(RUN_ID)).toBe(0);
+    expect(db.searchConcordance(projectId, 'OldNeedle')).toHaveLength(1);
+    expect(db.searchConcordance(projectId, 'RetainedNeedle')).toHaveLength(1);
+    for (const query of ['EditedNeedle', 'SyncedNeedle', 'InsertedNeedle']) {
+      expect(db.searchConcordance(projectId, query)).toHaveLength(0);
+    }
+  });
+
   it('pages diff sets with a keyset cursor that stays stable across applies', () => {
     db.runInTransaction(() => {
       db.stageTMSyncRows(

@@ -58,6 +58,177 @@ function createHarness(
   return { calls, deps, io, stdout, stderr };
 }
 
+describe.each([
+  ['inspect', 'localization'],
+  ['translate', 'file'],
+])('%s %s shared argument contract', (domain, action) => {
+  const required = ['--project-id', '7', '--input', 'input.xlsx', '--output', 'output.xlsx'];
+
+  it.each(['space', 'equals'])(
+    'reads common options with %s syntax and last values win',
+    async (syntax) => {
+      const harness = createHarness();
+      const options = [
+        ['db', 'old.db'],
+        ['db-path', 'D:\\custom\\cat.db'],
+        ['project-id', '3'],
+        ['project-id', '7'],
+        ['input', 'input.xlsx'],
+        ['output', 'output.xlsx'],
+        ['request-mode', 'window'],
+        ['target-baseline', 'ignore-current-targets'],
+        ['tag-policy', 'none'],
+      ];
+      const args = options.flatMap(([name, value]) =>
+        syntax === 'equals' ? [`--${name}=${value}`] : [`--${name}`, value],
+      );
+
+      expect(await runCli([domain, action, ...args], harness.deps, harness.io)).toBe(0);
+      expect(harness.calls[0]?.config).toEqual({
+        dbPath: 'D:/custom/cat.db',
+        projectId: 7,
+        inputPath: 'input.xlsx',
+        outputPath: 'output.xlsx',
+        requestMode: 'window',
+        targetBaseline: 'ignore-current-targets',
+        tagPolicy: 'none',
+        aiRuntimeConfigPath: 'D:/custom/ai-runtime.json',
+        proxyEnvPath: 'D:/custom/proxy.env',
+      });
+    },
+  );
+
+  it.each([
+    { args: ['--db-path='], message: 'Missing value for --db-path.' },
+    { args: ['--input', '--output'], message: 'Missing value for --input.' },
+    { args: ['--surprise='], message: 'Unknown argument: --surprise' },
+    { args: ['extra=value'], message: 'Unknown argument: extra=value' },
+    { args: ['--project-id=0', '--surprise'], message: '--project-id must be a positive integer.' },
+    {
+      args: ['--request-mode=legacy'],
+      message: '--request-mode must be window or window-partial.',
+    },
+    {
+      args: ['--target-baseline=blank'],
+      message: '--target-baseline must be use-current-targets or ignore-current-targets.',
+    },
+    { args: ['--tag-policy=html'], message: '--tag-policy must be default or none.' },
+  ])('rejects $args before invoking localization', async ({ args, message }) => {
+    const harness = createHarness();
+
+    expect(await runCli([domain, action, ...args], harness.deps, harness.io)).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toBe(`${message}\nRun: momocat ${domain} ${action} --help\n`);
+  });
+
+  it.each([
+    { args: [], message: 'Missing --project-id.' },
+    { args: ['--project-id', '7'], message: 'Missing --input.' },
+    { args: ['--project-id', '7', '--input', 'missing.xlsx'], message: 'Missing --output.' },
+  ])('checks required fields in order for $args', async ({ args, message }) => {
+    const harness = createHarness();
+
+    expect(
+      await runCli([domain, action, '--db', 'cat.db', ...args], harness.deps, harness.io),
+    ).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toBe(`${message}\nRun: momocat ${domain} ${action} --help\n`);
+  });
+
+  it('keeps missing explicit database ahead of fallback and missing required fields', async () => {
+    const harness = createHarness({
+      env: { MOMOCAT_DB: 'fallback.db' },
+      existing: ['fallback.db'],
+    });
+
+    expect(await runCli([domain, action, '--db', 'missing.db'], harness.deps, harness.io)).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toBe(
+      `Database does not exist: missing.db\nRun: momocat ${domain} ${action} --help\n`,
+    );
+  });
+
+  it('takes sidecars from the selected database even when sidecars are absent', async () => {
+    const harness = createHarness({
+      env: { MOMOCAT_DB: 'missing.db', MOMOCAT_USER_DATA_DIR: 'D:/user data' },
+      existing: ['D:/user data/cat_v1.db', 'input.xlsx'],
+    });
+
+    expect(await runCli([domain, action, ...required], harness.deps, harness.io)).toBe(0);
+    expect(harness.calls[0]?.config).toEqual({
+      dbPath: 'D:/user data/cat_v1.db',
+      projectId: 7,
+      inputPath: 'input.xlsx',
+      outputPath: 'output.xlsx',
+      requestMode: 'window-partial',
+      targetBaseline: 'use-current-targets',
+      aiRuntimeConfigPath: 'D:/user data/ai-runtime.json',
+      proxyEnvPath: 'D:/user data/proxy.env',
+    });
+  });
+
+  it('keeps option-like values accepted with equals syntax', async () => {
+    const harness = createHarness();
+
+    expect(
+      await runCli(
+        [domain, action, ...required, '--input=--literal.xlsx'],
+        harness.deps,
+        harness.io,
+      ),
+    ).toBe(0);
+    expect(harness.calls[0]?.config).toMatchObject({ inputPath: '--literal.xlsx' });
+  });
+
+  it('handles help only as the first argument', async () => {
+    const first = createHarness();
+    expect(await runCli([domain, action, '--help', '--surprise'], first.deps, first.io)).toBe(0);
+    expect(first.calls).toEqual([]);
+    expect(first.stderr).toEqual([]);
+
+    const later = createHarness();
+    expect(await runCli([domain, action, ...required, '--help'], later.deps, later.io)).toBe(1);
+    expect(later.calls).toEqual([]);
+    expect(later.stderr.join('')).toBe(
+      `Unknown argument: --help\nRun: momocat ${domain} ${action} --help\n`,
+    );
+  });
+});
+
+describe('command-specific argument grammar', () => {
+  it.each([
+    {
+      command: ['inspect', 'projects'],
+      args: ['--json=true'],
+      message: 'Unknown argument: --json',
+    },
+    {
+      command: ['inspect', 'projects'],
+      args: ['--json', 'true'],
+      message: 'Unknown argument: true',
+    },
+    { command: ['inspect', 'projects'], args: ['extra=value'], message: 'Unknown argument: extra' },
+    { command: ['env'], args: ['--json=true'], message: 'Unknown argument: --json=true' },
+    { command: ['env'], args: ['--json', 'true'], message: 'Unknown argument: true' },
+    {
+      command: ['translate', 'file'],
+      args: ['--resume=true'],
+      message: '--resume does not accept a value.',
+    },
+    {
+      command: ['translate', 'file'],
+      args: ['--resume', 'true'],
+      message: '--resume does not accept a value.',
+    },
+  ])('preserves $command errors for $args', async ({ command, args, message }) => {
+    const harness = createHarness();
+
+    expect(await runCli([...command, ...args], harness.deps, harness.io)).toBe(1);
+    expect(harness.calls).toEqual([]);
+    expect(harness.stderr.join('')).toBe(`${message}\nRun: momocat ${command.join(' ')} --help\n`);
+  });
+});
+
 describe('momocat CLI dispatch', () => {
   it('declares runtime dependencies and package files for standalone CLI distribution', () => {
     const packageJson = JSON.parse(

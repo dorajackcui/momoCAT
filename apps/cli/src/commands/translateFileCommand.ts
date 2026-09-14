@@ -1,18 +1,8 @@
 import type { TranslateFileCommandConfig } from '@cat/localization';
 import type { CliDependencies } from '../cli';
-import { formatMissingDatabaseMessage, resolveDataEnvironment } from '../env/dataEnvironment';
-import {
-  assertExistingPath,
-  parsePositiveInteger,
-  readValue,
-  requireOptionValue,
-} from '../parse/args';
+import { parsePositiveInteger, readOptions } from '../parse/args';
 import type { CommandIO } from '../parse/args';
-
-type TranslateFileCliConfig = TranslateFileCommandConfig & {
-  aiRuntimeConfigPath?: string;
-  proxyEnvPath?: string;
-};
+import { assignLocalizationOption, resolveLocalizationConfig } from '../parse/localizationArgs';
 
 export function runTranslateFileCliCommand(
   argv: string[],
@@ -36,134 +26,35 @@ export function runTranslateFileCliCommand(
   });
 }
 
-function parseTranslateFileArgs(argv: string[], io: CommandIO): TranslateFileCliConfig {
-  const config: Partial<TranslateFileCliConfig> = {};
+function parseTranslateFileArgs(argv: string[], io: CommandIO): TranslateFileCommandConfig {
+  const config: Partial<TranslateFileCommandConfig> = {};
   let explicitDbPath: string | undefined;
 
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    const equalsIndex = arg.indexOf('=');
-
-    if (!arg.startsWith('--')) {
-      throw new Error(`Unknown argument: ${arg}`);
-    }
-
-    if (equalsIndex !== -1) {
-      const name = arg.slice(2, equalsIndex);
-      if (!isKnownOption(name)) {
-        throw new Error(`Unknown argument: ${arg.slice(0, equalsIndex)}`);
-      }
-
-      if (isBooleanOption(name)) {
-        throw new Error(`${arg.slice(0, equalsIndex)} does not accept a value.`);
-      }
-
-      if (name === 'db' || name === 'db-path') {
-        explicitDbPath = requireOptionValue(arg.slice(0, equalsIndex), arg.slice(equalsIndex + 1));
-        continue;
-      }
-
-      assignOption(config, name, arg.slice(equalsIndex + 1), io, arg.slice(0, equalsIndex));
-      continue;
-    }
-
-    const name = arg.slice(2);
-    if (!isKnownOption(name)) {
-      throw new Error(`Unknown argument: ${arg}`);
-    }
-
-    if (isBooleanOption(name)) {
-      const next = argv[index + 1];
-      if (next && !next.startsWith('--')) {
-        throw new Error(`${arg} does not accept a value.`);
-      }
+  for (const { name, value } of readOptions(argv, isKnownOption, isBooleanOption)) {
+    if (value === true) {
       assignBooleanOption(config, name);
-      continue;
+    } else if (name === 'db' || name === 'db-path') {
+      explicitDbPath = value;
+    } else if (!assignLocalizationOption(config, name, value, io)) {
+      assignOption(config, name, value, io);
     }
-
-    if (name === 'db' || name === 'db-path') {
-      explicitDbPath = readValue(argv, index, arg);
-      index += 1;
-      continue;
-    }
-
-    assignOption(config, name, readValue(argv, index, arg), io, arg);
-    index += 1;
   }
 
-  const dataEnvironment = resolveDataEnvironment(io, { explicitDbPath });
-  if (explicitDbPath && dataEnvironment.source !== 'explicit') {
-    config.dbPath = io.resolvePath(explicitDbPath);
-    assertExistingPath(io, config.dbPath, 'Database');
-  } else if (!dataEnvironment.dbPath) {
-    throw new Error(formatMissingDatabaseMessage(dataEnvironment));
-  } else {
-    config.dbPath = dataEnvironment.dbPath;
-    config.aiRuntimeConfigPath = dataEnvironment.aiRuntimeConfigPath;
-    config.proxyEnvPath = dataEnvironment.proxyEnvPath;
-  }
-
-  if (config.projectId === undefined) throw new Error('Missing --project-id.');
-  if (!config.inputPath) throw new Error('Missing --input.');
-  if (!config.outputPath) throw new Error('Missing --output.');
-
-  assertExistingPath(io, config.dbPath, 'Database');
-  assertExistingPath(io, config.inputPath, 'Input file');
-
-  config.requestMode ??= 'window-partial';
-  config.targetBaseline ??= 'use-current-targets';
-
-  return config as TranslateFileCliConfig;
+  return resolveLocalizationConfig(config, io, explicitDbPath);
 }
 
 function assignOption(
-  config: Partial<TranslateFileCliConfig>,
+  config: Partial<TranslateFileCommandConfig>,
   name: string,
-  value: string | undefined,
+  optionValue: string,
   io: CommandIO,
-  flag = `--${name}`,
 ): void {
-  const optionValue = requireOptionValue(flag, value);
-
-  if (name === 'project-id') {
-    config.projectId = parsePositiveInteger(optionValue, '--project-id');
-    return;
-  }
-  if (name === 'input') {
-    config.inputPath = io.resolvePath(optionValue);
-    return;
-  }
-  if (name === 'output') {
-    config.outputPath = io.resolvePath(optionValue);
-    return;
-  }
   if (name === 'context-header') {
     config.contextHeader = optionValue;
     return;
   }
   if (name === 'context-col') {
     config.contextCol = parseZeroBasedColumnIndex(optionValue);
-    return;
-  }
-  if (name === 'target-baseline') {
-    if (optionValue !== 'use-current-targets' && optionValue !== 'ignore-current-targets') {
-      throw new Error('--target-baseline must be use-current-targets or ignore-current-targets.');
-    }
-    config.targetBaseline = optionValue;
-    return;
-  }
-  if (name === 'request-mode') {
-    if (optionValue !== 'window' && optionValue !== 'window-partial') {
-      throw new Error('--request-mode must be window or window-partial.');
-    }
-    config.requestMode = optionValue;
-    return;
-  }
-  if (name === 'tag-policy') {
-    if (optionValue !== 'default' && optionValue !== 'none') {
-      throw new Error('--tag-policy must be default or none.');
-    }
-    config.tagPolicy = optionValue;
     return;
   }
   if (name === 'checkpoint') {
@@ -206,7 +97,7 @@ function assignOption(
   throw new Error(`Unknown argument: --${name}`);
 }
 
-function assignBooleanOption(config: Partial<TranslateFileCliConfig>, name: string): void {
+function assignBooleanOption(config: Partial<TranslateFileCommandConfig>, name: string): void {
   if (name === 'resume') {
     config.resume = true;
     return;

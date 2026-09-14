@@ -1,18 +1,25 @@
 import { randomUUID } from 'crypto';
 import { access } from 'fs/promises';
-import type { Segment } from '@cat/core/models';
-import type {
-  StructuredJobError,
-  TMCommitOptions,
-  TMImportOptions,
-  TMSyncConfigInput,
-  TMSyncStartResult,
-  TMType,
-} from '../../shared/ipc';
+import type { StructuredJobError, TMSyncStartResult } from '../../shared/ipc';
 import { TM_SYNC_MAPPING_REVIEW_REQUIRED } from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import { registerHandle } from './registerHandle';
 import type { ReferenceBackedHandlerDeps } from './types';
+import {
+  isFiniteNumber,
+  isId,
+  isNonEmptyString,
+  isString,
+  readArgument,
+  readOptionalArgument,
+} from './argumentValidation';
+import { isSegment } from './projectPayloadValidation';
+import {
+  isTMCommitOptions,
+  isTMImportOptions,
+  isTMSyncConfigInput,
+  isTMType,
+} from './referencePayloadValidation';
 
 export function registerTMHandlers({
   ipcMain,
@@ -26,7 +33,8 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.getMatches,
     (_event, ...args) => {
-      const [projectId, segment] = args as [number, Segment];
+      const projectId = readArgument(args[0], 'projectId', isId);
+      const segment = readArgument(args[1], 'segment', isSegment);
       return referenceLookup.findTmMatches(projectId, segment);
     },
   );
@@ -35,7 +43,8 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.prefetch,
     (_event, ...args) => {
-      const [projectId, segment] = args as [number, Segment];
+      const projectId = readArgument(args[0], 'projectId', isId);
+      const segment = readArgument(args[1], 'segment', isSegment);
       return referenceLookupPrefetch.findTmMatches(projectId, segment);
     },
   );
@@ -44,7 +53,8 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.concordance,
     (_event, ...args) => {
-      const [projectId, query] = args as [number, string];
+      const projectId = readArgument(args[0], 'projectId', isId);
+      const query = readArgument(args[1], 'query', isString);
       return referenceLookup.searchConcordance(projectId, query);
     },
   );
@@ -53,7 +63,7 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.list,
     (_event, ...args) => {
-      const [type] = args as [TMType | undefined];
+      const type = readOptionalArgument(args[0], 'type', isTMType);
       return projectService.listTMs(type);
     },
   );
@@ -62,7 +72,7 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.listOptions,
     (_event, ...args) => {
-      const [type] = args as [TMType | undefined];
+      const type = readOptionalArgument(args[0], 'type', isTMType);
       return projectService.listTMOptions(type);
     },
   );
@@ -71,7 +81,7 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.preview,
     (_event, ...args) => {
-      const [tmId] = args as [string];
+      const tmId = readArgument(args[0], 'tmId', isNonEmptyString);
       return projectService.getTMPreview(tmId);
     },
   );
@@ -80,7 +90,10 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.create,
     async (_event, ...args) => {
-      const [name, srcLang, tgtLang, type] = args as [string, string, string, TMType | undefined];
+      const name = readArgument(args[0], 'name', isString);
+      const srcLang = readArgument(args[1], 'srcLang', isString);
+      const tgtLang = readArgument(args[2], 'tgtLang', isString);
+      const type = readOptionalArgument(args[3], 'type', isTMType);
       const tmId = await projectService.createTM(name, srcLang, tgtLang, type);
       notifyReferenceDataChanged({ projectId: null, kind: 'tm', reason: 'tm-created' });
       return tmId;
@@ -91,7 +104,7 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.remove,
     async (_event, ...args) => {
-      const [tmId] = args as [string];
+      const tmId = readArgument(args[0], 'tmId', isNonEmptyString);
       const result = await projectService.deleteTM(tmId);
       notifyReferenceDataChanged({ projectId: null, kind: 'tm', reason: 'tm-deleted' });
       return result;
@@ -102,7 +115,8 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.rename,
     async (_event, ...args) => {
-      const [tmId, name] = args as [string, string];
+      const tmId = readArgument(args[0], 'tmId', isNonEmptyString);
+      const name = readArgument(args[1], 'name', isString);
       const result = await projectService.renameTM(tmId, name);
       notifyReferenceDataChanged({ projectId: null, kind: 'tm', reason: 'tm-renamed' });
       return result;
@@ -113,7 +127,7 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.getMountedByProject,
     (_event, ...args) => {
-      const [projectId] = args as [number];
+      const projectId = readArgument(args[0], 'projectId', isId);
       return projectService.getProjectMountedTMs(projectId);
     },
   );
@@ -122,12 +136,10 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.mount,
     async (_event, ...args) => {
-      const [projectId, tmId, priority, permission] = args as [
-        number,
-        string,
-        number | undefined,
-        string | undefined,
-      ];
+      const projectId = readArgument(args[0], 'projectId', isId);
+      const tmId = readArgument(args[1], 'tmId', isNonEmptyString);
+      const priority = readOptionalArgument(args[2], 'priority', isFiniteNumber);
+      const permission = readOptionalArgument(args[3], 'permission', isString);
       const result = await projectService.mountTMToProject(projectId, tmId, priority, permission);
       notifyReferenceDataChanged({ projectId, kind: 'tm', reason: 'tm-mounted' });
       return result;
@@ -138,7 +150,8 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.unmount,
     async (_event, ...args) => {
-      const [projectId, tmId] = args as [number, string];
+      const projectId = readArgument(args[0], 'projectId', isId);
+      const tmId = readArgument(args[1], 'tmId', isNonEmptyString);
       const result = await projectService.unmountTMFromProject(projectId, tmId);
       notifyReferenceDataChanged({ projectId, kind: 'tm', reason: 'tm-unmounted' });
       return result;
@@ -149,7 +162,9 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.exportWorking,
     (_event, ...args) => {
-      const [projectId, tmId, outputPath] = args as [number, string, string];
+      const projectId = readArgument(args[0], 'projectId', isId);
+      const tmId = readArgument(args[1], 'tmId', isNonEmptyString);
+      const outputPath = readArgument(args[2], 'outputPath', isNonEmptyString);
       return projectService.exportWorkingTM(projectId, tmId, outputPath);
     },
   );
@@ -158,7 +173,8 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.resetWorking,
     async (_event, ...args) => {
-      const [projectId, tmId] = args as [number, string];
+      const projectId = readArgument(args[0], 'projectId', isId);
+      const tmId = readArgument(args[1], 'tmId', isNonEmptyString);
       const result = await projectService.resetWorkingTM(projectId, tmId);
       notifyReferenceDataChanged({ projectId, kind: 'tm', reason: 'working-tm-reset' });
       return result;
@@ -169,7 +185,9 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.commitFile,
     async (_event, ...args) => {
-      const [tmId, fileId, options] = args as [string, number, TMCommitOptions | undefined];
+      const tmId = readArgument(args[0], 'tmId', isNonEmptyString);
+      const fileId = readArgument(args[1], 'fileId', isId);
+      const options = readOptionalArgument(args[2], 'options', isTMCommitOptions);
       const result = await projectService.commitFileToTM(tmId, fileId, options);
       notifyReferenceDataChanged(
         result.tmType === 'working'
@@ -184,7 +202,8 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.matchFile,
     async (_event, ...args) => {
-      const [fileId, tmId] = args as [number, string];
+      const fileId = readArgument(args[0], 'fileId', isId);
+      const tmId = readArgument(args[1], 'tmId', isNonEmptyString);
       const result = await projectService.batchMatchFileWithTM(fileId, tmId);
       notifyReferenceDataChanged({ projectId: null, kind: 'tm', reason: 'tm-batch-matched' });
       return result;
@@ -195,7 +214,7 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.importPreview,
     (_event, ...args) => {
-      const [filePath] = args as [string];
+      const filePath = readArgument(args[0], 'filePath', isNonEmptyString);
       return projectService.getTMImportPreview(filePath);
     },
   );
@@ -204,7 +223,9 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.importExecute,
     (_event, ...args) => {
-      const [tmId, filePath, options] = args as [string, string, TMImportOptions];
+      const tmId = readArgument(args[0], 'tmId', isNonEmptyString);
+      const filePath = readArgument(args[1], 'filePath', isNonEmptyString);
+      const options = readArgument(args[2], 'options', isTMImportOptions);
       const jobId = randomUUID();
       jobManager.startJob(jobId, 'TM import started');
 
@@ -247,7 +268,8 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.syncSetConfig,
     (_event, ...args) => {
-      const [tmId, config] = args as [string, TMSyncConfigInput];
+      const tmId = readArgument(args[0], 'tmId', isNonEmptyString);
+      const config = readArgument(args[1], 'config', isTMSyncConfigInput);
       return projectService.setTMSyncConfig(tmId, config);
     },
   );
@@ -256,7 +278,7 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.syncExecute,
     async (_event, ...args): Promise<TMSyncStartResult> => {
-      const [tmId] = args as [string];
+      const tmId = readArgument(args[0], 'tmId', isNonEmptyString);
       const config = projectService.getTMSyncConfig(tmId);
       if (!config) {
         throw new Error('This TM is not bound to a local Excel file.');
@@ -322,7 +344,8 @@ export function registerTMHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tm.syncCancel,
     (_event, ...args) => {
-      const [tmId, jobId] = args as [string, string];
+      const tmId = readArgument(args[0], 'tmId', isNonEmptyString);
+      const jobId = readArgument(args[1], 'jobId', isNonEmptyString);
       jobManager.cancelJob(jobId);
       return projectService.cancelTMSync(tmId);
     },

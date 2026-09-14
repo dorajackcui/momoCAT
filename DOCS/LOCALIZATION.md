@@ -14,13 +14,13 @@ Ownership by package:
 
 Stable facades keep cross-layer callers independent of maintenance-oriented splits:
 
-| Boundary                    | Stable entrypoint                      | Internal collaborators                                                                                            |
-| --------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Term matching               | `@cat/core/text` and `termMatching.ts` | normalization, search planning, and English inflection helpers                                                    |
-| Persistent TM matching      | desktop `TMService`                    | shared scoring and result-selection collaborators in `@cat/localization`; diagnostic traces still call the facade |
-| Persistent TM sync          | `CATDatabase` / `TMRepo`               | `TMSyncRepo`; the caller continues to own the transaction                                                         |
-| MT prompt/response handling | `MTModule`                             | prompt-parameter construction and batch-response processing                                                       |
-| Engine orchestration        | `LocalizationEngine`                   | assembly, unit preparation, resume fingerprinting, and option helpers                                             |
+| Boundary                     | Stable entrypoint                      | Internal collaborators                                                                                                 |
+| ---------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Term matching                | `@cat/core/text` and `termMatching.ts` | normalization, search planning, and English inflection helpers                                                         |
+| Persistent TM matching       | desktop `TMService`                    | shared scoring and result-selection collaborators in `@cat/localization`; diagnostic traces still call the facade      |
+| Persistent TM storage/recall | `CATDatabase` / `TMRepo`               | [Repository ownership](DATA_MODEL.md#repository-ownership) maps entry/index, fuzzy/concordance, and sync collaborators |
+| MT prompt/response handling  | `MTModule`                             | prompt-parameter construction and batch-response processing                                                            |
+| Engine orchestration         | `LocalizationEngine`                   | assembly, unit preparation, resume fingerprinting, and option helpers                                                  |
 
 Callers should use the stable entrypoint rather than importing these collaborators as alternate public APIs.
 

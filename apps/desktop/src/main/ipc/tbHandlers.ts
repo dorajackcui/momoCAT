@@ -1,15 +1,19 @@
 import { randomUUID } from 'crypto';
 import { access } from 'fs/promises';
-import type { Segment } from '@cat/core/models';
-import type {
-  StructuredJobError,
-  TBImportOptions,
-  TBSyncConfigInput,
-  TBSyncStartResult,
-} from '../../shared/ipc';
+import type { StructuredJobError, TBSyncStartResult } from '../../shared/ipc';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import { registerHandle } from './registerHandle';
 import type { ReferenceBackedHandlerDeps } from './types';
+import {
+  isFiniteNumber,
+  isId,
+  isNonEmptyString,
+  isString,
+  readArgument,
+  readOptionalArgument,
+} from './argumentValidation';
+import { isSegment } from './projectPayloadValidation';
+import { isTBImportOptions, isTBSyncConfigInput } from './referencePayloadValidation';
 
 export function registerTBHandlers({
   ipcMain,
@@ -23,7 +27,8 @@ export function registerTBHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.getMatches,
     (_event, ...args) => {
-      const [projectId, segment] = args as [number, Segment];
+      const projectId = readArgument(args[0], 'projectId', isId);
+      const segment = readArgument(args[1], 'segment', isSegment);
       return referenceLookup.findTbMatches(projectId, segment);
     },
   );
@@ -32,7 +37,8 @@ export function registerTBHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.prefetch,
     (_event, ...args) => {
-      const [projectId, segment] = args as [number, Segment];
+      const projectId = readArgument(args[0], 'projectId', isId);
+      const segment = readArgument(args[1], 'segment', isSegment);
       return referenceLookupPrefetch.findTbMatches(projectId, segment);
     },
   );
@@ -45,7 +51,7 @@ export function registerTBHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.preview,
     (_event, ...args) => {
-      const [tbId] = args as [string];
+      const tbId = readArgument(args[0], 'tbId', isNonEmptyString);
       return projectService.getTBPreview(tbId);
     },
   );
@@ -54,7 +60,9 @@ export function registerTBHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.create,
     async (_event, ...args) => {
-      const [name, srcLang, tgtLang] = args as [string, string, string];
+      const name = readArgument(args[0], 'name', isString);
+      const srcLang = readArgument(args[1], 'srcLang', isString);
+      const tgtLang = readArgument(args[2], 'tgtLang', isString);
       const tbId = await projectService.createTB(name, srcLang, tgtLang);
       notifyReferenceDataChanged({ projectId: null, kind: 'tb', reason: 'tb-created' });
       return tbId;
@@ -65,7 +73,7 @@ export function registerTBHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.remove,
     async (_event, ...args) => {
-      const [tbId] = args as [string];
+      const tbId = readArgument(args[0], 'tbId', isNonEmptyString);
       const result = await projectService.deleteTB(tbId);
       notifyReferenceDataChanged({ projectId: null, kind: 'tb', reason: 'tb-deleted' });
       return result;
@@ -76,7 +84,8 @@ export function registerTBHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.rename,
     async (_event, ...args) => {
-      const [tbId, name] = args as [string, string];
+      const tbId = readArgument(args[0], 'tbId', isNonEmptyString);
+      const name = readArgument(args[1], 'name', isString);
       const result = await projectService.renameTB(tbId, name);
       notifyReferenceDataChanged({ projectId: null, kind: 'tb', reason: 'tb-renamed' });
       return result;
@@ -87,7 +96,7 @@ export function registerTBHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.getMountedByProject,
     (_event, ...args) => {
-      const [projectId] = args as [number];
+      const projectId = readArgument(args[0], 'projectId', isId);
       return projectService.getProjectMountedTBs(projectId);
     },
   );
@@ -96,7 +105,9 @@ export function registerTBHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.mount,
     async (_event, ...args) => {
-      const [projectId, tbId, priority] = args as [number, string, number | undefined];
+      const projectId = readArgument(args[0], 'projectId', isId);
+      const tbId = readArgument(args[1], 'tbId', isNonEmptyString);
+      const priority = readOptionalArgument(args[2], 'priority', isFiniteNumber);
       const result = await projectService.mountTBToProject(projectId, tbId, priority);
       notifyReferenceDataChanged({ projectId, kind: 'tb', reason: 'tb-mounted' });
       return result;
@@ -107,7 +118,8 @@ export function registerTBHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.unmount,
     async (_event, ...args) => {
-      const [projectId, tbId] = args as [number, string];
+      const projectId = readArgument(args[0], 'projectId', isId);
+      const tbId = readArgument(args[1], 'tbId', isNonEmptyString);
       const result = await projectService.unmountTBFromProject(projectId, tbId);
       notifyReferenceDataChanged({ projectId, kind: 'tb', reason: 'tb-unmounted' });
       return result;
@@ -118,7 +130,7 @@ export function registerTBHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.importPreview,
     (_event, ...args) => {
-      const [filePath] = args as [string];
+      const filePath = readArgument(args[0], 'filePath', isNonEmptyString);
       return projectService.getTBImportPreview(filePath);
     },
   );
@@ -127,7 +139,9 @@ export function registerTBHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.importExecute,
     (_event, ...args) => {
-      const [tbId, filePath, options] = args as [string, string, TBImportOptions];
+      const tbId = readArgument(args[0], 'tbId', isNonEmptyString);
+      const filePath = readArgument(args[1], 'filePath', isNonEmptyString);
+      const options = readArgument(args[2], 'options', isTBImportOptions);
       const jobId = randomUUID();
       jobManager.startJob(jobId, 'TB import started');
 
@@ -170,7 +184,8 @@ export function registerTBHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.syncSetConfig,
     (_event, ...args) => {
-      const [tbId, config] = args as [string, TBSyncConfigInput];
+      const tbId = readArgument(args[0], 'tbId', isNonEmptyString);
+      const config = readArgument(args[1], 'config', isTBSyncConfigInput);
       return projectService.setTBSyncConfig(tbId, config);
     },
   );
@@ -179,7 +194,7 @@ export function registerTBHandlers({
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.tb.syncExecute,
     async (_event, ...args): Promise<TBSyncStartResult> => {
-      const [tbId] = args as [string];
+      const tbId = readArgument(args[0], 'tbId', isNonEmptyString);
       const config = projectService.getTBSyncConfig(tbId);
       if (!config) {
         throw new Error('This term base is not bound to a local Excel file.');

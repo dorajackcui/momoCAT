@@ -14,7 +14,7 @@ function createIpcMainStub() {
 }
 
 describe('ai handlers', () => {
-  it.each([[], null, 's1', [''], ['  '], [1]].map((segmentIds) => ({ segmentIds })))(
+  it.each([[], null, 's1', [''], ['  '], [1], new Array(1)].map((segmentIds) => ({ segmentIds })))(
     'rejects invalid segment scope $segmentIds before starting a job',
     ({ segmentIds }) => {
       const { handlers, ipcMain } = createIpcMainStub();

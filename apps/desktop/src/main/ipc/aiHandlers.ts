@@ -1,9 +1,21 @@
 import { randomUUID } from 'crypto';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
-import type { AITranslateFileOptions } from '../../shared/ipc';
-import { parseAITranslationSegmentIds } from '../../shared/aiTranslationScope';
 import { registerHandle } from './registerHandle';
 import type { AIHandlerDeps } from './types';
+import {
+  isId,
+  isNonEmptyString,
+  isString,
+  readArgument,
+  readOptionalArgument,
+} from './argumentValidation';
+import {
+  isAddAIProviderInput,
+  isProxySettingsInput,
+  isSourceTerminologyPromptInput,
+  isTestAIConnectionInput,
+  readAITranslateFileOptions,
+} from './aiPayloadValidation';
 
 export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHandlerDeps): void {
   registerHandle({ ipcMain, projectService, jobManager }, IPC_CHANNELS.ai.getSettings, () =>
@@ -18,7 +30,7 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.ai.testConnection,
     (_event, ...args) => {
-      const [input] = args as [Parameters<typeof projectService.testAIConnection>[0]];
+      const input = readArgument(args[0], 'AI connection input', isTestAIConnectionInput);
       return projectService.testAIConnection(input);
     },
   );
@@ -27,7 +39,7 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.ai.deleteConnection,
     (_event, ...args) => {
-      const [connectionId] = args as [string];
+      const connectionId = readArgument(args[0], 'connectionId', isNonEmptyString);
       return projectService.deleteAIConnection(connectionId);
     },
   );
@@ -40,7 +52,7 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.ai.addProvider,
     (_event, ...args) => {
-      const [input] = args as [Parameters<typeof projectService.addAIProvider>[0]];
+      const input = readArgument(args[0], 'AI provider input', isAddAIProviderInput);
       return projectService.addAIProvider(input);
     },
   );
@@ -49,7 +61,7 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.ai.deleteProvider,
     (_event, ...args) => {
-      const [providerId] = args as [string];
+      const providerId = readArgument(args[0], 'providerId', isNonEmptyString);
       return projectService.deleteAIProvider(providerId);
     },
   );
@@ -62,7 +74,7 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.ai.setProxySettings,
     (_event, ...args) => {
-      const [settings] = args as [Parameters<typeof projectService.setProxySettings>[0]];
+      const settings = readArgument(args[0], 'proxy settings', isProxySettingsInput);
       return projectService.setProxySettings(settings);
     },
   );
@@ -77,9 +89,11 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.ai.setSourceTerminologyPromptSettings,
     (_event, ...args) => {
-      const [input] = args as [
-        Parameters<typeof projectService.setSourceTerminologyPromptSettings>[0],
-      ];
+      const input = readArgument(
+        args[0],
+        'source terminology prompt input',
+        isSourceTerminologyPromptInput,
+      );
       return projectService.setSourceTerminologyPromptSettings(input);
     },
   );
@@ -88,7 +102,7 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.ai.translateSegment,
     (_event, ...args) => {
-      const [segmentId] = args as [string];
+      const segmentId = readArgument(args[0], 'segmentId', isNonEmptyString);
       return projectService.aiTranslateSegment(segmentId);
     },
   );
@@ -97,7 +111,8 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.ai.refineSegment,
     (_event, ...args) => {
-      const [segmentId, instruction] = args as [string, string];
+      const segmentId = readArgument(args[0], 'segmentId', isNonEmptyString);
+      const instruction = readArgument(args[1], 'instruction', isString);
       return projectService.aiRefineSegment(segmentId, instruction);
     },
   );
@@ -106,8 +121,8 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.ai.translateFile,
     (_event, ...args) => {
-      const [fileId, options] = args as [number, AITranslateFileOptions | undefined];
-      const segmentIds = parseAITranslationSegmentIds(options?.segmentIds);
+      const fileId = readArgument(args[0], 'fileId', isId);
+      const options = readAITranslateFileOptions(args[1]);
       const jobId = randomUUID();
       jobManager.startJob(jobId, 'AI translation started');
       const cancellationToken = jobManager.getCancellationToken(jobId);
@@ -117,7 +132,7 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
           mode: options?.mode,
           targetScope: options?.targetScope,
           targetBaseline: options?.targetBaseline,
-          segmentIds,
+          segmentIds: options?.segmentIds,
           cancellationToken,
           onProgress: (data) => {
             if (jobManager.isCancellationRequested(jobId)) {
@@ -174,7 +189,7 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.ai.cancelFileJob,
     (_event, ...args) => {
-      const [jobId] = args as [string];
+      const jobId = readArgument(args[0], 'jobId', isNonEmptyString);
       return jobManager.cancelJob(jobId);
     },
   );
@@ -183,7 +198,9 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     { ipcMain, projectService, jobManager },
     IPC_CHANNELS.ai.testTranslate,
     (_event, ...args) => {
-      const [projectId, sourceText, contextText] = args as [number, string, string | undefined];
+      const projectId = readArgument(args[0], 'projectId', isId);
+      const sourceText = readArgument(args[1], 'sourceText', isString);
+      const contextText = readOptionalArgument(args[2], 'contextText', isString);
       return projectService.aiTestTranslate(projectId, sourceText, contextText);
     },
   );

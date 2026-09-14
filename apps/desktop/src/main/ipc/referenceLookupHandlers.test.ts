@@ -19,15 +19,17 @@ function createIpcMainStub() {
 
 function createSegment(source = 'Hello world'): Segment {
   return {
-    id: 1,
+    segmentId: 'segment-1',
     fileId: 1,
-    unitId: 'u1',
-    index: 0,
-    source,
-    target: '',
+    orderIndex: 0,
+    sourceTokens: [{ type: 'text', content: source }],
+    targetTokens: [],
     status: 'new',
-    locked: false,
-  } as unknown as Segment;
+    tagsSignature: '',
+    matchKey: source,
+    srcHash: 'source-hash',
+    meta: { updatedAt: '2026-01-01T00:00:00.000Z' },
+  };
 }
 
 function createDeps() {

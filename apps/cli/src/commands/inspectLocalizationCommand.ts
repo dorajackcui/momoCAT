@@ -1,18 +1,8 @@
 import type { InspectLocalizationCommandConfig } from '@cat/localization';
 import type { CliDependencies } from '../cli';
-import { formatMissingDatabaseMessage, resolveDataEnvironment } from '../env/dataEnvironment';
-import {
-  assertExistingPath,
-  parsePositiveInteger,
-  readValue,
-  requireOptionValue,
-} from '../parse/args';
+import { parsePositiveInteger, readOptions } from '../parse/args';
 import type { CommandIO } from '../parse/args';
-
-type InspectLocalizationCliConfig = InspectLocalizationCommandConfig & {
-  aiRuntimeConfigPath?: string;
-  proxyEnvPath?: string;
-};
+import { assignLocalizationOption, resolveLocalizationConfig } from '../parse/localizationArgs';
 
 export function runInspectLocalizationCliCommand(
   argv: string[],
@@ -31,131 +21,38 @@ export function runInspectLocalizationCliCommand(
 function parseInspectLocalizationArgs(
   argv: string[],
   io: CommandIO,
-): InspectLocalizationCliConfig {
-  const config: Partial<InspectLocalizationCliConfig> = {};
+): InspectLocalizationCommandConfig {
+  const config: Partial<InspectLocalizationCommandConfig> = {};
   let explicitDbPath: string | undefined;
 
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    const equalsIndex = arg.indexOf('=');
-
-    if (!arg.startsWith('--')) {
-      throw new Error(`Unknown argument: ${arg}`);
-    }
-
-    if (equalsIndex !== -1) {
-      const name = arg.slice(2, equalsIndex);
-      if (!isKnownOption(name)) {
-        throw new Error(`Unknown argument: ${arg.slice(0, equalsIndex)}`);
-      }
-
-      if (name === 'db' || name === 'db-path') {
-        explicitDbPath = requireOptionValue(arg.slice(0, equalsIndex), arg.slice(equalsIndex + 1));
-        continue;
-      }
-
-      assignOption(
-        config,
-        name,
-        arg.slice(equalsIndex + 1),
-        io,
-        arg.slice(0, equalsIndex),
-      );
-      continue;
-    }
-
-    const name = arg.slice(2);
-    if (!isKnownOption(name)) {
-      throw new Error(`Unknown argument: ${arg}`);
-    }
-
+  for (const { name, value } of readOptions(argv, isKnownOption)) {
+    if (value === true) throw new Error(`Unknown argument: --${name}`);
     if (name === 'db' || name === 'db-path') {
-      explicitDbPath = readValue(argv, index, arg);
-      index += 1;
-      continue;
+      explicitDbPath = value;
+    } else if (!assignLocalizationOption(config, name, value, io)) {
+      assignOption(config, name, value, io);
     }
-
-    assignOption(config, name, readValue(argv, index, arg), io, arg);
-    index += 1;
   }
 
-  const dataEnvironment = resolveDataEnvironment(io, { explicitDbPath });
-  if (explicitDbPath && dataEnvironment.source !== 'explicit') {
-    config.dbPath = io.resolvePath(explicitDbPath);
-    assertExistingPath(io, config.dbPath, 'Database');
-  } else if (!dataEnvironment.dbPath) {
-    throw new Error(formatMissingDatabaseMessage(dataEnvironment));
-  } else {
-    config.dbPath = dataEnvironment.dbPath;
-    config.aiRuntimeConfigPath = dataEnvironment.aiRuntimeConfigPath;
-    config.proxyEnvPath = dataEnvironment.proxyEnvPath;
-  }
-
-  if (config.projectId === undefined) throw new Error('Missing --project-id.');
-  if (!config.inputPath) throw new Error('Missing --input.');
-  if (!config.outputPath) throw new Error('Missing --output.');
-
-  assertExistingPath(io, config.dbPath, 'Database');
-  assertExistingPath(io, config.inputPath, 'Input file');
-
-  config.requestMode ??= 'window-partial';
-  config.targetBaseline ??= 'use-current-targets';
-
-  return config as InspectLocalizationCliConfig;
+  return resolveLocalizationConfig(config, io, explicitDbPath);
 }
 
 function assignOption(
-  config: Partial<InspectLocalizationCliConfig>,
+  config: Partial<InspectLocalizationCommandConfig>,
   name: string,
-  value: string | undefined,
+  value: string,
   io: CommandIO,
-  flag = `--${name}`,
 ): void {
-  const optionValue = requireOptionValue(flag, value);
-
-  if (name === 'project-id') {
-    config.projectId = parsePositiveInteger(optionValue, '--project-id');
-    return;
-  }
-  if (name === 'input') {
-    config.inputPath = io.resolvePath(optionValue);
-    return;
-  }
-  if (name === 'output') {
-    config.outputPath = io.resolvePath(optionValue);
-    return;
-  }
   if (name === 'json-output') {
-    config.jsonOutputPath = io.resolvePath(optionValue);
+    config.jsonOutputPath = io.resolvePath(value);
     return;
   }
   if (name === 'unit-limit') {
-    config.unitLimit = parsePositiveInteger(optionValue, '--unit-limit');
+    config.unitLimit = parsePositiveInteger(value, '--unit-limit');
     return;
   }
   if (name === 'max-cell-chars') {
-    config.maxCellChars = parsePositiveInteger(optionValue, '--max-cell-chars');
-    return;
-  }
-  if (name === 'request-mode') {
-    if (optionValue !== 'window' && optionValue !== 'window-partial') {
-      throw new Error('--request-mode must be window or window-partial.');
-    }
-    config.requestMode = optionValue;
-    return;
-  }
-  if (name === 'target-baseline') {
-    if (optionValue !== 'use-current-targets' && optionValue !== 'ignore-current-targets') {
-      throw new Error('--target-baseline must be use-current-targets or ignore-current-targets.');
-    }
-    config.targetBaseline = optionValue;
-    return;
-  }
-  if (name === 'tag-policy') {
-    if (optionValue !== 'default' && optionValue !== 'none') {
-      throw new Error('--tag-policy must be default or none.');
-    }
-    config.tagPolicy = optionValue;
+    config.maxCellChars = parsePositiveInteger(value, '--max-cell-chars');
     return;
   }
 

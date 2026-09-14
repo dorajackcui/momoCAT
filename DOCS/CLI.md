@@ -202,3 +202,9 @@ Avoid changing the same project resources while a long CLI run is active. CLI fi
 ## Safety boundary
 
 `inspect localization` makes no provider request. `translate file` sends source/context/reference text to the configured provider. Confirm input, project, provider, and artifact paths before a real run.
+
+## Changing a command
+
+Command modules in [apps/cli/src/commands](../apps/cli/src/commands) own their accepted option lists, help, and command-specific values. [parse/args.ts](../apps/cli/src/parse/args.ts) owns shared value/integer parsing and the long-option iterator used by inspect-localization and translate-file. [parse/localizationArgs.ts](../apps/cli/src/parse/localizationArgs.ts) owns their common localization fields, required arguments, and defaults. [env/dataEnvironment.ts](../apps/cli/src/env/dataEnvironment.ts) resolves the database and runtime sidecars for database-backed commands.
+
+Keep command-specific grammar deliberate: environment/project inspection and file translation do not accept identical boolean-option forms. Shared helpers preserve validation order, reject unknown flags before reading values, and keep repeated options' last-value behavior. Add command-boundary cases to [cli.test.ts](../apps/cli/src/cli.test.ts) when changing common parsing; test both consuming commands, database selection, malformed values, and help. The dispatcher continues to own error output and exit codes. Run the affected tests and `npm run build:cli`.

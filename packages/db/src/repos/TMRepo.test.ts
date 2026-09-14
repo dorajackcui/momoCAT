@@ -12,6 +12,41 @@ describe('TMRepo FTS replacement', () => {
     db.close();
   });
 
+  it.each([
+    'searchTMRecallCandidates',
+    'searchTMFuzzyRecallCandidates',
+    'searchTMConcordanceRecallCandidates',
+    'searchConcordance',
+  ] as const)('%s follows current mounts and preserves explicit TM scope', (searchMethod) => {
+    const projectId = db.createProject('Recall Mounts', 'en', 'fr');
+    const tmId = db.createTM('Recall TM', 'en', 'fr', 'main');
+    db.upsertTMEntry({
+      id: 'mounted-entry',
+      tmId,
+      projectId,
+      srcLang: 'en',
+      tgtLang: 'fr',
+      srcHash: 'mounted-hash',
+      matchKey: 'crystal orchard',
+      tagsSignature: '',
+      sourceTokens: [{ type: 'text', content: 'Crystal orchard' }],
+      targetTokens: [{ type: 'text', content: 'Verger de cristal' }],
+      createdAt: '2026-06-15T00:00:00.000Z',
+      updatedAt: '2026-06-15T00:00:00.000Z',
+      usageCount: 0,
+    });
+    const search = (tmIds?: string[]) => db[searchMethod](projectId, 'Crystal orchard', tmIds);
+
+    expect(search()).toEqual([]);
+    db.mountTMToProject(projectId, tmId);
+    expect(search().map((row) => row.id)).toEqual(['mounted-entry']);
+    expect(search([])).toEqual([]);
+
+    db.unmountTMFromProject(projectId, tmId);
+    expect(search()).toEqual([]);
+    expect(search([tmId]).map((row) => row.id)).toEqual(['mounted-entry']);
+  });
+
   it('renames a TM without changing its identity, contents, mounts, or recency', () => {
     const projectId = db.createProject('Rename Project', 'en', 'fr');
     const tmId = db.createTM('Original TM', 'en', 'fr', 'main');
@@ -149,9 +184,9 @@ describe('TMRepo FTS replacement', () => {
 
       const repo = (
         db as unknown as {
-          tmRepo: { stmtInsertTMFts: { run(...args: unknown[]): unknown } };
+          tmRepo: { entryRepo: { stmtInsertTMFts: { run(...args: unknown[]): unknown } } };
         }
-      ).tmRepo;
+      ).tmRepo.entryRepo;
       const originalRun = repo.stmtInsertTMFts.run.bind(repo.stmtInsertTMFts);
       repo.stmtInsertTMFts.run = () => {
         throw new Error('forced insert failure');
