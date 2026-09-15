@@ -95,7 +95,10 @@
     @apply flex h-16 shrink-0 items-center justify-between gap-2 px-2;
   }
   .workspace-brand {
-    @apply text-lg font-semibold tracking-tight;
+    @apply text-xl font-semibold tracking-tight text-brand;
+  }
+  .workspace-brand-dot {
+    color: #D97757;
   }
   .workspace-nav-item {
     @apply flex h-9 w-full min-w-0 items-center gap-3 rounded-control px-3 text-left text-sm text-text-muted transition-colors hover:bg-muted hover:text-text disabled:opacity-50;

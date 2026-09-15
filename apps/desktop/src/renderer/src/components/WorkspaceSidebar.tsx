@@ -108,7 +108,7 @@ export function WorkspaceSidebar({
           disabled={disabled}
           onClick={() => onNavigate({ kind: 'home' })}
         >
-          MomoCAT<span className="text-brand">.</span>
+          momoCAT<span className="workspace-brand-dot">.</span>
         </button>
       </div>
       <button
