@@ -3,7 +3,8 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SettingsModal } from './SettingsModal';
+import { SettingsPage } from './SettingsPage';
+import { version } from '../../../../package.json';
 import type {
   AIConnectionSummary,
   AIProviderSummary,
@@ -83,7 +84,7 @@ async function waitForConnectionsTabReady() {
   await waitFor(() => expect(screen.getByText('Test Connection')).not.toBeDisabled());
 }
 
-describe('SettingsModal', () => {
+describe('SettingsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiClientMock.getProxySettings.mockResolvedValue({
@@ -132,7 +133,9 @@ describe('SettingsModal', () => {
   });
 
   it('tests a connection, shows discovered models, and creates a provider from the selected model', async () => {
-    render(<SettingsModal isOpen onClose={vi.fn()} />);
+    render(
+      <SettingsPage updates={{ statusMessage: '', isBusy: false, checkForUpdates: vi.fn() }} />,
+    );
 
     await waitForConnectionsTabReady();
 
@@ -172,7 +175,9 @@ describe('SettingsModal', () => {
   });
 
   it('invalidates the tested connection when connection inputs change', async () => {
-    render(<SettingsModal isOpen onClose={vi.fn()} />);
+    render(
+      <SettingsPage updates={{ statusMessage: '', isBusy: false, checkForUpdates: vi.fn() }} />,
+    );
 
     await waitForConnectionsTabReady();
 
@@ -204,7 +209,9 @@ describe('SettingsModal', () => {
   });
 
   it('applies the current proxy draft before testing a connection', async () => {
-    render(<SettingsModal isOpen onClose={vi.fn()} />);
+    render(
+      <SettingsPage updates={{ statusMessage: '', isBusy: false, checkForUpdates: vi.fn() }} />,
+    );
 
     fireEvent.click(await screen.findByRole('tab', { name: 'Proxy' }));
     await waitFor(() => expect(screen.getByText('Save Proxy Settings')).not.toBeDisabled());
@@ -257,7 +264,9 @@ describe('SettingsModal', () => {
           resolveConnectionTest = resolve;
         }),
     );
-    render(<SettingsModal isOpen onClose={vi.fn()} />);
+    render(
+      <SettingsPage updates={{ statusMessage: '', isBusy: false, checkForUpdates: vi.fn() }} />,
+    );
 
     fireEvent.click(await screen.findByRole('tab', { name: 'Proxy' }));
     await waitFor(() => expect(screen.getByText('Save Proxy Settings')).not.toBeDisabled());
@@ -318,7 +327,9 @@ describe('SettingsModal', () => {
       .mockRejectedValueOnce(new Error('reload failed'))
       .mockResolvedValue([]);
 
-    render(<SettingsModal isOpen onClose={vi.fn()} />);
+    render(
+      <SettingsPage updates={{ statusMessage: '', isBusy: false, checkForUpdates: vi.fn() }} />,
+    );
 
     await waitForConnectionsTabReady();
 
@@ -352,7 +363,9 @@ describe('SettingsModal', () => {
   it('lists configured and legacy providers without builtin lock controls', async () => {
     apiClientMock.listAIProviders.mockResolvedValue([provider, legacyProvider]);
 
-    render(<SettingsModal isOpen onClose={vi.fn()} />);
+    render(
+      <SettingsPage updates={{ statusMessage: '', isBusy: false, checkForUpdates: vi.fn() }} />,
+    );
 
     await screen.findByText('OpenAI / gpt-demo');
     expect(screen.getByText('Legacy Provider')).toBeInTheDocument();
@@ -371,7 +384,9 @@ describe('SettingsModal', () => {
       model: 'gpt-demo-mini',
     });
 
-    render(<SettingsModal isOpen onClose={vi.fn()} />);
+    render(
+      <SettingsPage updates={{ statusMessage: '', isBusy: false, checkForUpdates: vi.fn() }} />,
+    );
 
     await screen.findByText('https://api.openai.com/v1');
 
@@ -397,7 +412,9 @@ describe('SettingsModal', () => {
     apiClientMock.listAIConnections.mockResolvedValue([connection]);
     apiClientMock.listAIProviders.mockResolvedValue([provider]);
 
-    render(<SettingsModal isOpen onClose={vi.fn()} />);
+    render(
+      <SettingsPage updates={{ statusMessage: '', isBusy: false, checkForUpdates: vi.fn() }} />,
+    );
 
     await screen.findByText('https://api.openai.com/v1');
     expect(screen.getByText('API Key: ****1234')).toBeInTheDocument();
@@ -417,7 +434,9 @@ describe('SettingsModal', () => {
   });
 
   it('saves proxy settings from the proxy tab and keeps status visible', async () => {
-    render(<SettingsModal isOpen onClose={vi.fn()} />);
+    render(
+      <SettingsPage updates={{ statusMessage: '', isBusy: false, checkForUpdates: vi.fn() }} />,
+    );
 
     fireEvent.click(await screen.findByRole('tab', { name: 'Proxy' }));
     await screen.findByText('Proxy Settings');
@@ -446,7 +465,9 @@ describe('SettingsModal', () => {
   });
 
   it('creates a named term extraction prompt and switches back to the built-in default', async () => {
-    render(<SettingsModal isOpen onClose={vi.fn()} />);
+    render(
+      <SettingsPage updates={{ statusMessage: '', isBusy: false, checkForUpdates: vi.fn() }} />,
+    );
 
     fireEvent.click(await screen.findByRole('tab', { name: 'Term Extraction' }));
     const editor = await screen.findByLabelText('Term extraction selection prompt');
@@ -480,5 +501,26 @@ describe('SettingsModal', () => {
       }),
     );
     expect(editor).toHaveValue('Default extraction rules.');
+  });
+
+  it('keeps update controls in their own tab and reflects app-wide progress', async () => {
+    const updates = { statusMessage: '', isBusy: false, checkForUpdates: vi.fn() };
+    const { rerender } = render(<SettingsPage updates={updates} />);
+    await waitForConnectionsTabReady();
+    expect(screen.queryByRole('region', { name: 'Software updates' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Updates' }));
+    expect(screen.getByText(`Current version: v${version}`)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    expect(updates.checkForUpdates).toHaveBeenCalledTimes(1);
+    rerender(
+      <SettingsPage updates={{ ...updates, isBusy: true, statusMessage: 'Downloading 25%' }} />,
+    );
+    expect(screen.getByRole('button', { name: 'Updating…' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('Downloading 25%');
+    fireEvent.click(screen.getByRole('tab', { name: 'Proxy' }));
+    expect(screen.queryByRole('region', { name: 'Software updates' })).not.toBeInTheDocument();
+    rerender(<SettingsPage updates={{ ...updates, statusMessage: 'Ready to restart' }} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Updates' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Ready to restart');
   });
 });

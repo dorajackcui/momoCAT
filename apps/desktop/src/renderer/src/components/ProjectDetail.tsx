@@ -315,7 +315,7 @@ export function ProjectDetail({
   };
 
   return (
-    <div className="flex flex-col h-full bg-canvas">
+    <div className="flex min-h-0 flex-col h-full bg-canvas">
       <ProjectDetailDialogs
         fileImport={fileImport}
         projectType={project?.projectType || 'translation'}
@@ -352,7 +352,6 @@ export function ProjectDetail({
         project={project}
         loading={loading}
         activeTab={activeTab}
-        onBack={onBack}
         onTabChange={setActiveTab}
         onOpenQASettings={openQaSettings}
         isAddFileMenuOpen={isAddFileMenuOpen}
@@ -362,7 +361,7 @@ export function ProjectDetail({
         onOpenPasteSource={() => void fileImport.openPasteSource()}
       />
 
-      <div className="flex-1 overflow-auto p-10 custom-scrollbar">
+      <div className="flex-1 min-h-0 overflow-auto p-6 custom-scrollbar">
         {!project ? (
           loading ? (
             <div className="max-w-4xl mx-auto text-center py-20 surface-subtle">
@@ -374,7 +373,7 @@ export function ProjectDetail({
                 Error: Project with ID {projectId} could not be found.
               </p>
               <button onClick={onBack} className="mt-4 text-brand font-semibold hover:underline">
-                Go back to Dashboard
+                Back to Projects
               </button>
             </div>
           )

@@ -1,20 +1,14 @@
 import React from 'react';
-import type {
-  TBAssetPreview,
-  TBWithStats,
-  TMAssetPreview,
-  TMWithStats,
-} from '../../../shared/ipc';
-import { Modal } from './ui/Modal';
+import type { TBAssetPreview, TBWithStats, TMAssetPreview, TMWithStats } from '../../../shared/ipc';
 
-type AssetPreviewModalProps =
+type AssetPreviewPageProps =
   | {
       kind: 'tm';
       asset: TMWithStats | null;
       preview: TMAssetPreview | null;
       loading: boolean;
       error: string | null;
-      onClose: () => void;
+      onBack: () => void;
       onRetry: () => void;
     }
   | {
@@ -23,22 +17,16 @@ type AssetPreviewModalProps =
       preview: TBAssetPreview | null;
       loading: boolean;
       error: string | null;
-      onClose: () => void;
+      onBack: () => void;
       onRetry: () => void;
     };
 
-export const AssetPreviewModal: React.FC<AssetPreviewModalProps> = (props) => {
-  const { asset, loading, error, onClose, onRetry } = props;
-  const preview = props.preview;
+export const AssetPreviewPage: React.FC<AssetPreviewPageProps> = (props) => {
+  const { asset, loading, error, onBack, onRetry } = props;
+  if (!asset) return null;
 
-  return (
-    <Modal
-      open={asset !== null}
-      onClose={onClose}
-      title={asset ? `${asset.name} Preview` : 'Preview'}
-      size="xl"
-      bodyClassName="space-y-4"
-    >
+  const content = (
+    <>
       {asset && (
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="font-semibold text-brand bg-brand-soft px-2 py-1 rounded-control uppercase tracking-wider">
@@ -65,12 +53,10 @@ export const AssetPreviewModal: React.FC<AssetPreviewModalProps> = (props) => {
             </button>
           </div>
         </div>
-      ) : preview && preview.rows.length > 0 ? (
+      ) : props.preview && props.preview.rows.length > 0 ? (
         <div className="overflow-hidden rounded-control border border-border/60">
           <div className="max-h-[460px] overflow-auto custom-scrollbar">
-            {props.kind === 'tm'
-              ? renderTMTable(preview as TMAssetPreview)
-              : renderTBTable(preview as TBAssetPreview)}
+            {props.kind === 'tm' ? renderTMTable(props.preview) : renderTBTable(props.preview)}
           </div>
         </div>
       ) : (
@@ -78,7 +64,22 @@ export const AssetPreviewModal: React.FC<AssetPreviewModalProps> = (props) => {
           <p className="text-sm font-medium text-text-muted">No entries to preview.</p>
         </div>
       )}
-    </Modal>
+    </>
+  );
+
+  return (
+    <section className="max-w-6xl mx-auto space-y-5">
+      <button type="button" onClick={onBack} className="text-sm text-text-muted hover:text-text">
+        ← {props.kind === 'tm' ? 'Translation memory' : 'Term bases'}
+      </button>
+      <div>
+        <h1 className="text-2xl font-semibold text-text">{asset.name}</h1>
+        <p className="mt-1 text-sm text-text-muted">
+          {props.kind === 'tm' ? 'Translation memory' : 'Term base'} · Entry preview
+        </p>
+      </div>
+      {content}
+    </section>
   );
 };
 

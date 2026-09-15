@@ -172,7 +172,6 @@ describe('ProjectAIPane', () => {
 
     expect(html).toContain('AI Settings');
     expect(html).toContain('OpenAI / gpt-demo');
-    expect(html).toContain('Saved');
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('border-border');
     expect(html).not.toContain('surface-subtle');

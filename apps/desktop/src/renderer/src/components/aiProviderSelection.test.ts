@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AIConnectionSummary, AIProviderSummary } from '../../../shared/ipc';
-import {
-  chooseInitialProviderModel,
-  isSavedConnectionReuseActive,
-} from './aiProviderSelection';
+import { chooseInitialProviderModel, isSavedConnectionReuseActive } from './aiProviderSelection';
 
 const connection: AIConnectionSummary = {
   id: 'connection:openai',

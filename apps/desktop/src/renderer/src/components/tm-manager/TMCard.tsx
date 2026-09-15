@@ -22,15 +22,16 @@ export const TMCard: React.FC<TMCardProps> = ({
   onDelete,
   onOpenLinkedFile,
 }) => (
-  <div className="surface-card p-5 hover:border-brand/40 transition-colors group">
-    <div className="flex justify-between items-start mb-3">
-      <div>
+  <div className="workspace-resource-card group">
+    <div className="workspace-resource-card-header">
+      <div className="min-w-0 flex-1 basis-40">
         <AssetNameEditor
           name={tm.name}
           assetLabel="TM"
+          onOpen={() => onPreview(tm.id)}
           onRename={(name) => onRename(tm.id, name)}
         />
-        <div className="flex items-center gap-2 mt-1">
+        <div className="flex flex-wrap items-center gap-2 mt-1 break-words">
           <span className="text-[10px] font-semibold text-brand bg-brand-soft px-1.5 py-0.5 rounded-control uppercase tracking-wider">
             {tm.srcLang} → {tm.tgtLang}
           </span>
@@ -39,7 +40,7 @@ export const TMCard: React.FC<TMCardProps> = ({
           )}
         </div>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex shrink-0 items-center gap-1">
         <button
           onClick={() => onPreview(tm.id)}
           className="p-1.5 text-text-faint hover:text-brand hover:bg-brand-soft rounded-control transition-colors"
@@ -109,7 +110,7 @@ export const TMCard: React.FC<TMCardProps> = ({
         </button>
       </div>
     </div>
-    <div className="flex items-center justify-between pt-4 border-t border-border/40">
+    <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-border/40">
       <div className="flex flex-col">
         <span className="text-[10px] font-semibold text-text-faint uppercase tracking-widest mb-0.5">
           Size
@@ -129,7 +130,7 @@ export const TMCard: React.FC<TMCardProps> = ({
             {tm.syncConfig.lastSyncStatus === 'cancelled' && ' (cancelled)'}
           </span>
         ) : (
-          <span>Last updated {new Date().toLocaleDateString()}</span>
+          <span>Last updated {new Date(tm.updatedAt).toLocaleDateString()}</span>
         )}
       </div>
     </div>

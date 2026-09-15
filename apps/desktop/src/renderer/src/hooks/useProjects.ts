@@ -62,15 +62,17 @@ export function useProjects() {
 
   const deleteProject = async (projectId: number, projectName: string) => {
     const confirmed = await feedbackService.confirm(buildDeleteProjectConfirmRequest(projectName));
-    if (!confirmed) return;
+    if (!confirmed) return false;
 
     setLoading(true);
     try {
       await apiClient.deleteProject(projectId);
       await loadProjects();
+      return true;
     } catch (error) {
       console.error('Failed to delete project:', error);
       feedbackService.error('Failed to delete project');
+      return false;
     } finally {
       setLoading(false);
     }

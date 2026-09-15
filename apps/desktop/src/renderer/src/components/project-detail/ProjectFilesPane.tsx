@@ -81,7 +81,11 @@ function ProjectFileCard({
   const jobRunning = job?.status === 'running';
   const jobStopping = jobRunning && job.cancelRequested === true;
   const jobProgressColor =
-    job?.status === 'failed' ? 'bg-danger' : job?.status === 'cancelled' ? 'bg-warning' : 'bg-brand';
+    job?.status === 'failed'
+      ? 'bg-danger'
+      : job?.status === 'cancelled'
+        ? 'bg-warning'
+        : 'bg-brand';
   const jobMessage =
     job?.message ||
     (job?.status === 'completed'
@@ -91,16 +95,25 @@ function ProjectFileCard({
         : 'In progress');
 
   return (
-    <Card
-      variant="surface"
-      className="flex items-center justify-between p-4 hover:border-brand/40 hover:shadow-sm transition-all group"
+    <div
+      className="workspace-task-row group"
+      onClick={(event) => {
+        // Title and action controls handle their own clicks; only row space opens the file.
+        if (
+          event.target instanceof Element &&
+          event.target.closest('button, input, select, textarea, a, form')
+        )
+          return;
+        onOpenFile(file.id);
+      }}
     >
-      <div className="flex-1 cursor-pointer" onClick={() => onOpenFile(file.id)}>
+      <div className="min-w-0 flex-1">
         <AssetNameEditor
           name={editableName}
           suffix={extension}
           headingLevel="h4"
           assetLabel="file"
+          onOpen={() => onOpenFile(file.id)}
           onRename={(name) => onRenameFile(file.id, `${name}${extension}`)}
         />
         <div className="flex items-center gap-4 mt-1">
@@ -126,30 +139,7 @@ function ProjectFileCard({
           </div>
         )}
       </div>
-      <div className="flex max-w-[34rem] flex-wrap items-center justify-end gap-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-        {supportsTMWorkflow && (
-          <Button
-            onClick={() => void onOpenCommitModal(file)}
-            variant="secondary"
-            size="sm"
-          >
-            Commit
-          </Button>
-        )}
-        {supportsTMWorkflow && (
-          <Button
-            onClick={() => void onOpenMatchModal(file)}
-            variant="secondary"
-            size="sm"
-          >
-            TM Match
-          </Button>
-        )}
-        {supportsTMWorkflow && (
-          <Button onClick={() => onOpenReferenceActions(file)} variant="secondary" size="sm">
-            TM/TB
-          </Button>
-        )}
+      <div className="workspace-task-actions">
         {supportsTMWorkflow ? (
           <Button
             onClick={() =>
@@ -184,6 +174,21 @@ function ProjectFileCard({
           </Button>
         )}
         {supportsTMWorkflow && (
+          <Button onClick={() => void onOpenCommitModal(file)} variant="secondary" size="sm">
+            Commit
+          </Button>
+        )}
+        {supportsTMWorkflow && (
+          <Button onClick={() => void onOpenMatchModal(file)} variant="secondary" size="sm">
+            TM Match
+          </Button>
+        )}
+        {supportsTMWorkflow && (
+          <Button onClick={() => onOpenReferenceActions(file)} variant="secondary" size="sm">
+            TM/TB
+          </Button>
+        )}
+        {supportsTMWorkflow && (
           <Button
             onClick={() => void onRunFileQA(file.id, file.name)}
             variant="secondary"
@@ -196,8 +201,15 @@ function ProjectFileCard({
           onClick={() => void onExportFile(file.id, file.name)}
           size="sm"
           title="Export File"
+          aria-label="Export File"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg
+            aria-hidden="true"
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -211,8 +223,15 @@ function ProjectFileCard({
           tone="danger"
           size="sm"
           title="Delete File"
+          aria-label="Delete File"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg
+            aria-hidden="true"
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -222,7 +241,7 @@ function ProjectFileCard({
           </svg>
         </IconButton>
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -250,7 +269,7 @@ export function ProjectFilesPane({
   }, []);
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="w-full max-w-6xl mx-auto">
       <ProjectAIPane
         ai={ai}
         projectType={projectType}
@@ -273,7 +292,9 @@ export function ProjectFilesPane({
         />
       )}
 
-      <h3 className="text-sm font-bold text-text-faint uppercase tracking-wider mb-6">Files</h3>
+      <h3 className="text-sm font-semibold text-text mb-3">
+        Tasks <span className="ml-2 font-normal text-text-faint">{files.length}</span>
+      </h3>
 
       {files.length === 0 ? (
         <Card variant="subtle" className="text-center py-20 border-2 border-dashed">
@@ -282,7 +303,7 @@ export function ProjectFilesPane({
           </p>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="workspace-task-list">
           {files.map((file) => (
             <ProjectFileCard
               key={file.id}

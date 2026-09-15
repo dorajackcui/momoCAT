@@ -75,16 +75,139 @@
 }
 
 @layer components {
-  .app-shell {
-    @apply h-screen flex flex-col;
+  .workspace-shell {
+    @apply flex h-screen overflow-hidden bg-canvas text-text;
+    --radius-panel: 8px;
+    --radius-control: 6px;
+    --shadow-panel: none;
   }
 
-  .app-topbar {
-    @apply px-10 py-4 bg-surface/90 backdrop-blur border-b border-border flex justify-between items-center;
+  .workspace-sidebar {
+    @apply flex shrink-0 flex-col gap-1 border-r border-border/60 bg-surface px-3 pb-3;
+    width: 236px;
   }
 
-  .app-footer {
-    @apply px-10 py-3 bg-surface/85 backdrop-blur border-t border-border text-[10px] text-text-faint flex justify-between;
+  .workspace-sidebar[hidden] {
+    display: none;
+  }
+
+  .workspace-sidebar-brand {
+    @apply flex h-16 shrink-0 items-center justify-between gap-2 px-2;
+  }
+  .workspace-brand {
+    @apply text-lg font-semibold tracking-tight;
+  }
+  .workspace-nav-item {
+    @apply flex h-9 w-full min-w-0 items-center gap-3 rounded-control px-3 text-left text-sm text-text-muted transition-colors hover:bg-muted hover:text-text disabled:opacity-50;
+  }
+  .workspace-nav-item[aria-current='page'] {
+    @apply bg-muted text-text font-medium;
+  }
+  .workspace-nav-item:focus-visible,
+  .workspace-project-more:focus-visible {
+    @apply outline-none ring-2 ring-brand;
+  }
+  .workspace-project-heading {
+    @apply mb-1 mt-6 px-3 text-xs font-medium text-text-faint;
+  }
+  .workspace-project-list {
+    @apply min-h-0 flex-1 overflow-y-auto py-1;
+  }
+  .workspace-project {
+    @apply relative mb-1;
+  }
+  .workspace-project .workspace-nav-item {
+    padding-right: 30px;
+  }
+  .workspace-project-more {
+    @apply absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-control text-text-muted opacity-0 hover:bg-surface;
+  }
+  .workspace-project:hover .workspace-project-more,
+  .workspace-project:focus-within .workspace-project-more,
+  .workspace-project-more[aria-expanded='true'] {
+    opacity: 1;
+  }
+  .workspace-resource-nav {
+    @apply space-y-1 border-t border-border/50 pt-3;
+  }
+  .workspace-settings-nav {
+    @apply mt-3;
+  }
+  .workspace-main {
+    @apply flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden;
+    container: workspace / inline-size;
+  }
+  .workspace-home {
+    @apply flex min-h-0 flex-1 items-center justify-center overflow-auto p-8;
+  }
+  .workspace-home-content {
+    @apply w-full max-w-lg pb-16;
+  }
+  .workspace-page-header {
+    @apply flex shrink-0 items-center justify-between border-b border-border px-6 py-5;
+  }
+  .workspace-settings-page {
+    @apply flex h-full min-h-0 flex-col bg-canvas;
+  }
+  .workspace-settings-content {
+    @apply w-full max-w-5xl mx-auto flex-1 overflow-y-auto space-y-4 p-6;
+  }
+  .workspace-project-header {
+    @apply shrink-0 space-y-4 border-b border-border/60 bg-canvas px-6 pb-3 pt-5;
+  }
+  .workspace-project-toolbar {
+    @apply flex flex-wrap items-center justify-between gap-3;
+  }
+  .workspace-task-list {
+    @apply border-y border-border/60;
+  }
+  .workspace-task-row {
+    @apply flex cursor-pointer flex-wrap items-center justify-between gap-4 border-b border-border/40 px-2 py-4 transition-colors hover:bg-surface/60 last:border-b-0;
+  }
+  .workspace-task-row > :first-child {
+    min-width: 180px;
+  }
+  .workspace-task-actions {
+    @apply flex min-w-0 flex-wrap items-center gap-2;
+    max-width: 100%;
+  }
+  .workspace-task-actions .btn-base {
+    @apply shrink-0 whitespace-nowrap;
+  }
+  .workspace-resource-grid {
+    @apply grid grid-cols-1 gap-4;
+  }
+  .workspace-resource-card {
+    @apply surface-card flex min-w-0 flex-col p-5 transition-colors hover:border-brand/40;
+  }
+  .workspace-resource-card h3 {
+    @apply min-w-0 break-words;
+  }
+  .workspace-resource-card-header {
+    @apply mb-3 flex flex-wrap items-start justify-between gap-2;
+  }
+  @container workspace (min-width: 720px) {
+    .workspace-resource-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  .workspace-action-menu {
+    @apply fixed z-50 overflow-y-auto rounded-lg border border-border/60 bg-surface p-1.5 text-sm text-text shadow-float;
+    width: 252px;
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
+  .workspace-action-menu button {
+    @apply flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left font-medium hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-50;
+  }
+  .workspace-action-menu .workspace-menu-danger {
+    @apply text-danger;
+  }
+  .workspace-menu-heading {
+    @apply break-words px-3 py-2 text-xs text-text-faint;
+  }
+  .workspace-menu-separator {
+    @apply my-1.5 border-t border-border/60;
   }
 
   .surface-card {
@@ -137,14 +260,6 @@
 
   .icon-btn-danger {
     @apply icon-btn bg-danger-soft text-danger border-danger/20 hover:bg-danger-soft/70;
-  }
-
-  .nav-pill {
-    @apply px-4 py-2 text-sm font-semibold rounded-control text-text-muted transition-colors hover:bg-muted;
-  }
-
-  .nav-pill-active {
-    @apply bg-brand-soft text-brand;
   }
 
   .field-input {
@@ -247,11 +362,6 @@
   .modal-backdrop {
     @apply fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm;
     background-color: rgba(30, 24, 20, 0.32);
-  }
-
-  .settings-modal-backdrop {
-    @apply fixed inset-0 z-50 flex items-center justify-center p-4;
-    background-color: rgba(30, 24, 20, 0.42);
   }
 
   .modal-card {

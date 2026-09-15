@@ -48,14 +48,16 @@ export function ProjectAIPane({
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
-        <span className="min-w-0">
-          <span className="block text-sm font-bold text-text-muted uppercase tracking-wider">
-            AI Settings
-          </span>
-          <span className="mt-1 flex min-w-0 items-center gap-2">
-            <Badge tone={ai.hasUnsavedPromptChanges ? 'warning' : 'success'}>
-              {ai.hasUnsavedPromptChanges ? 'Unsaved Changes' : 'Saved'}
-            </Badge>
+        <span
+          className={expanded ? 'min-w-0' : 'flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1'}
+        >
+          <span className="block shrink-0 text-sm font-semibold text-text-muted">AI Settings</span>
+          <span className={`flex min-w-0 items-center gap-2 ${expanded ? 'mt-1' : ''}`}>
+            {(expanded || ai.hasUnsavedPromptChanges) && (
+              <Badge tone={ai.hasUnsavedPromptChanges ? 'warning' : 'success'}>
+                {ai.hasUnsavedPromptChanges ? 'Unsaved Changes' : 'Saved'}
+              </Badge>
+            )}
             <span
               className={`truncate text-xs ${
                 providerNeedsAttention ? 'text-warning' : 'text-text-faint'
@@ -98,7 +100,7 @@ export function ProjectAIPane({
 
   if (!expanded) {
     return (
-      <div className="mb-8 rounded-panel border border-border p-5">
+      <div className="mb-6 rounded-control border border-border/60 px-3 py-3">
         {header}
         {promptManager}
       </div>

@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as XLSX from 'xlsx';
+import { IPC_CHANNELS } from '../src/shared/ipcChannels';
+import { version } from '../package.json';
 
 const APP_ROOT = join(__dirname, '..');
 
@@ -68,9 +70,11 @@ async function createSmokeSession(): Promise<SmokeSession> {
 
   await page.reload();
 
-  const projectCard = page.locator('.surface-card', { hasText: seeded.projectName }).first();
-  await expect(projectCard).toBeVisible();
-  await projectCard.getByRole('button', { name: 'Open' }).click();
+  const projectLink = page
+    .getByRole('navigation', { name: 'Projects', exact: true })
+    .getByRole('button', { name: seeded.projectName, exact: true });
+  await expect(projectLink).toBeVisible();
+  await projectLink.click();
 
   const fileTitle = page.getByText(seeded.fileName, { exact: true }).first();
   await expect(fileTitle).toBeVisible();
@@ -92,6 +96,178 @@ async function closeSmokeSession(session: SmokeSession): Promise<void> {
 }
 
 test.describe('CodeMirror editor engine smoke', () => {
+  test('keeps task actions and direct project navigation visible outside CAT', async () => {
+    const session = await createSmokeSession();
+    try {
+      const { page } = session;
+      await page.getByRole('button', { name: 'Back to Project', exact: true }).click();
+      const actions = [
+        'AI Translate',
+        'Commit',
+        'TM Match',
+        'TM/TB',
+        'Run QA',
+        'Export File',
+        'Delete File',
+      ];
+      for (const name of actions)
+        await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
+      const taskRow = page.locator('.workspace-task-row');
+      await taskRow.getByRole('button', { name: 'Rename cm6-smoke-fixture.xlsx' }).click();
+      await expect(page.getByRole('textbox', { name: 'Rename file' })).toBeVisible();
+      await page.getByRole('textbox', { name: 'Rename file' }).click();
+      await page.getByRole('button', { name: 'Cancel file rename' }).click();
+      await taskRow.getByRole('button', { name: 'AI Translate', exact: true }).click();
+      await expect(page.getByText('AI Translate Options', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(taskRow).toBeVisible();
+      const trigger = page.getByRole('button', { name: /^Actions for cm6-smoke-/ });
+      const before = await trigger.boundingBox();
+      await trigger.click();
+      const menu = page.getByRole('menu', { name: /cm6-smoke-.* actions/ });
+      await expect(menu).toBeVisible();
+      expect(await trigger.boundingBox()).toEqual(before);
+      expect(await menu.evaluate((element) => element.parentElement === document.body)).toBe(true);
+      await page.keyboard.press('Escape');
+      await expect(menu).toBeHidden();
+      await expect(trigger).toBeFocused();
+      const projectLink = page
+        .getByRole('navigation', { name: 'Projects', exact: true })
+        .getByRole('button', { name: /^cm6-smoke-/ });
+      await projectLink.click();
+      const fileInfo = taskRow.locator(':scope > div').first();
+      const infoBounds = await fileInfo.boundingBox();
+      expect(infoBounds).not.toBeNull();
+      await fileInfo.click({ position: { x: infoBounds!.width - 4, y: infoBounds!.height - 2 } });
+      await expect(page.getByRole('complementary', { name: 'Workspace navigation' })).toBeHidden();
+      await page.getByRole('button', { name: 'Back to Project', exact: true }).click();
+      await expect(projectLink).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: /Collapse sidebar|Expand sidebar|Switch project/ }),
+      ).toHaveCount(0);
+      await page.setViewportSize({ width: 640, height: 720 });
+      await expect(projectLink).toBeVisible();
+      for (const name of actions)
+        await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+      await taskRow.click({ position: { x: 2, y: 2 } });
+      await expect(page.getByPlaceholder('Filter target text')).toBeVisible();
+    } finally {
+      await closeSmokeSession(session);
+    }
+  });
+
+  test('hides navigation in CAT, saves on return, and restores the selected segment and filters', async () => {
+    const session = await createSmokeSession();
+    try {
+      const { page, fileId } = session;
+      await expect(page.getByRole('complementary', { name: 'Workspace navigation' })).toBeHidden();
+      await page.getByPlaceholder('Filter source text').fill('Needle');
+      const row = page.locator('div.group.grid');
+      await expect(row).toHaveCount(1);
+      await row.click();
+      const target = row.locator('.editor-target-editor-host .cm-content');
+      await target.fill('Saved on return');
+      await page.getByRole('button', { name: 'Back to Project', exact: true }).click();
+      await expect(page.getByRole('complementary', { name: 'Workspace navigation' })).toBeVisible();
+      await page.getByRole('button', { name: 'Translation memory', exact: true }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Translation memory', exact: true }),
+      ).toBeVisible();
+      const savedTarget = await page.evaluate(async (id) => {
+        const segments = await (window as unknown as { api: any }).api.getSegments(id, 0, 1000);
+        return segments[1].targetTokens
+          .map((token: { content?: string }) => token.content ?? '')
+          .join('');
+      }, fileId);
+      expect(savedTarget).toBe('Saved on return');
+      await page
+        .getByRole('navigation', { name: 'Projects', exact: true })
+        .getByRole('button')
+        .first()
+        .click();
+      await page.getByRole('button', { name: 'cm6-smoke-fixture.xlsx', exact: true }).click();
+      await expect(page.getByPlaceholder('Filter source text')).toHaveValue('Needle');
+      await expect(page.locator('.editor-target-editor-host .cm-content')).toHaveText(
+        'Saved on return',
+      );
+      await page.getByPlaceholder('Filter source text').fill('');
+      await page.getByRole('button', { name: 'Back to Project', exact: true }).click();
+      await page.getByRole('button', { name: 'Settings', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+      const updates = page.getByRole('region', { name: 'Software updates' });
+      await expect(updates).toHaveCount(0);
+      await page.getByRole('tab', { name: 'Updates', exact: true }).click();
+      await expect(
+        updates.getByText(`Current version: v${version}`, { exact: true }),
+      ).toBeVisible();
+      await expect(updates.getByRole('button', { name: 'Check for updates' })).toBeEnabled();
+      await page.getByRole('tab', { name: 'Proxy', exact: true }).click();
+      await expect(updates).toHaveCount(0);
+      await page.getByRole('tab', { name: 'Updates', exact: true }).click();
+      await expect(updates).toBeVisible();
+      await page
+        .getByRole('navigation', { name: 'Projects', exact: true })
+        .getByRole('button')
+        .first()
+        .click();
+      await page.getByRole('button', { name: 'cm6-smoke-fixture.xlsx', exact: true }).click();
+      await expect(page.locator('div.group.grid').nth(1).locator('.cm-content')).toBeVisible();
+    } finally {
+      await closeSmokeSession(session);
+    }
+  });
+
+  test('keeps CAT open after a failed save on return without losing the draft', async () => {
+    const session = await createSmokeSession();
+    try {
+      const { page } = session;
+      await session.electronApp.evaluate(({ ipcMain }, channel) => {
+        ipcMain.removeHandler(channel);
+        ipcMain.handle(
+          channel,
+          () =>
+            new Promise((_resolve, reject) => {
+              (globalThis as unknown as { rejectSmokeSave: () => void }).rejectSmokeSave = () =>
+                reject(new Error('Smoke test save failure'));
+            }),
+        );
+      }, IPC_CHANNELS.segment.update);
+      const target = page.locator('.editor-target-editor-host .cm-content').first();
+      await target.fill('Retained draft');
+      await page.getByRole('button', { name: 'Back to Project', exact: true }).click();
+      const workspace = page.locator('main[aria-label="Workspace"]');
+      await expect(workspace).toHaveAttribute('inert', '');
+      await target.evaluate((element: HTMLElement) => element.focus());
+      await page.keyboard.insertText('This edit must be blocked');
+      await expect(target).toHaveText('Retained draft');
+      await expect
+        .poll(() =>
+          session.electronApp.evaluate(
+            () =>
+              typeof (globalThis as unknown as { rejectSmokeSave?: () => void }).rejectSmokeSave,
+          ),
+        )
+        .toBe('function');
+      await session.electronApp.evaluate(() => {
+        (globalThis as unknown as { rejectSmokeSave: () => void }).rejectSmokeSave();
+      });
+      await expect(
+        page.getByText(/Failed to save pending segment edits before leaving the editor/),
+      ).toBeVisible();
+      await expect(page.getByPlaceholder('Filter target text')).toBeVisible();
+      await expect(target).toHaveText('Retained draft');
+      await expect(workspace).not.toHaveAttribute('inert');
+      await target.fill('Retained draft, still editable');
+      await expect(target).toHaveText('Retained draft, still editable');
+      await expect(page.getByRole('complementary', { name: 'Workspace navigation' })).toBeHidden();
+    } finally {
+      await closeSmokeSession(session);
+    }
+  });
+
   test('opens toolbar AI translation on the context-filtered scope and resets it on reopening', async () => {
     const session = await createSmokeSession();
     try {

@@ -7,7 +7,6 @@ interface ProjectDetailHeaderProps {
   project: Project | null;
   loading: boolean;
   activeTab: ProjectDetailTab;
-  onBack: () => void;
   onTabChange: (tab: ProjectDetailTab) => void;
   onOpenQASettings: () => void;
   isAddFileMenuOpen: boolean;
@@ -21,7 +20,6 @@ export function ProjectDetailHeader({
   project,
   loading,
   activeTab,
-  onBack,
   onTabChange,
   onOpenQASettings,
   isAddFileMenuOpen,
@@ -55,41 +53,22 @@ export function ProjectDetailHeader({
   }, [isAddFileMenuOpen, onCloseAddFileMenu]);
 
   return (
-    <div className="px-10 py-4 bg-surface/90 backdrop-blur border-b border-border flex items-center justify-between">
-      <div className="flex items-center gap-4">
-        <button
-          onClick={onBack}
-          className="p-2 text-text-faint hover:text-text-muted hover:bg-muted rounded-control transition-colors"
-          title="Back to Dashboard"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-        </button>
-        <div>
-          <h2 className="text-xl font-bold text-text">
+    <div className="workspace-project-header">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold text-text truncate">
             {loading ? 'Loading...' : project?.name || 'Project Not Found'}
           </h2>
           {project ? <ProjectSummary project={project} /> : null}
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="workspace-project-toolbar">
         <ProjectDetailTabs activeTab={activeTab} onTabChange={onTabChange} />
-        <div className="h-6 w-[1px] bg-border" />
         {project && activeTab === 'files' ? (
           <div className="flex items-center gap-2">
             {project.projectType === 'translation' ? (
-              <button
-                onClick={onOpenQASettings}
-                disabled={loading}
-                className="btn-secondary !text-warning !bg-warning-soft hover:!bg-warning-soft/80"
-              >
+              <button onClick={onOpenQASettings} disabled={loading} className="btn-secondary">
                 QA Settings
               </button>
             ) : null}
@@ -154,9 +133,9 @@ function ProjectDetailTabs({
   onTabChange: (tab: ProjectDetailTab) => void;
 }) {
   return (
-    <div className="flex surface-subtle p-1">
+    <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
       <ProjectDetailTabButton
-        label="Files"
+        label="Tasks"
         active={activeTab === 'files'}
         onClick={() => onTabChange('files')}
       />
@@ -186,10 +165,9 @@ function ProjectDetailTabButton({
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-1.5 text-xs font-semibold rounded-control transition-colors ${
-        active
-          ? 'bg-surface text-brand shadow-panel'
-          : 'text-text-muted hover:text-text hover:bg-surface'
+      aria-current={active ? 'page' : undefined}
+      className={`shrink-0 px-3 py-2 text-sm font-medium rounded-control transition-colors ${
+        active ? 'bg-muted text-text' : 'text-text-muted hover:text-text hover:bg-surface'
       }`}
     >
       {label}

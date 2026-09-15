@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TMImportWizard, type TMWizardMode } from './TMImportWizard';
-import { AssetPreviewModal } from './AssetPreviewModal';
+import { AssetPreviewPage } from './AssetPreviewPage';
 import { LanguageSelect } from './LanguageSelect';
 import { apiClient } from '../services/apiClient';
 import { feedbackService } from '../services/feedbackService';
@@ -307,7 +307,7 @@ export const TMManager: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 p-8 bg-canvas overflow-y-auto custom-scrollbar">
+    <div className="flex-1 min-h-0 p-6 bg-canvas overflow-y-auto custom-scrollbar">
       <TMImportWizard
         isOpen={isImportWizardOpen}
         previewData={importPreview}
@@ -322,13 +322,13 @@ export const TMManager: React.FC = () => {
         onJobCompleted={handleImportCompleted}
         onJobFailed={handleImportFailed}
       />
-      <AssetPreviewModal
+      <AssetPreviewPage
         kind="tm"
         asset={selectedPreviewTM}
         preview={selectedPreview}
         loading={previewLoading}
         error={previewError}
-        onClose={handleClosePreview}
+        onBack={handleClosePreview}
         onRetry={() => {
           if (previewTMId) {
             void handleOpenPreview(previewTMId, true);
@@ -336,10 +336,10 @@ export const TMManager: React.FC = () => {
         }}
       />
 
-      <div className="max-w-5xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
+      <div className="max-w-6xl mx-auto" hidden={selectedPreviewTM !== null}>
+        <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-text">TM Management</h1>
+            <h1 className="text-2xl font-semibold text-text">Translation memory</h1>
             <p className="text-sm text-text-muted mt-1">Manage your Main TMs</p>
           </div>
           <button onClick={() => setShowCreate(true)} className="btn-primary">
@@ -455,7 +455,7 @@ export const TMManager: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="workspace-resource-grid">
             {tms.map((tm) => (
               <TMCard
                 key={tm.id}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { TBImportWizard, type TBWizardMode } from './TBImportWizard';
-import { AssetPreviewModal } from './AssetPreviewModal';
+import { AssetPreviewPage } from './AssetPreviewPage';
 import { LanguageSelect } from './LanguageSelect';
 import { apiClient } from '../services/apiClient';
 import { feedbackService } from '../services/feedbackService';
@@ -292,7 +292,7 @@ export const TBManager: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 p-8 bg-canvas overflow-y-auto custom-scrollbar">
+    <div className="flex-1 min-h-0 p-6 bg-canvas overflow-y-auto custom-scrollbar">
       <TBImportWizard
         isOpen={isImportWizardOpen}
         previewData={importPreview}
@@ -308,13 +308,13 @@ export const TBManager: React.FC = () => {
         onJobCompleted={handleImportCompleted}
         onJobFailed={handleImportFailed}
       />
-      <AssetPreviewModal
+      <AssetPreviewPage
         kind="tb"
         asset={selectedPreviewTB}
         preview={selectedPreview}
         loading={previewLoading}
         error={previewError}
-        onClose={handleClosePreview}
+        onBack={handleClosePreview}
         onRetry={() => {
           if (previewTBId) {
             void handleOpenPreview(previewTBId, true);
@@ -322,10 +322,10 @@ export const TBManager: React.FC = () => {
         }}
       />
 
-      <div className="max-w-5xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
+      <div className="max-w-6xl mx-auto" hidden={selectedPreviewTB !== null}>
+        <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-text">TB Management</h1>
+            <h1 className="text-2xl font-semibold text-text">Term bases</h1>
             <p className="text-sm text-text-muted mt-1">
               Manage reusable term bases for consistency.
             </p>
@@ -443,7 +443,7 @@ export const TBManager: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="workspace-resource-grid">
             {tbs.map((tb) => (
               <TBCard
                 key={tb.id}

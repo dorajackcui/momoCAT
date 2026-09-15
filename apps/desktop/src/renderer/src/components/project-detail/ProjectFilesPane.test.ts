@@ -177,31 +177,12 @@ describe('ProjectFilesPane', () => {
     expect(html).not.toContain('AI Translate Options');
   });
 
-  it('keeps file actions wrappable and visible on keyboard focus', () => {
-    const { ai } = createAIControllerMock();
-    const html = renderPane(ai, 'translation');
-
-    expect(html).toContain('max-w-[34rem]');
-    expect(html).toContain('flex-wrap');
-    expect(html).toContain('justify-end');
-    expect(html).toContain('group-focus-within:opacity-100');
-  });
-
   it('shows the full file name with an inline rename action', () => {
     const { ai } = createAIControllerMock();
     const html = renderPane(ai, 'translation');
 
     expect(html).toContain('demo.xlsx');
     expect(html).toContain('aria-label="Rename demo.xlsx"');
-  });
-
-  it('does not duplicate file opening in the action buttons', () => {
-    const { ai } = createAIControllerMock();
-    capturedButtons.length = 0;
-
-    renderPane(ai, 'translation');
-
-    expect(capturedButtons.map((button) => button.label)).not.toContain('Open');
   });
 
   it('opens the TM/TB action chooser with the selected file', () => {

@@ -6,6 +6,7 @@ interface AssetNameEditorProps {
   headingLevel?: 'h3' | 'h4';
   assetLabel: string;
   onRename: (name: string) => Promise<void>;
+  onOpen?: () => void;
 }
 
 export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
@@ -14,6 +15,7 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
   headingLevel = 'h3',
   assetLabel,
   onRename,
+  onOpen,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState(name);
@@ -118,7 +120,13 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
   return (
     <div className="flex items-center gap-1 min-w-0">
       <Heading className="font-bold text-text group-hover:text-brand transition-colors">
-        {displayName}
+        {onOpen ? (
+          <button type="button" onClick={onOpen} className="text-left hover:underline">
+            {displayName}
+          </button>
+        ) : (
+          displayName
+        )}
       </Heading>
       <button
         type="button"

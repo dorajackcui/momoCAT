@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Project, ProjectFile } from '@cat/core/project';
 import { ProjectAITranslateModal } from './project-detail/ProjectAITranslateModal';
 import { useEditor } from '../hooks/useEditor';
@@ -19,11 +19,15 @@ import type { AIFileJobTracker } from '../hooks/aiFileJobs';
 import { feedbackService } from '../services/feedbackService';
 import type { TargetEditorController } from './editor-row/useEditorRowDraftController';
 import { applyTermAtEditorSelection } from '../hooks/editor/editorTokenPolicy';
+import type { WorkspaceNavigationGuard } from '../hooks/useWorkspaceNavigation';
 
 interface EditorProps {
   fileId: number;
   onBack: () => void;
   aiFileJobTracker: AIFileJobTracker;
+  registerNavigationGuard: (guard: WorkspaceNavigationGuard) => () => void;
+  initialActiveSegmentId?: string | null;
+  onRememberPosition?: (fileId: number, segmentId: string | null) => void;
 }
 
 function clampJobProgress(progress: number): number {
@@ -37,7 +41,15 @@ function getAIJobProgressColor(status: string): string {
   return 'bg-brand';
 }
 
-export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker }) => {
+export const Editor: React.FC<EditorProps> = ({
+  fileId,
+  onBack,
+  aiFileJobTracker,
+  registerNavigationGuard,
+  initialActiveSegmentId,
+  onRememberPosition,
+}) => {
+  const positionRestoredRef = useRef(false);
   const [file, setFile] = useState<ProjectFile | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [isSearchInputFocused, setIsSearchInputFocused] = useState(false);
@@ -134,6 +146,17 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
   });
 
   const { layoutRef, sidebarWidth, startSidebarResize } = useEditorLayout();
+
+  useEffect(() => {
+    if (loading || segments.length === 0 || positionRestoredRef.current) return;
+    positionRestoredRef.current = true;
+    if (
+      initialActiveSegmentId &&
+      filteredSegments.some((item) => item.segment.segmentId === initialActiveSegmentId)
+    ) {
+      setActiveSegmentId(initialActiveSegmentId);
+    }
+  }, [filteredSegments, initialActiveSegmentId, loading, segments.length, setActiveSegmentId]);
   const supportsBatchActions = project?.projectType === 'translation';
   const batchActions = useEditorBatchActions({
     fileId,
@@ -161,17 +184,20 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
     void handleBatchExport();
   }, [handleBatchExport]);
 
-  const handleBack = useCallback(() => {
-    void (async () => {
-      const saved = await flushPendingSegmentUpdatesForAction({
-        actionLabel: 'leaving the editor',
-        flushPendingSegmentUpdates,
-        feedback: feedbackService,
-      });
-      if (!saved) return;
-      onBack();
-    })();
-  }, [flushPendingSegmentUpdates, onBack]);
+  const prepareToLeave = useCallback(async () => {
+    const saved = await flushPendingSegmentUpdatesForAction({
+      actionLabel: 'leaving the editor',
+      flushPendingSegmentUpdates,
+      feedback: feedbackService,
+    });
+    if (saved && activeSegmentId) onRememberPosition?.(fileId, activeSegmentId);
+    return saved;
+  }, [activeSegmentId, fileId, flushPendingSegmentUpdates, onRememberPosition]);
+
+  useLayoutEffect(
+    () => registerNavigationGuard(prepareToLeave),
+    [prepareToLeave, registerNavigationGuard],
+  );
 
   const handleRunBatchQA = useCallback(() => {
     void handleBatchQA();
@@ -286,7 +312,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden bg-surface">
+    <div className="workspace-editor h-full w-full min-h-0 min-w-0 flex flex-col overflow-hidden bg-surface">
       {supportsBatchActions && batchActions.isBatchAIModalOpen && (
         <ProjectAITranslateModal
           open={batchActions.isBatchAIModalOpen}
@@ -306,7 +332,7 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
         saveErrorCount={saveErrorCount}
         confirmedSegments={confirmedSegments}
         totalSegments={totalSegments}
-        onBack={handleBack}
+        onBack={onBack}
         onExport={handleExport}
       />
 
@@ -333,10 +359,10 @@ export const Editor: React.FC<EditorProps> = ({ fileId, onBack, aiFileJobTracker
       <div ref={layoutRef as React.RefObject<HTMLDivElement>} className="flex-1 flex min-h-0">
         <div
           ref={listScrollRef}
-          className="editor-scrollbar flex-1 overflow-y-auto bg-surface"
+          className="editor-scrollbar min-w-0 flex-1 overflow-auto bg-surface"
           style={{ scrollbarGutter: 'stable' }}
         >
-          <div className="min-w-[800px]">
+          <div className="min-w-[560px]">
             <EditorFilterBar
               supportsBatchActions={supportsBatchActions}
               canRunActions={Boolean(file)}

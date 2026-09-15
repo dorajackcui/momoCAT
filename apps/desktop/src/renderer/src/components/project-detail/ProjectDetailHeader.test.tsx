@@ -21,7 +21,6 @@ function renderHeader(overrides: Partial<Parameters<typeof ProjectDetailHeader>[
     project: PROJECT,
     loading: false,
     activeTab: 'files',
-    onBack: vi.fn(),
     onTabChange: vi.fn(),
     onOpenQASettings: vi.fn(),
     isAddFileMenuOpen: false,
