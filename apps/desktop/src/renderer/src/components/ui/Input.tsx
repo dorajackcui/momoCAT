@@ -5,14 +5,20 @@ import { fieldClasses, type FieldStyleProps } from './fieldStyles';
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
   tone?: FieldStyleProps['tone'];
   size?: FieldStyleProps['size'];
+  appearance?: FieldStyleProps['appearance'];
 }
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Input(
-  { tone = 'default', size = 'md', className, ...rest },
+  { tone = 'default', size = 'md', appearance = 'default', className, ...rest },
   ref,
 ) {
   const focusProps = useAutoFocusProps(rest.autoFocus);
   return (
-    <input ref={ref} {...rest} {...focusProps} className={fieldClasses(tone, size, className)} />
+    <input
+      ref={ref}
+      {...rest}
+      {...focusProps}
+      className={fieldClasses(tone, size, className, appearance)}
+    />
   );
 });

@@ -107,7 +107,7 @@ export function ColumnSelector({
             }
             variant="primary"
             size="lg"
-            className="!px-8 shadow-md shadow-brand/20 hover:-translate-y-0.5 transition-all"
+            className="min-w-28"
           >
             Start Import
           </Button>
@@ -121,9 +121,9 @@ export function ColumnSelector({
             {sourceLabel}
           </label>
           <Select
+            size="compact"
             value={sourceCol}
             onChange={(e) => setSourceCol(parseInt(e.target.value, 10))}
-            className="!p-2.5"
           >
             {colIndexes.map((i) => (
               <option key={i} value={i}>
@@ -139,9 +139,9 @@ export function ColumnSelector({
             {targetLabel}
           </label>
           <Select
+            size="compact"
             value={targetCol}
             onChange={(e) => setTargetCol(parseInt(e.target.value, 10))}
-            className="!p-2.5"
           >
             {colIndexes.map((i) => (
               <option key={i} value={i}>
@@ -157,6 +157,7 @@ export function ColumnSelector({
             {contextLabel}
           </label>
           <Select
+            size="compact"
             value={
               contextCol === undefined ? (isReviewProject ? (colIndexes[0] ?? 0) : -1) : contextCol
             }
@@ -168,7 +169,6 @@ export function ColumnSelector({
               }
               setContextCol(val);
             }}
-            className="!p-2.5"
           >
             {!isReviewProject && <option value={-1}>None (Ignore)</option>}
             {colIndexes.map((i) => (
@@ -189,7 +189,6 @@ export function ColumnSelector({
             id="hasHeader"
             checked={hasHeader}
             onChange={(e) => setHasHeader(e.target.checked)}
-            className="w-4 h-4 accent-brand"
           />
           <label
             htmlFor="hasHeader"
@@ -201,9 +200,10 @@ export function ColumnSelector({
         <label className="flex items-center gap-3 text-sm font-medium text-text-muted">
           <span>Marker Handling</span>
           <Select
+            size="compact"
             value={tagPolicy}
             onChange={(e) => setTagPolicy(e.target.value as TagPolicy)}
-            className="!w-auto min-w-[180px] !p-2"
+            className="w-auto min-w-[180px]"
           >
             <option value="default">Protect CAT markers</option>
             <option value="none">Plain marker-like text</option>

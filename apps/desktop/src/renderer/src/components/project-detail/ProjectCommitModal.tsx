@@ -1,5 +1,5 @@
 import type { MountedTM, ProjectFileRecord, TMCommitScope } from '../../../../shared/ipc';
-import { Button, Modal, Select } from '../ui';
+import { Button, ChoiceGroup, Modal, Select } from '../ui';
 
 interface ProjectCommitModalProps {
   file: ProjectFileRecord | null;
@@ -69,30 +69,15 @@ export function ProjectCommitModal({
       </Select>
       <div className="space-y-2">
         <p className="text-xs font-semibold text-text-muted">Commit scope</p>
-        <div className="flex surface-subtle p-1">
-          <button
-            type="button"
-            onClick={() => onCommitScopeChange('confirmed-only')}
-            className={`flex-1 px-3 py-1.5 text-xs font-semibold rounded-control transition-colors ${
-              commitScope === 'confirmed-only'
-                ? 'bg-surface text-brand shadow-panel'
-                : 'text-text-muted hover:text-text hover:bg-surface'
-            }`}
-          >
-            Confirmed only
-          </button>
-          <button
-            type="button"
-            onClick={() => onCommitScopeChange('all')}
-            className={`flex-1 px-3 py-1.5 text-xs font-semibold rounded-control transition-colors ${
-              commitScope === 'all'
-                ? 'bg-surface text-brand shadow-panel'
-                : 'text-text-muted hover:text-text hover:bg-surface'
-            }`}
-          >
-            All with translations
-          </button>
-        </div>
+        <ChoiceGroup
+          label="Commit scope"
+          value={commitScope}
+          onValueChange={onCommitScopeChange}
+          options={[
+            { value: 'confirmed-only', label: 'Confirmed only' },
+            { value: 'all', label: 'All with translations' },
+          ]}
+        />
       </div>
     </Modal>
   );

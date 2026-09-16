@@ -73,12 +73,12 @@ export function ProjectAIPane({
       </button>
       {(expanded || ai.hasUnsavedPromptChanges || ai.savingPrompt) && (
         <Button
+          tone={ai.hasUnsavedPromptChanges ? 'brand' : 'success'}
           type="button"
           onClick={() => void ai.savePrompt()}
           disabled={ai.savingPrompt || !ai.hasUnsavedPromptChanges}
           size="sm"
-          variant={ai.hasUnsavedPromptChanges ? 'primary' : 'soft'}
-          className={!ai.hasUnsavedPromptChanges ? '!bg-success !text-success-contrast' : ''}
+          variant="primary"
         >
           {ai.savingPrompt
             ? 'Saving...'
@@ -118,11 +118,13 @@ export function ProjectAIPane({
           Prompt
         </label>
         <Textarea
+          size="xs"
+          appearance="subtle"
           id="project-ai-effective-prompt"
           value={ai.effectiveSystemPromptPreview}
           readOnly
           rows={7}
-          className="!bg-muted/35 text-[11px] leading-5 whitespace-pre-wrap"
+          className="leading-5 whitespace-pre-wrap"
         />
         <p className="mt-2 text-[11px] text-text-muted">
           This is the saved system prompt used at runtime. It updates after you save AI settings.
@@ -168,6 +170,7 @@ export function ProjectAIPane({
           </label>
           <div className="flex items-center gap-2">
             <Select
+              size="sm"
               id="project-ai-saved-prompt"
               aria-label="Saved Prompts"
               value={ai.savedPrompts.selectedPromptId ?? ''}
@@ -175,7 +178,7 @@ export function ProjectAIPane({
                 const promptId = Number(event.target.value);
                 if (promptId) void ai.savedPrompts.applyPrompt(promptId);
               }}
-              className="w-48 !text-xs"
+              className="w-48"
               disabled={ai.savedPrompts.prompts.length === 0}
             >
               <option value="">
@@ -283,9 +286,8 @@ export function ProjectAIPane({
           <div className="mt-2">
             <Button
               onClick={() => ai.setShowTestDetails((prev) => !prev)}
-              size="sm"
-              variant="ghost"
-              className="!px-0 !py-0 text-[10px] !text-brand underline-offset-2 hover:underline"
+              size="inline"
+              variant="link"
             >
               {ai.showTestDetails ? 'Hide Test Details' : 'Show Test Details'}
             </Button>

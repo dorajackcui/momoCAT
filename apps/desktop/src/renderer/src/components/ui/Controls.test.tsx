@@ -2,7 +2,7 @@
 import { createRef } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
-import { Button, Checkbox, IconButton, Input, Radio, Select, Textarea } from './index';
+import { Button, Checkbox, IconButton, Input, Radio, SearchInput, Select, Textarea } from './index';
 
 it('preserves native form values, refs, disabled behavior and explicit submission', () => {
   const submit = vi.fn((event) => event.preventDefault());
@@ -42,4 +42,30 @@ it('preserves native form values, refs, disabled behavior and explicit submissio
     enabled: 'on',
     mode: 'local',
   });
+});
+
+it('forwards search input refs and keyboard events without making its trailing action submit', () => {
+  const ref = createRef<HTMLInputElement>();
+  const keyDown = vi.fn();
+  const submit = vi.fn((event) => event.preventDefault());
+  const toggle = vi.fn();
+  render(
+    <form onSubmit={submit}>
+      <SearchInput
+        name="query"
+        aria-label="Search"
+        ref={ref}
+        defaultValue="Demo"
+        onKeyDown={keyDown}
+        trailingAction={<IconButton aria-label="Change scope" onClick={toggle} variant="ghost" />}
+      />
+    </form>,
+  );
+  expect(ref.current).toBe(screen.getByRole('textbox', { name: 'Search' }));
+  fireEvent.keyDown(ref.current!, { key: 'Enter' });
+  expect(keyDown).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', { name: 'Change scope' }));
+  expect(toggle).toHaveBeenCalledOnce();
+  expect(submit).not.toHaveBeenCalled();
+  expect(new FormData(ref.current!.form!).get('query')).toBe('Demo');
 });

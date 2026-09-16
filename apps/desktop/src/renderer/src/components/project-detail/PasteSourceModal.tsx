@@ -120,7 +120,7 @@ export function PasteSourceModal({
             <Select
               value={tagPolicy}
               onChange={(event) => setTagPolicy(event.target.value as TagPolicy)}
-              className="!w-auto min-w-[180px]"
+              className="w-auto min-w-[180px]"
             >
               <option value="default">Protect CAT markers</option>
               <option value="none">Plain marker-like text</option>
@@ -140,7 +140,6 @@ export function PasteSourceModal({
             Large paste: {rowLabel}. Creation is allowed, but import may take longer.
           </Card>
         )}
-
       </div>
     </Modal>
   );

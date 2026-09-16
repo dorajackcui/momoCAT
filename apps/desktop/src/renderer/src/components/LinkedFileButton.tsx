@@ -1,3 +1,4 @@
+import { Button } from './ui';
 import React from 'react';
 
 export function fileBaseName(filePath: string): string {
@@ -14,14 +15,16 @@ export const LinkedFileButton: React.FC<LinkedFileButtonProps> = ({ filePath, on
   const filename = fileBaseName(filePath);
 
   return (
-    <button
+    <Button
+      size="badge"
+      tone="success"
+      variant="soft"
       type="button"
       onClick={() => onOpen(filePath)}
-      className="text-[10px] font-semibold text-success bg-success-soft px-1.5 py-0.5 rounded-control tracking-wider hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-success/50"
       title={filePath}
       aria-label={`Open linked file ${filename}`}
     >
       ⟳ {filename}
-    </button>
+    </Button>
   );
 };

@@ -1,4 +1,4 @@
-import { Input } from '../ui';
+import { Input, IconButton } from '../ui';
 import React from 'react';
 
 interface EditorRowTargetActionsProps {
@@ -53,6 +53,8 @@ export const EditorRowTargetActions: React.FC<EditorRowTargetActionsProps> = ({
     {showAIRefineInput && showAIRefineControl && (
       <div className="absolute top-1.5 right-9 z-30">
         <Input
+          appearance="floating"
+          size="xs"
           ref={aiRefineInputRef}
           value={aiRefineDraft}
           onClick={(event) => event.stopPropagation()}
@@ -60,7 +62,7 @@ export const EditorRowTargetActions: React.FC<EditorRowTargetActionsProps> = ({
           onKeyDown={onAIRefineInputKeyDown}
           disabled={isAIRefining}
           placeholder="Refine prompt(Enter to send)"
-          className="!w-56 !px-2.5 !py-1 text-[11px] leading-tight !bg-surface/50 border-border/70 backdrop-blur-sm shadow-sm disabled:opacity-60 disabled:cursor-wait"
+          className="w-56 leading-tight"
           aria-label="AI refine instruction"
         />
       </div>
@@ -72,7 +74,10 @@ export const EditorRowTargetActions: React.FC<EditorRowTargetActionsProps> = ({
       }`}
     >
       {showAIRefineControl && (
-        <button
+        <IconButton
+          size="xs"
+          tone="brand"
+          variant="overlay"
           type="button"
           onClick={(event) => {
             event.stopPropagation();
@@ -80,7 +85,7 @@ export const EditorRowTargetActions: React.FC<EditorRowTargetActionsProps> = ({
             onToggleAIRefineInput();
           }}
           disabled={isAIRefining}
-          className="relative z-20 p-1 rounded bg-surface/80 border border-border/70 hover:bg-brand-soft/75 hover:border-brand/40 text-text-muted hover:text-brand transition-all shadow-sm disabled:opacity-60 disabled:cursor-wait"
+          className="relative z-20"
           title="AI refine this translation"
           aria-label="AI refine this translation"
         >
@@ -96,18 +101,21 @@ export const EditorRowTargetActions: React.FC<EditorRowTargetActionsProps> = ({
               />
             </svg>
           )}
-        </button>
+        </IconButton>
       )}
 
       {canAITranslate && (
-        <button
+        <IconButton
+          size="xs"
+          tone="brand"
+          variant="overlay"
           type="button"
           onClick={(event) => {
             event.stopPropagation();
             onAITranslate();
           }}
           disabled={isAITranslating}
-          className="relative z-20 p-1 rounded bg-surface/70 border border-border/70 hover:bg-brand-soft/75 hover:border-brand/40 text-text-muted hover:text-brand transition-all shadow-sm disabled:opacity-60 disabled:cursor-wait"
+          className="relative z-20"
           title="AI translate this segment"
           aria-label="AI translate this segment"
         >
@@ -123,11 +131,14 @@ export const EditorRowTargetActions: React.FC<EditorRowTargetActionsProps> = ({
               />
             </svg>
           )}
-        </button>
+        </IconButton>
       )}
 
       {canInsertTags && (
-        <button
+        <IconButton
+          size="xs"
+          tone="brand"
+          variant="overlay"
           ref={tagMenuAnchorRef}
           aria-haspopup="menu"
           aria-expanded={isTagMenuOpen}
@@ -136,7 +147,7 @@ export const EditorRowTargetActions: React.FC<EditorRowTargetActionsProps> = ({
             event.stopPropagation();
             onToggleTagInsertionUI();
           }}
-          className="relative z-20 p-1 rounded bg-surface/90 border border-border/80 hover:bg-brand-soft/80 hover:border-brand/40 text-text-muted hover:text-brand transition-all shadow-sm"
+          className="relative z-20"
           title="Insert tags from source (Ctrl/Cmd+Shift+1-9)"
           aria-label="Toggle tag insertion menu"
         >
@@ -148,7 +159,7 @@ export const EditorRowTargetActions: React.FC<EditorRowTargetActionsProps> = ({
               d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
             />
           </svg>
-        </button>
+        </IconButton>
       )}
     </div>
   </>

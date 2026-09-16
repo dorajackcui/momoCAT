@@ -100,10 +100,10 @@ export function ProjectTMPane({
                       Export
                     </Button>
                     <Button
+                      tone="danger"
                       type="button"
                       size="sm"
                       variant="ghost"
-                      className="!text-danger hover:!bg-danger-soft"
                       disabled={disabled || !tm.entryCount}
                       onClick={() => onResetWorkingTM(tm)}
                     >
@@ -124,7 +124,7 @@ export function ProjectTMPane({
           </h3>
           <div className="flex items-center gap-2">
             <Select
-              className="!px-3 !py-1.5 text-xs font-medium"
+              size="sm"
               onChange={(event) => {
                 if (!event.target.value) return;
                 onMountTM(event.target.value);

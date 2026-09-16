@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { MountedTM, ProjectFileRecord } from '../../../../shared/ipc';
 import {
@@ -32,6 +32,25 @@ const file = {
 } as ProjectFileRecord;
 
 describe('ProjectCommitModal', () => {
+  it('routes scope selection to its controller without starting the commit', () => {
+    const selectScope = vi.fn();
+    const confirm = vi.fn();
+    render(
+      <ProjectCommitModal
+        file={file}
+        mountedTMs={[]}
+        selectedTmId=""
+        commitScope="confirmed-only"
+        onSelectedTmIdChange={vi.fn()}
+        onCommitScopeChange={selectScope}
+        onCancel={vi.fn()}
+        onConfirm={confirm}
+      />,
+    );
+    fireEvent.click(screen.getByRole('radio', { name: 'All with translations' }));
+    expect(selectScope).toHaveBeenCalledExactlyOnceWith('all');
+    expect(confirm).not.toHaveBeenCalled();
+  });
   it('offers a writable Working TM alongside mounted Main TMs', () => {
     const workingTM = createMountedTM('working-1', 'working', 'readwrite');
     const mainTM = createMountedTM('main-1', 'main', 'read');

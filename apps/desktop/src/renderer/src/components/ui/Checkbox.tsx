@@ -2,10 +2,14 @@ import { useAutoFocusProps } from './autoFocus';
 import { forwardRef, type InputHTMLAttributes } from 'react';
 import { cx } from './cx';
 
-type CheckableProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'size'>;
+type CheckableProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'size'> & {
+  tone?: 'brand' | 'success' | 'info';
+};
+
+const toneClass = { brand: 'accent-brand', success: 'accent-success', info: 'accent-info' };
 
 export const Checkbox = forwardRef<HTMLInputElement, CheckableProps>(function Checkbox(
-  { className, ...props },
+  { className, tone = 'brand', ...props },
   ref,
 ) {
   const focusProps = useAutoFocusProps(props.autoFocus);
@@ -15,13 +19,13 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckableProps>(function Ch
       {...focusProps}
       ref={ref}
       type="checkbox"
-      className={cx('ui-checkable', className)}
+      className={cx('ui-checkable', toneClass[tone], className)}
     />
   );
 });
 
 export const Radio = forwardRef<HTMLInputElement, CheckableProps>(function Radio(
-  { className, ...props },
+  { className, tone = 'brand', ...props },
   ref,
 ) {
   const focusProps = useAutoFocusProps(props.autoFocus);
@@ -31,7 +35,7 @@ export const Radio = forwardRef<HTMLInputElement, CheckableProps>(function Radio
       {...focusProps}
       ref={ref}
       type="radio"
-      className={cx('ui-checkable', className)}
+      className={cx('ui-checkable', toneClass[tone], className)}
     />
   );
 });

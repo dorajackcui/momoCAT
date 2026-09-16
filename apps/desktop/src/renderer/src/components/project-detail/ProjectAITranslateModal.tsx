@@ -48,8 +48,8 @@ export function ProjectAITranslateModal({
             Cancel
           </Button>
           <Button
+            tone="success"
             variant="soft"
-            className="!bg-success-soft !text-success"
             disabled={selectedCount === 0}
             onClick={() => onConfirm({ targetBaseline, ...(hasFilteredScope ? { scope } : {}) })}
           >

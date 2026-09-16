@@ -158,8 +158,16 @@ export function MenuItem({
   className,
   disabled,
   danger,
+  selected,
+  tone,
+  size = 'md',
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { danger?: boolean }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  danger?: boolean;
+  selected?: boolean;
+  tone?: 'brand';
+  size?: 'sm' | 'md';
+}) {
   const menu = useContext(MenuContext);
   const { ref, index } = useListItem();
   if (!menu) throw new Error('MenuItem must be inside Menu');
@@ -176,6 +184,9 @@ export function MenuItem({
       type="button"
       role="menuitem"
       disabled={disabled}
+      data-selected={selected || undefined}
+      data-tone={tone}
+      data-size={size}
       tabIndex={menu.activeIndex === index ? 0 : -1}
       className={cx('ui-menu-item', danger && 'text-danger', className)}
     />

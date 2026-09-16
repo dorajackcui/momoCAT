@@ -90,11 +90,11 @@ export function ProjectPromptManagerModal({
                     onChange={(event) => setEditName(event.target.value)}
                   />
                   <Textarea
+                    size="sm"
                     aria-label="Prompt Content"
                     value={editContent}
                     onChange={(event) => setEditContent(event.target.value)}
                     rows={5}
-                    className="text-xs"
                   />
                   <div className="flex justify-end gap-2">
                     <Button onClick={() => setEditingId(null)} size="sm" variant="ghost">
@@ -156,11 +156,11 @@ export function ProjectPromptManagerModal({
                       Edit
                     </Button>
                     <Button
+                      tone="danger"
                       onClick={() => void handleDelete(prompt.id)}
                       disabled={busy}
                       size="sm"
                       variant="ghost"
-                      className="!text-danger"
                     >
                       Delete
                     </Button>

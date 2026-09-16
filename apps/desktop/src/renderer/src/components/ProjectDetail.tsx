@@ -1,4 +1,4 @@
-import { Tabs, TabsPanel } from './ui';
+import { Tabs, TabsPanel, Button } from './ui';
 import { useEffect, useState } from 'react';
 import { DEFAULT_PROJECT_QA_SETTINGS, type ProjectQASettings } from '@cat/core/project';
 import type { ProjectFileRecord, TMCommitScope } from '../../../shared/ipc';
@@ -376,9 +376,9 @@ export function ProjectDetail({
               <p className="text-danger font-medium">
                 Error: Project with ID {projectId} could not be found.
               </p>
-              <button onClick={onBack} className="mt-4 text-brand font-semibold hover:underline">
+              <Button size="inline" tone="brand" variant="link" onClick={onBack} className="mt-4">
                 Back to Projects
-              </button>
+              </Button>
             </div>
           )
         ) : activeTab === 'files' ? (

@@ -3,12 +3,15 @@ import React from 'react';
 import { cx } from './cx';
 import { Spinner } from './Spinner';
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'soft' | 'danger' | 'ghost';
-  size?: 'sm' | 'md' | 'lg';
+type ButtonTone = 'brand' | 'success' | 'danger';
+
+export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'inline' | 'badge';
   loading?: boolean;
-  iconOnly?: boolean;
-}
+} & (
+    | { variant?: 'primary' | 'secondary' | 'soft' | 'danger' | 'ghost'; tone?: ButtonTone }
+    | { variant: 'link'; tone?: ButtonTone | 'neutral' | 'inherit' }
+  );
 
 const variantClass: Record<NonNullable<ButtonProps['variant']>, string> = {
   primary: 'btn-primary',
@@ -16,26 +19,24 @@ const variantClass: Record<NonNullable<ButtonProps['variant']>, string> = {
   soft: 'btn-soft',
   danger: 'btn-danger',
   ghost: 'btn-ghost',
+  link: 'btn-link',
 };
 
 const sizeClass: Record<NonNullable<ButtonProps['size']>, string> = {
+  xs: 'text-[11px] px-2.5 py-1',
   sm: 'text-xs px-3 py-1.5',
   md: 'text-sm px-4 py-2',
   lg: 'text-sm px-5 py-2.5',
-};
-
-const iconOnlySizeClass: Record<NonNullable<ButtonProps['size']>, string> = {
-  sm: 'h-8 w-8 px-0 py-0',
-  md: 'h-9 w-9 px-0 py-0',
-  lg: 'h-10 w-10 px-0 py-0',
+  inline: 'p-0 text-inherit [font-weight:inherit]',
+  badge: 'text-[10px] px-1.5 py-0.5 tracking-wider',
 };
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   {
     variant = 'secondary',
+    tone,
     size = 'md',
     loading = false,
-    iconOnly = false,
     disabled,
     className,
     children,
@@ -54,11 +55,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
       {...rest}
       {...focusProps}
       disabled={isDisabled}
-      className={cx(
-        variantClass[variant],
-        iconOnly ? iconOnlySizeClass[size] : sizeClass[size],
-        className,
-      )}
+      data-tone={tone}
+      className={cx('btn-base', variantClass[variant], sizeClass[size], className)}
     >
       {loading && <Spinner size="sm" tone={variant === 'danger' ? 'danger' : 'brand'} />}
       {!loading && children}

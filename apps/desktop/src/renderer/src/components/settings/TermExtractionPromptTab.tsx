@@ -223,34 +223,35 @@ export function TermExtractionPromptTab() {
                 <div className="flex flex-wrap justify-end gap-1">
                   {!active && (
                     <Button
+                      size="xs"
                       variant="secondary"
                       type="button"
                       aria-label={`Use ${prompt.name}`}
                       onClick={() => void handleActivate(prompt)}
                       disabled={saving}
-                      className="!px-2 !py-1 text-xs"
                     >
                       Use
                     </Button>
                   )}
                   <Button
+                    size="xs"
                     variant="ghost"
                     type="button"
                     aria-label={`${prompt.isBuiltin ? 'View' : 'Edit'} ${prompt.name}`}
                     onClick={() => void handleSelect(prompt)}
                     disabled={saving || selected}
-                    className="!px-2 !py-1 text-xs"
                   >
                     {prompt.isBuiltin ? 'View' : 'Edit'}
                   </Button>
                   {!prompt.isBuiltin && (
                     <Button
+                      tone="danger"
+                      size="xs"
                       variant="ghost"
                       type="button"
                       aria-label={`Delete ${prompt.name}`}
                       onClick={() => void handleDelete(prompt)}
                       disabled={saving}
-                      className="!px-2 !py-1 text-xs !text-danger"
                     >
                       Delete
                     </Button>
@@ -300,6 +301,7 @@ export function TermExtractionPromptTab() {
               Selection Prompt
             </label>
             <Textarea
+              size="sm"
               id="term-extraction-selection-prompt"
               aria-label="Term extraction selection prompt"
               value={draft}
@@ -308,7 +310,7 @@ export function TermExtractionPromptTab() {
               readOnly={selectedPrompt?.isBuiltin}
               maxLength={settings?.maxChars}
               rows={16}
-              className="resize-y font-mono text-xs leading-relaxed"
+              className="resize-y font-mono leading-relaxed"
             />
           </div>
 

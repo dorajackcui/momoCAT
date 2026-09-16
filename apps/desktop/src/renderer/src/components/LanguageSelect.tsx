@@ -1,4 +1,4 @@
-import { Select } from './ui';
+import { Select, type SelectProps } from './ui';
 import React from 'react';
 import { LANGUAGE_OPTIONS } from './languageOptions';
 
@@ -8,6 +8,7 @@ interface LanguageSelectProps {
   className?: string;
   id?: string;
   required?: boolean;
+  size?: SelectProps['size'];
 }
 
 export const LanguageSelect: React.FC<LanguageSelectProps> = ({
@@ -16,6 +17,7 @@ export const LanguageSelect: React.FC<LanguageSelectProps> = ({
   className,
   id,
   required = false,
+  size,
 }) => {
   return (
     <Select
@@ -24,6 +26,7 @@ export const LanguageSelect: React.FC<LanguageSelectProps> = ({
       onChange={(event) => onChange(event.target.value)}
       className={className}
       required={required}
+      size={size}
     >
       {LANGUAGE_OPTIONS.map((language) => (
         <option key={language.value} value={language.value}>

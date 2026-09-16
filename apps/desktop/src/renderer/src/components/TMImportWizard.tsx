@@ -213,7 +213,7 @@ export function TMImportWizard({
             disabled={sameColumnSelected}
             variant="primary"
             size="lg"
-            className="!px-8 shadow-md shadow-brand/20 transition-all hover:-translate-y-0.5"
+            className="min-w-28"
           >
             {copy.confirmLabel}
           </Button>
@@ -227,9 +227,9 @@ export function TMImportWizard({
             Source Text Column (原文)
           </label>
           <Select
+            size="compact"
             value={sourceCol}
             onChange={(e) => setSourceCol(parseInt(e.target.value, 10))}
-            className="!p-2.5"
           >
             {colIndexes.map((i) => (
               <option key={i} value={i}>
@@ -245,9 +245,9 @@ export function TMImportWizard({
             Target Text Column (译文)
           </label>
           <Select
+            size="compact"
             value={targetCol}
             onChange={(e) => setTargetCol(parseInt(e.target.value, 10))}
-            className="!p-2.5"
           >
             {colIndexes.map((i) => (
               <option key={i} value={i}>
@@ -267,7 +267,6 @@ export function TMImportWizard({
             id="hasHeader"
             checked={hasHeader}
             onChange={(e) => setHasHeader(e.target.checked)}
-            className="w-4 h-4 accent-brand"
           />
           <label
             htmlFor="hasHeader"
@@ -283,10 +282,10 @@ export function TMImportWizard({
             className="flex items-center gap-3 p-4 border-info/20 bg-info-soft/50"
           >
             <Checkbox
+              tone="info"
               id="overwrite"
               checked={overwrite}
               onChange={(e) => setOverwrite(e.target.checked)}
-              className="w-4 h-4 accent-info"
             />
             <label
               htmlFor="overwrite"

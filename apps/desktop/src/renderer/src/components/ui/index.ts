@@ -13,3 +13,5 @@ export * from './Popup';
 export * from './Tabs';
 export * from './Checkbox';
 export * from './ToggleButton';
+export * from './ChoiceGroup';
+export * from './SearchInput';

@@ -10,7 +10,7 @@ const tones = {
 
 export const ToggleButton = forwardRef<
   HTMLButtonElement,
-  Omit<ButtonProps, 'variant'> & {
+  Omit<ButtonProps, 'variant' | 'tone'> & {
     pressed: boolean;
     tone?: keyof typeof tones;
   }

@@ -33,8 +33,9 @@ export const TagInsertionUI: React.FC<TagInsertionUIProps> = ({
       {/* Insert All Tags Button */}
       <div className="p-2 border-b border-border/60">
         <MenuItem
+          size="sm"
+          tone="brand"
           onClick={onInsertAllTags}
-          className="w-full px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand-soft rounded transition-colors"
           aria-label="Insert all tags from source"
         >
           Insert All Tags
@@ -50,7 +51,6 @@ export const TagInsertionUI: React.FC<TagInsertionUIProps> = ({
             <MenuItem
               key={index}
               onClick={() => onInsertTag(index)}
-              className="w-full px-3 py-2 text-left hover:bg-muted flex items-center gap-2 transition-colors"
               aria-label={`Insert tag ${index + 1}: ${tag.content}`}
             >
               {/* Tag Preview Capsule */}

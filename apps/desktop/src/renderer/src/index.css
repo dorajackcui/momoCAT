@@ -215,6 +215,46 @@
   .ui-menu-item {
     @apply flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left font-medium hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-50;
   }
+  .ui-menu-item[data-size='sm'] {
+    @apply px-3 py-1.5 text-xs;
+  }
+  .ui-menu-item[data-selected],
+  .ui-menu-item[data-tone='brand'] {
+    @apply text-brand hover:bg-brand-soft focus-visible:bg-brand-soft;
+  }
+  .ui-menu-item[data-selected] {
+    @apply bg-brand-soft;
+  }
+  .ui-choice-group {
+    @apply flex min-w-0 gap-2;
+  }
+  .ui-choice-group[data-variant='segmented'] {
+    @apply surface-subtle gap-0 p-1;
+  }
+  .ui-choice {
+    @apply relative flex min-w-0 flex-1 cursor-pointer;
+  }
+  .ui-choice-content {
+    @apply w-full rounded-control px-3 py-1.5 text-xs text-text-muted transition-colors hover:text-text;
+  }
+  .ui-choice > input:focus-visible + .ui-choice-content {
+    @apply ring-2 ring-brand/50;
+  }
+  .ui-choice > input:disabled + .ui-choice-content {
+    @apply cursor-not-allowed opacity-50;
+  }
+  .ui-choice-group[data-variant='segmented'] .ui-choice-content {
+    @apply text-center hover:bg-surface;
+  }
+  .ui-choice-group[data-variant='segmented'] input:checked + .ui-choice-content {
+    @apply bg-surface text-brand shadow-panel;
+  }
+  .ui-choice-group[data-variant='cards'] .ui-choice-content {
+    @apply border border-border/60 bg-surface py-2 text-sm hover:border-brand/40;
+  }
+  .ui-choice-group[data-variant='cards'] input:checked + .ui-choice-content {
+    @apply border-brand bg-brand-soft text-brand;
+  }
   .ui-checkable {
     @apply h-4 w-4 shrink-0 accent-brand disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30;
   }
@@ -256,47 +296,113 @@
   }
 
   .btn-base {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold rounded-control transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 font-semibold rounded-control transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50;
   }
 
   .btn-primary {
-    @apply btn-base bg-brand text-brand-contrast hover:bg-brand-hover shadow-panel;
+    @apply bg-brand text-brand-contrast hover:bg-brand-hover shadow-panel;
   }
 
   .btn-secondary {
-    @apply btn-base bg-surface text-text-muted border border-border hover:bg-muted;
+    @apply bg-surface text-text-muted border border-border hover:bg-muted;
   }
 
   .btn-soft {
-    @apply btn-base bg-brand-soft text-brand hover:bg-brand-soft/80;
+    @apply bg-brand-soft text-brand hover:bg-brand-soft/80;
   }
 
   .btn-danger {
-    @apply btn-base bg-danger text-danger-contrast hover:bg-danger-hover;
+    @apply bg-danger text-danger-contrast hover:bg-danger-hover;
   }
 
   .btn-ghost {
-    @apply btn-base bg-transparent text-text-muted hover:bg-muted;
+    @apply bg-transparent text-text-muted hover:bg-muted;
+  }
+  .btn-link {
+    @apply text-brand hover:underline underline-offset-2;
+  }
+  .btn-base[data-tone='success'] {
+    --button-color: var(--color-success);
+    --button-soft: var(--color-success-soft);
+    --button-hover: var(--color-success-hover);
+    --button-contrast: var(--color-success-contrast);
+  }
+  .btn-base[data-tone='danger'] {
+    --button-color: var(--color-danger);
+    --button-soft: var(--color-danger-soft);
+    --button-hover: var(--color-danger-hover);
+    --button-contrast: var(--color-danger-contrast);
+  }
+  .btn-base[data-tone='brand'] {
+    --button-color: var(--color-brand);
+    --button-soft: var(--color-brand-soft);
+    --button-hover: var(--color-brand-hover);
+    --button-contrast: var(--color-brand-contrast);
+  }
+  .btn-base:is([data-tone='brand'], [data-tone='success'], [data-tone='danger']) {
+    color: rgb(var(--button-color));
+  }
+  .btn-base:is([data-tone='brand'], [data-tone='success'], [data-tone='danger']):hover {
+    background-color: rgb(var(--button-soft));
+  }
+  .btn-soft[data-tone] {
+    background-color: rgb(var(--button-soft));
+  }
+  .btn-primary[data-tone],
+  .btn-danger[data-tone] {
+    background-color: rgb(var(--button-color));
+    color: rgb(var(--button-contrast));
+  }
+  .btn-primary[data-tone]:hover,
+  .btn-danger[data-tone]:hover {
+    background-color: rgb(var(--button-hover));
+  }
+  .btn-link[data-tone='neutral'] {
+    @apply text-text-muted hover:text-text;
+  }
+  .btn-link[data-tone='inherit'] {
+    color: inherit;
   }
 
   .icon-btn {
-    @apply inline-flex items-center justify-center h-8 w-8 rounded-control border transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex shrink-0 items-center justify-center rounded-control border transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50;
   }
 
   .icon-btn-neutral {
-    @apply icon-btn bg-surface text-text-faint border-border hover:text-text-muted hover:bg-muted;
+    @apply bg-surface text-text-faint border-border hover:text-text-muted hover:bg-muted;
   }
 
   .icon-btn-brand {
-    @apply icon-btn bg-brand-soft text-brand border-brand/20 hover:bg-brand-soft/70;
+    @apply bg-brand-soft text-brand border-brand/20 hover:bg-brand-soft/70;
   }
 
   .icon-btn-danger {
-    @apply icon-btn bg-danger-soft text-danger border-danger/20 hover:bg-danger-soft/70;
+    @apply bg-danger-soft text-danger border-danger/20 hover:bg-danger-soft/70;
+  }
+  .icon-btn-success {
+    @apply bg-success-soft text-success border-success/20 hover:bg-success-soft/70;
+  }
+  .icon-btn[data-variant='ghost'] {
+    @apply border-transparent bg-transparent text-text-faint;
+  }
+  .icon-btn-neutral[data-variant='ghost']:hover {
+    @apply bg-muted text-text-muted;
+  }
+  .icon-btn-brand[data-variant='ghost']:hover {
+    @apply bg-brand-soft text-brand;
+  }
+  .icon-btn-danger[data-variant='ghost']:hover {
+    @apply bg-danger-soft text-danger;
+  }
+  .icon-btn-success[data-variant='ghost']:hover {
+    @apply bg-success-soft text-success;
+  }
+  .icon-btn[data-variant='overlay'] {
+    @apply rounded bg-surface/80 border-border/70 text-text-muted shadow-sm hover:bg-brand-soft/80 hover:border-brand/40 hover:text-brand;
   }
 
   .field-input {
-    @apply w-full px-4 py-2 bg-surface border border-border rounded-control focus:outline-none focus:ring-0;
+    @apply w-full bg-surface border border-border rounded-control focus:outline-none focus:ring-0 disabled:opacity-60;
     box-shadow: none;
   }
 
@@ -310,6 +416,18 @@
 
   .field-input-success {
     @apply border-success/50;
+  }
+  .field-subtle {
+    @apply bg-muted/35;
+  }
+  .field-floating {
+    @apply bg-surface/50 border-border/70 backdrop-blur-sm shadow-sm disabled:cursor-wait;
+  }
+  .field-input.field-inline {
+    @apply px-2 py-1 font-bold;
+  }
+  .field-input.field-search {
+    @apply rounded-lg py-1.5 text-sm text-text-muted;
   }
 
   .field-label {

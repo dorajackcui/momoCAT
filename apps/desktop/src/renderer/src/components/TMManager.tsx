@@ -1,4 +1,4 @@
-import { Button, Input } from './ui';
+import { Button, Input, ChoiceGroup } from './ui';
 import React, { useState, useEffect } from 'react';
 import { TMImportWizard, type TMWizardMode } from './TMImportWizard';
 import { AssetPreviewPage } from './AssetPreviewPage';
@@ -358,13 +358,15 @@ export const TMManager: React.FC = () => {
           >
             <div className="flex items-center justify-between gap-3">
               <span>{importNotice.message}</span>
-              <button
+              <Button
+                size="inline"
+                tone="inherit"
+                variant="link"
                 type="button"
                 onClick={() => setImportNotice(null)}
-                className="text-xs font-semibold uppercase tracking-wide opacity-70 hover:opacity-100"
               >
                 Dismiss
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -374,57 +376,44 @@ export const TMManager: React.FC = () => {
             <h2 className="field-label !text-[10px] mb-4">Create New Main TM</h2>
             <div className="mb-4">
               <label className="field-label !text-[10px]">Type</label>
-              <div className="grid grid-cols-2 gap-2 mt-1">
-                {CREATE_SOURCE_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setCreateSource(option.value)}
-                    className={`rounded-control border px-3 py-2 text-left transition-colors ${
-                      createSource === option.value
-                        ? 'border-brand bg-brand-soft text-brand'
-                        : 'border-border/60 bg-surface text-text-muted hover:border-brand/40'
-                    }`}
-                  >
-                    <span className="block text-sm font-semibold">{option.label}</span>
-                    <span className="block text-[10px] opacity-70">{option.hint}</span>
-                  </button>
-                ))}
-              </div>
+              <ChoiceGroup
+                label="TM creation type"
+                variant="cards"
+                value={createSource}
+                onValueChange={setCreateSource}
+                options={CREATE_SOURCE_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                  description: option.hint,
+                }))}
+                className="mt-1"
+              />
             </div>
             <form onSubmit={handleCreate} className="grid grid-cols-4 gap-4 items-end">
               <div className="col-span-2">
                 <label className="field-label !text-[10px]">TM Name</label>
                 <Input
+                  size="compact"
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="!px-3 !py-2 text-sm"
                   placeholder="e.g. Technical Glossary"
                   autoFocus
                 />
               </div>
               <div>
                 <label className="field-label !text-[10px]">Source</label>
-                <LanguageSelect
-                  value={newSrc}
-                  onChange={setNewSrc}
-                  className="!px-3 !py-2 text-sm"
-                />
+                <LanguageSelect size="compact" value={newSrc} onChange={setNewSrc} />
               </div>
               <div>
                 <label className="field-label !text-[10px]">Target</label>
-                <LanguageSelect
-                  value={newTgt}
-                  onChange={setNewTgt}
-                  className="!px-3 !py-2 text-sm"
-                />
+                <LanguageSelect size="compact" value={newTgt} onChange={setNewTgt} />
               </div>
               <div className="col-span-4 flex justify-end gap-2 mt-2">
                 <Button variant="secondary" type="button" onClick={() => setShowCreate(false)}>
                   Cancel
                 </Button>
-                <Button variant="primary" type="submit" className="!px-6">
+                <Button variant="primary" type="submit" className="min-w-24">
                   Save TM
                 </Button>
               </div>
@@ -444,12 +433,9 @@ export const TMManager: React.FC = () => {
             <p className="text-xs text-text-muted mb-6">
               Create a Main TM to store your verified high-quality translations.
             </p>
-            <button
-              onClick={() => setShowCreate(true)}
-              className="text-brand text-sm font-semibold hover:underline"
-            >
+            <Button size="inline" tone="brand" variant="link" onClick={() => setShowCreate(true)}>
               + Create your first Main TM
-            </button>
+            </Button>
           </div>
         ) : (
           <div className="workspace-resource-grid">

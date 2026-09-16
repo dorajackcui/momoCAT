@@ -1,3 +1,4 @@
+import { IconButton } from '../ui';
 import React, { useState } from 'react';
 
 interface EditorRowSourceCellProps {
@@ -23,9 +24,11 @@ export const EditorRowSourceCell: React.FC<EditorRowSourceCellProps> = ({
       <div className="editor-source-text">{sourceContent}</div>
       {isHovered && (
         <div className="absolute top-2 right-2">
-          <button
+          <IconButton
+            size="xs"
+            tone="brand"
+            variant="overlay"
             onClick={onCopySourceToTarget}
-            className="p-1 rounded bg-surface/75 border border-border/80 hover:bg-brand-soft/80 hover:border-brand/40 text-text-muted hover:text-brand transition-all shadow-sm"
             title="Copy Source to Target"
             aria-label="Copy source to target"
           >
@@ -37,7 +40,7 @@ export const EditorRowSourceCell: React.FC<EditorRowSourceCellProps> = ({
                 d="M13 5l7 7-7 7M5 5l7 7-7 7"
               />
             </svg>
-          </button>
+          </IconButton>
         </div>
       )}
     </div>

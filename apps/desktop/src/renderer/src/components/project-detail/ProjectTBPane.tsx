@@ -18,7 +18,7 @@ export function ProjectTBPane({ mountedTBs, allTBs, onMountTB, onUnmountTB }: Pr
           </h3>
           <div className="flex items-center gap-2">
             <Select
-              className="!px-3 !py-1.5 text-xs font-medium"
+              size="sm"
               onChange={(event) => {
                 if (!event.target.value) return;
                 onMountTB(event.target.value);

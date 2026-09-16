@@ -1,4 +1,4 @@
-import { Menu, MenuItem, MenuHeading, Popover, ToggleButton, IconButton, Input } from '../ui';
+import { Menu, MenuItem, MenuHeading, Popover, ToggleButton, IconButton, SearchInput } from '../ui';
 import React from 'react';
 import { EditorBatchActionBar } from './EditorBatchActionBar';
 import {
@@ -151,14 +151,11 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
                 const active = sortBy === option.sortBy && sortDirection === option.sortDirection;
                 return (
                   <MenuItem
+                    size="sm"
+                    selected={active}
                     key={`${option.sortBy}-${option.sortDirection}`}
                     type="button"
                     onClick={() => handleSortChange(option.sortBy, option.sortDirection)}
-                    className={`w-full text-left px-2 py-1.5 rounded-md text-[11px] font-bold border transition-colors ${
-                      active
-                        ? 'bg-brand-soft text-brand border-brand/30'
-                        : 'bg-surface text-text-muted border-transparent hover:text-text-muted hover:bg-muted'
-                    }`}
                   >
                     {option.label}
                   </MenuItem>
@@ -168,79 +165,59 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
           )}
         </div>
 
-        <label className="relative flex-1 min-w-0">
-          <Input
-            ref={sourceSearchInputRef as React.RefObject<HTMLInputElement>}
-            value={sourceQueryInput}
-            onChange={(event) => setSourceQueryInput(event.target.value)}
-            onFocus={onSearchInputFocus}
-            onBlur={onSearchInputBlur}
-            placeholder="Filter source text"
-            className="w-full rounded-xl border border-border bg-surface pl-8 pr-3 py-1.5 text-sm text-text-muted focus:border-brand/50 focus:outline-none focus:ring-1 focus:ring-brand/15"
-          />
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-          </span>
-        </label>
+        <SearchInput
+          ref={sourceSearchInputRef as React.RefObject<HTMLInputElement>}
+          value={sourceQueryInput}
+          onChange={(event) => setSourceQueryInput(event.target.value)}
+          onFocus={onSearchInputFocus}
+          onBlur={onSearchInputBlur}
+          placeholder="Filter source text"
+          className="flex-1"
+        />
 
-        <div className="relative flex-1 min-w-0">
-          <Input
-            ref={targetSearchInputRef as React.RefObject<HTMLInputElement>}
-            value={targetQueryInput}
-            onChange={(event) => setTargetQueryInput(event.target.value)}
-            onFocus={onSearchInputFocus}
-            onBlur={onSearchInputBlur}
-            aria-label={targetSearchScope === 'context' ? 'Filter context' : 'Filter target text'}
-            placeholder={targetSearchScope === 'context' ? 'Filter context' : 'Filter target text'}
-            className="w-full rounded-xl border border-border bg-surface pl-8 pr-12 py-1.5 text-sm text-text-muted focus:border-brand/50 focus:outline-none focus:ring-1 focus:ring-brand/15"
-          />
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-          </span>
-          <button
-            type="button"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => {
-              toggleTargetSearchScope();
-              targetSearchInputRef.current?.focus();
-            }}
-            aria-pressed={targetSearchScope === 'context'}
-            aria-label={
-              targetSearchScope === 'context'
-                ? 'Search context; switch to target text'
-                : 'Search target text; switch to context'
-            }
-            title={
-              targetSearchScope === 'context'
-                ? 'Switch to target text search'
-                : 'Switch to context search'
-            }
-            className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-text-faint transition-colors hover:bg-muted hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.8}
-                d="M8 7h11m0 0-4-4m4 4-4 4M16 17H5m0 0 4 4m-4-4 4-4"
-              />
-            </svg>
-          </button>
-        </div>
+        <SearchInput
+          ref={targetSearchInputRef as React.RefObject<HTMLInputElement>}
+          value={targetQueryInput}
+          onChange={(event) => setTargetQueryInput(event.target.value)}
+          onFocus={onSearchInputFocus}
+          onBlur={onSearchInputBlur}
+          aria-label={targetSearchScope === 'context' ? 'Filter context' : 'Filter target text'}
+          placeholder={targetSearchScope === 'context' ? 'Filter context' : 'Filter target text'}
+          className="flex-1"
+          trailingAction={
+            <IconButton
+              variant="ghost"
+              tone="brand"
+              size="xs"
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                toggleTargetSearchScope();
+                targetSearchInputRef.current?.focus();
+              }}
+              aria-pressed={targetSearchScope === 'context'}
+              aria-label={
+                targetSearchScope === 'context'
+                  ? 'Search context; switch to target text'
+                  : 'Search target text; switch to context'
+              }
+              title={
+                targetSearchScope === 'context'
+                  ? 'Switch to target text search'
+                  : 'Switch to context search'
+              }
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.8}
+                  d="M8 7h11m0 0-4-4m4 4-4 4M16 17H5m0 0 4 4m-4-4 4-4"
+                />
+              </svg>
+            </IconButton>
+          }
+        />
 
         <div className="relative shrink-0">
           <IconButton
@@ -285,11 +262,10 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
                     return (
                       <ToggleButton
                         pressed={active}
-                        size="sm"
+                        size="xs"
                         key={preset.value}
                         type="button"
                         onClick={() => applyQuickPreset(preset.value)}
-                        className="!px-2.5 !py-1 text-[11px]"
                       >
                         {preset.label}
                       </ToggleButton>
@@ -308,11 +284,10 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
                     return (
                       <ToggleButton
                         pressed={active}
-                        size="sm"
+                        size="xs"
                         key={mode.value}
                         type="button"
                         onClick={() => handleMatchModeChange(mode.value)}
-                        className="!px-2.5 !py-1 text-[11px]"
                       >
                         {mode.label}
                       </ToggleButton>
@@ -331,11 +306,10 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
                     return (
                       <ToggleButton
                         pressed={active}
-                        size="sm"
+                        size="xs"
                         key={option.value}
                         type="button"
                         onClick={() => handleStatusFilterChange(option.value)}
-                        className="!px-2.5 !py-1 text-[11px]"
                       >
                         {option.label}
                       </ToggleButton>
@@ -354,11 +328,10 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
                     return (
                       <ToggleButton
                         pressed={active}
-                        size="sm"
+                        size="xs"
                         key={option.value}
                         type="button"
                         onClick={() => toggleQualityFilter(option.value)}
-                        className="!px-2.5 !py-1 text-[11px]"
                       >
                         {option.label}
                       </ToggleButton>
@@ -370,11 +343,13 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
           )}
         </div>
 
-        <button
+        <IconButton
+          size="md"
+          tone="neutral"
+          variant="outline"
           type="button"
           onClick={clearFilters}
           disabled={!hasActiveFilter}
-          className="h-8 w-8 shrink-0 rounded-md border border-border bg-surface text-text-muted hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           aria-label="Clear filter"
           title="Clear filter"
         >
@@ -391,7 +366,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
               d="M6 18L18 6M6 6l12 12"
             />
           </svg>
-        </button>
+        </IconButton>
       </div>
     </div>
   );

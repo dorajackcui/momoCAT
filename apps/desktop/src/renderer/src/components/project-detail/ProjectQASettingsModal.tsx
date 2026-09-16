@@ -63,7 +63,7 @@ export function ProjectQASettingsModal({
                 <Checkbox
                   checked={checked}
                   onChange={() => toggleRule(rule.id)}
-                  className="mt-0.5 accent-brand"
+                  className="mt-0.5"
                 />
                 <span>
                   <span className="block text-sm font-semibold text-text">{rule.label}</span>
@@ -85,7 +85,7 @@ export function ProjectQASettingsModal({
                 instantQaOnConfirm: e.target.checked,
               })
             }
-            className="mt-0.5 accent-brand"
+            className="mt-0.5"
           />
           <span>
             <span className="block text-sm font-semibold text-text">Instant QA on Confirm</span>

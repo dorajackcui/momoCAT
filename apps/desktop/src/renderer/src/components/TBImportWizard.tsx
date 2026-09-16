@@ -179,7 +179,7 @@ export function TBImportWizard({
             }}
             variant="primary"
             size="lg"
-            className="!px-8"
+            className="min-w-28"
           >
             {WIZARD_COPY[mode].confirmLabel}
           </Button>
@@ -241,9 +241,9 @@ export function TBImportWizard({
           className="flex items-center gap-3 p-4 border-success/30 bg-success-soft/50"
         >
           <Checkbox
+            tone="success"
             checked={hasHeader}
             onChange={(e) => setHasHeader(e.target.checked)}
-            className="w-4 h-4 accent-success"
           />
           <span className="text-sm font-medium text-text-muted">First row is header</span>
         </Card>
@@ -252,11 +252,7 @@ export function TBImportWizard({
             variant="subtle"
             className="flex items-center gap-3 p-4 border-brand/20 bg-brand-soft/50"
           >
-            <Checkbox
-              checked={overwrite}
-              onChange={(e) => setOverwrite(e.target.checked)}
-              className="w-4 h-4 accent-brand"
-            />
+            <Checkbox checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />
             <span className="text-sm font-medium text-text-muted">
               Overwrite existing source terms
             </span>

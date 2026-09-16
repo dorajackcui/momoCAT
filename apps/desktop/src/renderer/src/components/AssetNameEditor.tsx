@@ -1,4 +1,4 @@
-import { Input } from './ui';
+import { Input, IconButton, Button } from './ui';
 import React, { useEffect, useId, useRef, useState } from 'react';
 
 interface AssetNameEditorProps {
@@ -66,6 +66,8 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
         className="flex items-center gap-1 min-w-0"
       >
         <Input
+          size="compact"
+          appearance="inline"
           ref={inputRef}
           type="text"
           value={draftName}
@@ -76,7 +78,7 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
               cancel();
             }
           }}
-          className="!px-2 !py-1 text-sm font-bold min-w-0"
+          className="min-w-0"
           aria-label={`Rename ${assetLabel}`}
           aria-describedby={suffix ? suffixDescriptionId : undefined}
           disabled={isSaving}
@@ -86,9 +88,11 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
             {suffix}
           </span>
         )}
-        <button
+        <IconButton
+          size="xs"
+          tone="success"
+          variant="ghost"
           type="submit"
-          className="p-1 text-text-faint hover:text-success hover:bg-success-soft rounded-control transition-colors disabled:opacity-40"
           title="Save name"
           aria-label={`Save ${assetLabel} name`}
           disabled={isSaving || !draftName.trim()}
@@ -96,11 +100,13 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
-        </button>
-        <button
+        </IconButton>
+        <IconButton
+          size="xs"
+          tone="danger"
+          variant="ghost"
           type="button"
           onClick={cancel}
-          className="p-1 text-text-faint hover:text-danger hover:bg-danger-soft rounded-control transition-colors disabled:opacity-40"
           title="Cancel rename"
           aria-label={`Cancel ${assetLabel} rename`}
           disabled={isSaving}
@@ -113,7 +119,7 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
               d="M6 18L18 6M6 6l12 12"
             />
           </svg>
-        </button>
+        </IconButton>
       </form>
     );
   }
@@ -122,21 +128,31 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
     <div className="flex items-center gap-1 min-w-0">
       <Heading className="font-bold text-text group-hover:text-brand transition-colors">
         {onOpen ? (
-          <button type="button" onClick={onOpen} className="text-left hover:underline">
+          <Button
+            size="inline"
+            tone="inherit"
+            variant="link"
+            type="button"
+            onClick={onOpen}
+            className="text-left"
+          >
             {displayName}
-          </button>
+          </Button>
         ) : (
           displayName
         )}
       </Heading>
-      <button
+      <IconButton
+        size="xs"
+        tone="brand"
+        variant="ghost"
         type="button"
         onClick={(event) => {
           event.stopPropagation();
           setDraftName(name);
           setIsEditing(true);
         }}
-        className="p-1 text-text-faint hover:text-brand hover:bg-brand-soft rounded-control transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+        className="opacity-0 group-hover:opacity-100 focus:opacity-100"
         title={`Rename ${assetLabel}`}
         aria-label={`Rename ${displayName}`}
       >
@@ -148,7 +164,7 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
             d="M16.862 3.487a2.12 2.12 0 013 3L8.25 18.1 4 19l.9-4.25L16.862 3.487z"
           />
         </svg>
-      </button>
+      </IconButton>
     </div>
   );
 };

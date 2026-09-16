@@ -16,7 +16,6 @@ export function ProxySettingsTab({ controller, busy }: ProxySettingsTabProps) {
             name="proxy-mode"
             checked={controller.mode === 'off'}
             onChange={() => controller.setMode('off')}
-            className="accent-brand"
           />
           <span>No Proxy (Direct)</span>
         </label>
@@ -25,7 +24,6 @@ export function ProxySettingsTab({ controller, busy }: ProxySettingsTabProps) {
             name="proxy-mode"
             checked={controller.mode === 'system'}
             onChange={() => controller.setMode('system')}
-            className="accent-brand"
           />
           <span>Use System/Environment Proxy</span>
         </label>
@@ -34,7 +32,6 @@ export function ProxySettingsTab({ controller, busy }: ProxySettingsTabProps) {
             name="proxy-mode"
             checked={controller.mode === 'custom'}
             onChange={() => controller.setMode('custom')}
-            className="accent-brand"
           />
           <span>Use Custom Proxy URL</span>
         </label>

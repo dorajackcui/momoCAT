@@ -49,7 +49,7 @@ export const AssetPreviewPage: React.FC<AssetPreviewPageProps> = (props) => {
         <div className="rounded-control border border-danger/40 bg-danger-soft px-4 py-3">
           <div className="flex items-center justify-between gap-4">
             <p className="text-sm font-medium text-danger">{error}</p>
-            <Button variant="secondary" type="button" onClick={onRetry} className="text-xs">
+            <Button size="sm" variant="secondary" type="button" onClick={onRetry}>
               Retry
             </Button>
           </div>
@@ -70,9 +70,9 @@ export const AssetPreviewPage: React.FC<AssetPreviewPageProps> = (props) => {
 
   return (
     <section className="max-w-6xl mx-auto space-y-5">
-      <button type="button" onClick={onBack} className="text-sm text-text-muted hover:text-text">
+      <Button size="inline" tone="neutral" variant="link" type="button" onClick={onBack}>
         ← {props.kind === 'tm' ? 'Translation memory' : 'Term bases'}
-      </button>
+      </Button>
       <div>
         <h1 className="text-2xl font-semibold text-text">{asset.name}</h1>
         <p className="mt-1 text-sm text-text-muted">

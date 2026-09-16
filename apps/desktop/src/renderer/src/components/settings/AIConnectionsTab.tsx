@@ -146,7 +146,7 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
                       variant="secondary"
                       onClick={() => controller.useConnection(connectionItem)}
                       disabled={busy || connectionItem.discoveredModels.length === 0}
-                      className="md:w-auto disabled:opacity-50"
+                      className="md:w-auto"
                     >
                       Use Connection
                     </Button>
@@ -154,7 +154,7 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
                       variant="secondary"
                       onClick={() => void controller.deleteConnection(connectionItem.id)}
                       disabled={busy}
-                      className="md:w-auto disabled:opacity-50"
+                      className="md:w-auto"
                     >
                       {isDeleting ? 'Deleting...' : 'Delete Connection'}
                     </Button>
@@ -201,7 +201,7 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
                       variant="secondary"
                       onClick={() => void controller.deleteProvider(provider.id)}
                       disabled={busy}
-                      className="md:w-auto disabled:opacity-50"
+                      className="md:w-auto"
                     >
                       {isDeleting ? 'Deleting...' : 'Delete Provider'}
                     </Button>
