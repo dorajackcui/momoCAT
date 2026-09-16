@@ -24,6 +24,8 @@ describe('TagInsertionUI', () => {
     test('renders when isVisible is true and tags are available', () => {
       render(
         <TagInsertionUI
+          anchor={{ x: 40, y: 40 }}
+          onClose={vi.fn()}
           sourceTags={mockSourceTags}
           onInsertTag={mockOnInsertTag}
           onInsertAllTags={mockOnInsertAllTags}
@@ -38,6 +40,8 @@ describe('TagInsertionUI', () => {
     test('does not render when isVisible is false', () => {
       const { container } = render(
         <TagInsertionUI
+          anchor={{ x: 40, y: 40 }}
+          onClose={vi.fn()}
           sourceTags={mockSourceTags}
           onInsertTag={mockOnInsertTag}
           onInsertAllTags={mockOnInsertAllTags}
@@ -51,6 +55,8 @@ describe('TagInsertionUI', () => {
     test('does not render when sourceTags is empty', () => {
       const { container } = render(
         <TagInsertionUI
+          anchor={{ x: 40, y: 40 }}
+          onClose={vi.fn()}
           sourceTags={[]}
           onInsertTag={mockOnInsertTag}
           onInsertAllTags={mockOnInsertAllTags}
@@ -66,6 +72,8 @@ describe('TagInsertionUI', () => {
     test('renders all source tags in the list', () => {
       render(
         <TagInsertionUI
+          anchor={{ x: 40, y: 40 }}
+          onClose={vi.fn()}
           sourceTags={mockSourceTags}
           onInsertTag={mockOnInsertTag}
           onInsertAllTags={mockOnInsertAllTags}
@@ -82,6 +90,8 @@ describe('TagInsertionUI', () => {
     test('displays tag preview capsules with correct format', () => {
       render(
         <TagInsertionUI
+          anchor={{ x: 40, y: 40 }}
+          onClose={vi.fn()}
           sourceTags={mockSourceTags}
           onInsertTag={mockOnInsertTag}
           onInsertAllTags={mockOnInsertAllTags}
@@ -100,6 +110,8 @@ describe('TagInsertionUI', () => {
     test('renders "Insert All Tags" button', () => {
       render(
         <TagInsertionUI
+          anchor={{ x: 40, y: 40 }}
+          onClose={vi.fn()}
           sourceTags={mockSourceTags}
           onInsertTag={mockOnInsertTag}
           onInsertAllTags={mockOnInsertAllTags}
@@ -115,6 +127,8 @@ describe('TagInsertionUI', () => {
     test('calls onInsertAllTags when "Insert All Tags" is clicked', () => {
       render(
         <TagInsertionUI
+          anchor={{ x: 40, y: 40 }}
+          onClose={vi.fn()}
           sourceTags={mockSourceTags}
           onInsertTag={mockOnInsertTag}
           onInsertAllTags={mockOnInsertAllTags}
@@ -134,6 +148,8 @@ describe('TagInsertionUI', () => {
     test('calls onInsertTag with correct index when a tag is clicked', () => {
       render(
         <TagInsertionUI
+          anchor={{ x: 40, y: 40 }}
+          onClose={vi.fn()}
           sourceTags={mockSourceTags}
           onInsertTag={mockOnInsertTag}
           onInsertAllTags={mockOnInsertAllTags}
@@ -152,6 +168,8 @@ describe('TagInsertionUI', () => {
     test('calls onInsertTag with correct index for different tags', () => {
       render(
         <TagInsertionUI
+          anchor={{ x: 40, y: 40 }}
+          onClose={vi.fn()}
           sourceTags={mockSourceTags}
           onInsertTag={mockOnInsertTag}
           onInsertAllTags={mockOnInsertAllTags}
@@ -172,6 +190,8 @@ describe('TagInsertionUI', () => {
     test('has proper ARIA attributes', () => {
       render(
         <TagInsertionUI
+          anchor={{ x: 40, y: 40 }}
+          onClose={vi.fn()}
           sourceTags={mockSourceTags}
           onInsertTag={mockOnInsertTag}
           onInsertAllTags={mockOnInsertAllTags}
@@ -189,6 +209,8 @@ describe('TagInsertionUI', () => {
     test('tag buttons have descriptive aria-labels', () => {
       render(
         <TagInsertionUI
+          anchor={{ x: 40, y: 40 }}
+          onClose={vi.fn()}
           sourceTags={mockSourceTags}
           onInsertTag={mockOnInsertTag}
           onInsertAllTags={mockOnInsertAllTags}
@@ -207,6 +229,8 @@ describe('TagInsertionUI', () => {
     test('applies correct CSS classes for layout', () => {
       const { container } = render(
         <TagInsertionUI
+          anchor={{ x: 40, y: 40 }}
+          onClose={vi.fn()}
           sourceTags={mockSourceTags}
           onInsertTag={mockOnInsertTag}
           onInsertAllTags={mockOnInsertAllTags}
@@ -214,21 +238,16 @@ describe('TagInsertionUI', () => {
         />,
       );
 
-      const menu = container.querySelector('[role="menu"]');
-      expect(menu).toHaveClass(
-        'absolute',
-        'top-full',
-        'left-0',
-        'bg-surface',
-        'border',
-        'rounded-md',
-        'shadow-lg',
-      );
+      const menu = screen.getByRole('menu');
+      expect(container).not.toContainElement(menu);
+      expect(menu).toHaveStyle({ position: 'fixed' });
     });
 
     test('tag preview capsules have correct styling', () => {
       render(
         <TagInsertionUI
+          anchor={{ x: 40, y: 40 }}
+          onClose={vi.fn()}
           sourceTags={mockSourceTags}
           onInsertTag={mockOnInsertTag}
           onInsertAllTags={mockOnInsertAllTags}

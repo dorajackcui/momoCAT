@@ -1,3 +1,4 @@
+import { Tabs, TabsPanel } from './ui';
 import { useEffect, useState } from 'react';
 import { DEFAULT_PROJECT_QA_SETTINGS, type ProjectQASettings } from '@cat/core/project';
 import type { ProjectFileRecord, TMCommitScope } from '../../../shared/ipc';
@@ -315,7 +316,11 @@ export function ProjectDetail({
   };
 
   return (
-    <div className="flex min-h-0 flex-col h-full bg-canvas">
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) => setActiveTab(value as ProjectDetailTab)}
+      className="flex min-h-0 flex-col h-full bg-canvas"
+    >
       <ProjectDetailDialogs
         fileImport={fileImport}
         projectType={project?.projectType || 'translation'}
@@ -352,7 +357,6 @@ export function ProjectDetail({
         project={project}
         loading={loading}
         activeTab={activeTab}
-        onTabChange={setActiveTab}
         onOpenQASettings={openQaSettings}
         isAddFileMenuOpen={isAddFileMenuOpen}
         onToggleAddFileMenu={fileImport.toggleAddFileMenu}
@@ -361,7 +365,7 @@ export function ProjectDetail({
         onOpenPasteSource={() => void fileImport.openPasteSource()}
       />
 
-      <div className="flex-1 min-h-0 overflow-auto p-6 custom-scrollbar">
+      <TabsPanel value={activeTab} className="flex-1 min-h-0 overflow-auto p-6 custom-scrollbar">
         {!project ? (
           loading ? (
             <div className="max-w-4xl mx-auto text-center py-20 surface-subtle">
@@ -413,7 +417,7 @@ export function ProjectDetail({
             onUnmountTB={(tbId) => void handleUnmountTB(tbId)}
           />
         )}
-      </div>
-    </div>
+      </TabsPanel>
+    </Tabs>
   );
 }

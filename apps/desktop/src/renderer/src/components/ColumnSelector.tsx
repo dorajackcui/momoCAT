@@ -3,7 +3,7 @@ import type { ProjectType } from '@cat/core/project';
 import type { TagPolicy } from '@cat/core/tag';
 import type { ImportOptions, SpreadsheetPreviewData } from '../../../shared/ipc';
 import { resolveDefaultContextColumn } from '../../../shared/importColumnDefaults';
-import { Button, Card, IconButton, Select } from './ui';
+import { Button, Card, Modal, Select, Checkbox } from './ui';
 
 interface ColumnSelectorProps {
   isOpen: boolean;
@@ -77,200 +77,21 @@ export function ColumnSelector({
   if (!isOpen) return null;
 
   return (
-    <div className="modal-backdrop !z-[100]">
-      <div className="modal-card max-w-4xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
-        <div className="panel-header px-8 py-6 flex justify-between items-center">
-          <div>
-            <h2 className="text-xl font-bold text-text">Import Configuration</h2>
-            <p className="text-sm text-text-muted mt-1">
-              {isReviewProject
-                ? 'Select translation/original/output columns for AI review'
-                : isCustomProject
-                  ? 'Select input/context/output columns for AI custom processing'
-                  : 'Select the columns to import from your spreadsheet'}
-            </p>
-          </div>
-          <IconButton onClick={onClose} tone="neutral" aria-label="Close">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </IconButton>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-          <div className="grid grid-cols-3 gap-8 mb-8">
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-text-muted flex items-center gap-2">
-                <span className="w-2 h-2 bg-brand rounded-full"></span>
-                {sourceLabel}
-              </label>
-              <Select
-                value={sourceCol}
-                onChange={(e) => setSourceCol(parseInt(e.target.value, 10))}
-                className="!p-2.5"
-              >
-                {colIndexes.map((i) => (
-                  <option key={i} value={i}>
-                    Column {XLSX_COL_NAME(i)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-text-muted flex items-center gap-2">
-                <span className="w-2 h-2 bg-success rounded-full"></span>
-                {targetLabel}
-              </label>
-              <Select
-                value={targetCol}
-                onChange={(e) => setTargetCol(parseInt(e.target.value, 10))}
-                className="!p-2.5"
-              >
-                {colIndexes.map((i) => (
-                  <option key={i} value={i}>
-                    Column {XLSX_COL_NAME(i)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-text-muted flex items-center gap-2">
-                <span className="w-2 h-2 bg-info rounded-full"></span>
-                {contextLabel}
-              </label>
-              <Select
-                value={
-                  contextCol === undefined
-                    ? isReviewProject
-                      ? (colIndexes[0] ?? 0)
-                      : -1
-                    : contextCol
-                }
-                onChange={(e) => {
-                  const val = parseInt(e.target.value, 10);
-                  if (!isReviewProject && val === -1) {
-                    setContextCol(undefined);
-                    return;
-                  }
-                  setContextCol(val);
-                }}
-                className="!p-2.5"
-              >
-                {!isReviewProject && <option value={-1}>None (Ignore)</option>}
-                {colIndexes.map((i) => (
-                  <option key={i} value={i}>
-                    Column {XLSX_COL_NAME(i)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </div>
-
-          <Card
-            variant="subtle"
-            className="mb-6 p-4 flex flex-wrap items-center justify-between gap-4 border-brand/20 bg-brand-soft/50"
-          >
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="hasHeader"
-                checked={hasHeader}
-                onChange={(e) => setHasHeader(e.target.checked)}
-                className="w-4 h-4 accent-brand"
-              />
-              <label
-                htmlFor="hasHeader"
-                className="text-sm font-medium text-text-muted cursor-pointer select-none"
-              >
-                First row is a header (Skip it)
-              </label>
-            </div>
-            <label className="flex items-center gap-3 text-sm font-medium text-text-muted">
-              <span>Marker Handling</span>
-              <Select
-                value={tagPolicy}
-                onChange={(e) => setTagPolicy(e.target.value as TagPolicy)}
-                className="!w-auto min-w-[180px] !p-2"
-              >
-                <option value="default">Protect CAT markers</option>
-                <option value="none">Plain marker-like text</option>
-              </Select>
-            </label>
-          </Card>
-
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-text-faint uppercase tracking-wider">
-              Preview (First 10 rows)
-            </h3>
-            <Card variant="surface" className="table-shell !rounded-xl !shadow-sm">
-              <table className="w-full text-sm text-left border-collapse">
-                <thead className="table-head">
-                  <tr>
-                    {colIndexes.map((i) => (
-                      <th
-                        key={i}
-                        className={`px-4 py-3 font-bold text-[11px] uppercase tracking-tight ${
-                          i === sourceCol
-                            ? 'text-brand bg-brand-soft/50'
-                            : i === targetCol
-                              ? 'text-success bg-success-soft/50'
-                              : i === contextCol
-                                ? 'text-info bg-info-soft/50'
-                                : 'text-text-muted'
-                        }`}
-                      >
-                        Col {XLSX_COL_NAME(i)}
-                        {i === sourceCol && (
-                          <span className="block text-[9px] mt-0.5">{sourceTagLabel}</span>
-                        )}
-                        {i === targetCol && (
-                          <span className="block text-[9px] mt-0.5">{targetTagLabel}</span>
-                        )}
-                        {i === contextCol && (
-                          <span className="block text-[9px] mt-0.5">{contextTagLabel}</span>
-                        )}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/50">
-                  {previewData.map((row, rowIndex) => (
-                    <tr
-                      key={rowIndex}
-                      className={`${hasHeader && rowIndex === 0 ? 'bg-muted/80 opacity-60 italic' : 'bg-surface'}`}
-                    >
-                      {colIndexes.map((i) => (
-                        <td
-                          key={i}
-                          className={`px-4 py-3 truncate max-w-[200px] text-xs ${
-                            i === sourceCol
-                              ? 'bg-brand-soft/20 font-medium'
-                              : i === targetCol
-                                ? 'bg-success-soft/20'
-                                : i === contextCol
-                                  ? 'bg-info-soft/20'
-                                  : ''
-                          }`}
-                        >
-                          {row[i] || '-'}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Card>
-          </div>
-        </div>
-
-        <div className="panel-footer px-8 py-6 flex justify-end gap-3">
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      closeOnBackdrop={false}
+      title="Import Configuration"
+      description={
+        isReviewProject
+          ? 'Select translation/original/output columns for AI review'
+          : isCustomProject
+            ? 'Select input/context/output columns for AI custom processing'
+            : 'Select the columns to import from your spreadsheet'
+      }
+      size="xl"
+      footer={
+        <>
           <Button onClick={onClose} variant="secondary" size="lg">
             Cancel
           </Button>
@@ -290,9 +111,170 @@ export function ColumnSelector({
           >
             Start Import
           </Button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-3 gap-8 mb-8">
+        <div className="space-y-2">
+          <label className="text-sm font-bold text-text-muted flex items-center gap-2">
+            <span className="w-2 h-2 bg-brand rounded-full"></span>
+            {sourceLabel}
+          </label>
+          <Select
+            value={sourceCol}
+            onChange={(e) => setSourceCol(parseInt(e.target.value, 10))}
+            className="!p-2.5"
+          >
+            {colIndexes.map((i) => (
+              <option key={i} value={i}>
+                Column {XLSX_COL_NAME(i)}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-bold text-text-muted flex items-center gap-2">
+            <span className="w-2 h-2 bg-success rounded-full"></span>
+            {targetLabel}
+          </label>
+          <Select
+            value={targetCol}
+            onChange={(e) => setTargetCol(parseInt(e.target.value, 10))}
+            className="!p-2.5"
+          >
+            {colIndexes.map((i) => (
+              <option key={i} value={i}>
+                Column {XLSX_COL_NAME(i)}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-bold text-text-muted flex items-center gap-2">
+            <span className="w-2 h-2 bg-info rounded-full"></span>
+            {contextLabel}
+          </label>
+          <Select
+            value={
+              contextCol === undefined ? (isReviewProject ? (colIndexes[0] ?? 0) : -1) : contextCol
+            }
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10);
+              if (!isReviewProject && val === -1) {
+                setContextCol(undefined);
+                return;
+              }
+              setContextCol(val);
+            }}
+            className="!p-2.5"
+          >
+            {!isReviewProject && <option value={-1}>None (Ignore)</option>}
+            {colIndexes.map((i) => (
+              <option key={i} value={i}>
+                Column {XLSX_COL_NAME(i)}
+              </option>
+            ))}
+          </Select>
         </div>
       </div>
-    </div>
+
+      <Card
+        variant="subtle"
+        className="mb-6 p-4 flex flex-wrap items-center justify-between gap-4 border-brand/20 bg-brand-soft/50"
+      >
+        <div className="flex items-center gap-3">
+          <Checkbox
+            id="hasHeader"
+            checked={hasHeader}
+            onChange={(e) => setHasHeader(e.target.checked)}
+            className="w-4 h-4 accent-brand"
+          />
+          <label
+            htmlFor="hasHeader"
+            className="text-sm font-medium text-text-muted cursor-pointer select-none"
+          >
+            First row is a header (Skip it)
+          </label>
+        </div>
+        <label className="flex items-center gap-3 text-sm font-medium text-text-muted">
+          <span>Marker Handling</span>
+          <Select
+            value={tagPolicy}
+            onChange={(e) => setTagPolicy(e.target.value as TagPolicy)}
+            className="!w-auto min-w-[180px] !p-2"
+          >
+            <option value="default">Protect CAT markers</option>
+            <option value="none">Plain marker-like text</option>
+          </Select>
+        </label>
+      </Card>
+
+      <div className="space-y-3">
+        <h3 className="text-xs font-bold text-text-faint uppercase tracking-wider">
+          Preview (First 10 rows)
+        </h3>
+        <Card variant="surface" className="table-shell !rounded-xl !shadow-sm">
+          <table className="w-full text-sm text-left border-collapse">
+            <thead className="table-head">
+              <tr>
+                {colIndexes.map((i) => (
+                  <th
+                    key={i}
+                    className={`px-4 py-3 font-bold text-[11px] uppercase tracking-tight ${
+                      i === sourceCol
+                        ? 'text-brand bg-brand-soft/50'
+                        : i === targetCol
+                          ? 'text-success bg-success-soft/50'
+                          : i === contextCol
+                            ? 'text-info bg-info-soft/50'
+                            : 'text-text-muted'
+                    }`}
+                  >
+                    Col {XLSX_COL_NAME(i)}
+                    {i === sourceCol && (
+                      <span className="block text-[9px] mt-0.5">{sourceTagLabel}</span>
+                    )}
+                    {i === targetCol && (
+                      <span className="block text-[9px] mt-0.5">{targetTagLabel}</span>
+                    )}
+                    {i === contextCol && (
+                      <span className="block text-[9px] mt-0.5">{contextTagLabel}</span>
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {previewData.map((row, rowIndex) => (
+                <tr
+                  key={rowIndex}
+                  className={`${hasHeader && rowIndex === 0 ? 'bg-muted/80 opacity-60 italic' : 'bg-surface'}`}
+                >
+                  {colIndexes.map((i) => (
+                    <td
+                      key={i}
+                      className={`px-4 py-3 truncate max-w-[200px] text-xs ${
+                        i === sourceCol
+                          ? 'bg-brand-soft/20 font-medium'
+                          : i === targetCol
+                            ? 'bg-success-soft/20'
+                            : i === contextCol
+                              ? 'bg-info-soft/20'
+                              : ''
+                      }`}
+                    >
+                      {row[i] || '-'}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      </div>
+    </Modal>
   );
 }
 

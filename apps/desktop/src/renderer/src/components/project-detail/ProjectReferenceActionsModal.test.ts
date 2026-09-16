@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ProjectFileRecord } from '../../../../shared/ipc';
 import {
@@ -9,14 +10,14 @@ import {
 
 describe('ProjectReferenceActionsModal', () => {
   it('offers source term extraction and the existing reference export', () => {
-    const html = renderToStaticMarkup(
+    const html = render(
       React.createElement(ProjectReferenceActionsModal, {
         file: { id: 7, name: 'demo.xlsx' } as ProjectFileRecord,
         onClose: vi.fn(),
         onPrecheckSourceTerms: vi.fn(),
         onExportReferences: vi.fn(),
       }),
-    );
+    ).baseElement.innerHTML;
 
     expect(html).toContain('TM/TB Tools');
     expect(html).toContain('Extract Source Terms');

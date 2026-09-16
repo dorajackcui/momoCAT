@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import type { Project, ProjectType } from '@cat/core/project';
 import type { WorkspaceView } from '../hooks/useWorkspaceNavigation';
-import { WorkspaceActionMenu } from './WorkspaceActionMenu';
+import { Menu, MenuItem, MenuHeading, MenuSeparator } from './ui';
 
 type IconName = 'project' | 'plus' | 'pin' | 'tm' | 'tb' | 'settings' | 'trash';
 
@@ -305,36 +305,25 @@ export function WorkspaceSidebar({
         </span>
       )}
       {!hidden && menu && menuProject && (
-        <WorkspaceActionMenu
+        <Menu
           id={menuId}
           label={`${menuProject.name} actions`}
           anchor={menu.anchor}
           onClose={closeMenu}
         >
-          <div className="workspace-menu-heading">{menuProject.name}</div>
-          <button
-            type="button"
-            role="menuitem"
-            disabled={disabled}
-            onClick={() => openProject(menuProject)}
-          >
+          <MenuHeading>{menuProject.name}</MenuHeading>
+          <MenuItem type="button" disabled={disabled} onClick={() => openProject(menuProject)}>
             <NavIcon name="project" projectType={menuProject.projectType} />
             <span>Open project</span>
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            disabled={disabled}
-            onClick={() => toggleProjectPin(menuProject)}
-          >
+          </MenuItem>
+          <MenuItem type="button" disabled={disabled} onClick={() => toggleProjectPin(menuProject)}>
             <NavIcon name="pin" />
             <span>{pinnedProjectIds.has(menuProject.id!) ? 'Unpin project' : 'Pin project'}</span>
-          </button>
-          <div role="separator" className="workspace-menu-separator" />
-          <button
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem
             type="button"
-            role="menuitem"
-            className="workspace-menu-danger"
+            danger
             disabled={disabled}
             onClick={() => {
               closeMenu();
@@ -343,8 +332,8 @@ export function WorkspaceSidebar({
           >
             <NavIcon name="trash" />
             <span>Delete project…</span>
-          </button>
-        </WorkspaceActionMenu>
+          </MenuItem>
+        </Menu>
       )}
     </aside>
   );

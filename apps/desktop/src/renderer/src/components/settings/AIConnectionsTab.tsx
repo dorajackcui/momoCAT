@@ -1,3 +1,4 @@
+import { Input, Button, Select } from '../ui';
 import type { AIConnectionsController } from './useAIConnectionsController';
 
 interface AIConnectionsTabProps {
@@ -18,64 +19,61 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="field-label">Connection Name</label>
-            <input
+            <Input
               aria-label="Connection Name"
               type="text"
               value={controller.connectionNameInput}
               onChange={(event) => controller.updateConnectionName(event.target.value)}
               disabled={controller.testingProvider}
               placeholder="OpenAI"
-              className="field-input"
             />
           </div>
           <div>
             <label className="field-label">API Base URL</label>
-            <input
+            <Input
               aria-label="API Base URL"
               type="text"
               value={controller.connectionBaseUrlInput}
               onChange={(event) => controller.updateConnectionBaseUrl(event.target.value)}
               disabled={controller.testingProvider}
               placeholder="https://api.openai.com/v1"
-              className="field-input"
             />
           </div>
         </div>
 
         <div>
           <label className="field-label">API Key</label>
-          <input
+          <Input
             aria-label="API Key"
             type="password"
             value={controller.connectionApiKeyInput}
             onChange={(event) => controller.updateConnectionApiKey(event.target.value)}
             disabled={controller.testingProvider}
             placeholder={controller.apiKeyPlaceholder}
-            className="field-input"
           />
         </div>
 
-        <button
+        <Button
+          variant="secondary"
           onClick={() => void controller.testConnection()}
           disabled={busy || controller.savedConnectionReuseActive}
-          className="btn-secondary w-full"
+          className="w-full"
         >
           {controller.testingProvider
             ? 'Testing...'
             : controller.savedConnectionReuseActive
               ? 'Enter Key to Retest'
               : 'Test Connection'}
-        </button>
+        </Button>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="field-label">Model</label>
-            <select
+            <Select
               aria-label="Model"
               value={controller.selectedModel}
               onChange={(event) => controller.changeModel(event.target.value)}
               disabled={busy || !controller.testedConnection}
-              className="field-input"
             >
               {controller.testedConnection ? (
                 controller.testedConnection.discoveredModels.map((model) => (
@@ -86,29 +84,29 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
               ) : (
                 <option value="">No models discovered</option>
               )}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="field-label">Provider Name</label>
-            <input
+            <Input
               aria-label="Provider Name"
               type="text"
               value={controller.providerNameInput}
               onChange={(event) => controller.updateProviderName(event.target.value)}
               placeholder="OpenAI / gpt-demo"
               disabled={busy || !controller.testedConnection}
-              className="field-input"
             />
           </div>
         </div>
 
-        <button
+        <Button
+          variant="primary"
           onClick={() => void controller.addProvider()}
           disabled={busy || !controller.testedConnection || !controller.selectedModel}
-          className="btn-primary w-full"
+          className="w-full"
         >
           {controller.addingProvider ? 'Adding Provider...' : 'Add Provider'}
-        </button>
+        </Button>
       </section>
 
       <section className="surface-card p-4 space-y-3">
@@ -144,20 +142,22 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
                     </div>
                   </div>
                   <div className="flex flex-col gap-2 md:flex-row md:items-center">
-                    <button
+                    <Button
+                      variant="secondary"
                       onClick={() => controller.useConnection(connectionItem)}
                       disabled={busy || connectionItem.discoveredModels.length === 0}
-                      className="btn-secondary md:w-auto disabled:opacity-50"
+                      className="md:w-auto disabled:opacity-50"
                     >
                       Use Connection
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="secondary"
                       onClick={() => void controller.deleteConnection(connectionItem.id)}
                       disabled={busy}
-                      className="btn-secondary md:w-auto disabled:opacity-50"
+                      className="md:w-auto disabled:opacity-50"
                     >
                       {isDeleting ? 'Deleting...' : 'Delete Connection'}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               );
@@ -197,13 +197,14 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
                     </div>
                   </div>
                   {provider.kind === 'configured' ? (
-                    <button
+                    <Button
+                      variant="secondary"
                       onClick={() => void controller.deleteProvider(provider.id)}
                       disabled={busy}
-                      className="btn-secondary md:w-auto disabled:opacity-50"
+                      className="md:w-auto disabled:opacity-50"
                     >
                       {isDeleting ? 'Deleting...' : 'Delete Provider'}
-                    </button>
+                    </Button>
                   ) : (
                     <span className="text-[11px] font-medium uppercase tracking-wider text-text-faint">
                       Read only

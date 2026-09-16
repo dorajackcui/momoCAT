@@ -3,7 +3,7 @@ import {
   SEGMENT_QA_RULE_OPTIONS,
   type ProjectQASettings,
 } from '@cat/core/project';
-import { Button, Card, Modal } from '../ui';
+import { Button, Card, Modal, Checkbox } from '../ui';
 
 interface ProjectQASettingsModalProps {
   isOpen: boolean;
@@ -40,12 +40,12 @@ export function ProjectQASettingsModal({
   return (
     <Modal
       open={isOpen}
-      onClose={onClose}
+      onClose={saving ? undefined : onClose}
       size="lg"
       title="QA Settings"
       footer={
         <>
-          <Button variant="secondary" size="sm" onClick={onClose}>
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
           <Button variant="primary" size="sm" onClick={onSave} disabled={saving} loading={saving}>
@@ -60,8 +60,7 @@ export function ProjectQASettingsModal({
           return (
             <Card key={rule.id} variant="surface" className="p-3">
               <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={checked}
                   onChange={() => toggleRule(rule.id)}
                   className="mt-0.5 accent-brand"
@@ -78,8 +77,7 @@ export function ProjectQASettingsModal({
 
       <Card variant="subtle" className="p-3">
         <label className="flex items-start gap-3 cursor-pointer">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={current.instantQaOnConfirm}
             onChange={(e) =>
               onChange({

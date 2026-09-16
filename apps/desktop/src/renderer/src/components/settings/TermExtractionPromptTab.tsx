@@ -1,3 +1,4 @@
+import { Button, Input, Textarea } from '../ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   SourceTerminologyPromptPreset,
@@ -177,14 +178,14 @@ export function TermExtractionPromptTab() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
+          <Button
+            variant="primary"
             type="button"
             onClick={() => void handleCreate()}
             disabled={loading || saving || settings === null || creating}
-            className="btn-primary"
           >
             New Prompt
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -221,35 +222,38 @@ export function TermExtractionPromptTab() {
                 </div>
                 <div className="flex flex-wrap justify-end gap-1">
                   {!active && (
-                    <button
+                    <Button
+                      variant="secondary"
                       type="button"
                       aria-label={`Use ${prompt.name}`}
                       onClick={() => void handleActivate(prompt)}
                       disabled={saving}
-                      className="btn-secondary !px-2 !py-1 text-xs"
+                      className="!px-2 !py-1 text-xs"
                     >
                       Use
-                    </button>
+                    </Button>
                   )}
-                  <button
+                  <Button
+                    variant="ghost"
                     type="button"
                     aria-label={`${prompt.isBuiltin ? 'View' : 'Edit'} ${prompt.name}`}
                     onClick={() => void handleSelect(prompt)}
                     disabled={saving || selected}
-                    className="btn-ghost !px-2 !py-1 text-xs"
+                    className="!px-2 !py-1 text-xs"
                   >
                     {prompt.isBuiltin ? 'View' : 'Edit'}
-                  </button>
+                  </Button>
                   {!prompt.isBuiltin && (
-                    <button
+                    <Button
+                      variant="ghost"
                       type="button"
                       aria-label={`Delete ${prompt.name}`}
                       onClick={() => void handleDelete(prompt)}
                       disabled={saving}
-                      className="btn-ghost !px-2 !py-1 text-xs !text-danger"
+                      className="!px-2 !py-1 text-xs !text-danger"
                     >
                       Delete
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
@@ -278,13 +282,12 @@ export function TermExtractionPromptTab() {
               >
                 Prompt Name
               </label>
-              <input
+              <Input
                 id="term-extraction-prompt-name"
                 value={draftName}
                 onChange={(event) => setDraftName(event.target.value)}
                 disabled={saving}
                 maxLength={settings?.maxNameChars}
-                className="field-input"
               />
             </div>
           )}
@@ -296,7 +299,7 @@ export function TermExtractionPromptTab() {
             >
               Selection Prompt
             </label>
-            <textarea
+            <Textarea
               id="term-extraction-selection-prompt"
               aria-label="Term extraction selection prompt"
               value={draft}
@@ -305,7 +308,7 @@ export function TermExtractionPromptTab() {
               readOnly={selectedPrompt?.isBuiltin}
               maxLength={settings?.maxChars}
               rows={16}
-              className="field-input resize-y font-mono text-xs leading-relaxed"
+              className="resize-y font-mono text-xs leading-relaxed"
             />
           </div>
 
@@ -316,22 +319,17 @@ export function TermExtractionPromptTab() {
 
           {(creating || (selectedPrompt && !selectedPrompt.isBuiltin)) && (
             <div className="flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                onClick={cancelEditing}
-                disabled={saving}
-                className="btn-secondary"
-              >
+              <Button variant="secondary" type="button" onClick={cancelEditing} disabled={saving}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
                 type="button"
                 onClick={() => void handleSave()}
                 disabled={saving || !dirty || !valid}
-                className="btn-primary"
               >
                 {saving ? 'Saving...' : creating ? 'Save and Use' : 'Save Changes'}
-              </button>
+              </Button>
             </div>
           )}
 

@@ -1,3 +1,4 @@
+import { renderToStaticMarkup } from 'react-dom/server';
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { EditorBatchActionBar, type EditorBatchActionBarProps } from './EditorBatchActionBar';
@@ -36,13 +37,7 @@ function getButtons(
 }
 
 function resolveIconClassName(iconButtonElement: React.ReactElement): string {
-  const renderedButton = IconButton(iconButtonElement.props);
-  const child = renderedButton.props.children as React.ReactElement;
-  if (React.isValidElement(child) && typeof child.type === 'function') {
-    const nested = child.type(child.props);
-    return nested.props.className || '';
-  }
-  return (child.props?.className as string) || '';
+  return renderToStaticMarkup(iconButtonElement);
 }
 
 describe('EditorBatchActionBar', () => {

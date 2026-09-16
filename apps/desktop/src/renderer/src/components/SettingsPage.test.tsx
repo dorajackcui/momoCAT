@@ -213,14 +213,20 @@ describe('SettingsPage', () => {
       <SettingsPage updates={{ statusMessage: '', isBusy: false, checkForUpdates: vi.fn() }} />,
     );
 
-    fireEvent.click(await screen.findByRole('tab', { name: 'Proxy' }));
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Proxy' }), {
+      button: 0,
+      ctrlKey: false,
+    });
     await waitFor(() => expect(screen.getByText('Save Proxy Settings')).not.toBeDisabled());
     fireEvent.click(screen.getByLabelText('Use Custom Proxy URL'));
     fireEvent.change(screen.getByLabelText('Custom Proxy URL'), {
       target: { value: 'http://127.0.0.1:7890' },
     });
 
-    fireEvent.click(screen.getByRole('tab', { name: 'AI Connections' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'AI Connections' }), {
+      button: 0,
+      ctrlKey: false,
+    });
     await waitForConnectionsTabReady();
     fireEvent.change(screen.getByLabelText('Connection Name'), {
       target: { value: 'OpenAI' },
@@ -268,7 +274,10 @@ describe('SettingsPage', () => {
       <SettingsPage updates={{ statusMessage: '', isBusy: false, checkForUpdates: vi.fn() }} />,
     );
 
-    fireEvent.click(await screen.findByRole('tab', { name: 'Proxy' }));
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Proxy' }), {
+      button: 0,
+      ctrlKey: false,
+    });
     await waitFor(() => expect(screen.getByText('Save Proxy Settings')).not.toBeDisabled());
     fireEvent.click(screen.getByLabelText('Use Custom Proxy URL'));
     fireEvent.change(screen.getByLabelText('Custom Proxy URL'), {
@@ -290,7 +299,10 @@ describe('SettingsPage', () => {
       customProxyUrl: 'http://127.0.0.1:7002',
       effectiveProxyUrl: 'http://127.0.0.1:7002',
     });
-    fireEvent.click(screen.getByRole('tab', { name: 'AI Connections' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'AI Connections' }), {
+      button: 0,
+      ctrlKey: false,
+    });
     await waitForConnectionsTabReady();
     fireEvent.change(screen.getByLabelText('Connection Name'), {
       target: { value: 'OpenAI' },
@@ -304,7 +316,7 @@ describe('SettingsPage', () => {
     fireEvent.click(screen.getByText('Test Connection'));
     await waitFor(() => expect(apiClientMock.testAIConnection).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Proxy' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Proxy' }), { button: 0, ctrlKey: false });
     expect(screen.getByText('Save Proxy Settings')).toBeDisabled();
     expect(screen.getByText('Active proxy: http://127.0.0.1:7002')).toBeInTheDocument();
     expect(screen.queryByText('Proxy applied: http://127.0.0.1:7001')).not.toBeInTheDocument();
@@ -313,7 +325,10 @@ describe('SettingsPage', () => {
     await waitFor(() => expect(screen.getByText('Save Proxy Settings')).not.toBeDisabled());
     expect(screen.queryByText('Connection tested: 2 models discovered.')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'AI Connections' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'AI Connections' }), {
+      button: 0,
+      ctrlKey: false,
+    });
     expect(await screen.findByText('Connection tested: 2 models discovered.')).toBeInTheDocument();
   });
 
@@ -438,7 +453,10 @@ describe('SettingsPage', () => {
       <SettingsPage updates={{ statusMessage: '', isBusy: false, checkForUpdates: vi.fn() }} />,
     );
 
-    fireEvent.click(await screen.findByRole('tab', { name: 'Proxy' }));
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Proxy' }), {
+      button: 0,
+      ctrlKey: false,
+    });
     await screen.findByText('Proxy Settings');
     await waitFor(() => expect(screen.getByText('Save Proxy Settings')).not.toBeDisabled());
 
@@ -469,7 +487,10 @@ describe('SettingsPage', () => {
       <SettingsPage updates={{ statusMessage: '', isBusy: false, checkForUpdates: vi.fn() }} />,
     );
 
-    fireEvent.click(await screen.findByRole('tab', { name: 'Term Extraction' }));
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: 'Term Extraction' }), {
+      button: 0,
+      ctrlKey: false,
+    });
     const editor = await screen.findByLabelText('Term extraction selection prompt');
     expect(editor).toHaveValue('Default extraction rules.');
     expect(editor).toHaveAttribute('readonly');
@@ -508,7 +529,10 @@ describe('SettingsPage', () => {
     const { rerender } = render(<SettingsPage updates={updates} />);
     await waitForConnectionsTabReady();
     expect(screen.queryByRole('region', { name: 'Software updates' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('tab', { name: 'Updates' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Updates' }), {
+      button: 0,
+      ctrlKey: false,
+    });
     expect(screen.getByText(`Current version: v${version}`)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     expect(updates.checkForUpdates).toHaveBeenCalledTimes(1);
@@ -517,10 +541,13 @@ describe('SettingsPage', () => {
     );
     expect(screen.getByRole('button', { name: 'Updating…' })).toBeDisabled();
     expect(screen.getByRole('status')).toHaveTextContent('Downloading 25%');
-    fireEvent.click(screen.getByRole('tab', { name: 'Proxy' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Proxy' }), { button: 0, ctrlKey: false });
     expect(screen.queryByRole('region', { name: 'Software updates' })).not.toBeInTheDocument();
     rerender(<SettingsPage updates={{ ...updates, statusMessage: 'Ready to restart' }} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Updates' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Updates' }), {
+      button: 0,
+      ctrlKey: false,
+    });
     expect(screen.getByRole('status')).toHaveTextContent('Ready to restart');
   });
 });

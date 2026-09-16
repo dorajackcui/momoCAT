@@ -1,3 +1,4 @@
+import { Menu, MenuItem, MenuHeading, Popover, ToggleButton, IconButton, Input } from '../ui';
 import React from 'react';
 import { EditorBatchActionBar } from './EditorBatchActionBar';
 import {
@@ -53,8 +54,6 @@ interface EditorFilterBarProps {
   toggleQualityFilter: (value: 'qa_error' | 'qa_warning' | 'save_error') => void;
   clearFilters: () => void;
   hasActiveFilter: boolean;
-  filterMenuRef: React.RefObject<HTMLDivElement | null>;
-  sortMenuRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
@@ -96,9 +95,9 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
   toggleQualityFilter,
   clearFilters,
   hasActiveFilter,
-  filterMenuRef,
-  sortMenuRef,
 }) => {
+  const filterMenuRef = React.useRef<HTMLButtonElement>(null);
+  const sortMenuRef = React.useRef<HTMLButtonElement>(null);
   return (
     <div className="sticky top-0 z-20 bg-surface border-b border-border">
       <EditorBatchActionBar
@@ -115,17 +114,16 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
       />
 
       <div className="flex items-center gap-2 px-4 py-2.5 bg-surface">
-        <div ref={sortMenuRef as React.RefObject<HTMLDivElement>} className="relative shrink-0">
-          <button
+        <div className="relative shrink-0">
+          <IconButton
             type="button"
+            ref={sortMenuRef}
             onClick={toggleSortMenu}
-            className={`h-8 w-8 rounded-md border transition-colors ${
-              isSortMenuOpen || sortBy !== 'default'
-                ? 'bg-brand-soft text-brand border-brand/30'
-                : 'bg-surface text-text-muted border-border hover:bg-muted'
-            }`}
+            tone={isSortMenuOpen || sortBy !== 'default' ? 'brand' : 'neutral'}
             title="Sort options"
             aria-label="Sort options"
+            aria-haspopup="menu"
+            aria-expanded={isSortMenuOpen}
           >
             <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -135,21 +133,24 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
                 d="M8 7h8M6 12h12M10 17h4"
               />
             </svg>
-          </button>
+          </IconButton>
 
           {sortBy !== 'default' && (
             <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-brand" />
           )}
 
           {isSortMenuOpen && (
-            <div className="absolute left-0 top-full mt-2 w-64 rounded-lg border border-border bg-surface shadow-lg p-2 z-30 space-y-1">
-              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-text-faint">
-                Sort
-              </div>
+            <Menu
+              anchor={sortMenuRef}
+              onClose={toggleSortMenu}
+              label="Sort"
+              placement="bottom-start"
+            >
+              <MenuHeading>Sort</MenuHeading>
               {FILTER_SORT_OPTIONS.map((option) => {
                 const active = sortBy === option.sortBy && sortDirection === option.sortDirection;
                 return (
-                  <button
+                  <MenuItem
                     key={`${option.sortBy}-${option.sortDirection}`}
                     type="button"
                     onClick={() => handleSortChange(option.sortBy, option.sortDirection)}
@@ -160,15 +161,15 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
                     }`}
                   >
                     {option.label}
-                  </button>
+                  </MenuItem>
                 );
               })}
-            </div>
+            </Menu>
           )}
         </div>
 
         <label className="relative flex-1 min-w-0">
-          <input
+          <Input
             ref={sourceSearchInputRef as React.RefObject<HTMLInputElement>}
             value={sourceQueryInput}
             onChange={(event) => setSourceQueryInput(event.target.value)}
@@ -190,7 +191,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
         </label>
 
         <div className="relative flex-1 min-w-0">
-          <input
+          <Input
             ref={targetSearchInputRef as React.RefObject<HTMLInputElement>}
             value={targetQueryInput}
             onChange={(event) => setTargetQueryInput(event.target.value)}
@@ -241,16 +242,15 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
           </button>
         </div>
 
-        <div ref={filterMenuRef as React.RefObject<HTMLDivElement>} className="relative shrink-0">
-          <button
+        <div className="relative shrink-0">
+          <IconButton
             type="button"
+            ref={filterMenuRef}
             onClick={toggleFilterMenu}
-            className={`h-8 w-8 rounded-md border transition-colors ${
-              isFilterMenuOpen || activeFilterCount > 0
-                ? 'bg-brand-soft text-brand border-brand/30'
-                : 'bg-surface text-text-muted border-border hover:bg-muted'
-            }`}
+            tone={isFilterMenuOpen || activeFilterCount > 0 ? 'brand' : 'neutral'}
             aria-label="Open filters"
+            aria-haspopup="dialog"
+            aria-expanded={isFilterMenuOpen}
             title="Open filters"
           >
             <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -261,7 +261,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
                 d="M3 4h18M6 12h12M10 20h4"
               />
             </svg>
-          </button>
+          </IconButton>
           {activeFilterCount > 0 && (
             <span className="absolute -top-1 -right-1 rounded-full bg-brand px-1.5 py-0.5 text-[9px] text-white leading-none">
               {activeFilterCount}
@@ -269,7 +269,12 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
           )}
 
           {isFilterMenuOpen && (
-            <div className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-border bg-surface shadow-lg p-3 z-30 space-y-3">
+            <Popover
+              anchor={filterMenuRef}
+              onClose={toggleFilterMenu}
+              label="Filters"
+              className="w-80 space-y-3"
+            >
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-wider text-text-faint mb-2">
                   Quick Presets
@@ -278,18 +283,16 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
                   {FILTER_QUICK_PRESET_OPTIONS.map((preset) => {
                     const active = quickPreset === preset.value;
                     return (
-                      <button
+                      <ToggleButton
+                        pressed={active}
+                        size="sm"
                         key={preset.value}
                         type="button"
                         onClick={() => applyQuickPreset(preset.value)}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition-colors ${
-                          active
-                            ? 'bg-brand-soft text-brand border-brand/30'
-                            : 'bg-surface text-text-muted border-border hover:text-text-muted hover:bg-muted'
-                        }`}
+                        className="!px-2.5 !py-1 text-[11px]"
                       >
                         {preset.label}
-                      </button>
+                      </ToggleButton>
                     );
                   })}
                 </div>
@@ -303,18 +306,16 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
                   {FILTER_MATCH_MODE_OPTIONS.map((mode) => {
                     const active = matchMode === mode.value;
                     return (
-                      <button
+                      <ToggleButton
+                        pressed={active}
+                        size="sm"
                         key={mode.value}
                         type="button"
                         onClick={() => handleMatchModeChange(mode.value)}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition-colors ${
-                          active
-                            ? 'bg-brand-soft text-brand border-brand/30'
-                            : 'bg-surface text-text-muted border-border hover:text-text-muted hover:bg-muted'
-                        }`}
+                        className="!px-2.5 !py-1 text-[11px]"
                       >
                         {mode.label}
-                      </button>
+                      </ToggleButton>
                     );
                   })}
                 </div>
@@ -328,18 +329,16 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
                   {FILTER_STATUS_OPTIONS.map((option) => {
                     const active = statusFilter === option.value;
                     return (
-                      <button
+                      <ToggleButton
+                        pressed={active}
+                        size="sm"
                         key={option.value}
                         type="button"
                         onClick={() => handleStatusFilterChange(option.value)}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition-colors ${
-                          active
-                            ? 'bg-brand-soft text-brand border-brand/30'
-                            : 'bg-surface text-text-muted border-border hover:text-text-muted hover:bg-muted'
-                        }`}
+                        className="!px-2.5 !py-1 text-[11px]"
                       >
                         {option.label}
-                      </button>
+                      </ToggleButton>
                     );
                   })}
                 </div>
@@ -353,23 +352,21 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
                   {FILTER_QUALITY_OPTIONS.map((option) => {
                     const active = qualityFilters.includes(option.value);
                     return (
-                      <button
+                      <ToggleButton
+                        pressed={active}
+                        size="sm"
                         key={option.value}
                         type="button"
                         onClick={() => toggleQualityFilter(option.value)}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition-colors ${
-                          active
-                            ? 'bg-brand-soft text-brand border-brand/30'
-                            : 'bg-surface text-text-muted border-border hover:text-text-muted hover:bg-muted'
-                        }`}
+                        className="!px-2.5 !py-1 text-[11px]"
                       >
                         {option.label}
-                      </button>
+                      </ToggleButton>
                     );
                   })}
                 </div>
               </div>
-            </div>
+            </Popover>
           )}
         </div>
 

@@ -1,3 +1,4 @@
+import { Select } from './ui';
 import React from 'react';
 import { LANGUAGE_OPTIONS } from './languageOptions';
 
@@ -12,12 +13,12 @@ interface LanguageSelectProps {
 export const LanguageSelect: React.FC<LanguageSelectProps> = ({
   value,
   onChange,
-  className = 'field-input',
+  className,
   id,
   required = false,
 }) => {
   return (
-    <select
+    <Select
       id={id}
       value={value}
       onChange={(event) => onChange(event.target.value)}
@@ -29,6 +30,6 @@ export const LanguageSelect: React.FC<LanguageSelectProps> = ({
           {language.label}
         </option>
       ))}
-    </select>
+    </Select>
   );
 };

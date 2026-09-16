@@ -3,6 +3,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Project } from '@cat/core/project';
+import { Tabs } from '../ui';
 import { ProjectDetailHeader } from './ProjectDetailHeader';
 
 const PROJECT: Project = {
@@ -21,7 +22,6 @@ function renderHeader(overrides: Partial<Parameters<typeof ProjectDetailHeader>[
     project: PROJECT,
     loading: false,
     activeTab: 'files',
-    onTabChange: vi.fn(),
     onOpenQASettings: vi.fn(),
     isAddFileMenuOpen: false,
     onToggleAddFileMenu: vi.fn(),
@@ -30,8 +30,13 @@ function renderHeader(overrides: Partial<Parameters<typeof ProjectDetailHeader>[
     onOpenPasteSource: vi.fn(),
     ...overrides,
   };
-  render(<ProjectDetailHeader {...props} />);
-  return props;
+  const onTabChange = vi.fn();
+  render(
+    <Tabs value={props.activeTab} onValueChange={onTabChange}>
+      <ProjectDetailHeader {...props} />
+    </Tabs>,
+  );
+  return { ...props, onTabChange };
 }
 
 describe('ProjectDetailHeader', () => {
@@ -40,8 +45,14 @@ describe('ProjectDetailHeader', () => {
 
     expect(screen.getByText('Demo Project')).toBeInTheDocument();
     expect(screen.getByText('en → fr')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Translation Memory' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Term Bases' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Translation Memory' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Term Bases' }), {
+      button: 0,
+      ctrlKey: false,
+    });
 
     expect(props.onTabChange).toHaveBeenNthCalledWith(1, 'tm');
     expect(props.onTabChange).toHaveBeenNthCalledWith(2, 'tb');

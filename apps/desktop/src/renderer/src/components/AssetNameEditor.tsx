@@ -1,3 +1,4 @@
+import { Input } from './ui';
 import React, { useEffect, useId, useRef, useState } from 'react';
 
 interface AssetNameEditorProps {
@@ -64,7 +65,7 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
         onClick={(event) => event.stopPropagation()}
         className="flex items-center gap-1 min-w-0"
       >
-        <input
+        <Input
           ref={inputRef}
           type="text"
           value={draftName}
@@ -75,7 +76,7 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
               cancel();
             }
           }}
-          className="field-input !px-2 !py-1 text-sm font-bold min-w-0"
+          className="!px-2 !py-1 text-sm font-bold min-w-0"
           aria-label={`Rename ${assetLabel}`}
           aria-describedby={suffix ? suffixDescriptionId : undefined}
           disabled={isSaving}

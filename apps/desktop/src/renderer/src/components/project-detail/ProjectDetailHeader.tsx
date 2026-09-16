@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
+import { Menu, MenuItem, TabsList, Button } from '../ui';
 import type { Project } from '@cat/core/project';
 
 export type ProjectDetailTab = 'files' | 'tm' | 'tb';
@@ -7,7 +8,6 @@ interface ProjectDetailHeaderProps {
   project: Project | null;
   loading: boolean;
   activeTab: ProjectDetailTab;
-  onTabChange: (tab: ProjectDetailTab) => void;
   onOpenQASettings: () => void;
   isAddFileMenuOpen: boolean;
   onToggleAddFileMenu: () => void;
@@ -20,7 +20,6 @@ export function ProjectDetailHeader({
   project,
   loading,
   activeTab,
-  onTabChange,
   onOpenQASettings,
   isAddFileMenuOpen,
   onToggleAddFileMenu,
@@ -28,29 +27,7 @@ export function ProjectDetailHeader({
   onOpenFileImport,
   onOpenPasteSource,
 }: ProjectDetailHeaderProps) {
-  const addFileMenuRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!isAddFileMenuOpen) return;
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCloseAddFileMenu();
-    };
-    const closeOnOutsidePointer = (event: PointerEvent | MouseEvent) => {
-      const target = event.target;
-      if (target instanceof Node && addFileMenuRef.current?.contains(target)) return;
-      onCloseAddFileMenu();
-    };
-
-    document.addEventListener('keydown', closeOnEscape);
-    document.addEventListener('pointerdown', closeOnOutsidePointer);
-    document.addEventListener('mousedown', closeOnOutsidePointer);
-    return () => {
-      document.removeEventListener('keydown', closeOnEscape);
-      document.removeEventListener('pointerdown', closeOnOutsidePointer);
-      document.removeEventListener('mousedown', closeOnOutsidePointer);
-    };
-  }, [isAddFileMenuOpen, onCloseAddFileMenu]);
+  const addFileMenuRef = useRef<HTMLButtonElement | null>(null);
 
   return (
     <div className="workspace-project-header">
@@ -64,32 +41,42 @@ export function ProjectDetailHeader({
       </div>
 
       <div className="workspace-project-toolbar">
-        <ProjectDetailTabs activeTab={activeTab} onTabChange={onTabChange} />
+        <TabsList
+          label="Project sections"
+          items={[
+            { value: 'files', label: 'Tasks' },
+            { value: 'tm', label: 'Translation Memory' },
+            { value: 'tb', label: 'Term Bases' },
+          ]}
+        />
         {project && activeTab === 'files' ? (
           <div className="flex items-center gap-2">
             {project.projectType === 'translation' ? (
-              <button onClick={onOpenQASettings} disabled={loading} className="btn-secondary">
+              <Button variant="secondary" onClick={onOpenQASettings} disabled={loading}>
                 QA Settings
-              </button>
+              </Button>
             ) : null}
-            <div className="relative" ref={addFileMenuRef}>
-              <button
+            <div className="relative">
+              <Button
+                variant="primary"
+                ref={addFileMenuRef}
                 onClick={onToggleAddFileMenu}
                 disabled={loading}
-                className="btn-primary"
                 aria-haspopup="menu"
                 aria-expanded={isAddFileMenuOpen}
               >
                 + Add File
-              </button>
+              </Button>
               {isAddFileMenuOpen ? (
-                <div
-                  className="absolute right-0 mt-2 w-40 surface-card p-1 shadow-float z-20"
-                  role="menu"
+                <Menu
+                  anchor={addFileMenuRef}
+                  onClose={onCloseAddFileMenu}
+                  label="Add file"
+                  className="w-40"
                 >
-                  <AddFileMenuItem label="Import" onClick={onOpenFileImport} />
-                  <AddFileMenuItem label="Paste" onClick={onOpenPasteSource} />
-                </div>
+                  <MenuItem onClick={onOpenFileImport}>Import</MenuItem>
+                  <MenuItem onClick={onOpenPasteSource}>Paste</MenuItem>
+                </Menu>
               ) : null}
             </div>
           </div>
@@ -122,68 +109,5 @@ function ProjectSummary({ project }: { project: Project }) {
         {projectTypeLabel}
       </span>
     </div>
-  );
-}
-
-function ProjectDetailTabs({
-  activeTab,
-  onTabChange,
-}: {
-  activeTab: ProjectDetailTab;
-  onTabChange: (tab: ProjectDetailTab) => void;
-}) {
-  return (
-    <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
-      <ProjectDetailTabButton
-        label="Tasks"
-        active={activeTab === 'files'}
-        onClick={() => onTabChange('files')}
-      />
-      <ProjectDetailTabButton
-        label="Translation Memory"
-        active={activeTab === 'tm'}
-        onClick={() => onTabChange('tm')}
-      />
-      <ProjectDetailTabButton
-        label="Term Bases"
-        active={activeTab === 'tb'}
-        onClick={() => onTabChange('tb')}
-      />
-    </div>
-  );
-}
-
-function ProjectDetailTabButton({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-current={active ? 'page' : undefined}
-      className={`shrink-0 px-3 py-2 text-sm font-medium rounded-control transition-colors ${
-        active ? 'bg-muted text-text' : 'text-text-muted hover:text-text hover:bg-surface'
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function AddFileMenuItem({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full text-left px-3 py-2 text-sm font-semibold text-text-muted hover:text-text hover:bg-muted rounded-control"
-      role="menuitem"
-    >
-      {label}
-    </button>
   );
 }

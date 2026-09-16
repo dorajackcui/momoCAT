@@ -1,3 +1,4 @@
+import { Button, Input } from './ui';
 import React, { useState, useEffect } from 'react';
 import { TMImportWizard, type TMWizardMode } from './TMImportWizard';
 import { AssetPreviewPage } from './AssetPreviewPage';
@@ -342,9 +343,9 @@ export const TMManager: React.FC = () => {
             <h1 className="text-2xl font-semibold text-text">Translation memory</h1>
             <p className="text-sm text-text-muted mt-1">Manage your Main TMs</p>
           </div>
-          <button onClick={() => setShowCreate(true)} className="btn-primary">
+          <Button variant="primary" onClick={() => setShowCreate(true)}>
             Create Main TM
-          </button>
+          </Button>
         </div>
 
         {importNotice && (
@@ -394,11 +395,11 @@ export const TMManager: React.FC = () => {
             <form onSubmit={handleCreate} className="grid grid-cols-4 gap-4 items-end">
               <div className="col-span-2">
                 <label className="field-label !text-[10px]">TM Name</label>
-                <input
+                <Input
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="field-input !px-3 !py-2 text-sm"
+                  className="!px-3 !py-2 text-sm"
                   placeholder="e.g. Technical Glossary"
                   autoFocus
                 />
@@ -408,7 +409,7 @@ export const TMManager: React.FC = () => {
                 <LanguageSelect
                   value={newSrc}
                   onChange={setNewSrc}
-                  className="field-input !px-3 !py-2 text-sm"
+                  className="!px-3 !py-2 text-sm"
                 />
               </div>
               <div>
@@ -416,20 +417,16 @@ export const TMManager: React.FC = () => {
                 <LanguageSelect
                   value={newTgt}
                   onChange={setNewTgt}
-                  className="field-input !px-3 !py-2 text-sm"
+                  className="!px-3 !py-2 text-sm"
                 />
               </div>
               <div className="col-span-4 flex justify-end gap-2 mt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCreate(false)}
-                  className="btn-secondary"
-                >
+                <Button variant="secondary" type="button" onClick={() => setShowCreate(false)}>
                   Cancel
-                </button>
-                <button type="submit" className="btn-primary !px-6">
+                </Button>
+                <Button variant="primary" type="submit" className="!px-6">
                   Save TM
-                </button>
+                </Button>
               </div>
             </form>
           </div>

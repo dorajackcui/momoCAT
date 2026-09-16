@@ -1,3 +1,4 @@
+import { Button } from './components/ui';
 import React, { useCallback, useState } from 'react';
 import type { Project, ProjectType } from '@cat/core/project';
 import { CreateProjectModal } from './components/CreateProjectModal';
@@ -102,13 +103,14 @@ function App(): JSX.Element {
                       ? 'Choose a project in the sidebar to continue your work.'
                       : 'Create a project to start translating, reviewing, or processing your files.'}
                   </p>
-                  <button
+                  <Button
+                    variant="primary"
                     type="button"
-                    className="btn-primary mt-6"
+                    className="mt-6"
                     onClick={() => setIsCreateOpen(true)}
                   >
                     + New project
-                  </button>
+                  </Button>
                 </div>
               </section>
             )}

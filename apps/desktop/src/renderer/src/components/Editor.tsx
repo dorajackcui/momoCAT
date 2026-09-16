@@ -115,8 +115,6 @@ export const Editor: React.FC<EditorProps> = ({
     sortDirection,
     isFilterMenuOpen,
     isSortMenuOpen,
-    filterMenuRef,
-    sortMenuRef,
     filteredSegments,
     getFilteredSegmentIds,
     activeFilteredIndex,
@@ -402,8 +400,6 @@ export const Editor: React.FC<EditorProps> = ({
               toggleQualityFilter={toggleQualityFilter}
               clearFilters={clearFilters}
               hasActiveFilter={hasActiveFilter}
-              filterMenuRef={filterMenuRef}
-              sortMenuRef={sortMenuRef}
             />
 
             <EditorListPane

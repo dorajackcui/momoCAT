@@ -1,3 +1,4 @@
+import { useAutoFocusProps } from './autoFocus';
 import React from 'react';
 import { cx } from './cx';
 
@@ -18,16 +19,20 @@ const sizeClass: Record<NonNullable<IconButtonProps['size']>, string> = {
   lg: 'h-10 w-10',
 };
 
-export const IconButton: React.FC<IconButtonProps> = ({
-  tone = 'neutral',
-  size = 'md',
-  className,
-  children,
-  ...rest
-}: IconButtonProps) => {
+export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
+  { tone = 'neutral', size = 'md', className, children, type = 'button', ...rest },
+  ref,
+) {
+  const focusProps = useAutoFocusProps(rest.autoFocus);
   return (
-    <button {...rest} className={cx('icon-btn', toneClass[tone], sizeClass[size], className)}>
+    <button
+      ref={ref}
+      type={type}
+      {...rest}
+      {...focusProps}
+      className={cx('icon-btn', toneClass[tone], sizeClass[size], className)}
+    >
       {children}
     </button>
   );
-};
+});

@@ -1,6 +1,9 @@
+import { Input } from '../ui';
 import React from 'react';
 
 interface EditorRowTargetActionsProps {
+  tagMenuAnchorRef: React.Ref<HTMLButtonElement>;
+  isTagMenuOpen: boolean;
   aiRefineInputRef: React.Ref<HTMLInputElement>;
   showAIRefineInput: boolean;
   showAIRefineControl: boolean;
@@ -29,6 +32,8 @@ const LoadingSpinnerIcon: React.FC = () => (
 );
 
 export const EditorRowTargetActions: React.FC<EditorRowTargetActionsProps> = ({
+  tagMenuAnchorRef,
+  isTagMenuOpen,
   aiRefineInputRef,
   showAIRefineInput,
   showAIRefineControl,
@@ -47,7 +52,7 @@ export const EditorRowTargetActions: React.FC<EditorRowTargetActionsProps> = ({
   <>
     {showAIRefineInput && showAIRefineControl && (
       <div className="absolute top-1.5 right-9 z-30">
-        <input
+        <Input
           ref={aiRefineInputRef}
           value={aiRefineDraft}
           onClick={(event) => event.stopPropagation()}
@@ -55,7 +60,7 @@ export const EditorRowTargetActions: React.FC<EditorRowTargetActionsProps> = ({
           onKeyDown={onAIRefineInputKeyDown}
           disabled={isAIRefining}
           placeholder="Refine prompt(Enter to send)"
-          className="field-input !w-56 !px-2.5 !py-1 text-[11px] leading-tight !bg-surface/50 border-border/70 backdrop-blur-sm shadow-sm disabled:opacity-60 disabled:cursor-wait"
+          className="!w-56 !px-2.5 !py-1 text-[11px] leading-tight !bg-surface/50 border-border/70 backdrop-blur-sm shadow-sm disabled:opacity-60 disabled:cursor-wait"
           aria-label="AI refine instruction"
         />
       </div>
@@ -123,6 +128,9 @@ export const EditorRowTargetActions: React.FC<EditorRowTargetActionsProps> = ({
 
       {canInsertTags && (
         <button
+          ref={tagMenuAnchorRef}
+          aria-haspopup="menu"
+          aria-expanded={isTagMenuOpen}
           type="button"
           onClick={(event) => {
             event.stopPropagation();

@@ -1,56 +1,27 @@
 import React from 'react';
 import type { Token } from '@cat/core/models';
+import { Menu, MenuItem, type PopupAnchor } from './ui';
 import { formatTagAsMemoQMarker } from '@cat/core/tag';
 
-/**
- * Props interface for the TagInsertionUI component
- *
- * This component provides a visual interface for inserting tags from the source
- * segment into the target segment. It displays a dropdown list of available tags
- * and an "Insert All Tags" button.
- */
 export interface TagInsertionUIProps {
-  /** Array of source tags available for insertion */
   sourceTags: Token[];
 
-  /** Callback when a specific tag is selected for insertion */
   onInsertTag: (tagIndex: number) => void;
 
-  /** Callback when "Insert All Tags" button is clicked */
   onInsertAllTags: () => void;
 
-  /** Controls visibility of the insertion UI */
   isVisible: boolean;
+  anchor: PopupAnchor;
+  onClose: () => void;
 }
 
-/**
- * TagInsertionUI Component
- *
- * Provides a visual interface for inserting tags from source into target segments.
- *
- * Features:
- * - Displays a dropdown list of available source tags
- * - Shows tag preview with display format and full content
- * - Provides "Insert All Tags" button for bulk insertion
- * - Automatically hidden when no tags are available or isVisible is false
- *
- * **Validates: Requirements 11.1, 11.2, 11.3**
- *
- * @example
- * ```tsx
- * <TagInsertionUI
- *   sourceTags={sourceTokens.filter(t => t.type === 'tag')}
- *   onInsertTag={(index) => handleInsertTag(index)}
- *   onInsertAllTags={() => handleInsertAllTags()}
- *   isVisible={isSegmentActive}
- * />
- * ```
- */
 export const TagInsertionUI: React.FC<TagInsertionUIProps> = ({
   sourceTags,
   onInsertTag,
   onInsertAllTags,
   isVisible,
+  anchor,
+  onClose,
 }) => {
   // Don't render if not visible or no tags available
   if (!isVisible || sourceTags.length === 0) {
@@ -58,21 +29,16 @@ export const TagInsertionUI: React.FC<TagInsertionUIProps> = ({
   }
 
   return (
-    <div
-      className="absolute top-full left-0 mt-1 bg-surface border border-border rounded-md shadow-lg z-30 min-w-[200px]"
-      role="menu"
-      aria-label="Tag insertion menu"
-    >
+    <Menu anchor={anchor} onClose={onClose} label="Tag insertion menu" className="w-64">
       {/* Insert All Tags Button */}
       <div className="p-2 border-b border-border/60">
-        <button
+        <MenuItem
           onClick={onInsertAllTags}
           className="w-full px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand-soft rounded transition-colors"
-          role="menuitem"
           aria-label="Insert all tags from source"
         >
           Insert All Tags
-        </button>
+        </MenuItem>
       </div>
 
       {/* Individual Tag List */}
@@ -81,11 +47,10 @@ export const TagInsertionUI: React.FC<TagInsertionUIProps> = ({
           const marker = formatTagAsMemoQMarker(tag.content, index + 1);
 
           return (
-            <button
+            <MenuItem
               key={index}
               onClick={() => onInsertTag(index)}
               className="w-full px-3 py-2 text-left hover:bg-muted flex items-center gap-2 transition-colors"
-              role="menuitem"
               aria-label={`Insert tag ${index + 1}: ${tag.content}`}
             >
               {/* Tag Preview Capsule */}
@@ -98,10 +63,10 @@ export const TagInsertionUI: React.FC<TagInsertionUIProps> = ({
 
               {/* Full Tag Content */}
               <span className="text-xs text-text-muted truncate">{tag.content}</span>
-            </button>
+            </MenuItem>
           );
         })}
       </div>
-    </div>
+    </Menu>
   );
 };

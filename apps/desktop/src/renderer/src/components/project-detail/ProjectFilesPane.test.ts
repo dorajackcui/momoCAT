@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ProjectAIController } from '../../hooks/projectDetail/useProjectAI';
 import type { ProjectFileRecord } from '../../../../shared/ipc';
@@ -147,7 +148,7 @@ function createAIControllerMock(overrides?: Partial<ProjectAIController>): {
 }
 
 function renderPane(ai: ProjectAIController, projectType: 'translation' | 'review' | 'custom') {
-  return renderToStaticMarkup(
+  return render(
     React.createElement(ProjectFilesPane, {
       files: [createFile()],
       onOpenFile: vi.fn(),
@@ -163,7 +164,7 @@ function renderPane(ai: ProjectAIController, projectType: 'translation' | 'revie
       aiSettingsExpanded: false,
       onToggleAISettings: vi.fn(),
     }),
-  );
+  ).baseElement.innerHTML;
 }
 
 describe('ProjectFilesPane', () => {
@@ -191,7 +192,7 @@ describe('ProjectFilesPane', () => {
     const onOpenReferenceActions = vi.fn();
     capturedButtons.length = 0;
 
-    renderToStaticMarkup(
+    render(
       React.createElement(ProjectFilesPane, {
         files: [file],
         onOpenFile: vi.fn(),
@@ -207,7 +208,7 @@ describe('ProjectFilesPane', () => {
         aiSettingsExpanded: false,
         onToggleAISettings: vi.fn(),
       }),
-    );
+    ).baseElement.innerHTML;
 
     const inspectButton = capturedButtons.find((button) => button.label === 'TM/TB');
     expect(inspectButton).toBeDefined();
@@ -245,14 +246,14 @@ describe('ProjectFilesPane', () => {
   });
 
   it('renders target baseline options without legacy translation scope controls', () => {
-    const html = renderToStaticMarkup(
+    const html = render(
       React.createElement(ProjectAITranslateModal, {
         open: true,
         fileName: 'demo.xlsx',
         onClose: vi.fn(),
         onConfirm: vi.fn(),
       }),
-    );
+    ).baseElement.innerHTML;
 
     expect(html).toContain('AI Translate Options');
     expect(html).toContain('Target Baseline');

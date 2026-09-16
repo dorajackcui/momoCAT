@@ -1,33 +1,20 @@
+import { useAutoFocusProps } from './autoFocus';
 import React from 'react';
-import { cx } from './cx';
+import { fieldClasses, type FieldStyleProps } from './fieldStyles';
 
 export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
-  tone?: 'default' | 'danger' | 'success';
-  size?: 'sm' | 'md' | 'lg';
+  tone?: FieldStyleProps['tone'];
+  size?: FieldStyleProps['size'];
 }
 
-const toneClass: Record<NonNullable<SelectProps['tone']>, string> = {
-  default: '',
-  danger: 'field-input-danger',
-  success: 'field-input-success',
-};
-
-const sizeClass: Record<NonNullable<SelectProps['size']>, string> = {
-  sm: 'px-3 py-1.5 text-xs',
-  md: 'px-4 py-2 text-sm',
-  lg: 'px-4 py-2.5 text-sm',
-};
-
-export const Select: React.FC<SelectProps> = ({
-  tone = 'default',
-  size = 'md',
-  className,
-  children,
-  ...rest
-}: SelectProps) => {
+export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(function Select(
+  { tone = 'default', size = 'md', className, children, ...rest },
+  ref,
+) {
+  const focusProps = useAutoFocusProps(rest.autoFocus);
   return (
-    <select {...rest} className={cx('field-input', toneClass[tone], sizeClass[size], className)}>
+    <select ref={ref} {...rest} {...focusProps} className={fieldClasses(tone, size, className)}>
       {children}
     </select>
   );
-};
+});

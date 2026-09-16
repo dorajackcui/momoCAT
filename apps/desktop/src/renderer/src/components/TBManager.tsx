@@ -1,3 +1,4 @@
+import { Button, Input } from './ui';
 import React, { useEffect, useState } from 'react';
 import { TBImportWizard, type TBWizardMode } from './TBImportWizard';
 import { AssetPreviewPage } from './AssetPreviewPage';
@@ -330,9 +331,9 @@ export const TBManager: React.FC = () => {
               Manage reusable term bases for consistency.
             </p>
           </div>
-          <button onClick={() => setShowCreate(true)} className="btn-primary">
+          <Button variant="primary" onClick={() => setShowCreate(true)}>
             Create Term Base
-          </button>
+          </Button>
         </div>
 
         {importNotice && (
@@ -382,11 +383,11 @@ export const TBManager: React.FC = () => {
             <form onSubmit={handleCreate} className="grid grid-cols-4 gap-4 items-end">
               <div className="col-span-2">
                 <label className="field-label !text-[10px]">Name</label>
-                <input
+                <Input
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="field-input !px-3 !py-2 text-sm"
+                  className="!px-3 !py-2 text-sm"
                   placeholder="e.g. Product Glossary"
                   autoFocus
                 />
@@ -396,7 +397,7 @@ export const TBManager: React.FC = () => {
                 <LanguageSelect
                   value={newSrc}
                   onChange={setNewSrc}
-                  className="field-input !px-3 !py-2 text-sm"
+                  className="!px-3 !py-2 text-sm"
                 />
               </div>
               <div>
@@ -404,20 +405,16 @@ export const TBManager: React.FC = () => {
                 <LanguageSelect
                   value={newTgt}
                   onChange={setNewTgt}
-                  className="field-input !px-3 !py-2 text-sm"
+                  className="!px-3 !py-2 text-sm"
                 />
               </div>
               <div className="col-span-4 flex justify-end gap-2 mt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCreate(false)}
-                  className="btn-secondary"
-                >
+                <Button variant="secondary" type="button" onClick={() => setShowCreate(false)}>
                   Cancel
-                </button>
-                <button type="submit" className="btn-primary !px-6">
+                </Button>
+                <Button variant="primary" type="submit" className="!px-6">
                   Save
-                </button>
+                </Button>
               </div>
             </form>
           </div>

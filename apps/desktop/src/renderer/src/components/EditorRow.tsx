@@ -102,6 +102,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
     [segment.targetTokens, segment.sourceTokens],
   );
 
+  const tagMenuAnchorRef = React.useRef<HTMLButtonElement>(null);
   const {
     editorHostRef,
     draftText,
@@ -130,6 +131,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
     aiRefineDraft,
     setAiRefineDraft,
     toggleTagInsertionUI,
+    closeTagInsertionUI,
     toggleAIRefineInput,
     handleInsertTag,
     handleInsertAllTags,
@@ -255,6 +257,8 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
         />
 
         <EditorRowTargetActions
+          tagMenuAnchorRef={tagMenuAnchorRef}
+          isTagMenuOpen={showTagInsertionUI}
           aiRefineInputRef={aiRefineInputRef as React.Ref<HTMLInputElement>}
           showAIRefineInput={showAIRefineInput}
           showAIRefineControl={displayModel.showAIRefineControl}
@@ -272,6 +276,8 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
         />
 
         <TagInsertionUI
+          anchor={tagMenuAnchorRef}
+          onClose={closeTagInsertionUI}
           sourceTags={sourceTags}
           onInsertTag={handleInsertTag}
           onInsertAllTags={handleInsertAllTags}

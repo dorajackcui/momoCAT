@@ -77,6 +77,10 @@
 @layer components {
   .workspace-shell {
     @apply flex h-screen overflow-hidden bg-canvas text-text;
+  }
+
+  .workspace-shell,
+  .ui-layer {
     --radius-panel: 8px;
     --radius-control: 6px;
     --shadow-panel: none;
@@ -203,23 +207,40 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
-  .workspace-action-menu {
-    @apply fixed z-50 overflow-y-auto rounded-lg border border-border/60 bg-surface p-1.5 text-sm text-text shadow-float;
-    width: 252px;
+  .ui-popup {
+    @apply z-[100] overflow-y-auto rounded-lg border border-border/60 bg-surface text-sm text-text shadow-float outline-none;
     max-width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);
   }
-  .workspace-action-menu button {
+  .ui-menu-item {
     @apply flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left font-medium hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-50;
   }
-  .workspace-action-menu .workspace-menu-danger {
-    @apply text-danger;
+  .ui-checkable {
+    @apply h-4 w-4 shrink-0 accent-brand disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30;
   }
-  .workspace-menu-heading {
-    @apply break-words px-3 py-2 text-xs text-text-faint;
+  .ui-tabs-list {
+    @apply flex min-w-0 items-center gap-1 overflow-x-auto;
   }
-  .workspace-menu-separator {
-    @apply my-1.5 border-t border-border/60;
+  .ui-tab {
+    @apply shrink-0 rounded-control px-3 py-2 text-sm font-medium text-text-muted transition-colors hover:text-text hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/50 disabled:opacity-50;
+  }
+  .ui-tabs-neutral .ui-tab[data-state='active'] {
+    @apply bg-muted text-text;
+  }
+  .ui-tabs-brand .ui-tab {
+    @apply h-9 px-4 whitespace-nowrap hover:bg-muted;
+  }
+  .ui-tabs-brand .ui-tab[data-state='active'] {
+    @apply bg-brand text-brand-contrast font-semibold;
+  }
+  .ui-tabs-underline {
+    @apply gap-0 border-b border-border bg-surface;
+  }
+  .ui-tabs-underline .ui-tab {
+    @apply flex-1 rounded-none border-b-2 border-transparent py-3 text-[10px] font-bold uppercase tracking-wider text-text-faint;
+  }
+  .ui-tabs-underline .ui-tab[data-state='active'] {
+    @apply border-brand text-brand;
   }
 
   .surface-card {
@@ -367,26 +388,22 @@
     @apply rounded-control border border-border bg-surface shadow-float;
   }
 
-  .menu-item {
-    @apply w-full px-3 py-2 text-left text-sm text-text-muted hover:bg-muted transition-colors;
-  }
-
   .modal-backdrop {
-    @apply fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm;
+    @apply fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm;
     background-color: rgba(30, 24, 20, 0.32);
   }
 
   .modal-card {
-    @apply bg-surface rounded-panel border border-border w-full overflow-hidden;
+    @apply bg-surface rounded-panel border border-border w-full overflow-hidden flex flex-col max-h-[90vh] outline-none;
     box-shadow: var(--shadow-float);
   }
 
   .modal-header {
-    @apply px-6 py-4 border-b border-border flex justify-between items-center;
+    @apply px-6 py-4 border-b border-border flex shrink-0 justify-between items-center;
   }
 
   .modal-body {
-    @apply p-6 space-y-4;
+    @apply p-6 space-y-4 min-h-0 overflow-y-auto;
   }
 
   .status-note {

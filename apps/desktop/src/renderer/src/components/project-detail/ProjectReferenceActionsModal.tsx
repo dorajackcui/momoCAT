@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ProjectFileRecord } from '../../../../shared/ipc';
-import { Button, Modal } from '../ui';
+import { Button, Modal, Radio } from '../ui';
 
 export type ProjectReferenceAction = 'precheck' | 'export';
 
@@ -72,8 +72,7 @@ export function ProjectReferenceActionsModal({
           }`}
         >
           <span className="flex items-center gap-2 text-sm font-semibold text-text">
-            <input
-              type="radio"
+            <Radio
               name="reference-action"
               value="precheck"
               checked={selectedAction === 'precheck'}
@@ -91,8 +90,7 @@ export function ProjectReferenceActionsModal({
           }`}
         >
           <span className="flex items-center gap-2 text-sm font-semibold text-text">
-            <input
-              type="radio"
+            <Radio
               name="reference-action"
               value="export"
               checked={selectedAction === 'export'}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Modal } from '../components/ui';
+import { Button, Modal, Input } from '../components/ui';
 import type { NotifyTone } from './feedbackService';
 import {
   ConfirmOptions,
@@ -101,10 +101,6 @@ export function FeedbackHost() {
         onClose={() => settleActiveRequest(false)}
         closeOnBackdrop={false}
         size="sm"
-        // A confirm is an interrupt: it must stack above every other modal,
-        // including the !z-[100] wizards and the prompt manager (same-z fixed
-        // elements paint in DOM order, and FeedbackHost mounts first).
-        backdropClassName="!z-[200]"
         footer={
           <>
             <Button variant="secondary" onClick={() => settleActiveRequest(false)}>
@@ -132,13 +128,12 @@ export function FeedbackHost() {
             <div className="text-sm font-semibold text-text break-all">
               {activeRequest.requiredText}
             </div>
-            <input
+            <Input
               id="feedback-confirm-input"
               autoFocus
               type="text"
               value={typedConfirmation}
               onChange={(event) => setTypedConfirmation(event.target.value)}
-              className="field-input"
             />
           </div>
         )}

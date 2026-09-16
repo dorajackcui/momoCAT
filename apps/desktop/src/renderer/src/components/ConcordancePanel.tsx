@@ -1,3 +1,4 @@
+import { Input } from './ui';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import { apiClient } from '../services/apiClient';
@@ -69,7 +70,7 @@ export const ConcordancePanel: React.FC<ConcordancePanelProps> = ({
           Concordance Search
         </h3>
         <form onSubmit={handleSearch} className="relative">
-          <input
+          <Input
             ref={inputRef}
             type="text"
             className="w-full pl-8 pr-3 py-1.5 text-sm bg-surface border border-border rounded-lg focus:ring-2 focus:ring-brand/20 outline-none transition-all"

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { apiClient } from '../services/apiClient';
-import { Button, Card, IconButton, Select, Spinner } from './ui';
+import { Button, Card, Modal, Select, Spinner, Checkbox } from './ui';
 import type {
   ImportExecutionResult,
   JobProgressEvent,
@@ -135,171 +135,35 @@ export function TBImportWizard({
     const progressMessage = jobProgress?.message || 'Starting import...';
 
     return (
-      <div className="modal-backdrop !z-[100]">
-        <div className="modal-card max-w-md p-8 text-center animate-in fade-in zoom-in duration-200">
-          <div className="mb-6">
-            <div className="w-16 h-16 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-4">
-              <Spinner size="lg" tone="success" />
-            </div>
-            <h2 className="text-xl font-bold text-text">{WIZARD_COPY[mode].progressTitle}</h2>
-            <p className="text-sm text-text-muted mt-1">{progressMessage}</p>
+      <Modal open={isOpen} title={WIZARD_COPY[mode].progressTitle} bodyClassName="text-center">
+        <div className="mb-6">
+          <div className="w-16 h-16 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-4">
+            <Spinner size="lg" tone="success" />
           </div>
-
-          <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-success-soft/80">
-            <div
-              style={{ width: `${clampedProgress}%` }}
-              className="shadow-none flex flex-col text-center whitespace-nowrap text-success-contrast justify-center bg-success transition-all duration-300"
-            />
-          </div>
-          <p className="text-[10px] text-text-faint font-medium">Job ID: {jobId}</p>
+          <p className="text-sm text-text-muted mt-1">{progressMessage}</p>
         </div>
-      </div>
+
+        <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-success-soft/80">
+          <div
+            style={{ width: `${clampedProgress}%` }}
+            className="shadow-none flex flex-col text-center whitespace-nowrap text-success-contrast justify-center bg-success transition-all duration-300"
+          />
+        </div>
+        <p className="text-[10px] text-text-faint font-medium">Job ID: {jobId}</p>
+      </Modal>
     );
   }
 
   return (
-    <div className="modal-backdrop !z-[100]">
-      <div className="modal-card max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-        <div className="panel-header px-8 py-6 flex justify-between items-center">
-          <div>
-            <h2 className="text-xl font-bold text-text">{WIZARD_COPY[mode].title}</h2>
-            <p className="text-sm text-text-muted mt-1">{WIZARD_COPY[mode].subtitle}</p>
-          </div>
-          <IconButton onClick={onClose} tone="neutral" aria-label="Close">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </IconButton>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-          <div className="grid grid-cols-3 gap-6 mb-8">
-            <div>
-              <label className="text-sm font-bold text-text-muted">Source Term Column</label>
-              <Select
-                value={sourceCol}
-                onChange={(e) => setSourceCol(parseInt(e.target.value, 10))}
-                className="mt-2"
-              >
-                {colIndexes.map((i) => (
-                  <option key={i} value={i}>
-                    Column {XLSX_COL_NAME(i)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm font-bold text-text-muted">Target Term Column</label>
-              <Select
-                value={targetCol}
-                onChange={(e) => setTargetCol(parseInt(e.target.value, 10))}
-                className="mt-2"
-              >
-                {colIndexes.map((i) => (
-                  <option key={i} value={i}>
-                    Column {XLSX_COL_NAME(i)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm font-bold text-text-muted">Note Column (Optional)</label>
-              <Select
-                value={noteCol ?? -1}
-                onChange={(e) => {
-                  const next = parseInt(e.target.value, 10);
-                  setNoteCol(next === -1 ? undefined : next);
-                }}
-                className="mt-2"
-              >
-                <option value={-1}>Not used</option>
-                {colIndexes.map((i) => (
-                  <option key={i} value={i}>
-                    Column {XLSX_COL_NAME(i)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <Card
-              variant="subtle"
-              className="flex items-center gap-3 p-4 border-success/30 bg-success-soft/50"
-            >
-              <input
-                type="checkbox"
-                checked={hasHeader}
-                onChange={(e) => setHasHeader(e.target.checked)}
-                className="w-4 h-4 accent-success"
-              />
-              <span className="text-sm font-medium text-text-muted">First row is header</span>
-            </Card>
-            {mode === 'import' ? (
-              <Card
-                variant="subtle"
-                className="flex items-center gap-3 p-4 border-brand/20 bg-brand-soft/50"
-              >
-                <input
-                  type="checkbox"
-                  checked={overwrite}
-                  onChange={(e) => setOverwrite(e.target.checked)}
-                  className="w-4 h-4 accent-brand"
-                />
-                <span className="text-sm font-medium text-text-muted">
-                  Overwrite existing source terms
-                </span>
-              </Card>
-            ) : (
-              <Card
-                variant="subtle"
-                className="flex items-center gap-3 p-4 border-brand/20 bg-brand-soft/50"
-              >
-                <span className="text-sm font-medium text-text-muted">
-                  Sync replaces all terms with the Excel contents.
-                </span>
-              </Card>
-            )}
-          </div>
-
-          <Card variant="surface" className="table-shell !rounded-xl !shadow-sm">
-            <table className="w-full text-sm text-left border-collapse">
-              <thead className="table-head">
-                <tr>
-                  {colIndexes.map((i) => (
-                    <th
-                      key={i}
-                      className="px-4 py-3 font-bold text-[11px] uppercase tracking-tight text-text-muted"
-                    >
-                      Col {XLSX_COL_NAME(i)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {previewData.map((row, rowIndex) => (
-                  <tr
-                    key={rowIndex}
-                    className={`${hasHeader && rowIndex === 0 ? 'bg-muted/80 opacity-60 italic' : 'bg-surface'}`}
-                  >
-                    {colIndexes.map((i) => (
-                      <td key={i} className="px-4 py-3 truncate max-w-[240px] text-xs">
-                        {row[i] || '-'}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
-        </div>
-
-        <div className="panel-footer px-8 py-6 flex justify-end gap-3">
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      closeOnBackdrop={false}
+      title={WIZARD_COPY[mode].title}
+      description={WIZARD_COPY[mode].subtitle}
+      size="xl"
+      footer={
+        <>
           <Button onClick={onClose} variant="secondary" size="lg">
             Cancel
           </Button>
@@ -319,9 +183,127 @@ export function TBImportWizard({
           >
             {WIZARD_COPY[mode].confirmLabel}
           </Button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-3 gap-6 mb-8">
+        <div>
+          <label className="text-sm font-bold text-text-muted">Source Term Column</label>
+          <Select
+            value={sourceCol}
+            onChange={(e) => setSourceCol(parseInt(e.target.value, 10))}
+            className="mt-2"
+          >
+            {colIndexes.map((i) => (
+              <option key={i} value={i}>
+                Column {XLSX_COL_NAME(i)}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <label className="text-sm font-bold text-text-muted">Target Term Column</label>
+          <Select
+            value={targetCol}
+            onChange={(e) => setTargetCol(parseInt(e.target.value, 10))}
+            className="mt-2"
+          >
+            {colIndexes.map((i) => (
+              <option key={i} value={i}>
+                Column {XLSX_COL_NAME(i)}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <label className="text-sm font-bold text-text-muted">Note Column (Optional)</label>
+          <Select
+            value={noteCol ?? -1}
+            onChange={(e) => {
+              const next = parseInt(e.target.value, 10);
+              setNoteCol(next === -1 ? undefined : next);
+            }}
+            className="mt-2"
+          >
+            <option value={-1}>Not used</option>
+            {colIndexes.map((i) => (
+              <option key={i} value={i}>
+                Column {XLSX_COL_NAME(i)}
+              </option>
+            ))}
+          </Select>
         </div>
       </div>
-    </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <Card
+          variant="subtle"
+          className="flex items-center gap-3 p-4 border-success/30 bg-success-soft/50"
+        >
+          <Checkbox
+            checked={hasHeader}
+            onChange={(e) => setHasHeader(e.target.checked)}
+            className="w-4 h-4 accent-success"
+          />
+          <span className="text-sm font-medium text-text-muted">First row is header</span>
+        </Card>
+        {mode === 'import' ? (
+          <Card
+            variant="subtle"
+            className="flex items-center gap-3 p-4 border-brand/20 bg-brand-soft/50"
+          >
+            <Checkbox
+              checked={overwrite}
+              onChange={(e) => setOverwrite(e.target.checked)}
+              className="w-4 h-4 accent-brand"
+            />
+            <span className="text-sm font-medium text-text-muted">
+              Overwrite existing source terms
+            </span>
+          </Card>
+        ) : (
+          <Card
+            variant="subtle"
+            className="flex items-center gap-3 p-4 border-brand/20 bg-brand-soft/50"
+          >
+            <span className="text-sm font-medium text-text-muted">
+              Sync replaces all terms with the Excel contents.
+            </span>
+          </Card>
+        )}
+      </div>
+
+      <Card variant="surface" className="table-shell !rounded-xl !shadow-sm">
+        <table className="w-full text-sm text-left border-collapse">
+          <thead className="table-head">
+            <tr>
+              {colIndexes.map((i) => (
+                <th
+                  key={i}
+                  className="px-4 py-3 font-bold text-[11px] uppercase tracking-tight text-text-muted"
+                >
+                  Col {XLSX_COL_NAME(i)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/50">
+            {previewData.map((row, rowIndex) => (
+              <tr
+                key={rowIndex}
+                className={`${hasHeader && rowIndex === 0 ? 'bg-muted/80 opacity-60 italic' : 'bg-surface'}`}
+              >
+                {colIndexes.map((i) => (
+                  <td key={i} className="px-4 py-3 truncate max-w-[240px] text-xs">
+                    {row[i] || '-'}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </Modal>
   );
 }
 

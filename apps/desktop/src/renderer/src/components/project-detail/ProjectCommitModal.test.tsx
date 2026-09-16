@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { MountedTM, ProjectFileRecord } from '../../../../shared/ipc';
 import {
@@ -34,7 +35,7 @@ describe('ProjectCommitModal', () => {
   it('offers a writable Working TM alongside mounted Main TMs', () => {
     const workingTM = createMountedTM('working-1', 'working', 'readwrite');
     const mainTM = createMountedTM('main-1', 'main', 'read');
-    const html = renderToStaticMarkup(
+    const html = render(
       React.createElement(ProjectCommitModal, {
         file,
         mountedTMs: [workingTM, mainTM],
@@ -45,7 +46,7 @@ describe('ProjectCommitModal', () => {
         onCancel: vi.fn(),
         onConfirm: vi.fn(),
       }),
-    );
+    ).baseElement.innerHTML;
 
     expect(html).toContain('Commit File To TM');
     expect(html).toContain('Project Working TM (Working TM, en→zh)');

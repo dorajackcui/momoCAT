@@ -1,3 +1,4 @@
+import { Tabs, TabsList, TabsPanel } from '../ui';
 import React from 'react';
 import type { TBMatch, Token } from '@cat/core/models';
 import type { TMMatch } from '../../../../shared/ipc';
@@ -42,7 +43,9 @@ const EditorSidebarComponent: React.FC<EditorSidebarProps> = ({
   concordanceSearchSignal,
 }) => {
   return (
-    <div
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) => setActiveTab(value as 'tm' | 'concordance')}
       className="border-l border-border bg-surface flex-col hidden lg:flex relative"
       style={{ width: `${sidebarWidth}px` }}
     >
@@ -55,31 +58,16 @@ const EditorSidebarComponent: React.FC<EditorSidebarProps> = ({
         <span className="absolute left-1/2 -translate-x-1/2 h-full w-[2px] bg-transparent group-hover:bg-brand/40 transition-colors" />
       </button>
 
-      <div className="flex border-b border-border bg-surface">
-        <button
-          onClick={() => setActiveTab('tm')}
-          className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-wider transition-colors ${
-            activeTab === 'tm'
-              ? 'text-brand border-b-2 border-brand'
-              : 'text-text-faint hover:text-text-muted'
-          }`}
-        >
-          CAT
-        </button>
-        <button
-          onClick={() => setActiveTab('concordance')}
-          title="Concordance (Ctrl/Cmd+K)"
-          className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-wider transition-colors ${
-            activeTab === 'concordance'
-              ? 'text-brand border-b-2 border-brand'
-              : 'text-text-faint hover:text-text-muted'
-          }`}
-        >
-          Concordance
-        </button>
-      </div>
+      <TabsList
+        label="Editor references"
+        variant="underline"
+        items={[
+          { value: 'tm', label: 'CAT' },
+          { value: 'concordance', label: 'Concordance', title: 'Concordance (Ctrl/Cmd+K)' },
+        ]}
+      />
 
-      <div className="flex-1 min-h-0">
+      <TabsPanel value={activeTab} className="flex-1 min-h-0">
         {activeTab === 'tm' ? (
           <TMPanel
             key={activeSegmentId ?? 'no-active-segment'}
@@ -100,8 +88,8 @@ const EditorSidebarComponent: React.FC<EditorSidebarProps> = ({
             searchSignal={concordanceSearchSignal}
           />
         )}
-      </div>
-    </div>
+      </TabsPanel>
+    </Tabs>
   );
 };
 

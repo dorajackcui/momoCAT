@@ -1,3 +1,4 @@
+import { Button } from './ui';
 import React from 'react';
 import type { TBAssetPreview, TBWithStats, TMAssetPreview, TMWithStats } from '../../../shared/ipc';
 
@@ -48,9 +49,9 @@ export const AssetPreviewPage: React.FC<AssetPreviewPageProps> = (props) => {
         <div className="rounded-control border border-danger/40 bg-danger-soft px-4 py-3">
           <div className="flex items-center justify-between gap-4">
             <p className="text-sm font-medium text-danger">{error}</p>
-            <button type="button" onClick={onRetry} className="btn-secondary text-xs">
+            <Button variant="secondary" type="button" onClick={onRetry} className="text-xs">
               Retry
-            </button>
+            </Button>
           </div>
         </div>
       ) : props.preview && props.preview.rows.length > 0 ? (

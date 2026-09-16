@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ProjectSavedPromptsController } from '../../hooks/projectDetail/useProjectAI';
 import { ProjectPromptManagerModal } from './ProjectPromptManagerModal';
@@ -22,14 +23,14 @@ function createSavedPromptsController(
 }
 
 function renderModal(savedPrompts: ProjectSavedPromptsController, currentDraft = '') {
-  return renderToStaticMarkup(
+  return render(
     React.createElement(ProjectPromptManagerModal, {
       open: true,
       onClose: vi.fn(),
       savedPrompts,
       currentDraft,
     }),
-  );
+  ).baseElement.innerHTML;
 }
 
 describe('ProjectPromptManagerModal', () => {

@@ -224,8 +224,6 @@ export function useEditorFilters({
   const {
     isFilterMenuOpen,
     isSortMenuOpen,
-    filterMenuRef,
-    sortMenuRef,
     toggleFilterMenu,
     toggleSortMenu,
     closeMenus,
@@ -452,8 +450,6 @@ export function useEditorFilters({
     sortDirection: filterState.sortDirection,
     isFilterMenuOpen,
     isSortMenuOpen,
-    filterMenuRef,
-    sortMenuRef,
     filteredSegments,
     activeFilteredIndex,
     activeFilterCount,

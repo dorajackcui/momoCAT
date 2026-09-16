@@ -43,6 +43,7 @@ interface EditorRowCommandHandlersResult {
   aiRefineDraft: string;
   setAiRefineDraft: React.Dispatch<React.SetStateAction<string>>;
   toggleTagInsertionUI: () => void;
+  closeTagInsertionUI: () => void;
   toggleAIRefineInput: () => void;
   handleInsertTag: (tagIndex: number) => void;
   handleInsertAllTags: () => void;
@@ -144,6 +145,8 @@ export function useEditorRowCommandHandlers({
     });
   }, []);
 
+  const closeTagInsertionUI = useCallback(() => setShowTagInsertionUI(false), []);
+
   const toggleTagInsertionUI = useCallback(() => {
     setShowTagInsertionUI((prev) => !prev);
   }, []);
@@ -208,6 +211,7 @@ export function useEditorRowCommandHandlers({
     aiRefineDraft,
     setAiRefineDraft,
     toggleTagInsertionUI,
+    closeTagInsertionUI,
     toggleAIRefineInput,
     handleInsertTag,
     handleInsertAllTags,

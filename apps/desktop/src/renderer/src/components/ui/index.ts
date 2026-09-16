@@ -9,3 +9,7 @@ export * from './Modal';
 export * from './Badge';
 export * from './IconButton';
 export * from './Notice';
+export * from './Popup';
+export * from './Tabs';
+export * from './Checkbox';
+export * from './ToggleButton';

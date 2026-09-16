@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import {
   PasteSourceModal,
@@ -10,7 +11,7 @@ import {
 
 describe('PasteSourceModal', () => {
   it('renders parsed source count, preview rows, and marker handling controls', () => {
-    const html = renderToStaticMarkup(
+    const html = render(
       React.createElement(PasteSourceModal, {
         open: true,
         clipboard: { html: '', text: 'A\nBB' },
@@ -18,7 +19,7 @@ describe('PasteSourceModal', () => {
         onClose: vi.fn(),
         onCreate: vi.fn(),
       }),
-    );
+    ).baseElement.innerHTML;
 
     expect(html).toContain('Paste Source');
     expect(html).toContain('2 source rows');
@@ -30,7 +31,7 @@ describe('PasteSourceModal', () => {
   });
 
   it('disables creation when there are no valid sources', () => {
-    const html = renderToStaticMarkup(
+    const html = render(
       React.createElement(PasteSourceModal, {
         open: true,
         clipboard: { html: '', text: '  \n\n' },
@@ -38,7 +39,7 @@ describe('PasteSourceModal', () => {
         onClose: vi.fn(),
         onCreate: vi.fn(),
       }),
-    );
+    ).baseElement.innerHTML;
 
     expect(html).toContain('No valid source rows found.');
     expect(html).toContain('disabled=""');
@@ -46,7 +47,7 @@ describe('PasteSourceModal', () => {
 
   it('shows a soft warning for large pastes', () => {
     const rows = Array.from({ length: 5001 }, (_, index) => `row ${index + 1}`).join('\n');
-    const html = renderToStaticMarkup(
+    const html = render(
       React.createElement(PasteSourceModal, {
         open: true,
         clipboard: { html: '', text: rows },
@@ -54,17 +55,14 @@ describe('PasteSourceModal', () => {
         onClose: vi.fn(),
         onCreate: vi.fn(),
       }),
-    );
+    ).baseElement.innerHTML;
 
     expect(html).toContain('5,001 source rows');
     expect(html).toContain('Large paste');
   });
 
   it('builds submitted sources from edited source drafts', () => {
-    const input = buildPasteSourceFileInput(
-      ['Edited A', 'Edited B'],
-      'default',
-    );
+    const input = buildPasteSourceFileInput(['Edited A', 'Edited B'], 'default');
 
     expect(input).toEqual({
       sources: ['Edited A', 'Edited B'],
@@ -87,10 +85,7 @@ describe('PasteSourceModal', () => {
     };
 
     const drafts = createPasteSourceDrafts(clipboard);
-    const input = buildPasteSourceFileInput(
-      [`${drafts[0]}\n追加一句`],
-      'default',
-    );
+    const input = buildPasteSourceFileInput([`${drafts[0]}\n追加一句`], 'default');
 
     expect(input).toEqual({
       sources: ['【主线新篇】黄金尘\n伊赞之土主线终章现已开启\n追加一句'],
@@ -106,10 +101,7 @@ describe('PasteSourceModal', () => {
   });
 
   it('builds plain marker-like text marker handling when selected', () => {
-    const input = buildPasteSourceFileInput(
-      ['A'],
-      'none',
-    );
+    const input = buildPasteSourceFileInput(['A'], 'none');
 
     expect(input).toEqual({
       sources: ['A'],
@@ -119,10 +111,7 @@ describe('PasteSourceModal', () => {
 
   it('builds parsed clipboard sources for Create', () => {
     const drafts = createPasteSourceDrafts({ html: '', text: 'A\n\nBB' });
-    const input = buildPasteSourceFileInput(
-      drafts,
-      'default',
-    );
+    const input = buildPasteSourceFileInput(drafts, 'default');
 
     expect(input).toEqual({
       sources: ['A', 'BB'],
@@ -131,7 +120,7 @@ describe('PasteSourceModal', () => {
   });
 
   it('keeps Create disabled when there are no valid sources', () => {
-    const html = renderToStaticMarkup(
+    const html = render(
       React.createElement(PasteSourceModal, {
         open: true,
         clipboard: { html: '', text: '  \n\n' },
@@ -139,7 +128,7 @@ describe('PasteSourceModal', () => {
         onClose: vi.fn(),
         onCreate: vi.fn(),
       }),
-    );
+    ).baseElement.innerHTML;
 
     expect(html).toContain('disabled=""');
   });

@@ -1,30 +1,18 @@
+import { useAutoFocusProps } from './autoFocus';
 import React from 'react';
-import { cx } from './cx';
+import { fieldClasses, type FieldStyleProps } from './fieldStyles';
 
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
-  tone?: 'default' | 'danger' | 'success';
-  size?: 'sm' | 'md' | 'lg';
+  tone?: FieldStyleProps['tone'];
+  size?: FieldStyleProps['size'];
 }
 
-const toneClass: Record<NonNullable<InputProps['tone']>, string> = {
-  default: '',
-  danger: 'field-input-danger',
-  success: 'field-input-success',
-};
-
-const sizeClass: Record<NonNullable<InputProps['size']>, string> = {
-  sm: 'px-3 py-1.5 text-xs',
-  md: 'px-4 py-2 text-sm',
-  lg: 'px-4 py-2.5 text-sm',
-};
-
-export const Input: React.FC<InputProps> = ({
-  tone = 'default',
-  size = 'md',
-  className,
-  ...rest
-}: InputProps) => {
+export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Input(
+  { tone = 'default', size = 'md', className, ...rest },
+  ref,
+) {
+  const focusProps = useAutoFocusProps(rest.autoFocus);
   return (
-    <input {...rest} className={cx('field-input', toneClass[tone], sizeClass[size], className)} />
+    <input ref={ref} {...rest} {...focusProps} className={fieldClasses(tone, size, className)} />
   );
-};
+});

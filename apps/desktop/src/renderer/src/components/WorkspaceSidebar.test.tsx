@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Project } from '@cat/core/project';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
@@ -27,22 +27,28 @@ beforeEach(() => {
 });
 
 describe('WorkspaceSidebar', () => {
-  it('opens a floating project menu outside the scrolling list and supports keyboard dismissal', () => {
+  it('opens a floating project menu outside the scrolling list and supports keyboard dismissal', async () => {
     const callbacks = props();
     render(<WorkspaceSidebar {...callbacks} />);
     const trigger = screen.getByRole('button', { name: 'Actions for Product localization' });
     fireEvent.click(trigger);
     const menu = screen.getByRole('menu', { name: 'Product localization actions' });
-    expect(menu.parentElement).toBe(document.body);
+    expect(document.body).toContainElement(menu);
     expect(screen.getByRole('navigation', { name: 'Projects' })).not.toContainElement(menu);
-    expect(within(menu).getByRole('menuitem', { name: 'Open project' })).toHaveFocus();
+    await waitFor(() =>
+      expect(within(menu).getByRole('menuitem', { name: 'Open project' })).toHaveFocus(),
+    );
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
-    expect(within(menu).getByRole('menuitem', { name: 'Pin project' })).toHaveFocus();
+    await waitFor(() =>
+      expect(within(menu).getByRole('menuitem', { name: 'Pin project' })).toHaveFocus(),
+    );
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
-    expect(within(menu).getByRole('menuitem', { name: 'Delete project…' })).toHaveFocus();
+    await waitFor(() =>
+      expect(within(menu).getByRole('menuitem', { name: 'Delete project…' })).toHaveFocus(),
+    );
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
-    expect(trigger).toHaveFocus();
+    await waitFor(() => expect(trigger).toHaveFocus());
     expect(callbacks.onDelete).not.toHaveBeenCalled();
   });
 

@@ -1,3 +1,4 @@
+import { useAutoFocusProps } from './autoFocus';
 import React from 'react';
 import { cx } from './cx';
 import { Spinner } from './Spinner';
@@ -29,21 +30,29 @@ const iconOnlySizeClass: Record<NonNullable<ButtonProps['size']>, string> = {
   lg: 'h-10 w-10 px-0 py-0',
 };
 
-export const Button: React.FC<ButtonProps> = ({
-  variant = 'secondary',
-  size = 'md',
-  loading = false,
-  iconOnly = false,
-  disabled,
-  className,
-  children,
-  ...rest
-}: ButtonProps) => {
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  {
+    variant = 'secondary',
+    size = 'md',
+    loading = false,
+    iconOnly = false,
+    disabled,
+    className,
+    children,
+    type = 'button',
+    ...rest
+  },
+  ref,
+) {
+  const focusProps = useAutoFocusProps(rest.autoFocus);
   const isDisabled = disabled || loading;
 
   return (
     <button
+      ref={ref}
+      type={type}
       {...rest}
+      {...focusProps}
       disabled={isDisabled}
       className={cx(
         variantClass[variant],
@@ -56,4 +65,4 @@ export const Button: React.FC<ButtonProps> = ({
       {loading && children && <span className="opacity-80">{children}</span>}
     </button>
   );
-};
+});

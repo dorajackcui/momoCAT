@@ -1,3 +1,4 @@
+import { Tabs, TabsList, TabsPanel } from './ui';
 import { useState } from 'react';
 import type { AppUpdatesController } from '../hooks/useAppUpdates';
 import { AIConnectionsTab } from './settings/AIConnectionsTab';
@@ -24,38 +25,27 @@ export function SettingsPage({ updates }: { updates: AppUpdatesController }) {
   const busy = aiConnections.busy || proxySettings.loading || proxySettings.saving;
 
   return (
-    <div className="workspace-settings-page">
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) => setActiveTab(value as SettingsTabId)}
+      className="workspace-settings-page"
+    >
       <div className="workspace-page-header">
         <h2 className="text-xl font-bold text-text">Settings</h2>
       </div>
 
-      <div
-        role="tablist"
-        aria-label="Settings sections"
-        className="px-6 py-3 border-b border-border flex items-center gap-2 overflow-x-auto"
-      >
-        {SETTINGS_TABS.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setActiveTab(tab.id)}
-              className={
-                isActive
-                  ? 'inline-flex h-9 shrink-0 items-center justify-center rounded-control px-4 text-sm font-semibold leading-5 bg-brand text-white whitespace-nowrap'
-                  : 'inline-flex h-9 shrink-0 items-center justify-center rounded-control px-4 text-sm font-medium leading-5 text-text-muted hover:text-text hover:bg-muted transition-colors whitespace-nowrap'
-              }
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      <TabsList
+        label="Settings sections"
+        variant="brand"
+        className="px-6 py-3 border-b border-border"
+        items={SETTINGS_TABS.map((tab) => ({ value: tab.id, label: tab.label }))}
+      />
 
-      <div className="workspace-settings-content" style={{ scrollbarGutter: 'stable' }}>
+      <TabsPanel
+        value={activeTab}
+        className="workspace-settings-content"
+        style={{ scrollbarGutter: 'stable' }}
+      >
         {activeTab === 'connections' && <AIConnectionsTab controller={aiConnections} busy={busy} />}
         {activeTab === 'term-extraction' && <TermExtractionPromptTab />}
         {activeTab === 'proxy' && <ProxySettingsTab controller={proxySettings} busy={busy} />}
@@ -63,7 +53,7 @@ export function SettingsPage({ updates }: { updates: AppUpdatesController }) {
           <div className="status-note">{aiConnections.status}</div>
         )}
         {activeTab === 'updates' && <UpdatesTab controller={updates} />}
-      </div>
-    </div>
+      </TabsPanel>
+    </Tabs>
   );
 }
