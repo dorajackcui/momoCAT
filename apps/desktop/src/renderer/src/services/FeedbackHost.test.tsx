@@ -23,6 +23,7 @@ it('stacks typed confirmation above a dialog and resolves queued decisions indep
                   title: 'Delete resource',
                   message: 'Remove this resource?',
                   requiredText: 'Demo',
+                  confirmVariant: 'danger',
                 })
                 .then(firstResult);
               void feedbackService

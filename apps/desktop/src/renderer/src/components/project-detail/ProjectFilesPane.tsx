@@ -156,7 +156,8 @@ function ProjectFileCard({
               jobRunning ? void ai.cancelAITranslateFile(file.id) : onRequestAITranslate(file)
             }
             disabled={jobStopping}
-            variant={jobRunning ? 'danger' : 'secondary'}
+            variant={jobRunning ? 'primary' : 'secondary'}
+            tone={jobRunning ? 'danger' : undefined}
             size="sm"
           >
             {jobRunning ? (jobStopping ? 'Stopping...' : 'Stop') : 'Translate'}
@@ -169,7 +170,8 @@ function ProjectFileCard({
                 : void ai.startAITranslateFile(file.id, file.name)
             }
             disabled={jobStopping}
-            variant={jobRunning ? 'danger' : 'secondary'}
+            variant={jobRunning ? 'primary' : 'secondary'}
+            tone={jobRunning ? 'danger' : undefined}
             size="sm"
           >
             {jobRunning

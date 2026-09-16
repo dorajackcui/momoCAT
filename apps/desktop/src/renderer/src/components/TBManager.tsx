@@ -347,7 +347,6 @@ export const TBManager: React.FC = () => {
             <div className="flex items-center justify-between gap-3">
               <span>{importNotice.message}</span>
               <Button
-                size="inline"
                 tone="inherit"
                 variant="link"
                 type="button"
@@ -421,7 +420,7 @@ export const TBManager: React.FC = () => {
             <p className="text-xs text-text-muted mb-6">
               Create one to enforce terminology consistency.
             </p>
-            <Button size="inline" tone="brand" variant="link" onClick={() => setShowCreate(true)}>
+            <Button tone="brand" variant="link" onClick={() => setShowCreate(true)}>
               + Create your first term base
             </Button>
           </div>

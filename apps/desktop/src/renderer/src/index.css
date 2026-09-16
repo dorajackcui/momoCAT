@@ -311,15 +311,12 @@
     @apply bg-brand-soft text-brand hover:bg-brand-soft/80;
   }
 
-  .btn-danger {
-    @apply bg-danger text-danger-contrast hover:bg-danger-hover;
-  }
-
   .btn-ghost {
     @apply bg-transparent text-text-muted hover:bg-muted;
   }
   .btn-link {
-    @apply text-brand hover:underline underline-offset-2;
+    @apply p-0 text-brand hover:underline underline-offset-2;
+    font-weight: inherit;
   }
   .btn-base[data-tone='success'] {
     --button-color: var(--color-success);
@@ -348,13 +345,11 @@
   .btn-soft[data-tone] {
     background-color: rgb(var(--button-soft));
   }
-  .btn-primary[data-tone],
-  .btn-danger[data-tone] {
+  .btn-primary[data-tone] {
     background-color: rgb(var(--button-color));
     color: rgb(var(--button-contrast));
   }
-  .btn-primary[data-tone]:hover,
-  .btn-danger[data-tone]:hover {
+  .btn-primary[data-tone]:hover {
     background-color: rgb(var(--button-hover));
   }
   .btn-link[data-tone='neutral'] {

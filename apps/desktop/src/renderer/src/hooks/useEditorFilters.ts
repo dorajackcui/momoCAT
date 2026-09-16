@@ -226,8 +226,9 @@ export function useEditorFilters({
     isSortMenuOpen,
     toggleFilterMenu,
     toggleSortMenu,
+    closeFilterMenu,
+    closeSortMenu,
     closeMenus,
-    setIsSortMenuOpen,
   } = menus;
 
   const effectiveCriteria = useMemo(
@@ -351,9 +352,9 @@ export function useEditorFilters({
         sortBy,
         sortDirection,
       }));
-      setIsSortMenuOpen(false);
+      closeSortMenu();
     },
-    [setIsSortMenuOpen],
+    [closeSortMenu],
   );
 
   useEffect(() => {
@@ -456,6 +457,8 @@ export function useEditorFilters({
     hasActiveFilter,
     toggleFilterMenu,
     toggleSortMenu,
+    closeFilterMenu,
+    closeSortMenu,
     setSourceQueryInput,
     setTargetQueryInput,
     toggleTargetSearchScope,

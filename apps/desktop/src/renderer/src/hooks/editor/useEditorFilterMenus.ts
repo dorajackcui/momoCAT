@@ -1,39 +1,33 @@
 import { useCallback, useState } from 'react';
 
 export function useEditorFilterMenus() {
-  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
-  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  const [openMenu, setOpenMenu] = useState<'filter' | 'sort' | null>(null);
 
   const closeMenus = useCallback(() => {
-    setIsFilterMenuOpen(false);
-    setIsSortMenuOpen(false);
+    setOpenMenu(null);
+  }, []);
+
+  const closeFilterMenu = useCallback(() => {
+    setOpenMenu((current) => (current === 'filter' ? null : current));
+  }, []);
+
+  const closeSortMenu = useCallback(() => {
+    setOpenMenu((current) => (current === 'sort' ? null : current));
   }, []);
 
   const toggleFilterMenu = useCallback(() => {
-    setIsFilterMenuOpen((prev) => {
-      const next = !prev;
-      if (next) {
-        setIsSortMenuOpen(false);
-      }
-      return next;
-    });
+    setOpenMenu((current) => (current === 'filter' ? null : 'filter'));
   }, []);
 
   const toggleSortMenu = useCallback(() => {
-    setIsSortMenuOpen((prev) => {
-      const next = !prev;
-      if (next) {
-        setIsFilterMenuOpen(false);
-      }
-      return next;
-    });
+    setOpenMenu((current) => (current === 'sort' ? null : 'sort'));
   }, []);
 
   return {
-    isFilterMenuOpen,
-    isSortMenuOpen,
-    setIsFilterMenuOpen,
-    setIsSortMenuOpen,
+    isFilterMenuOpen: openMenu === 'filter',
+    isSortMenuOpen: openMenu === 'sort',
+    closeFilterMenu,
+    closeSortMenu,
     toggleFilterMenu,
     toggleSortMenu,
     closeMenus,

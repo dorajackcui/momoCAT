@@ -376,7 +376,7 @@ export function ProjectDetail({
               <p className="text-danger font-medium">
                 Error: Project with ID {projectId} could not be found.
               </p>
-              <Button size="inline" tone="brand" variant="link" onClick={onBack} className="mt-4">
+              <Button tone="brand" variant="link" onClick={onBack} className="mt-4">
                 Back to Projects
               </Button>
             </div>

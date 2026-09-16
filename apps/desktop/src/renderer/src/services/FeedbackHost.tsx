@@ -107,7 +107,8 @@ export function FeedbackHost() {
               {activeRequest?.cancelLabel ?? 'Cancel'}
             </Button>
             <Button
-              variant={activeRequest?.confirmVariant ?? 'primary'}
+              variant="primary"
+              tone={activeRequest?.confirmVariant === 'danger' ? 'danger' : undefined}
               onClick={() => settleActiveRequest(true)}
               disabled={!canConfirm}
               autoFocus={!requiresTypedConfirmation}

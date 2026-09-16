@@ -122,6 +122,8 @@ export const Editor: React.FC<EditorProps> = ({
     hasActiveFilter,
     toggleFilterMenu,
     toggleSortMenu,
+    closeFilterMenu,
+    closeSortMenu,
     setSourceQueryInput,
     setTargetQueryInput,
     toggleTargetSearchScope,
@@ -376,6 +378,7 @@ export const Editor: React.FC<EditorProps> = ({
               sortDirection={sortDirection}
               isSortMenuOpen={isSortMenuOpen}
               toggleSortMenu={toggleSortMenu}
+              closeSortMenu={closeSortMenu}
               handleSortChange={handleSortChange}
               sourceQueryInput={sourceQueryInput}
               targetQueryInput={targetQueryInput}
@@ -390,6 +393,7 @@ export const Editor: React.FC<EditorProps> = ({
               isFilterMenuOpen={isFilterMenuOpen}
               activeFilterCount={activeFilterCount}
               toggleFilterMenu={toggleFilterMenu}
+              closeFilterMenu={closeFilterMenu}
               quickPreset={quickPreset}
               applyQuickPreset={applyQuickPreset}
               matchMode={matchMode}

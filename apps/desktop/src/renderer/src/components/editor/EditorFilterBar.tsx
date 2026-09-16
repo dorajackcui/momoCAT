@@ -25,6 +25,7 @@ interface EditorFilterBarProps {
   sortDirection: string;
   isSortMenuOpen: boolean;
   toggleSortMenu: () => void;
+  closeSortMenu: () => void;
   handleSortChange: (
     sortBy: 'default' | 'source_length' | 'target_length',
     direction: 'asc' | 'desc',
@@ -42,6 +43,7 @@ interface EditorFilterBarProps {
   isFilterMenuOpen: boolean;
   activeFilterCount: number;
   toggleFilterMenu: () => void;
+  closeFilterMenu: () => void;
   quickPreset: EditorQuickPreset;
   applyQuickPreset: (value: EditorQuickPreset) => void;
   matchMode: 'contains' | 'exact' | 'regex';
@@ -71,6 +73,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
   sortDirection,
   isSortMenuOpen,
   toggleSortMenu,
+  closeSortMenu,
   handleSortChange,
   sourceQueryInput,
   targetQueryInput,
@@ -85,6 +88,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
   isFilterMenuOpen,
   activeFilterCount,
   toggleFilterMenu,
+  closeFilterMenu,
   quickPreset,
   applyQuickPreset,
   matchMode,
@@ -142,7 +146,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
           {isSortMenuOpen && (
             <Menu
               anchor={sortMenuRef}
-              onClose={toggleSortMenu}
+              onClose={closeSortMenu}
               label="Sort"
               placement="bottom-start"
             >
@@ -248,7 +252,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
           {isFilterMenuOpen && (
             <Popover
               anchor={filterMenuRef}
-              onClose={toggleFilterMenu}
+              onClose={closeFilterMenu}
               label="Filters"
               className="w-80 space-y-3"
             >

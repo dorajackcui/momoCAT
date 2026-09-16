@@ -284,11 +284,7 @@ export function ProjectAIPane({
         )}
         {ai.hasTestDetails && (
           <div className="mt-2">
-            <Button
-              onClick={() => ai.setShowTestDetails((prev) => !prev)}
-              size="inline"
-              variant="link"
-            >
+            <Button onClick={() => ai.setShowTestDetails((prev) => !prev)} variant="link">
               {ai.showTestDetails ? 'Hide Test Details' : 'Show Test Details'}
             </Button>
           </div>

@@ -70,7 +70,7 @@ export const AssetPreviewPage: React.FC<AssetPreviewPageProps> = (props) => {
 
   return (
     <section className="max-w-6xl mx-auto space-y-5">
-      <Button size="inline" tone="neutral" variant="link" type="button" onClick={onBack}>
+      <Button tone="neutral" variant="link" type="button" onClick={onBack}>
         ← {props.kind === 'tm' ? 'Translation memory' : 'Term bases'}
       </Button>
       <div>

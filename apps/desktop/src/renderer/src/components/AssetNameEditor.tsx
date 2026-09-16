@@ -129,7 +129,6 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
       <Heading className="font-bold text-text group-hover:text-brand transition-colors">
         {onOpen ? (
           <Button
-            size="inline"
             tone="inherit"
             variant="link"
             type="button"

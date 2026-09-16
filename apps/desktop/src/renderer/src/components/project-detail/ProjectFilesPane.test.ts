@@ -17,7 +17,6 @@ type MockButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: string;
   size?: string;
   loading?: boolean;
-  iconOnly?: boolean;
 };
 
 const capturedButtons = vi.hoisted<CapturedButton[]>(() => []);
@@ -28,15 +27,7 @@ vi.mock('../ui', async (importOriginal) => {
 
   return {
     ...actual,
-    Button: ({
-      children,
-      onClick,
-      loading,
-      variant,
-      size,
-      iconOnly,
-      ...props
-    }: MockButtonProps) => {
+    Button: ({ children, onClick, loading, variant, size, ...props }: MockButtonProps) => {
       const label = react.Children.toArray(children)
         .map((child) =>
           typeof child === 'string' || typeof child === 'number' ? String(child) : '',
@@ -46,7 +37,6 @@ vi.mock('../ui', async (importOriginal) => {
       capturedButtons.push({ label, onClick, disabled: Boolean(props.disabled || loading) });
       void variant;
       void size;
-      void iconOnly;
       return react.createElement(
         'button',
         { ...props, disabled: props.disabled || loading, onClick },

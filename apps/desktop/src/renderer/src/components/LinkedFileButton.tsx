@@ -16,7 +16,7 @@ export const LinkedFileButton: React.FC<LinkedFileButtonProps> = ({ filePath, on
 
   return (
     <Button
-      size="badge"
+      size="xs"
       tone="success"
       variant="soft"
       type="button"

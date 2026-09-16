@@ -29,7 +29,7 @@ import {
 import { cx } from './cx';
 import { OverlayContainerContext } from './overlayContainer';
 
-export type PopupAnchor = HTMLElement | RefObject<HTMLElement | null> | { x: number; y: number };
+export type PopupAnchor = HTMLElement | RefObject<HTMLElement | null>;
 interface PopupProps {
   open?: boolean;
   anchor: PopupAnchor;
@@ -65,7 +65,7 @@ function PopupSurface({
     document.activeElement instanceof HTMLElement ? document.activeElement : null,
   );
   const {
-    refs: { setFloating, setReference, setPositionReference, domReference },
+    refs: { setFloating, setReference, domReference },
     floatingStyles,
     context,
   } = useFloating({
@@ -79,23 +79,8 @@ function PopupSurface({
     middleware: [offset(6), flip({ padding: 8 }), shift({ padding: 8 })],
   });
   useLayoutEffect(() => {
-    if ('x' in anchor) {
-      setPositionReference({
-        getBoundingClientRect: () => ({
-          x: anchor.x,
-          y: anchor.y,
-          left: anchor.x,
-          right: anchor.x,
-          top: anchor.y,
-          bottom: anchor.y,
-          width: 0,
-          height: 0,
-        }),
-      });
-    } else {
-      setReference('current' in anchor ? anchor.current : anchor);
-    }
-  }, [anchor, setPositionReference, setReference]);
+    setReference('current' in anchor ? anchor.current : anchor);
+  }, [anchor, setReference]);
   const dismiss = useDismiss(context, { bubbles: false });
   const role = useRole(context, { role: menu ? 'menu' : 'dialog' });
   const navigation = useListNavigation(context, {

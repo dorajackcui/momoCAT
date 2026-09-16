@@ -101,12 +101,7 @@ export const ConcordancePanel: React.FC<ConcordancePanelProps> = ({
                   </span>
                   <span>Used {entry.usageCount} times</span>
                 </div>
-                <Button
-                  size="inline"
-                  tone="brand"
-                  variant="link"
-                  className="opacity-0 group-hover:opacity-100"
-                >
+                <Button tone="brand" variant="link" className="opacity-0 group-hover:opacity-100">
                   Apply
                 </Button>
               </div>
