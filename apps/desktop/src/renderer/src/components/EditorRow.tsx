@@ -8,6 +8,7 @@ import { EditorRowNumberCell } from './editor-row/EditorRowNumberCell';
 import { EditorRowTargetActions } from './editor-row/EditorRowTargetActions';
 import { EditorRowFeedback } from './editor-row/EditorRowFeedback';
 import { EditorRowTargetCell, resolvePreviewSelection } from './editor-row/EditorRowTargetCell';
+import { EDITOR_ROW_MIN_HEIGHT } from './editor/editorVirtualizationFlag';
 import {
   useEditorRowDraftController,
   type TargetEditorController,
@@ -195,6 +196,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
       className={`group grid grid-cols-[30px_minmax(0,1fr)_4px_minmax(0,1fr)] border-b border-border transition-colors ${
         isActive ? 'bg-brand-soft/20' : 'hover:bg-muted/30'
       }`}
+      style={{ minHeight: EDITOR_ROW_MIN_HEIGHT }}
       onClick={(event) => {
         const preview = event.currentTarget.querySelector<HTMLElement>('.editor-target-preview');
         capturePendingSelection(
@@ -226,7 +228,9 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
       </div>
 
       <div
-        className={`px-1.5 py-0.5 relative flex min-h-full min-w-0 overflow-hidden flex-col ${
+        className={`px-1.5 py-0.5 relative flex min-h-full min-w-0 flex-col ${
+          showTagInsertionUI ? 'overflow-visible' : 'overflow-hidden'
+        } ${
           qaIssues.some((issue) => issue.severity === 'error')
             ? 'bg-danger-soft/40'
             : qaIssues.some((issue) => issue.severity === 'warning')

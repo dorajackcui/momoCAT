@@ -15,13 +15,11 @@ interface UseEditorRowCommandHandlersParams {
   onAIRefine: (id: string, instruction: string) => void;
   onConfirm: (id: string) => void;
   editorController: {
-    getSnapshot: () =>
-      | {
-          text: string;
-          selectionFrom: number;
-          selectionTo: number;
-        }
-      | null;
+    getSnapshot: () => {
+      text: string;
+      selectionFrom: number;
+      selectionTo: number;
+    } | null;
     setText: (nextText: string, preserveSelection?: boolean) => void;
     replaceSelection: (insertText: string) => void;
     focus: () => void;
@@ -32,6 +30,7 @@ type EditorRowShortcutAction = EditorShortcutAction;
 
 interface EditorRowShortcutKeyInput {
   key: string;
+  code: string;
   ctrlKey: boolean;
   metaKey: boolean;
   shiftKey: boolean;
@@ -55,11 +54,12 @@ interface EditorRowCommandHandlersResult {
 
 export function resolveEditorRowShortcutAction({
   key,
+  code,
   ctrlKey,
   metaKey,
   shiftKey,
 }: EditorRowShortcutKeyInput): EditorRowShortcutAction {
-  return resolveEditorShortcutAction({ key, ctrlKey, metaKey, shiftKey });
+  return resolveEditorShortcutAction({ key, code, ctrlKey, metaKey, shiftKey });
 }
 
 export function useEditorRowCommandHandlers({

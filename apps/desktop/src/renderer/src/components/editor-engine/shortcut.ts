@@ -2,6 +2,7 @@ import { EditorShortcutAction } from './types';
 
 interface EditorShortcutKeyInput {
   key: string;
+  code: string;
   ctrlKey: boolean;
   metaKey: boolean;
   shiftKey: boolean;
@@ -9,6 +10,7 @@ interface EditorShortcutKeyInput {
 
 export function resolveEditorShortcutAction({
   key,
+  code,
   ctrlKey,
   metaKey,
   shiftKey,
@@ -21,12 +23,13 @@ export function resolveEditorShortcutAction({
     return null;
   }
 
-  if (key === '0' || key === ')') {
+  if (code === 'Digit0' || code === 'Numpad0') {
     return { type: 'insertAllTags' };
   }
 
-  if (/^[1-9]$/.test(key)) {
-    return { type: 'insertTag', tagIndex: Number.parseInt(key, 10) - 1 };
+  const digitMatch = /^(?:Digit|Numpad)([1-9])$/.exec(code);
+  if (digitMatch) {
+    return { type: 'insertTag', tagIndex: Number.parseInt(digitMatch[1], 10) - 1 };
   }
 
   return null;

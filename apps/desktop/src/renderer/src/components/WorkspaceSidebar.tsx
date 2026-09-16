@@ -1,9 +1,54 @@
-import { useCallback, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import type { Project, ProjectType } from '@cat/core/project';
 import type { WorkspaceView } from '../hooks/useWorkspaceNavigation';
 import { WorkspaceActionMenu } from './WorkspaceActionMenu';
 
-type IconName = 'project' | 'plus' | 'tm' | 'tb' | 'settings' | 'trash';
+type IconName = 'project' | 'plus' | 'pin' | 'tm' | 'tb' | 'settings' | 'trash';
+
+interface WorkspaceSidebarPreferences {
+  pinnedProjectIds: number[];
+  pinnedCollapsed: boolean;
+  projectsCollapsed: boolean;
+}
+
+const WORKSPACE_SIDEBAR_STORAGE_KEY = 'workspace.sidebar.preferences';
+const DEFAULT_WORKSPACE_SIDEBAR_PREFERENCES: WorkspaceSidebarPreferences = {
+  pinnedProjectIds: [],
+  pinnedCollapsed: false,
+  projectsCollapsed: false,
+};
+
+function readWorkspaceSidebarPreferences(): WorkspaceSidebarPreferences {
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_SIDEBAR_STORAGE_KEY);
+    if (!raw) return DEFAULT_WORKSPACE_SIDEBAR_PREFERENCES;
+    const stored = JSON.parse(raw) as Partial<WorkspaceSidebarPreferences>;
+    const pinnedProjectIds = Array.isArray(stored.pinnedProjectIds)
+      ? [
+          ...new Set(
+            stored.pinnedProjectIds.filter(
+              (projectId): projectId is number => Number.isInteger(projectId) && projectId > 0,
+            ),
+          ),
+        ]
+      : [];
+    return {
+      pinnedProjectIds,
+      pinnedCollapsed: stored.pinnedCollapsed === true,
+      projectsCollapsed: stored.projectsCollapsed === true,
+    };
+  } catch {
+    return DEFAULT_WORKSPACE_SIDEBAR_PREFERENCES;
+  }
+}
+
+function persistWorkspaceSidebarPreferences(preferences: WorkspaceSidebarPreferences): void {
+  try {
+    window.localStorage.setItem(WORKSPACE_SIDEBAR_STORAGE_KEY, JSON.stringify(preferences));
+  } catch {
+    // Sidebar preferences are optional; navigation remains usable without persistence.
+  }
+}
 
 const projectTypeLabels: Record<ProjectType, string> = {
   translation: 'Translation',
@@ -21,6 +66,7 @@ function NavIcon({
   const paths: Record<IconName, string> = {
     project: 'M3.5 5h6l2 2h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z',
     plus: 'M12 5v14 M5 12h14',
+    pin: 'M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6Z M12 14v7',
     trash: 'M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13 M10 11v5 M14 11v5',
     tm: 'M4 5h16v11H9l-5 4z M8 9h8 M8 12h5',
     tb: 'M4 4h7l1 2 1-2h7v15h-7l-1 2-1-2H4z M12 6v15',
@@ -56,6 +102,23 @@ function NavIcon({
   );
 }
 
+function SectionChevron({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg
+      className={`workspace-project-heading-chevron ${collapsed ? '' : 'rotate-90'}`}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m6 3 5 5-5 5" />
+    </svg>
+  );
+}
+
 interface WorkspaceSidebarProps {
   projects: Project[];
   view: WorkspaceView;
@@ -76,14 +139,82 @@ export function WorkspaceSidebar({
   onDelete,
 }: WorkspaceSidebarProps) {
   const [menu, setMenu] = useState<{ projectId: number; anchor: HTMLElement } | null>(null);
+  const [preferences, setPreferences] = useState(readWorkspaceSidebarPreferences);
   const menuId = useId();
   const closeMenu = useCallback(() => setMenu(null), []);
   const activeProjectId = 'projectId' in view ? view.projectId : null;
   const menuProject = projects.find((project) => project.id === menu?.projectId);
+  const pinnedProjectIds = new Set(preferences.pinnedProjectIds);
+  const pinnedProjects = projects.filter(
+    (project) => project.id && pinnedProjectIds.has(project.id),
+  );
+  const regularProjects = projects.filter(
+    (project) => !project.id || !pinnedProjectIds.has(project.id),
+  );
+
+  useEffect(() => {
+    persistWorkspaceSidebarPreferences(preferences);
+  }, [preferences]);
+
   const openProject = (project: Project) => {
     closeMenu();
     onNavigate({ kind: 'project', projectId: project.id! });
   };
+
+  const toggleProjectPin = (project: Project) => {
+    if (!project.id) return;
+    closeMenu();
+    setPreferences((current) => ({
+      ...current,
+      pinnedProjectIds: current.pinnedProjectIds.includes(project.id!)
+        ? current.pinnedProjectIds.filter((projectId) => projectId !== project.id)
+        : [...current.pinnedProjectIds, project.id!],
+    }));
+  };
+
+  const toggleSection = (section: 'pinned' | 'projects') => {
+    setPreferences((current) =>
+      section === 'pinned'
+        ? { ...current, pinnedCollapsed: !current.pinnedCollapsed }
+        : { ...current, projectsCollapsed: !current.projectsCollapsed },
+    );
+  };
+
+  const renderProject = (project: Project) => (
+    <div key={project.id} className="workspace-project">
+      <button
+        type="button"
+        className="workspace-nav-item"
+        disabled={disabled}
+        aria-current={activeProjectId === project.id ? 'page' : undefined}
+        aria-label={project.name}
+        aria-description={`${projectTypeLabels[project.projectType ?? 'translation']} project`}
+        title={`${project.name} · ${projectTypeLabels[project.projectType ?? 'translation']}`}
+        onClick={() => openProject(project)}
+      >
+        <NavIcon name="project" projectType={project.projectType} />
+        <span className="truncate">{project.name}</span>
+      </button>
+      <button
+        type="button"
+        className="workspace-project-more"
+        disabled={disabled}
+        aria-label={`Actions for ${project.name}`}
+        aria-expanded={menu?.projectId === project.id}
+        aria-haspopup="menu"
+        aria-controls={menu?.projectId === project.id ? menuId : undefined}
+        onClick={(event) =>
+          setMenu(
+            menu?.projectId === project.id
+              ? null
+              : { projectId: project.id!, anchor: event.currentTarget },
+          )
+        }
+      >
+        ···
+      </button>
+    </div>
+  );
 
   const navItem = (kind: 'tm' | 'tb' | 'settings', label: string, icon: IconName) => (
     <button
@@ -122,46 +253,46 @@ export function WorkspaceSidebar({
         <NavIcon name="plus" />
         <span>New project</span>
       </button>
-      <div className="workspace-project-heading">Projects</div>
       <nav className="workspace-project-list custom-scrollbar" aria-label="Projects">
-        {projects.map((project) => (
-          <div key={project.id} className="workspace-project">
+        {pinnedProjects.length > 0 && (
+          <div className="workspace-project-section">
             <button
               type="button"
-              className="workspace-nav-item"
-              disabled={disabled}
-              aria-current={activeProjectId === project.id ? 'page' : undefined}
-              aria-label={project.name}
-              aria-description={`${projectTypeLabels[project.projectType ?? 'translation']} project`}
-              title={`${project.name} · ${projectTypeLabels[project.projectType ?? 'translation']}`}
-              onClick={() => openProject(project)}
+              className="workspace-project-heading"
+              aria-expanded={!preferences.pinnedCollapsed}
+              aria-label={`${preferences.pinnedCollapsed ? 'Expand' : 'Collapse'} Pinned projects`}
+              onClick={() => toggleSection('pinned')}
             >
-              <NavIcon name="project" projectType={project.projectType} />
-              <span className="truncate">{project.name}</span>
+              <span>Pinned</span>
+              <SectionChevron collapsed={preferences.pinnedCollapsed} />
             </button>
-            <button
-              type="button"
-              className="workspace-project-more"
-              disabled={disabled}
-              aria-label={`Actions for ${project.name}`}
-              aria-expanded={menu?.projectId === project.id}
-              aria-haspopup="menu"
-              aria-controls={menu?.projectId === project.id ? menuId : undefined}
-              onClick={(event) =>
-                setMenu(
-                  menu?.projectId === project.id
-                    ? null
-                    : { projectId: project.id!, anchor: event.currentTarget },
-                )
-              }
-            >
-              ···
-            </button>
+            {!preferences.pinnedCollapsed && (
+              <div role="group" aria-label="Pinned projects">
+                {pinnedProjects.map(renderProject)}
+              </div>
+            )}
           </div>
-        ))}
-        {projects.length === 0 && (
-          <p className="px-3 text-xs text-text-faint">Your projects will appear here.</p>
         )}
+        <div className="workspace-project-section">
+          <button
+            type="button"
+            className="workspace-project-heading"
+            aria-expanded={!preferences.projectsCollapsed}
+            aria-label={`${preferences.projectsCollapsed ? 'Expand' : 'Collapse'} Projects`}
+            onClick={() => toggleSection('projects')}
+          >
+            <span>Projects</span>
+            <SectionChevron collapsed={preferences.projectsCollapsed} />
+          </button>
+          {!preferences.projectsCollapsed && (
+            <div role="group" aria-label="Projects list">
+              {regularProjects.map(renderProject)}
+              {projects.length === 0 && (
+                <p className="px-3 py-1 text-xs text-text-faint">Your projects will appear here.</p>
+              )}
+            </div>
+          )}
+        </div>
       </nav>
       <nav className="workspace-resource-nav" aria-label="Resources">
         {navItem('tm', 'Translation memory', 'tm')}
@@ -189,6 +320,15 @@ export function WorkspaceSidebar({
           >
             <NavIcon name="project" projectType={menuProject.projectType} />
             <span>Open project</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={disabled}
+            onClick={() => toggleProjectPin(menuProject)}
+          >
+            <NavIcon name="pin" />
+            <span>{pinnedProjectIds.has(menuProject.id!) ? 'Unpin project' : 'Pin project'}</span>
           </button>
           <div role="separator" className="workspace-menu-separator" />
           <button

@@ -80,7 +80,8 @@ describe('EditorRow layout containment', () => {
     );
 
     expect(html).toContain('grid-cols-[30px_minmax(0,1fr)_4px_minmax(0,1fr)]');
-    expect(html).toContain('min-w-0 overflow-hidden');
+    expect(html).toContain('min-w-0');
+    expect(html).toContain('overflow-hidden');
     expect(html).toContain('truncate whitespace-nowrap');
   });
 });
@@ -158,6 +159,7 @@ describe('EditorRow keyboard shortcut decisions', () => {
     expect(
       resolveEditorRowShortcutAction({
         key: 'Enter',
+        code: 'Enter',
         ctrlKey: true,
         metaKey: false,
         shiftKey: false,
@@ -167,6 +169,7 @@ describe('EditorRow keyboard shortcut decisions', () => {
     expect(
       resolveEditorRowShortcutAction({
         key: 'Enter',
+        code: 'Enter',
         ctrlKey: false,
         metaKey: true,
         shiftKey: false,
@@ -174,10 +177,11 @@ describe('EditorRow keyboard shortcut decisions', () => {
     ).toEqual({ type: 'confirm' });
   });
 
-  it('resolves insert tag commands for ctrl/cmd + shift + number', () => {
+  it('resolves insert tag commands for ctrl/cmd + shift + physical number keys', () => {
     expect(
       resolveEditorRowShortcutAction({
-        key: '1',
+        key: '!',
+        code: 'Digit1',
         ctrlKey: true,
         metaKey: false,
         shiftKey: true,
@@ -186,7 +190,8 @@ describe('EditorRow keyboard shortcut decisions', () => {
 
     expect(
       resolveEditorRowShortcutAction({
-        key: '9',
+        key: '(',
+        code: 'Digit9',
         ctrlKey: false,
         metaKey: true,
         shiftKey: true,
@@ -194,10 +199,11 @@ describe('EditorRow keyboard shortcut decisions', () => {
     ).toEqual({ type: 'insertTag', tagIndex: 8 });
   });
 
-  it('resolves insert all tags for ctrl/cmd + shift + 0/)', () => {
+  it('resolves insert all tags for ctrl/cmd + shift + the physical 0 key', () => {
     expect(
       resolveEditorRowShortcutAction({
         key: '0',
+        code: 'Digit0',
         ctrlKey: true,
         metaKey: false,
         shiftKey: true,
@@ -207,6 +213,7 @@ describe('EditorRow keyboard shortcut decisions', () => {
     expect(
       resolveEditorRowShortcutAction({
         key: ')',
+        code: 'Digit0',
         ctrlKey: false,
         metaKey: true,
         shiftKey: true,

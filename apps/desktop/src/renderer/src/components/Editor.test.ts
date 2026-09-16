@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  EDITOR_ROW_MIN_HEIGHT,
   ESTIMATED_EDITOR_ROW_HEIGHT,
   getEditorVirtualizerInitialRect,
   isVirtualizedEditorListEnabled,
@@ -7,6 +8,11 @@ import {
 } from './editor/editorVirtualizationFlag';
 
 describe('Editor virtualization flag', () => {
+  it('uses the three-action layout height as its row estimate', () => {
+    expect(ESTIMATED_EDITOR_ROW_HEIGHT).toBe(EDITOR_ROW_MIN_HEIGHT);
+    expect(EDITOR_ROW_MIN_HEIGHT).toBe(92);
+  });
+
   it('enables virtualization by default unless explicitly disabled', () => {
     const enabledStorage = {
       getItem: (key: string) => (key === VIRTUALIZED_LIST_FLAG_KEY ? '1' : null),

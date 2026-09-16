@@ -22,6 +22,7 @@ function props() {
 }
 
 beforeEach(() => {
+  window.localStorage.clear();
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
 });
 
@@ -35,6 +36,8 @@ describe('WorkspaceSidebar', () => {
     expect(menu.parentElement).toBe(document.body);
     expect(screen.getByRole('navigation', { name: 'Projects' })).not.toContainElement(menu);
     expect(within(menu).getByRole('menuitem', { name: 'Open project' })).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
+    expect(within(menu).getByRole('menuitem', { name: 'Pin project' })).toHaveFocus();
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
     expect(within(menu).getByRole('menuitem', { name: 'Delete project…' })).toHaveFocus();
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
@@ -57,6 +60,48 @@ describe('WorkspaceSidebar', () => {
     fireEvent.click(trigger);
     fireEvent.pointerDown(document.body);
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('moves pinned projects into a persistent collapsible section', () => {
+    const callbacks = props();
+    const { unmount } = render(<WorkspaceSidebar {...callbacks} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Product localization' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Pin project' }));
+
+    const pinnedProjects = screen.getByRole('group', { name: 'Pinned projects' });
+    const regularProjects = screen.getByRole('group', { name: 'Projects list' });
+    expect(
+      within(pinnedProjects).getByRole('button', { name: 'Product localization', exact: true }),
+    ).toBeVisible();
+    expect(
+      within(regularProjects).queryByRole('button', {
+        name: 'Product localization',
+        exact: true,
+      }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Pinned projects' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Projects' }));
+    expect(screen.queryByRole('group', { name: 'Pinned projects' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Projects list' })).not.toBeInTheDocument();
+
+    unmount();
+    render(<WorkspaceSidebar {...props()} />);
+    expect(screen.getByRole('button', { name: 'Expand Pinned projects' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Expand Projects' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Pinned projects' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Product localization' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Unpin project' }));
+    expect(screen.queryByRole('group', { name: 'Pinned projects' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Projects' }));
+    expect(
+      within(screen.getByRole('group', { name: 'Projects list' })).getByRole('button', {
+        name: 'Product localization',
+        exact: true,
+      }),
+    ).toBeVisible();
   });
 
   it('keeps direct project navigation on narrow windows and restores it after CAT', () => {

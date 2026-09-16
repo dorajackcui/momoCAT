@@ -1,105 +1,16 @@
-import { _electron as electron, expect, test } from '@playwright/test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import * as XLSX from 'xlsx';
+import { expect, test } from '@playwright/test';
 import { IPC_CHANNELS } from '../src/shared/ipcChannels';
 import { version } from '../package.json';
-
-const APP_ROOT = join(__dirname, '..');
-
-interface SmokeSession {
-  electronApp: Awaited<ReturnType<typeof electron.launch>>;
-  page: Awaited<ReturnType<Awaited<ReturnType<typeof electron.launch>>['firstWindow']>>;
-  tempDir: string;
-  fileId: number;
-}
-
-function createFixtureSpreadsheet(tempDir: string): string {
-  const fixturePath = join(tempDir, 'cm6-smoke-fixture.xlsx');
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.aoa_to_sheet([
-    ['Source', 'Target', 'Context'],
-    ['Hello <b>World</b>', '', 'ctx-1'],
-    ['Needle source', 'Needle target', 'ctx-2'],
-    ['Space and tab\tsegment', 'A B', 'ctx-3'],
-  ]);
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Segments');
-  XLSX.writeFile(workbook, fixturePath);
-  return fixturePath;
-}
-
-async function createSmokeSession(): Promise<SmokeSession> {
-  const tempDir = mkdtempSync(join(tmpdir(), 'simple-cat-cm6-smoke-'));
-  const fixturePath = createFixtureSpreadsheet(tempDir);
-  const projectName = `cm6-smoke-${Date.now()}`;
-  const launchEnv = { ...process.env };
-  delete launchEnv.ELECTRON_RUN_AS_NODE;
-  launchEnv.MOMOCAT_USER_DATA_DIR = tempDir;
-
-  const electronApp = await electron.launch({
-    cwd: APP_ROOT,
-    args: ['.'],
-    env: launchEnv,
-  });
-  const page = await electronApp.firstWindow();
-
-  await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
-
-  const seeded = await page.evaluate(
-    async ({ nextProjectName, nextFixturePath }) => {
-      const api = (window as unknown as { api: any }).api;
-      const project = await api.createProject(nextProjectName, 'en', 'zh', 'translation');
-      const file = await api.addFileToProject(project.id, nextFixturePath, {
-        hasHeader: true,
-        sourceCol: 0,
-        targetCol: 1,
-        contextCol: 2,
-      });
-      return {
-        projectName: project.name as string,
-        fileName: file.name as string,
-        fileId: file.id as number,
-      };
-    },
-    {
-      nextProjectName: projectName,
-      nextFixturePath: fixturePath,
-    },
-  );
-
-  await page.reload();
-
-  const projectLink = page
-    .getByRole('navigation', { name: 'Projects', exact: true })
-    .getByRole('button', { name: seeded.projectName, exact: true });
-  await expect(projectLink).toBeVisible();
-  await projectLink.click();
-
-  const fileTitle = page.getByText(seeded.fileName, { exact: true }).first();
-  await expect(fileTitle).toBeVisible();
-  await fileTitle.click();
-
-  await expect(page.getByPlaceholder('Filter target text')).toBeVisible();
-
-  return {
-    electronApp,
-    page,
-    tempDir,
-    fileId: seeded.fileId,
-  };
-}
-
-async function closeSmokeSession(session: SmokeSession): Promise<void> {
-  await session.electronApp.close();
-  rmSync(session.tempDir, { recursive: true, force: true });
-}
+import {
+  closeEditorSmokeSession as closeSmokeSession,
+  createEditorSmokeSession as createSmokeSession,
+} from './support/editorSmokeSession';
 
 test.describe('CodeMirror editor engine smoke', () => {
   test('keeps task actions and direct project navigation visible outside CAT', async () => {
     const session = await createSmokeSession();
     try {
-      const { page } = session;
+      const { page, projectName } = session;
       await page.getByRole('button', { name: 'Back to Project', exact: true }).click();
       const actions = [
         'AI Translate',
@@ -131,6 +42,13 @@ test.describe('CodeMirror editor engine smoke', () => {
       await page.keyboard.press('Escape');
       await expect(menu).toBeHidden();
       await expect(trigger).toBeFocused();
+      await trigger.click();
+      await page.getByRole('menuitem', { name: 'Pin project' }).click();
+      await expect(
+        page
+          .getByRole('group', { name: 'Pinned projects' })
+          .getByRole('button', { name: projectName, exact: true }),
+      ).toBeVisible();
       const projectLink = page
         .getByRole('navigation', { name: 'Projects', exact: true })
         .getByRole('button', { name: /^cm6-smoke-/ });
@@ -162,7 +80,7 @@ test.describe('CodeMirror editor engine smoke', () => {
   test('hides navigation in CAT, saves on return, and restores the selected segment and filters', async () => {
     const session = await createSmokeSession();
     try {
-      const { page, fileId } = session;
+      const { page, fileId, projectName } = session;
       await expect(page.getByRole('complementary', { name: 'Workspace navigation' })).toBeHidden();
       await page.getByPlaceholder('Filter source text').fill('Needle');
       const row = page.locator('div.group.grid');
@@ -185,8 +103,7 @@ test.describe('CodeMirror editor engine smoke', () => {
       expect(savedTarget).toBe('Saved on return');
       await page
         .getByRole('navigation', { name: 'Projects', exact: true })
-        .getByRole('button')
-        .first()
+        .getByRole('button', { name: projectName, exact: true })
         .click();
       await page.getByRole('button', { name: 'cm6-smoke-fixture.xlsx', exact: true }).click();
       await expect(page.getByPlaceholder('Filter source text')).toHaveValue('Needle');
@@ -210,8 +127,7 @@ test.describe('CodeMirror editor engine smoke', () => {
       await expect(updates).toBeVisible();
       await page
         .getByRole('navigation', { name: 'Projects', exact: true })
-        .getByRole('button')
-        .first()
+        .getByRole('button', { name: projectName, exact: true })
         .click();
       await page.getByRole('button', { name: 'cm6-smoke-fixture.xlsx', exact: true }).click();
       await expect(page.locator('div.group.grid').nth(1).locator('.cm-content')).toBeVisible();
@@ -313,6 +229,7 @@ test.describe('CodeMirror editor engine smoke', () => {
       const inactiveHeight = await secondRow.evaluate(
         (element) => element.getBoundingClientRect().height,
       );
+      expect(inactiveHeight).toBeGreaterThanOrEqual(92);
 
       await secondRow.click();
       await expect(secondRow.locator('.editor-target-editor-host .cm-content')).toBeVisible();
@@ -327,6 +244,39 @@ test.describe('CodeMirror editor engine smoke', () => {
         (element) => element.getBoundingClientRect().height,
       );
       expect(Math.abs(activeHeight - inactiveHeight)).toBeLessThanOrEqual(0.5);
+    } finally {
+      await closeSmokeSession(session);
+    }
+  });
+
+  test('inserts source tags from the menu and Windows number-row shortcut', async () => {
+    const session = await createSmokeSession();
+
+    try {
+      const { page } = session;
+      const firstRow = page.locator('div.group.grid').first();
+      await firstRow.click();
+
+      const targetEditor = firstRow.locator('.editor-target-editor-host .cm-content');
+      await expect(targetEditor).toBeVisible();
+
+      await firstRow.getByRole('button', { name: 'Toggle tag insertion menu' }).click();
+      const insertionMenu = page.getByRole('menu', { name: 'Tag insertion menu' });
+      await expect(insertionMenu).toBeVisible();
+      await insertionMenu.getByRole('menuitem', { name: 'Insert tag 1: <b>' }).click();
+      await expect(targetEditor).toContainText('{1>');
+
+      await targetEditor.focus();
+      await page.keyboard.press('Control+a');
+      await page.keyboard.press('Backspace');
+      await targetEditor.dispatchEvent('keydown', {
+        key: '!',
+        code: 'Digit1',
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+      });
+      await expect(targetEditor).toContainText('{1>');
     } finally {
       await closeSmokeSession(session);
     }

@@ -129,7 +129,7 @@ export const EditorRowTargetActions: React.FC<EditorRowTargetActionsProps> = ({
             onToggleTagInsertionUI();
           }}
           className="relative z-20 p-1 rounded bg-surface/90 border border-border/80 hover:bg-brand-soft/80 hover:border-brand/40 text-text-muted hover:text-brand transition-all shadow-sm"
-          title="Insert tags from source (Ctrl+Shift+1-9)"
+          title="Insert tags from source (Ctrl/Cmd+Shift+1-9)"
           aria-label="Toggle tag insertion menu"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

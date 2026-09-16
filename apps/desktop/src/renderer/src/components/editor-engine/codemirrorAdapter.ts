@@ -250,6 +250,7 @@ export function createCodeMirrorAdapter({
       keydown: (event) => {
         const action = resolveEditorShortcutAction({
           key: event.key,
+          code: event.code,
           ctrlKey: event.ctrlKey,
           metaKey: event.metaKey,
           shiftKey: event.shiftKey,

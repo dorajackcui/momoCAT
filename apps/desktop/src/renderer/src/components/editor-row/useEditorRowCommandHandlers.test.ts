@@ -6,6 +6,7 @@ describe('useEditorRowCommandHandlers.resolveEditorRowShortcutAction', () => {
     expect(
       resolveEditorRowShortcutAction({
         key: 'a',
+        code: 'KeyA',
         ctrlKey: false,
         metaKey: false,
         shiftKey: false,
@@ -15,6 +16,7 @@ describe('useEditorRowCommandHandlers.resolveEditorRowShortcutAction', () => {
     expect(
       resolveEditorRowShortcutAction({
         key: '1',
+        code: 'Digit1',
         ctrlKey: true,
         metaKey: false,
         shiftKey: false,
@@ -26,6 +28,7 @@ describe('useEditorRowCommandHandlers.resolveEditorRowShortcutAction', () => {
     expect(
       resolveEditorRowShortcutAction({
         key: 'Enter',
+        code: 'Enter',
         ctrlKey: true,
         metaKey: false,
         shiftKey: false,
@@ -33,10 +36,11 @@ describe('useEditorRowCommandHandlers.resolveEditorRowShortcutAction', () => {
     ).toEqual({ type: 'confirm' });
   });
 
-  it('returns insert all tags for command/ctrl + shift + 0/)', () => {
+  it('returns insert all tags for command/ctrl + shift + the physical 0 key', () => {
     expect(
       resolveEditorRowShortcutAction({
         key: '0',
+        code: 'Digit0',
         ctrlKey: true,
         metaKey: false,
         shiftKey: true,
@@ -46,6 +50,7 @@ describe('useEditorRowCommandHandlers.resolveEditorRowShortcutAction', () => {
     expect(
       resolveEditorRowShortcutAction({
         key: ')',
+        code: 'Digit0',
         ctrlKey: false,
         metaKey: true,
         shiftKey: true,
@@ -53,10 +58,11 @@ describe('useEditorRowCommandHandlers.resolveEditorRowShortcutAction', () => {
     ).toEqual({ type: 'insertAllTags' });
   });
 
-  it('returns insert tag for command/ctrl + shift + 1..9', () => {
+  it('returns insert tag for command/ctrl + shift + physical number keys', () => {
     expect(
       resolveEditorRowShortcutAction({
-        key: '1',
+        key: '!',
+        code: 'Digit1',
         ctrlKey: true,
         metaKey: false,
         shiftKey: true,
@@ -65,11 +71,22 @@ describe('useEditorRowCommandHandlers.resolveEditorRowShortcutAction', () => {
 
     expect(
       resolveEditorRowShortcutAction({
-        key: '9',
+        key: '(',
+        code: 'Digit9',
         ctrlKey: false,
         metaKey: true,
         shiftKey: true,
       }),
     ).toEqual({ type: 'insertTag', tagIndex: 8 });
+
+    expect(
+      resolveEditorRowShortcutAction({
+        key: '1',
+        code: 'Numpad1',
+        ctrlKey: true,
+        metaKey: false,
+        shiftKey: true,
+      }),
+    ).toEqual({ type: 'insertTag', tagIndex: 0 });
   });
 });

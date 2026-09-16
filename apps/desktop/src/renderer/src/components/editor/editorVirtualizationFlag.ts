@@ -1,5 +1,7 @@
 export const VIRTUALIZED_LIST_FLAG_KEY = 'editor.virtualizedList';
-export const ESTIMATED_EDITOR_ROW_HEIGHT = 72;
+// Three 24px action buttons, two 4px gaps, and 6px breathing room above and below.
+export const EDITOR_ROW_MIN_HEIGHT = 92;
+export const ESTIMATED_EDITOR_ROW_HEIGHT = EDITOR_ROW_MIN_HEIGHT;
 const DEFAULT_INITIAL_EDITOR_LIST_ROWS = 10;
 
 export function isVirtualizedEditorListEnabled(storage: Pick<Storage, 'getItem'>): boolean {

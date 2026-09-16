@@ -215,7 +215,10 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
                 data-index={virtualItem.index}
                 ref={virtualizer.measureElement}
                 className="absolute left-0 top-0 w-full"
-                style={{ transform: `translateY(${virtualItem.start}px)` }}
+                style={{
+                  transform: `translateY(${virtualItem.start}px)`,
+                  zIndex: item.segment.segmentId === activeSegmentId ? 1 : undefined,
+                }}
               >
                 {renderRow(item)}
               </div>

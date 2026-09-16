@@ -98,7 +98,7 @@
     @apply text-xl font-semibold tracking-tight text-brand;
   }
   .workspace-brand-dot {
-    color: #D97757;
+    color: #d97757;
   }
   .workspace-nav-item {
     @apply flex h-9 w-full min-w-0 items-center gap-3 rounded-control px-3 text-left text-sm text-text-muted transition-colors hover:bg-muted hover:text-text disabled:opacity-50;
@@ -111,10 +111,19 @@
     @apply outline-none ring-2 ring-brand;
   }
   .workspace-project-heading {
-    @apply mb-1 mt-6 px-3 text-xs font-medium text-text-faint;
+    @apply flex h-7 w-full items-center gap-1 rounded-control px-3 text-left text-xs font-semibold text-text-faint transition-colors hover:bg-muted hover:text-text-muted;
+  }
+  .workspace-project-heading:focus-visible {
+    @apply outline-none ring-2 ring-brand;
+  }
+  .workspace-project-heading-chevron {
+    @apply h-3 w-3 transition-transform;
   }
   .workspace-project-list {
-    @apply min-h-0 flex-1 overflow-y-auto py-1;
+    @apply min-h-0 flex-1 overflow-y-auto pt-4;
+  }
+  .workspace-project-section + .workspace-project-section {
+    @apply mt-3;
   }
   .workspace-project {
     @apply relative mb-1;
