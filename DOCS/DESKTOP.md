@@ -68,6 +68,8 @@ The editor's unload/pagehide hooks start a best-effort flush. They are not an aw
 
 `ProjectFileModule` owns project file workflows behind `ProjectService`. Renderer file dialogs and hooks collect options and display outcomes; shared parsing and localization behavior stays behind the application adapter. File-level tag policy is persisted with import options and reused throughout the file lifecycle.
 
+Paste imports name the task from the first five filename-safe characters of the first non-empty segment plus the local date (`YYYY-MM-DD`), retaining the CSV extension and adding a numeric suffix on collisions.
+
 The CAT editor toolbar's AI Translate action defaults to the current filtered results when filters are active and offers the entire file as an alternative. Opening the dialog snapshots all matching segment IDs using the latest filter input, including context searches. Display sorting does not change translation order. The Tasks tab translates entire files. Planning, confirmed-row locking, and selected-scope result identity follow the [localization contract](LOCALIZATION.md#mt-request-planning).
 
 Job handlers dispatch long operations through `JobManager` and the corresponding service/worker. The renderer tracks returned job identities and progress; progress notifications do not prove that a write committed. Preserve cooperative cancellation and the workflow's completion/failure outcome when adding UI actions. Reference export, source terminology precheck, and TM/TB sync retain their own [localization contracts](LOCALIZATION.md).
