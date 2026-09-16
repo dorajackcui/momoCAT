@@ -428,6 +428,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
       clearSegmentSaveError(segmentId);
 
       try {
+        await flushSegmentUpdate(segmentId);
         const result = await apiClient.aiTranslateSegment(segmentId);
         publishSegmentChanges(applyAISegmentTranslateResultToStore(segmentStore, result));
       } catch (error) {
@@ -444,6 +445,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     },
     [
       clearSegmentSaveError,
+      flushSegmentUpdate,
       getSegmentById,
       publishSegmentChanges,
       segmentStore,
@@ -482,6 +484,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
       clearSegmentSaveError(segmentId);
 
       try {
+        await flushSegmentUpdate(segmentId);
         const result = await apiClient.aiRefineSegment(segmentId, refinementInstruction);
         publishSegmentChanges(applyAISegmentTranslateResultToStore(segmentStore, result));
       } catch (error) {
@@ -498,6 +501,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     },
     [
       clearSegmentSaveError,
+      flushSegmentUpdate,
       getSegmentById,
       publishSegmentChanges,
       segmentStore,

@@ -13,10 +13,6 @@ export function hasRefinableTargetText(text: string): boolean {
   return text.trim().length > 0;
 }
 
-export function shouldShowAIRefineControl(isActive: boolean, targetText: string): boolean {
-  return isActive && hasRefinableTargetText(targetText);
-}
-
 export function normalizeRefinementInstruction(instruction: string): string {
   return instruction.trim();
 }

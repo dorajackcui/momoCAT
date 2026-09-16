@@ -6,6 +6,138 @@ import {
 } from './support/editorSmokeSession';
 
 test.describe('Shared UI controls smoke', () => {
+  test('uses one AI entry on compact rows and waits for saves before AI dispatch', async () => {
+    const session = await createSmokeSession();
+    try {
+      const { page, fileId } = session;
+      const errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      type AIProbe = {
+        calls: { kind: string; instruction?: string; savedText?: string }[];
+        savedText?: string;
+        releaseSave?: () => void;
+        failSave?: boolean;
+      };
+      await session.electronApp.evaluate(
+        ({ ipcMain }, { channels, fileId }) => {
+          const probe: AIProbe = { calls: [] };
+          (globalThis as unknown as { aiProbe: AIProbe }).aiProbe = probe;
+          for (const [kind, channel] of [
+            ['translate', channels.ai.translateSegment],
+            ['refine', channels.ai.refineSegment],
+          ]) {
+            ipcMain.removeHandler(channel);
+            ipcMain.handle(channel, (_event, segmentId, instruction) => {
+              probe.calls.push({ kind, instruction, savedText: probe.savedText });
+              return {
+                fileId,
+                segmentId,
+                status: 'translated',
+                propagatedIds: [],
+                targetTokens: [{ type: 'text', content: `${kind} result` }],
+                serverAppliedAt: new Date().toISOString(),
+              };
+            });
+          }
+          ipcMain.removeHandler(channels.segment.update);
+          ipcMain.handle(
+            channels.segment.update,
+            async (_event, segmentId, targetTokens, status) => {
+              if (probe.failSave) throw new Error('Fixture save failed');
+              await new Promise<void>((resolve) => {
+                probe.releaseSave = resolve;
+              });
+              probe.savedText = targetTokens
+                .map((token: { content: string }) => token.content)
+                .join('');
+              return { fileId, segmentId, targetTokens, status, propagatedIds: [] };
+            },
+          );
+        },
+        { channels: IPC_CHANNELS, fileId },
+      );
+      const calls = () =>
+        session.electronApp.evaluate(
+          () => (globalThis as unknown as { aiProbe: AIProbe }).aiProbe.calls,
+        );
+
+      const rows = page.locator('div.group.grid');
+      await rows.first().click();
+      const emptyAI = rows.first().getByRole('button', { name: 'AI translate this segment' });
+      expect((await rows.first().boundingBox())!.height).toBe(64);
+      await emptyAI.click();
+      await expect(rows.first().locator('.cm-content')).toHaveText('translate result');
+      await expect(page.getByRole('dialog', { name: 'Refine translation' })).toBeHidden();
+      expect((await calls()).map((call) => call.kind)).toEqual(['translate']);
+
+      const row = rows.nth(1);
+      await row.click();
+      const target = row.locator('.cm-content');
+      const ai = row.getByRole('button', { name: 'AI refine this translation' });
+      await target.press('Home');
+      await target.press('ArrowRight');
+      const height = (await row.boundingBox())!.height;
+      await ai.click();
+      const popup = page.getByRole('dialog', { name: 'Refine translation' });
+      const prompt = popup.getByRole('textbox', { name: 'AI refine instruction' });
+      await expect(prompt).toBeFocused();
+      expect((await row.boundingBox())!.height).toBe(height);
+      await prompt.fill('Discard this');
+      await prompt.press('Escape');
+      await expect(popup).toBeHidden();
+      await expect(target).toBeFocused();
+      await page.keyboard.insertText('X');
+      await expect(target).toHaveText('NXeedle target');
+      await ai.click();
+      await expect(prompt).toHaveValue('');
+      const search = page.getByPlaceholder('Filter source text');
+      await search.click();
+      await expect(popup).toBeHidden();
+      await expect(search).toBeFocused();
+      await ai.click();
+      await prompt.fill('  Make it concise  ');
+      await prompt.press('Enter');
+      await expect(popup).toBeHidden();
+      await expect(ai).toBeDisabled();
+      expect((await calls()).map((call) => call.kind)).toEqual(['translate']);
+      await session.electronApp.evaluate(() => {
+        (globalThis as unknown as { aiProbe: AIProbe }).aiProbe.releaseSave!();
+      });
+      await expect(target).toHaveText('refine result');
+      expect((await calls())[1]).toEqual({
+        kind: 'refine',
+        instruction: 'Make it concise',
+        savedText: 'NXeedle target',
+      });
+      await ai.click();
+      await popup.getByRole('button', { name: 'Retranslate' }).click();
+      await expect(target).toHaveText('translate result');
+      expect((await calls()).map((call) => call.kind)).toEqual([
+        'translate',
+        'refine',
+        'translate',
+      ]);
+
+      await session.electronApp.evaluate(() => {
+        (globalThis as unknown as { aiProbe: AIProbe }).aiProbe.failSave = true;
+      });
+      await target.fill('Keep this unsaved draft');
+      await ai.click();
+      await prompt.fill('Shorter');
+      await prompt.press('Enter');
+      await expect(row.getByText(/AI 微调失败/)).toBeVisible();
+      await expect(target).toHaveText('Keep this unsaved draft');
+      await ai.click();
+      await popup.getByRole('button', { name: 'Retranslate' }).click();
+      await expect(row.getByText(/AI 翻译失败/)).toBeVisible();
+      await expect(target).toHaveText('Keep this unsaved draft');
+      expect(await calls()).toHaveLength(3);
+      expect(errors).toEqual([]);
+    } finally {
+      await closeSmokeSession(session);
+    }
+  });
+
   test('preserves CAT search, editor focus and drafts across popups and dialogs', async () => {
     const session = await createSmokeSession();
     try {

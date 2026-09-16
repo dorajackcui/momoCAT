@@ -1,18 +1,15 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import type { Token } from '@cat/core/models';
 import { formatTagAsMemoQMarker } from '@cat/core/tag';
 import { resolveEditorShortcutAction } from '../editor-engine/shortcut';
 import { EditorShortcutAction } from '../editor-engine/types';
-import { normalizeRefinementInstruction } from './editorRowUtils';
 
 interface UseEditorRowCommandHandlersParams {
   segmentId: string;
   isActive: boolean;
-  isAIRefining: boolean;
   sourceTags: Token[];
   sourceEditorText: string;
   onActivate: (id: string, options?: { autoFocusTarget?: boolean }) => void;
-  onAIRefine: (id: string, instruction: string) => void;
   onConfirm: (id: string) => void;
   editorController: {
     getSnapshot: () => {
@@ -37,19 +34,13 @@ interface EditorRowShortcutKeyInput {
 }
 
 interface EditorRowCommandHandlersResult {
-  aiRefineInputRef: React.RefObject<HTMLInputElement | null>;
   showTagInsertionUI: boolean;
-  showAIRefineInput: boolean;
-  aiRefineDraft: string;
-  setAiRefineDraft: React.Dispatch<React.SetStateAction<string>>;
   toggleTagInsertionUI: () => void;
   closeTagInsertionUI: () => void;
-  toggleAIRefineInput: () => void;
   handleInsertTag: (tagIndex: number) => void;
   handleInsertAllTags: () => void;
   handleCopySourceToTarget: (event: React.MouseEvent<HTMLButtonElement>) => void;
   handleSourceCellClick: (event: React.MouseEvent<HTMLDivElement>) => void;
-  handleAIRefineInputKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
   handleShortcutAction: (action: EditorRowShortcutAction) => void;
 }
 
@@ -66,18 +57,13 @@ export function resolveEditorRowShortcutAction({
 export function useEditorRowCommandHandlers({
   segmentId,
   isActive,
-  isAIRefining,
   sourceTags,
   sourceEditorText,
   onActivate,
-  onAIRefine,
   onConfirm,
   editorController,
 }: UseEditorRowCommandHandlersParams): EditorRowCommandHandlersResult {
-  const aiRefineInputRef = useRef<HTMLInputElement>(null);
   const [showTagInsertionUI, setShowTagInsertionUI] = useState(false);
-  const [showAIRefineInput, setShowAIRefineInput] = useState(false);
-  const [aiRefineDraft, setAiRefineDraft] = useState('');
 
   const insertAtSelection = useCallback(
     (insertText: string) => {
@@ -126,49 +112,11 @@ export function useEditorRowCommandHandlers({
     [onActivate, segmentId],
   );
 
-  const submitAIRefinement = useCallback(() => {
-    if (isAIRefining) return;
-    const instruction = normalizeRefinementInstruction(aiRefineDraft);
-    if (!instruction) return;
-    onAIRefine(segmentId, instruction);
-    setShowAIRefineInput(false);
-    setAiRefineDraft('');
-  }, [aiRefineDraft, isAIRefining, onAIRefine, segmentId]);
-
-  const toggleAIRefineInput = useCallback(() => {
-    setShowAIRefineInput((prev) => {
-      const next = !prev;
-      if (!next) {
-        setAiRefineDraft('');
-      }
-      return next;
-    });
-  }, []);
-
   const closeTagInsertionUI = useCallback(() => setShowTagInsertionUI(false), []);
 
   const toggleTagInsertionUI = useCallback(() => {
     setShowTagInsertionUI((prev) => !prev);
   }, []);
-
-  const handleAIRefineInputKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        event.stopPropagation();
-        submitAIRefinement();
-        return;
-      }
-
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        setShowAIRefineInput(false);
-        setAiRefineDraft('');
-      }
-    },
-    [submitAIRefinement],
-  );
 
   const handleShortcutAction = useCallback(
     (action: EditorRowShortcutAction) => {
@@ -191,33 +139,17 @@ export function useEditorRowCommandHandlers({
       // Reset transient insertion UI when row loses focus.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowTagInsertionUI(false);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setShowAIRefineInput(false);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setAiRefineDraft('');
     }
   }, [isActive]);
 
-  useEffect(() => {
-    if (!showAIRefineInput || !isActive) return;
-    aiRefineInputRef.current?.focus();
-    aiRefineInputRef.current?.select();
-  }, [isActive, showAIRefineInput]);
-
   return {
-    aiRefineInputRef,
     showTagInsertionUI,
-    showAIRefineInput,
-    aiRefineDraft,
-    setAiRefineDraft,
     toggleTagInsertionUI,
     closeTagInsertionUI,
-    toggleAIRefineInput,
     handleInsertTag,
     handleInsertAllTags,
     handleCopySourceToTarget,
     handleSourceCellClick,
-    handleAIRefineInputKeyDown,
     handleShortcutAction,
   };
 }

@@ -232,7 +232,7 @@ test.describe('CodeMirror editor engine smoke', () => {
       const inactiveHeight = await secondRow.evaluate(
         (element) => element.getBoundingClientRect().height,
       );
-      expect(inactiveHeight).toBeGreaterThanOrEqual(92);
+      expect(inactiveHeight).toBeGreaterThanOrEqual(64);
 
       await secondRow.click();
       await expect(secondRow.locator('.editor-target-editor-host .cm-content')).toBeVisible();

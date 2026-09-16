@@ -46,7 +46,6 @@ export {
   normalizeRefinementInstruction,
   parseVisualizedNonPrintingSymbols,
   shouldSyncDraftFromExternalTarget,
-  shouldShowAIRefineControl,
   visualizeNonPrintingSymbols,
 } from './editor-row/editorRowUtils';
 
@@ -125,28 +124,20 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
   });
 
   const {
-    aiRefineInputRef,
     showTagInsertionUI,
-    showAIRefineInput,
-    aiRefineDraft,
-    setAiRefineDraft,
     toggleTagInsertionUI,
     closeTagInsertionUI,
-    toggleAIRefineInput,
     handleInsertTag,
     handleInsertAllTags,
     handleCopySourceToTarget,
     handleSourceCellClick,
-    handleAIRefineInputKeyDown,
     handleShortcutAction,
   } = useEditorRowCommandHandlers({
     segmentId: segment.segmentId,
     isActive,
-    isAIRefining,
     sourceTags,
     sourceEditorText,
     onActivate,
-    onAIRefine,
     onConfirm,
     editorController,
   });
@@ -256,24 +247,20 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
           showNonPrintingSymbols={showNonPrintingSymbols}
         />
 
-        <EditorRowTargetActions
-          tagMenuAnchorRef={tagMenuAnchorRef}
-          isTagMenuOpen={showTagInsertionUI}
-          aiRefineInputRef={aiRefineInputRef as React.Ref<HTMLInputElement>}
-          showAIRefineInput={showAIRefineInput}
-          showAIRefineControl={displayModel.showAIRefineControl}
-          showTargetActionButtons={displayModel.showTargetActionButtons}
-          aiRefineDraft={aiRefineDraft}
-          isAIRefining={isAIRefining}
-          isAITranslating={isAITranslating}
-          canAITranslate={displayModel.canAITranslate}
-          canInsertTags={displayModel.canInsertTags}
-          onAiRefineDraftChange={setAiRefineDraft}
-          onAIRefineInputKeyDown={handleAIRefineInputKeyDown}
-          onToggleAIRefineInput={toggleAIRefineInput}
-          onAITranslate={() => onAITranslate(segment.segmentId)}
-          onToggleTagInsertionUI={toggleTagInsertionUI}
-        />
+        {displayModel.showTargetActionButtons && (
+          <EditorRowTargetActions
+            tagMenuAnchorRef={tagMenuAnchorRef}
+            isTagMenuOpen={showTagInsertionUI}
+            hasRefinableTarget={displayModel.hasRefinableTarget}
+            isAIBusy={isAIRefining || isAITranslating}
+            canAITranslate={displayModel.canAITranslate}
+            canInsertTags={displayModel.canInsertTags}
+            onAIRefine={(instruction) => onAIRefine(segment.segmentId, instruction)}
+            onAITranslate={() => onAITranslate(segment.segmentId)}
+            onFocusTarget={editorController.focus}
+            onToggleTagInsertionUI={toggleTagInsertionUI}
+          />
+        )}
 
         <TagInsertionUI
           anchor={tagMenuAnchorRef}

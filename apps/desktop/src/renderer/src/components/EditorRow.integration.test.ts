@@ -8,7 +8,6 @@ import {
   normalizeRefinementInstruction,
   parseVisualizedNonPrintingSymbols,
   shouldSyncDraftFromExternalTarget,
-  shouldShowAIRefineControl,
   visualizeNonPrintingSymbols,
 } from './EditorRow';
 import { resolveEditorRowShortcutAction } from './editor-row/useEditorRowCommandHandlers';
@@ -23,12 +22,6 @@ describe('EditorRow AI refine decisions', () => {
     expect(hasRefinableTargetText('  existing translation  ')).toBe(true);
     expect(hasRefinableTargetText('')).toBe(false);
     expect(hasRefinableTargetText('   ')).toBe(false);
-  });
-
-  it('shows refine control only when row is active and target has text', () => {
-    expect(shouldShowAIRefineControl(true, 'existing translation')).toBe(true);
-    expect(shouldShowAIRefineControl(true, '   ')).toBe(false);
-    expect(shouldShowAIRefineControl(false, 'existing translation')).toBe(false);
   });
 
   it('normalizes refine instruction before submit', () => {

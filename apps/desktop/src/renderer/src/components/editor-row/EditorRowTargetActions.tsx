@@ -1,166 +1,176 @@
-import { Input, IconButton } from '../ui';
-import React from 'react';
+import React, { useRef, useState } from 'react';
+import { Button, Input, IconButton, Popover } from '../ui';
+import { normalizeRefinementInstruction } from './editorRowUtils';
 
 interface EditorRowTargetActionsProps {
   tagMenuAnchorRef: React.Ref<HTMLButtonElement>;
   isTagMenuOpen: boolean;
-  aiRefineInputRef: React.Ref<HTMLInputElement>;
-  showAIRefineInput: boolean;
-  showAIRefineControl: boolean;
-  showTargetActionButtons: boolean;
-  aiRefineDraft: string;
-  isAIRefining: boolean;
-  isAITranslating: boolean;
+  hasRefinableTarget: boolean;
+  isAIBusy: boolean;
   canAITranslate: boolean;
   canInsertTags: boolean;
-  onAiRefineDraftChange: (value: string) => void;
-  onAIRefineInputKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
-  onToggleAIRefineInput: () => void;
+  onAIRefine: (instruction: string) => void;
   onAITranslate: () => void;
+  onFocusTarget: () => void;
   onToggleTagInsertionUI: () => void;
 }
-
-const LoadingSpinnerIcon: React.FC = () => (
-  <svg className="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M12 4v4m0 8v4m8-8h-4M8 12H4m12.364 5.364l-2.828-2.828M9.464 9.464L6.636 6.636m9.728 0l-2.828 2.828m-4.072 4.072l-2.828 2.828"
-    />
-  </svg>
-);
 
 export const EditorRowTargetActions: React.FC<EditorRowTargetActionsProps> = ({
   tagMenuAnchorRef,
   isTagMenuOpen,
-  aiRefineInputRef,
-  showAIRefineInput,
-  showAIRefineControl,
-  showTargetActionButtons,
-  aiRefineDraft,
-  isAIRefining,
-  isAITranslating,
+  hasRefinableTarget,
+  isAIBusy,
   canAITranslate,
   canInsertTags,
-  onAiRefineDraftChange,
-  onAIRefineInputKeyDown,
-  onToggleAIRefineInput,
+  onAIRefine,
   onAITranslate,
+  onFocusTarget,
   onToggleTagInsertionUI,
-}) => (
-  <>
-    {showAIRefineInput && showAIRefineControl && (
-      <div className="absolute top-1.5 right-9 z-30">
-        <Input
-          appearance="floating"
-          size="xs"
-          ref={aiRefineInputRef}
-          value={aiRefineDraft}
-          onClick={(event) => event.stopPropagation()}
-          onChange={(event) => onAiRefineDraftChange(event.target.value)}
-          onKeyDown={onAIRefineInputKeyDown}
-          disabled={isAIRefining}
-          placeholder="Refine prompt(Enter to send)"
-          className="w-56 leading-tight"
-          aria-label="AI refine instruction"
-        />
+}) => {
+  const aiButtonRef = useRef<HTMLButtonElement>(null);
+  const [refineOpen, setRefineOpen] = useState(false);
+  const [instruction, setInstruction] = useState('');
+  const prompt = normalizeRefinementInstruction(instruction);
+  const aiLabel = hasRefinableTarget ? 'AI refine this translation' : 'AI translate this segment';
+
+  const closeRefine = () => {
+    setRefineOpen(false);
+    setInstruction('');
+  };
+  const submitRefine = () => {
+    if (isAIBusy || !prompt) return;
+    closeRefine();
+    onAIRefine(prompt);
+    onFocusTarget();
+  };
+
+  return (
+    <>
+      <div className="absolute top-1.5 right-1.5 z-20 flex min-w-[30px] flex-col items-end gap-1">
+        {canAITranslate && (
+          <IconButton
+            ref={aiButtonRef}
+            size="xs"
+            tone="brand"
+            variant="overlay"
+            disabled={isAIBusy}
+            aria-busy={isAIBusy}
+            aria-haspopup={hasRefinableTarget ? 'dialog' : undefined}
+            aria-expanded={hasRefinableTarget ? refineOpen : undefined}
+            title={aiLabel}
+            aria-label={aiLabel}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (hasRefinableTarget) {
+                if (refineOpen) closeRefine();
+                else setRefineOpen(true);
+              } else {
+                onAITranslate();
+              }
+            }}
+          >
+            <svg
+              className={`w-3.5 h-3.5 ${isAIBusy ? 'animate-spin' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d={
+                  isAIBusy
+                    ? 'M12 4v4m0 8v4m8-8h-4M8 12H4m12.364 5.364l-2.828-2.828M9.464 9.464L6.636 6.636m9.728 0l-2.828 2.828m-4.072 4.072l-2.828 2.828'
+                    : 'M12 3l2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5L12 3z'
+                }
+              />
+            </svg>
+          </IconButton>
+        )}
+        {canInsertTags && (
+          <IconButton
+            size="xs"
+            tone="brand"
+            variant="overlay"
+            ref={tagMenuAnchorRef}
+            aria-haspopup="menu"
+            aria-expanded={isTagMenuOpen}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleTagInsertionUI();
+            }}
+            title="Insert tags from source (Ctrl/Cmd+Shift+1-9)"
+            aria-label="Toggle tag insertion menu"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+              />
+            </svg>
+          </IconButton>
+        )}
       </div>
-    )}
-
-    <div
-      className={`absolute top-1.5 right-1.5 z-20 flex min-w-[30px] flex-col items-end gap-1 transition-opacity ${
-        showTargetActionButtons ? 'opacity-100' : 'pointer-events-none opacity-0'
-      }`}
-    >
-      {showAIRefineControl && (
-        <IconButton
-          size="xs"
-          tone="brand"
-          variant="overlay"
-          type="button"
-          onClick={(event) => {
+      <Popover
+        open={refineOpen && hasRefinableTarget && canAITranslate}
+        anchor={aiButtonRef}
+        label="Refine translation"
+        placement="bottom-end"
+        className="w-64 max-w-[calc(100vw-16px)]"
+        onClose={closeRefine}
+      >
+        <div
+          className="space-y-2"
+          onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing || event.key !== 'Escape') return;
+            event.preventDefault();
             event.stopPropagation();
-            if (isAIRefining) return;
-            onToggleAIRefineInput();
+            closeRefine();
+            onFocusTarget();
           }}
-          disabled={isAIRefining}
-          className="relative z-20"
-          title="AI refine this translation"
-          aria-label="AI refine this translation"
         >
-          {isAIRefining ? (
-            <LoadingSpinnerIcon />
-          ) : (
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3 18h18M7 18c0-6 3-10 5-10s5 4 5 10"
-              />
-            </svg>
-          )}
-        </IconButton>
-      )}
-
-      {canAITranslate && (
-        <IconButton
-          size="xs"
-          tone="brand"
-          variant="overlay"
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onAITranslate();
-          }}
-          disabled={isAITranslating}
-          className="relative z-20"
-          title="AI translate this segment"
-          aria-label="AI translate this segment"
-        >
-          {isAITranslating ? (
-            <LoadingSpinnerIcon />
-          ) : (
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 3l2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5L12 3z"
-              />
-            </svg>
-          )}
-        </IconButton>
-      )}
-
-      {canInsertTags && (
-        <IconButton
-          size="xs"
-          tone="brand"
-          variant="overlay"
-          ref={tagMenuAnchorRef}
-          aria-haspopup="menu"
-          aria-expanded={isTagMenuOpen}
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggleTagInsertionUI();
-          }}
-          className="relative z-20"
-          title="Insert tags from source (Ctrl/Cmd+Shift+1-9)"
-          aria-label="Toggle tag insertion menu"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-            />
-          </svg>
-        </IconButton>
-      )}
-    </div>
-  </>
-);
+          <Input
+            size="xs"
+            value={instruction}
+            onChange={(event) => setInstruction(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing || event.key !== 'Enter') return;
+              event.preventDefault();
+              event.stopPropagation();
+              submitRefine();
+            }}
+            disabled={isAIBusy}
+            placeholder="e.g. Make it more concise"
+            aria-label="AI refine instruction"
+          />
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <Button
+              variant="link"
+              tone="neutral"
+              disabled={isAIBusy}
+              title="Translate again from source, replacing the current translation"
+              onClick={() => {
+                closeRefine();
+                onAITranslate();
+                onFocusTarget();
+              }}
+            >
+              Retranslate
+            </Button>
+            <Button
+              variant="primary"
+              size="xs"
+              disabled={isAIBusy || !prompt}
+              onClick={submitRefine}
+            >
+              Refine ↵
+            </Button>
+          </div>
+        </div>
+      </Popover>
+    </>
+  );
+};

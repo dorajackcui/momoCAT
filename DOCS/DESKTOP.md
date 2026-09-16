@@ -48,6 +48,8 @@ The desktop smoke command runs both the [editor suite](../apps/desktop/e2e/edito
 
 ## Editor persistence and events
 
+The active segment exposes one AI button: empty targets translate immediately; existing targets open a refinement popover with an instruction field and an explicit Retranslate action. Escape returns focus to the target editor, while outside dismissal respects the clicked control. Both AI actions await pending segment saves before dispatch. The tag insertion button remains separate. Rows have a shared 64px minimum/estimated height and grow with text and feedback; popovers do not participate in row sizing.
+
 `Editor` composes filters and batch actions with the `useEditor` state controller. `useEditor` composes the segment store, persistence, QA, data loading, and references. Rows edit token-backed local state optimistically; `useSegmentPersistence` coalesces writes per segment and serializes requests for that segment. Different segments may save concurrently.
 
 Confirmation and explicit actions that require saved data must await `flushSegmentUpdate` or `flushAllSegmentUpdates`. A failed save rejects the flush, leaves a visible save error, and retains the latest unsaved target for retry. An older failed request must not replace a newer queued edit. Automatic debounce catches rejection only after recording the failure; an explicit flush must observe it.

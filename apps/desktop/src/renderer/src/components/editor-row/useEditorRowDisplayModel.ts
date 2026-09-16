@@ -1,11 +1,7 @@
 import type { Segment } from '@cat/core/models';
 import { useMemo } from 'react';
 import { buildHighlightChunks, EditorMatchMode } from '../editorFilterUtils';
-import {
-  hasRefinableTargetText,
-  shouldShowAIRefineControl,
-  visualizeNonPrintingSymbols,
-} from './editorRowUtils';
+import { hasRefinableTargetText, visualizeNonPrintingSymbols } from './editorRowUtils';
 
 interface UseEditorRowDisplayModelParams {
   segmentStatus: Segment['status'];
@@ -27,7 +23,6 @@ interface EditorRowDisplayModel {
   canInsertTags: boolean;
   canAITranslate: boolean;
   hasRefinableTarget: boolean;
-  showAIRefineControl: boolean;
   showTargetActionButtons: boolean;
 }
 
@@ -121,7 +116,6 @@ export function buildEditorRowDisplayModel({
       sourceEditorText,
       draftText,
     });
-  const showAIRefineControl = shouldShowAIRefineControl(isActive, draftText);
 
   return {
     statusLine,
@@ -131,7 +125,6 @@ export function buildEditorRowDisplayModel({
     canInsertTags,
     canAITranslate,
     hasRefinableTarget,
-    showAIRefineControl,
     showTargetActionButtons,
   };
 }
