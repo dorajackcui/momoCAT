@@ -12,23 +12,24 @@ test.describe('CodeMirror editor engine smoke', () => {
     try {
       const { page, projectName } = session;
       await page.getByRole('button', { name: 'Back to Project', exact: true }).click();
-      const actions = [
-        'AI Translate',
-        'Commit',
-        'TM Match',
-        'TM/TB',
-        'Run QA',
-        'Export File',
-        'Delete File',
-      ];
+      const actions = ['Match', 'TM/TB', 'Translate', 'QA', 'Commit', 'Export File', 'Delete File'];
       for (const name of actions)
         await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
       const taskRow = page.locator('.workspace-task-row');
+      expect(
+        await taskRow
+          .locator('.workspace-task-actions button')
+          .evaluateAll((buttons) =>
+            buttons.map(
+              (button) => button.getAttribute('aria-label') || button.textContent?.trim(),
+            ),
+          ),
+      ).toEqual(actions);
       await taskRow.getByRole('button', { name: 'Rename cm6-smoke-fixture.xlsx' }).click();
       await expect(page.getByRole('textbox', { name: 'Rename file' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Rename file' }).click();
       await page.getByRole('button', { name: 'Cancel file rename' }).click();
-      await taskRow.getByRole('button', { name: 'AI Translate', exact: true }).click();
+      await taskRow.getByRole('button', { name: 'Translate', exact: true }).click();
       await expect(page.getByText('AI Translate Options', { exact: true })).toBeVisible();
       await page.getByRole('button', { name: 'Cancel', exact: true }).click();
       await expect(taskRow).toBeVisible();
@@ -261,12 +262,29 @@ test.describe('CodeMirror editor engine smoke', () => {
 
       const targetEditor = firstRow.locator('.editor-target-editor-host .cm-content');
       await expect(targetEditor).toBeVisible();
+      await targetEditor.fill('AB');
+      await page.keyboard.press('Home');
+      await page.keyboard.press('ArrowRight');
 
       await firstRow.getByRole('button', { name: 'Toggle tag insertion menu' }).click();
       const insertionMenu = page.getByRole('menu', { name: 'Tag insertion menu' });
       await expect(insertionMenu).toBeVisible();
       await insertionMenu.getByRole('menuitem', { name: 'Insert tag 1: <b>' }).click();
-      await expect(targetEditor).toContainText('{1>');
+      await expect(targetEditor).toHaveText('A{1>B');
+      await expect(targetEditor).toBeFocused();
+      await page.keyboard.press('Control+z');
+      await expect(targetEditor).toHaveText('AB');
+      await page.keyboard.press('Control+y');
+      await expect(targetEditor).toHaveText('A{1>B');
+      await page.keyboard.insertText('X');
+      await expect(targetEditor).toHaveText('A{1>XB');
+
+      const tagTrigger = firstRow.getByRole('button', { name: 'Toggle tag insertion menu' });
+      await tagTrigger.click();
+      await page.keyboard.press('Escape');
+      await expect(insertionMenu).toBeHidden();
+      await expect(tagTrigger).toBeFocused();
+      await expect(targetEditor).toHaveText('A{1>XB');
 
       await targetEditor.focus();
       await page.keyboard.press('Control+a');

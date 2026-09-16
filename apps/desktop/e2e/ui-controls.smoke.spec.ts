@@ -1,10 +1,96 @@
 import { expect, test } from '@playwright/test';
+import { IPC_CHANNELS } from '../src/shared/ipcChannels';
 import {
   closeEditorSmokeSession as closeSmokeSession,
   createEditorSmokeSession as createSmokeSession,
 } from './support/editorSmokeSession';
 
 test.describe('Shared UI controls smoke', () => {
+  test('preserves CAT search, editor focus and drafts across popups and dialogs', async () => {
+    const session = await createSmokeSession();
+    try {
+      const { page, fileId } = session;
+      const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+      await session.electronApp.evaluate(({ ipcMain }, channel) => {
+        ipcMain.removeHandler(channel);
+        ipcMain.handle(channel, (_event, _projectId, query) => {
+          (globalThis as unknown as { concordanceQuery: string }).concordanceQuery = query;
+          return [];
+        });
+      }, IPC_CHANNELS.tm.concordance);
+      const row = page.locator('div.group.grid').nth(1);
+      await row.click();
+      const target = row.locator('.cm-content');
+      await target.fill('Draft before controls');
+      await page.keyboard.press(`${modifier}+a`);
+      await page.keyboard.press(`${modifier}+k`);
+      const search = page.getByPlaceholder('Search TM...');
+      await expect(search).toBeFocused();
+      await expect(search).toHaveValue('Draft before controls');
+      await expect(page.getByRole('tab', { name: 'Concordance', exact: true })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      await search.fill('Explicit concordance query');
+      await search.press('Enter');
+      await expect
+        .poll(() =>
+          session.electronApp.evaluate(
+            () => (globalThis as unknown as { concordanceQuery: string }).concordanceQuery,
+          ),
+        )
+        .toBe('Explicit concordance query');
+      await page.getByRole('tab', { name: 'CAT', exact: true }).click();
+      await expect(search).toHaveCount(0);
+      await expect(target).toHaveText('Draft before controls');
+
+      const filtersButton = page.getByRole('button', { name: 'Open filters' });
+      await filtersButton.click();
+      const filters = page.getByRole('dialog', { name: 'Filters' });
+      const sourceSearch = page.getByPlaceholder('Filter source text');
+      await sourceSearch.click();
+      await expect(filters).toBeHidden();
+      await expect(sourceSearch).toBeFocused();
+      await filtersButton.click();
+      await page.getByRole('button', { name: 'Sort options' }).click();
+      await expect(filters).toBeHidden();
+      const sort = page.getByRole('menu', { name: 'Sort', exact: true });
+      await expect(sort).toBeVisible();
+      await target.click();
+      await expect(sort).toBeHidden();
+      await expect(target).toBeFocused();
+
+      const translate = page.getByRole('button', { name: 'AI batch translate' });
+      await translate.click();
+      const modal = page.getByRole('dialog', { name: 'AI Translate Options' });
+      await expect(modal).toBeVisible();
+      for (let index = 0; index < 7; index++) {
+        await page.keyboard.press('Tab');
+        expect(await modal.evaluate((element) => element.contains(document.activeElement))).toBe(
+          true,
+        );
+      }
+      await page.keyboard.press('Escape');
+      await expect(modal).toBeHidden();
+      await expect(translate).toBeFocused();
+      await expect(target).toHaveText('Draft before controls');
+      await target.focus();
+      await page.keyboard.press('Control+End');
+      await page.keyboard.insertText(' after controls');
+      await page.getByRole('button', { name: 'Back to Project', exact: true }).click();
+      expect(
+        await page.evaluate(async (id) => {
+          const segments = await (window as unknown as { api: any }).api.getSegments(id, 0, 1000);
+          return segments[1].targetTokens
+            .map((token: { content?: string }) => token.content ?? '')
+            .join('');
+        }, fileId),
+      ).toBe('Draft before controls after controls');
+    } finally {
+      await closeSmokeSession(session);
+    }
+  });
+
   test('uses shared choices and action controls through commit and resource workflows', async () => {
     const session = await createSmokeSession();
     try {

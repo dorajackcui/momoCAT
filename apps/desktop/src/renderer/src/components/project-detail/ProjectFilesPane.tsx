@@ -140,6 +140,16 @@ function ProjectFileCard({
         )}
       </div>
       <div className="workspace-task-actions">
+        {supportsTMWorkflow && (
+          <Button onClick={() => void onOpenMatchModal(file)} variant="secondary" size="sm">
+            Match
+          </Button>
+        )}
+        {supportsTMWorkflow && (
+          <Button onClick={() => onOpenReferenceActions(file)} variant="secondary" size="sm">
+            TM/TB
+          </Button>
+        )}
         {supportsTMWorkflow ? (
           <Button
             onClick={() =>
@@ -149,7 +159,7 @@ function ProjectFileCard({
             variant={jobRunning ? 'danger' : 'secondary'}
             size="sm"
           >
-            {jobRunning ? (jobStopping ? 'Stopping...' : 'Stop') : 'AI Translate'}
+            {jobRunning ? (jobStopping ? 'Stopping...' : 'Stop') : 'Translate'}
           </Button>
         ) : (
           <Button
@@ -174,27 +184,17 @@ function ProjectFileCard({
           </Button>
         )}
         {supportsTMWorkflow && (
-          <Button onClick={() => void onOpenCommitModal(file)} variant="secondary" size="sm">
-            Commit
-          </Button>
-        )}
-        {supportsTMWorkflow && (
-          <Button onClick={() => void onOpenMatchModal(file)} variant="secondary" size="sm">
-            TM Match
-          </Button>
-        )}
-        {supportsTMWorkflow && (
-          <Button onClick={() => onOpenReferenceActions(file)} variant="secondary" size="sm">
-            TM/TB
-          </Button>
-        )}
-        {supportsTMWorkflow && (
           <Button
             onClick={() => void onRunFileQA(file.id, file.name)}
             variant="secondary"
             size="sm"
           >
-            Run QA
+            QA
+          </Button>
+        )}
+        {supportsTMWorkflow && (
+          <Button onClick={() => void onOpenCommitModal(file)} variant="secondary" size="sm">
+            Commit
           </Button>
         )}
         <IconButton

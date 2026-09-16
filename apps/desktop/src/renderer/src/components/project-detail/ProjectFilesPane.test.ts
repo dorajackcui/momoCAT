@@ -168,12 +168,17 @@ function renderPane(ai: ProjectAIController, projectType: 'translation' | 'revie
 }
 
 describe('ProjectFilesPane', () => {
-  it('shows a single AI Translate button in translation projects', () => {
+  it('shows the task workflow actions in order in translation projects', () => {
     const { ai } = createAIControllerMock();
     const html = renderPane(ai, 'translation');
 
-    expect(html).toContain('AI Translate');
-    expect(html).toContain('TM/TB');
+    const row = document.querySelector('.workspace-task-actions');
+    expect(
+      Array.from(
+        row!.querySelectorAll('button'),
+        (button) => button.getAttribute('aria-label') || button.textContent,
+      ),
+    ).toEqual(['Match', 'TM/TB', 'Translate', 'QA', 'Commit', 'Export File', 'Delete File']);
     expect(html).not.toContain('AI Dialogue');
     expect(html).not.toContain('AI Translate Options');
   });
