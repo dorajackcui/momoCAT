@@ -337,7 +337,7 @@ export const Editor: React.FC<EditorProps> = ({
       />
 
       {activeBatchAIJob && (
-        <div className="border-b border-border bg-surface px-4 py-2">
+        <div className="border-b border-border-subtle bg-surface-chrome px-4 py-2">
           <div className="flex items-center justify-between gap-3 text-[11px] font-medium text-text-muted">
             <span className="truncate">
               {activeBatchAIJob.message ||

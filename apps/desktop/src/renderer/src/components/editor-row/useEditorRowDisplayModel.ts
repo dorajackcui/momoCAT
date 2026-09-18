@@ -40,17 +40,12 @@ interface EditorRowActionVisibility {
   showTargetActionButtons: boolean;
 }
 
-export function getEditorRowStatusLineClass(
-  segmentStatus: Segment['status'],
-  hasError: boolean,
-): string {
-  if (hasError) return 'bg-danger';
-
-  if (segmentStatus === 'confirmed') return 'bg-success';
-  if (segmentStatus === 'reviewed') return 'bg-info';
-  if (segmentStatus === 'translated') return 'bg-brand';
-  if (segmentStatus === 'draft') return 'bg-warning';
-  return 'bg-text-faint';
+export function getEditorRowStatusLineClass(segmentStatus: Segment['status']): string {
+  if (segmentStatus === 'confirmed') return 'bg-status-confirmed';
+  if (segmentStatus === 'reviewed') return 'bg-status-reviewed';
+  if (segmentStatus === 'translated') return 'bg-status-translated';
+  if (segmentStatus === 'draft') return 'bg-status-draft';
+  return 'bg-status-new';
 }
 
 export function getEditorRowStatusTitle(
@@ -95,7 +90,7 @@ export function buildEditorRowDisplayModel({
 }: UseEditorRowDisplayModelParams): EditorRowDisplayModel {
   const hasError = qaIssues.some((issue) => issue.severity === 'error');
   const hasWarning = qaIssues.some((issue) => issue.severity === 'warning');
-  const statusLine = getEditorRowStatusLineClass(segmentStatus, hasError);
+  const statusLine = getEditorRowStatusLineClass(segmentStatus);
   const statusTitle = getEditorRowStatusTitle(segmentStatus, hasError, hasWarning);
 
   const sourceDisplayText = showNonPrintingSymbols

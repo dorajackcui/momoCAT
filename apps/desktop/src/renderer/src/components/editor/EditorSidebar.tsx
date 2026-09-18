@@ -46,7 +46,7 @@ const EditorSidebarComponent: React.FC<EditorSidebarProps> = ({
     <Tabs
       value={activeTab}
       onValueChange={(value) => setActiveTab(value as 'tm' | 'concordance')}
-      className="border-l border-border bg-surface flex-col hidden lg:flex relative"
+      className="border-l border-border-subtle bg-surface-panel flex-col hidden lg:flex relative"
       style={{ width: `${sidebarWidth}px` }}
     >
       <button

@@ -4,49 +4,8 @@
 
 @layer base {
   :root {
-    --color-canvas: 231 219 208;
-    --color-surface: 235 224 216;
-    --color-muted: 220 207 196;
-    --color-border: 165 143 128;
-    --color-secondary: 146 127 114;
-    --color-text: 30 30 30;
-    --color-text-muted: 93 80 71;
-    --color-text-faint: 134 118 106;
-    --color-editor-surface: 235 224 216;
-    --color-editor-text: 30 30 30;
-
-    --color-brand: 63 111 138;
-    --color-brand-hover: 52 94 118;
-    --color-brand-soft: 217 229 236;
-    --color-brand-contrast: 255 255 255;
-
-    --color-success: 79 122 84;
-    --color-success-hover: 65 101 70;
-    --color-success-soft: 223 233 225;
-    --color-success-contrast: 255 255 255;
-
-    --color-warning: 169 119 37;
-    --color-warning-hover: 142 100 32;
-    --color-warning-soft: 239 227 207;
-    --color-warning-contrast: 255 255 255;
-
-    --color-danger: 178 74 66;
-    --color-danger-hover: 151 61 54;
-    --color-danger-soft: 243 221 217;
-    --color-danger-contrast: 255 255 255;
-
-    --color-info: 95 125 132;
-    --color-info-hover: 79 105 112;
-    --color-info-soft: 223 232 234;
-    --color-info-contrast: 255 255 255;
-
     --radius-panel: 14px;
     --radius-control: 10px;
-    --font-weight-editor-text: 500;
-
-    --shadow-panel: 0 1px 2px rgba(30, 24, 20, 0.05), 0 8px 24px rgba(30, 24, 20, 0.04);
-    --shadow-float: 0 18px 50px rgba(30, 24, 20, 0.14);
-    --shadow-focus: 0 0 0 3px rgba(63, 111, 138, 0.26);
   }
 
   * {
@@ -62,8 +21,13 @@
   body {
     @apply m-0 bg-canvas text-text font-sans antialiased;
     background-image:
-      radial-gradient(circle at 0% 0%, rgba(63, 111, 138, 0.1), transparent 42%),
-      radial-gradient(circle at 100% 0%, rgba(169, 119, 37, 0.1), transparent 36%);
+      radial-gradient(circle at 0% 0%, rgb(var(--color-brand) / 0.1), transparent 42%),
+      radial-gradient(circle at 100% 0%, rgb(var(--color-warning) / 0.1), transparent 36%);
+  }
+
+  ::selection {
+    background-color: rgb(var(--color-selection));
+    color: rgb(var(--color-selection-text));
   }
 
   button,
@@ -102,7 +66,7 @@
     @apply text-xl font-semibold tracking-tight text-brand;
   }
   .workspace-brand-dot {
-    color: #d97757;
+    color: rgb(var(--color-brand-accent));
   }
   .workspace-nav-item {
     @apply flex h-9 w-full min-w-0 items-center gap-3 rounded-control px-3 text-left text-sm text-text-muted transition-colors hover:bg-muted hover:text-text disabled:opacity-50;
@@ -256,13 +220,13 @@
     @apply border-brand bg-brand-soft text-brand;
   }
   .ui-checkable {
-    @apply h-4 w-4 shrink-0 accent-brand disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30;
+    @apply h-4 w-4 shrink-0 accent-brand disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30;
   }
   .ui-tabs-list {
     @apply flex min-w-0 items-center gap-1 overflow-x-auto;
   }
   .ui-tab {
-    @apply shrink-0 rounded-control px-3 py-2 text-sm font-medium text-text-muted transition-colors hover:text-text hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/50 disabled:opacity-50;
+    @apply shrink-0 rounded-control px-3 py-2 text-sm font-medium text-text-muted transition-colors hover:text-text hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus/50 disabled:opacity-50;
   }
   .ui-tabs-neutral .ui-tab[data-state='active'] {
     @apply bg-muted text-text;
@@ -274,7 +238,7 @@
     @apply bg-brand text-brand-contrast font-semibold;
   }
   .ui-tabs-underline {
-    @apply gap-0 border-b border-border bg-surface;
+    @apply gap-0 border-b border-border-subtle bg-transparent;
   }
   .ui-tabs-underline .ui-tab {
     @apply flex-1 rounded-none border-b-2 border-transparent py-3 text-[10px] font-bold uppercase tracking-wider text-text-faint;
@@ -296,7 +260,7 @@
   }
 
   .btn-base {
-    @apply inline-flex items-center justify-center gap-2 font-semibold rounded-control transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50;
+    @apply inline-flex items-center justify-center gap-2 font-semibold rounded-control transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/50;
   }
 
   .btn-primary {
@@ -360,7 +324,7 @@
   }
 
   .icon-btn {
-    @apply inline-flex shrink-0 items-center justify-center rounded-control border transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50;
+    @apply inline-flex shrink-0 items-center justify-center rounded-control border transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/50;
   }
 
   .icon-btn-neutral {
@@ -503,7 +467,7 @@
 
   .modal-backdrop {
     @apply fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm;
-    background-color: rgba(30, 24, 20, 0.32);
+    background-color: rgb(var(--color-backdrop) / 0.32);
   }
 
   .modal-card {
@@ -523,13 +487,26 @@
     @apply text-xs text-text-muted bg-muted border border-border rounded-control px-3 py-2;
   }
 
+  .content-text {
+    font-family: var(--font-content);
+    font-weight: var(--font-weight-content);
+    font-optical-sizing: auto;
+  }
+
   .editor-text-base {
-    @apply w-full min-h-[36px] text-[14px] font-sans leading-normal whitespace-pre-wrap break-words;
-    font-weight: var(--font-weight-editor-text);
+    @apply content-text w-full min-h-[36px] whitespace-pre-wrap break-words;
+    font-size: var(--font-size-content);
+    line-height: var(--line-height-content);
   }
 
   .editor-cell-bg {
     background-color: rgb(var(--color-editor-surface));
+  }
+
+  .editor-target-cell[data-active='true'],
+  .cat-reference-match[data-selected='true'] {
+    @apply z-10;
+    box-shadow: var(--shadow-active);
   }
 
   .editor-source-text {
@@ -546,26 +523,32 @@
     @apply relative w-full;
   }
 
-  /* CM6 target filter highlight fallback: keep this global so highlight remains visible
-     even if theme-injected style order changes. */
-  .cm-target-highlight {
-    background-color: rgba(var(--color-warning), 0.58) !important;
-    box-shadow:
-      inset 0 0 0 1px rgba(var(--color-warning), 0.92),
-      0 0 0 1px rgba(var(--color-warning), 0.55) !important;
-    border-radius: 3px !important;
-    text-decoration-line: underline !important;
-    text-decoration-color: rgba(var(--color-warning), 0.95) !important;
-    text-decoration-thickness: 2px !important;
-    text-underline-offset: 2px !important;
-    font-weight: 600 !important;
+  .appearance-color-swatch {
+    @apply flex h-9 items-center justify-center rounded text-xs;
+    background-color: rgb(var(--color-editor-surface));
+    color: rgb(var(--color-editor-text));
+  }
+
+  /* Shared by source, inactive target previews and live CodeMirror matches. */
+  .editor-search-highlight,
+  .cm-target-highlight,
+  .cm-editor .cm-content .cm-target-highlight {
+    background-color: rgb(var(--color-highlight));
+    color: rgb(var(--color-highlight-text));
+    box-shadow: inset 0 0 0 1px rgb(var(--color-highlight-border));
+    border-radius: 3px;
+    text-decoration-line: underline;
+    text-decoration-color: rgb(var(--color-highlight-border));
+    text-decoration-thickness: 2px;
+    text-underline-offset: 2px;
+    font-weight: inherit;
   }
 }
 
 @layer utilities {
   .custom-scrollbar {
     scrollbar-width: thin;
-    scrollbar-color: rgba(165, 143, 128, 0.32) transparent;
+    scrollbar-color: rgb(var(--color-border) / 0.32) transparent;
   }
 
   .custom-scrollbar::-webkit-scrollbar {
@@ -574,7 +557,7 @@
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: rgba(165, 143, 128, 0.3);
+    background-color: rgb(var(--color-border) / 0.3);
     border-radius: 999px;
     border: 1px solid transparent;
     background-clip: content-box;

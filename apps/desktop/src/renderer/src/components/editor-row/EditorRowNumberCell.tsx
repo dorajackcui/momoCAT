@@ -10,7 +10,7 @@ export const EditorRowNumberCell: React.FC<EditorRowNumberCellProps> = ({
   rowNumber,
   repeatedSourceRole,
 }) => (
-  <div className="px-0 py-0.5 border-r border-border bg-muted/50 flex min-h-full flex-col items-center">
+  <div className="px-0 py-0.5 border-r border-border-subtle bg-surface-panel flex min-h-full flex-col items-center">
     <div className="mt-0.5 text-[9px] leading-[10px] font-medium text-text-faint select-none">
       {rowNumber}
     </div>

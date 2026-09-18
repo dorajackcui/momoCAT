@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { Segment } from '@cat/core/models';
+import type { QaSeverity, Segment } from '@cat/core/models';
 import { buildHighlightChunks, type EditorMatchMode } from '../editorFilterUtils';
 
 interface EditorRowFeedbackProps {
@@ -8,6 +8,46 @@ interface EditorRowFeedbackProps {
   contextText?: string;
   contextHighlightQuery?: string;
   highlightMode?: EditorMatchMode;
+}
+
+function FeedbackLine({
+  severity,
+  label,
+  children,
+}: {
+  severity: QaSeverity;
+  label: string;
+  children: React.ReactNode;
+}) {
+  const tone =
+    severity === 'error' ? 'text-danger' : severity === 'warning' ? 'text-warning' : 'text-info';
+  return (
+    <div className="flex items-start gap-1.5 px-1 py-0.5 text-[11px] text-text-muted">
+      <span className={`inline-flex shrink-0 items-center gap-1 font-medium ${tone}`}>
+        <svg
+          className="h-3.5 w-3.5"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          aria-hidden="true"
+        >
+          {severity === 'warning' ? (
+            <path strokeLinejoin="round" d="M12 3 22 21H2L12 3Z" />
+          ) : (
+            <circle cx="12" cy="12" r="9" />
+          )}
+          {severity === 'info' ? (
+            <path strokeLinecap="round" d="M12 11v6m0-10v.1" />
+          ) : (
+            <path strokeLinecap="round" d="M12 8v5m0 4v.1" />
+          )}
+        </svg>
+        <span className="capitalize">{label}</span>
+      </span>
+      <span className="min-w-0 break-words">{children}</span>
+    </div>
+  );
 }
 
 async function copyText(text: string): Promise<boolean> {
@@ -91,25 +131,18 @@ export const EditorRowFeedback: React.FC<EditorRowFeedbackProps> = ({
       {qaIssues.length > 0 && (
         <div className="mt-1 space-y-1">
           {qaIssues.map((issue, idx) => (
-            <div
-              key={idx}
-              className={`text-[10px] flex items-center gap-1.5 px-2 py-0.5 rounded ${
-                issue.severity === 'error'
-                  ? 'bg-danger-soft text-danger'
-                  : 'bg-warning-soft text-warning'
-              }`}
-            >
-              <span className="font-bold uppercase text-[8px]">{issue.severity}:</span>
+            <FeedbackLine key={idx} severity={issue.severity} label={issue.severity}>
               {issue.message}
-            </div>
+            </FeedbackLine>
           ))}
         </div>
       )}
 
       {saveError && (
-        <div className="mt-1 text-[10px] flex items-center gap-1.5 px-2 py-0.5 rounded bg-danger-soft text-danger">
-          <span className="font-bold uppercase text-[8px]">save:</span>
-          {saveError}
+        <div className="mt-1">
+          <FeedbackLine severity="error" label="save">
+            {saveError}
+          </FeedbackLine>
         </div>
       )}
 

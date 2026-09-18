@@ -1,0 +1,34 @@
+/* Bundled by Vite; no runtime font service is required. */
+@import '@fontsource-variable/source-sans-3';
+@import '@fontsource-variable/source-serif-4';
+@import '@fontsource-variable/noto-sans-sc';
+@import '@fontsource-variable/noto-serif-sc';
+
+:root {
+  --font-interface: 'Source Sans 3 Variable', 'Noto Sans SC Variable', sans-serif;
+  --font-content-latin: 'Source Serif 4 Variable';
+  --font-content-cjk: 'Noto Sans SC Variable';
+  --font-content: var(--font-content-latin), var(--font-content-cjk), serif;
+  --font-size-content: 16px;
+  --line-height-content: 1.7;
+  --font-weight-content: 400;
+}
+[data-content-latin='source-sans'] {
+  --font-content-latin: 'Source Sans 3 Variable';
+}
+[data-content-latin='source-serif'] {
+  --font-content-latin: 'Source Serif 4 Variable';
+}
+[data-content-cjk='noto-sans'] {
+  --font-content-cjk: 'Noto Sans SC Variable';
+}
+[data-content-cjk='noto-serif'] {
+  --font-content-cjk: 'Noto Serif SC Variable';
+}
+
+[data-content-size='14'] {
+  --font-size-content: 14px;
+}
+[data-content-size='16'] {
+  --font-size-content: 16px;
+}

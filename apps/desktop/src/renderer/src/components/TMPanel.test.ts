@@ -141,7 +141,8 @@ describe('buildCombinedMatches', () => {
     expect(html).toContain('line-clamp-5');
     expect(html).not.toContain('>...<');
     expect(html).not.toContain('>less<');
-    expect(html).toContain('border-l-border bg-muted/60');
+    expect(html).toContain('data-selected="true"');
+    expect(html).not.toContain('bg-muted/60');
     expect(html).not.toContain('border-l-brand/70');
     expect(html).not.toContain('bg-brand-soft');
   });

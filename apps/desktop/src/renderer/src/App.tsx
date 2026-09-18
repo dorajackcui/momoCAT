@@ -14,9 +14,12 @@ import { useProjects } from './hooks/useProjects';
 import { FeedbackHost } from './services/FeedbackHost';
 import { useAppUpdates } from './hooks/useAppUpdates';
 import { useWorkspaceNavigation } from './hooks/useWorkspaceNavigation';
+import { ThemeProvider } from './theme/ThemeProvider';
+import { TypographyProvider } from './theme/TypographyProvider';
 
 function App(): JSX.Element {
   const { view, pending, navigate, runGuarded, registerGuard } = useWorkspaceNavigation();
+  const appearanceScope = view.kind === 'editor' ? 'editor' : 'workspace';
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editorPositions, setEditorPositions] = useState<Record<number, string | null>>({});
   const rememberEditorPosition = useCallback((fileId: number, segmentId: string | null) => {
@@ -51,100 +54,102 @@ function App(): JSX.Element {
   };
 
   return (
-    <>
-      <FeedbackHost />
-      <div className="workspace-shell">
-        <WorkspaceSidebar
-          hidden={view.kind === 'editor'}
-          projects={projects}
-          view={view}
-          disabled={pending || loading}
-          onNavigate={(next) => {
-            void navigate(next);
-          }}
-          onCreate={() => setIsCreateOpen(true)}
-          onDelete={handleDeleteProject}
-        />
-        {isCreateOpen && (
-          <CreateProjectModal
-            isOpen
-            onClose={() => {
-              if (!pending) setIsCreateOpen(false);
+    <ThemeProvider scope={appearanceScope}>
+      <TypographyProvider scope={appearanceScope}>
+        <FeedbackHost />
+        <div className="workspace-shell">
+          <WorkspaceSidebar
+            hidden={view.kind === 'editor'}
+            projects={projects}
+            view={view}
+            disabled={pending || loading}
+            onNavigate={(next) => {
+              void navigate(next);
             }}
-            onConfirm={handleCreateProject}
-            loading={loading || pending}
+            onCreate={() => setIsCreateOpen(true)}
+            onDelete={handleDeleteProject}
           />
-        )}
-        <main
-          className="workspace-main"
-          aria-label="Workspace"
-          aria-busy={pending}
-          ref={(element) => {
-            // Prevent new edits while the navigation guard drains pending writes.
-            if (element) element.inert = pending;
-          }}
-        >
-          <ErrorBoundary
-            key={
-              view.kind === 'editor'
-                ? `editor:${view.fileId}`
-                : view.kind === 'project'
-                  ? `project:${view.projectId}`
-                  : view.kind
-            }
+          {isCreateOpen && (
+            <CreateProjectModal
+              isOpen
+              onClose={() => {
+                if (!pending) setIsCreateOpen(false);
+              }}
+              onConfirm={handleCreateProject}
+              loading={loading || pending}
+            />
+          )}
+          <main
+            className="workspace-main"
+            aria-label="Workspace"
+            aria-busy={pending}
+            ref={(element) => {
+              // Prevent new edits while the navigation guard drains pending writes.
+              if (element) element.inert = pending;
+            }}
           >
-            {view.kind === 'home' && (
-              <section className="workspace-home">
-                <div className="workspace-home-content">
-                  <span className="text-sm text-text-muted">MomoCAT workspace</span>
-                  <h1 className="mt-3 text-3xl font-semibold tracking-tight">Projects</h1>
-                  <p className="mt-3 text-sm leading-6 text-text-muted">
-                    {projects.length
-                      ? 'Choose a project in the sidebar to continue your work.'
-                      : 'Create a project to start translating, reviewing, or processing your files.'}
-                  </p>
-                  <Button
-                    variant="primary"
-                    type="button"
-                    className="mt-6"
-                    onClick={() => setIsCreateOpen(true)}
-                  >
-                    + New project
-                  </Button>
-                </div>
-              </section>
-            )}
-            {view.kind === 'project' && (
-              <ProjectDetail
-                projectId={view.projectId}
-                onBack={() => {
-                  void navigate({ kind: 'home' });
-                }}
-                onOpenFile={(fileId) => {
-                  void navigate({ kind: 'editor', projectId: view.projectId, fileId });
-                }}
-                aiFileJobTracker={aiFileJobTracker}
-              />
-            )}
-            {view.kind === 'editor' && (
-              <Editor
-                fileId={view.fileId}
-                onBack={() => {
-                  void navigate({ kind: 'project', projectId: view.projectId });
-                }}
-                aiFileJobTracker={aiFileJobTracker}
-                registerNavigationGuard={registerGuard}
-                initialActiveSegmentId={editorPositions[view.fileId]}
-                onRememberPosition={rememberEditorPosition}
-              />
-            )}
-            {view.kind === 'tm' && <TMManager />}
-            {view.kind === 'tb' && <TBManager />}
-            {view.kind === 'settings' && <SettingsPage updates={updates} />}
-          </ErrorBoundary>
-        </main>
-      </div>
-    </>
+            <ErrorBoundary
+              key={
+                view.kind === 'editor'
+                  ? `editor:${view.fileId}`
+                  : view.kind === 'project'
+                    ? `project:${view.projectId}`
+                    : view.kind
+              }
+            >
+              {view.kind === 'home' && (
+                <section className="workspace-home">
+                  <div className="workspace-home-content">
+                    <span className="text-sm text-text-muted">MomoCAT workspace</span>
+                    <h1 className="mt-3 text-3xl font-semibold tracking-tight">Projects</h1>
+                    <p className="mt-3 text-sm leading-6 text-text-muted">
+                      {projects.length
+                        ? 'Choose a project in the sidebar to continue your work.'
+                        : 'Create a project to start translating, reviewing, or processing your files.'}
+                    </p>
+                    <Button
+                      variant="primary"
+                      type="button"
+                      className="mt-6"
+                      onClick={() => setIsCreateOpen(true)}
+                    >
+                      + New project
+                    </Button>
+                  </div>
+                </section>
+              )}
+              {view.kind === 'project' && (
+                <ProjectDetail
+                  projectId={view.projectId}
+                  onBack={() => {
+                    void navigate({ kind: 'home' });
+                  }}
+                  onOpenFile={(fileId) => {
+                    void navigate({ kind: 'editor', projectId: view.projectId, fileId });
+                  }}
+                  aiFileJobTracker={aiFileJobTracker}
+                />
+              )}
+              {view.kind === 'editor' && (
+                <Editor
+                  fileId={view.fileId}
+                  onBack={() => {
+                    void navigate({ kind: 'project', projectId: view.projectId });
+                  }}
+                  aiFileJobTracker={aiFileJobTracker}
+                  registerNavigationGuard={registerGuard}
+                  initialActiveSegmentId={editorPositions[view.fileId]}
+                  onRememberPosition={rememberEditorPosition}
+                />
+              )}
+              {view.kind === 'tm' && <TMManager />}
+              {view.kind === 'tb' && <TBManager />}
+              {view.kind === 'settings' && <SettingsPage updates={updates} />}
+            </ErrorBoundary>
+          </main>
+        </div>
+      </TypographyProvider>
+    </ThemeProvider>
   );
 }
 

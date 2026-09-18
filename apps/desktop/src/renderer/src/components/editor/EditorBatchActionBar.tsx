@@ -42,7 +42,7 @@ export function EditorBatchActionBar({
   if (!visible) return null;
 
   return (
-    <div className="flex items-center justify-start gap-1.5 px-4 py-1.5 border-b border-border bg-surface/90">
+    <div className="flex items-center gap-1.5">
       <IconButton
         tone={isBatchAITranslating ? 'danger' : 'brand'}
         size="sm"

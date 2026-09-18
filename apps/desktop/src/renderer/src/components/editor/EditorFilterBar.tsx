@@ -1,4 +1,13 @@
-import { Menu, MenuItem, MenuHeading, Popover, ToggleButton, IconButton, SearchInput } from '../ui';
+import {
+  Menu,
+  MenuItem,
+  MenuHeading,
+  Popover,
+  ToggleButton,
+  IconButton,
+  SearchInput,
+  AppearancePicker,
+} from '../ui';
 import React from 'react';
 import { EditorBatchActionBar } from './EditorBatchActionBar';
 import {
@@ -103,21 +112,27 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
   const filterMenuRef = React.useRef<HTMLButtonElement>(null);
   const sortMenuRef = React.useRef<HTMLButtonElement>(null);
   return (
-    <div className="sticky top-0 z-20 bg-surface border-b border-border">
-      <EditorBatchActionBar
-        visible={supportsBatchActions}
-        canRunActions={canRunActions}
-        isBatchAITranslating={isBatchAITranslating}
-        isBatchAIStopping={isBatchAIStopping}
-        isBatchQARunning={isBatchQARunning}
-        showNonPrintingSymbols={showNonPrintingSymbols}
-        onOpenBatchAIModal={onOpenBatchAIModal}
-        onCancelBatchAITranslate={onCancelBatchAITranslate}
-        onRunBatchQA={onRunBatchQA}
-        onToggleNonPrintingSymbols={onToggleNonPrintingSymbols}
-      />
+    <div className="sticky top-0 z-20 bg-surface-chrome border-b border-border-subtle">
+      <div className="flex items-center gap-1.5 px-4 py-1.5">
+        <EditorBatchActionBar
+          visible={supportsBatchActions}
+          canRunActions={canRunActions}
+          isBatchAITranslating={isBatchAITranslating}
+          isBatchAIStopping={isBatchAIStopping}
+          isBatchQARunning={isBatchQARunning}
+          showNonPrintingSymbols={showNonPrintingSymbols}
+          onOpenBatchAIModal={onOpenBatchAIModal}
+          onCancelBatchAITranslate={onCancelBatchAITranslate}
+          onRunBatchQA={onRunBatchQA}
+          onToggleNonPrintingSymbols={onToggleNonPrintingSymbols}
+        />
+        {supportsBatchActions && (
+          <span className="mx-1 h-4 w-px bg-border-subtle" aria-hidden="true" />
+        )}
+        <AppearancePicker label="Editor appearance" />
+      </div>
 
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-surface">
+      <div className="flex items-center gap-2 px-4 py-2.5">
         <div className="relative shrink-0">
           <IconButton
             type="button"
@@ -244,7 +259,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
             </svg>
           </IconButton>
           {activeFilterCount > 0 && (
-            <span className="absolute -top-1 -right-1 rounded-full bg-brand px-1.5 py-0.5 text-[9px] text-white leading-none">
+            <span className="absolute -top-1 -right-1 rounded-full bg-brand px-1.5 py-0.5 text-[9px] text-brand-contrast leading-none">
               {activeFilterCount}
             </span>
           )}

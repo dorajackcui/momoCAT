@@ -64,8 +64,8 @@ export const ConcordancePanel: React.FC<ConcordancePanelProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-surface border-l border-border w-80">
-      <div className="p-4 border-b border-border/60 bg-muted/50">
+    <div className="flex flex-col h-full bg-surface-panel w-80">
+      <div className="p-4 border-b border-border-subtle bg-surface-chrome">
         <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted mb-3">
           Concordance Search
         </h3>
@@ -85,11 +85,11 @@ export const ConcordancePanel: React.FC<ConcordancePanelProps> = ({
           <div className="text-center py-8 text-text-faint text-xs italic">Searching...</div>
         ) : results.length > 0 ? (
           results.map((entry) => (
-            <div key={entry.id} className="group border-b border-border/40 pb-4 last:border-0">
-              <div className="text-[13px] text-text-muted mb-1.5 leading-snug">
+            <div key={entry.id} className="group border-b border-border-subtle pb-4 last:border-0">
+              <div className="content-text text-sm text-text-muted mb-1.5 leading-snug">
                 {serializeTokensToDisplayText(entry.sourceTokens)}
               </div>
-              <div className="text-[13px] text-brand leading-snug italic">
+              <div className="content-text text-sm text-text leading-snug italic">
                 {serializeTokensToDisplayText(entry.targetTokens)}
               </div>
               <div className="mt-2 flex items-center justify-between text-[10px] text-text-faint">

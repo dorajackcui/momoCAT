@@ -25,7 +25,7 @@ const EditorHeaderComponent: React.FC<EditorHeaderProps> = ({
   onExport,
 }) => {
   return (
-    <header className="px-6 py-3 border-b border-border flex justify-between items-center bg-surface shadow-sm z-10">
+    <header className="px-6 py-3 border-b border-border-subtle flex justify-between items-center bg-surface-chrome z-10">
       <div className="flex items-center gap-4">
         <IconButton
           size="sm"
@@ -71,7 +71,7 @@ const EditorHeaderComponent: React.FC<EditorHeaderProps> = ({
             {confirmedSegments}/{totalSegments}
           </div>
         </div>
-        <div className="h-4 w-[1px] bg-border" />
+        <div className="h-4 w-[1px] bg-border-subtle" />
         <Button size="xs" variant="primary" onClick={onExport}>
           Export
         </Button>

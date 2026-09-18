@@ -5,28 +5,31 @@ import {
 } from './useEditorRowDisplayModel';
 
 describe('useEditorRowDisplayModel.buildEditorRowDisplayModel', () => {
-  it('keeps the confirmed status color when only QA warnings are present', () => {
-    const model = buildEditorRowDisplayModel({
-      segmentStatus: 'confirmed',
-      qaIssues: [
-        {
-          ruleId: 'tb-term-missing',
-          severity: 'warning',
-          message: 'Use the preferred term.',
-        },
-      ],
-      isActive: false,
-      draftText: 'Target',
-      sourceEditorText: 'Source',
-      sourceTagsCount: 0,
-      sourceHighlightQuery: '',
-      highlightMode: 'contains',
-      showNonPrintingSymbols: false,
-    });
+  it.each(['warning', 'error'] as const)(
+    'keeps the confirmed status when QA reports %s',
+    (severity) => {
+      const model = buildEditorRowDisplayModel({
+        segmentStatus: 'confirmed',
+        qaIssues: [
+          {
+            ruleId: 'tb-term-missing',
+            severity,
+            message: 'Use the preferred term.',
+          },
+        ],
+        isActive: false,
+        draftText: 'Target',
+        sourceEditorText: 'Source',
+        sourceTagsCount: 0,
+        sourceHighlightQuery: '',
+        highlightMode: 'contains',
+        showNonPrintingSymbols: false,
+      });
 
-    expect(model.statusLine).toBe('bg-success');
-    expect(model.statusTitle).toBe('Status: confirmed (QA warning)');
-  });
+      expect(model.statusLine).toBe('bg-status-confirmed');
+      expect(model.statusTitle).toBe(`Status: confirmed (QA ${severity})`);
+    },
+  );
 
   it('builds source highlight chunks in non-printing mode', () => {
     const model = buildEditorRowDisplayModel({
@@ -41,7 +44,7 @@ describe('useEditorRowDisplayModel.buildEditorRowDisplayModel', () => {
       showNonPrintingSymbols: true,
     });
 
-    expect(model.statusLine).toBe('bg-warning');
+    expect(model.statusLine).toBe('bg-status-draft');
     expect(model.sourceHighlightChunks.some((chunk) => chunk.isMatch)).toBe(true);
     expect(model.sourceDisplayText).toContain('·');
   });
@@ -59,7 +62,7 @@ describe('useEditorRowDisplayModel.buildEditorRowDisplayModel', () => {
       showNonPrintingSymbols: true,
     });
 
-    expect(model.statusLine).toBe('bg-brand');
+    expect(model.statusLine).toBe('bg-status-translated');
     expect(model.canAITranslate).toBe(true);
     expect(model.showTargetActionButtons).toBe(true);
   });

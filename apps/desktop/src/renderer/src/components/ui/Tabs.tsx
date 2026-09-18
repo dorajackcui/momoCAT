@@ -2,6 +2,12 @@ import * as Primitive from '@radix-ui/react-tabs';
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 import { cx } from './cx';
 
+const variantClasses = {
+  neutral: 'ui-tabs-neutral',
+  brand: 'ui-tabs-brand',
+  underline: 'ui-tabs-underline',
+};
+
 export const Tabs = Primitive.Root;
 
 export function TabsList({
@@ -18,7 +24,7 @@ export function TabsList({
   return (
     <Primitive.List
       aria-label={label}
-      className={cx('ui-tabs-list', `ui-tabs-${variant}`, className)}
+      className={cx('ui-tabs-list', variantClasses[variant], className)}
     >
       {items.map(({ value, label: itemLabel, ...props }) => (
         <Primitive.Trigger key={value} value={value} {...props} className="ui-tab">

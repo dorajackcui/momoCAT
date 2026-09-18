@@ -5,10 +5,42 @@ module.exports = {
     extend: {
       colors: {
         canvas: 'rgb(var(--color-canvas) / <alpha-value>)',
-        surface: 'rgb(var(--color-surface) / <alpha-value>)',
+        surface: {
+          DEFAULT: 'rgb(var(--color-surface) / <alpha-value>)',
+          chrome: 'rgb(var(--color-surface-chrome) / <alpha-value>)',
+          panel: 'rgb(var(--color-surface-panel) / <alpha-value>)',
+        },
         muted: 'rgb(var(--color-muted) / <alpha-value>)',
-        border: 'rgb(var(--color-border) / <alpha-value>)',
+        border: {
+          DEFAULT: 'rgb(var(--color-border) / <alpha-value>)',
+          subtle: 'rgb(var(--color-border-subtle) / <alpha-value>)',
+        },
         secondary: 'rgb(var(--color-secondary) / <alpha-value>)',
+        focus: 'rgb(var(--color-focus) / <alpha-value>)',
+        status: Object.fromEntries(
+          ['new', 'draft', 'translated', 'reviewed', 'confirmed'].map((status) => [
+            status,
+            `rgb(var(--color-status-${status}) / <alpha-value>)`,
+          ]),
+        ),
+        match: {
+          exact: {
+            DEFAULT: 'rgb(var(--color-match-exact) / <alpha-value>)',
+            contrast: 'rgb(var(--color-match-exact-contrast) / <alpha-value>)',
+          },
+          fuzzy: {
+            DEFAULT: 'rgb(var(--color-match-fuzzy) / <alpha-value>)',
+            contrast: 'rgb(var(--color-match-fuzzy-contrast) / <alpha-value>)',
+          },
+          concordance: {
+            DEFAULT: 'rgb(var(--color-match-concordance) / <alpha-value>)',
+            contrast: 'rgb(var(--color-match-concordance-contrast) / <alpha-value>)',
+          },
+          term: {
+            DEFAULT: 'rgb(var(--color-match-term) / <alpha-value>)',
+            contrast: 'rgb(var(--color-match-term-contrast) / <alpha-value>)',
+          },
+        },
         text: {
           DEFAULT: 'rgb(var(--color-text) / <alpha-value>)',
           muted: 'rgb(var(--color-text-muted) / <alpha-value>)',
@@ -55,14 +87,7 @@ module.exports = {
         focus: 'var(--shadow-focus)',
       },
       fontFamily: {
-        sans: [
-          '"Source Sans 3"',
-          '"Noto Sans"',
-          '"Segoe UI"',
-          '"PingFang SC"',
-          '"Noto Sans CJK SC"',
-          'sans-serif',
-        ],
+        sans: ['var(--font-interface)'],
       },
     },
   },

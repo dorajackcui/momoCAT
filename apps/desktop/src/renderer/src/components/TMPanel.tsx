@@ -137,7 +137,7 @@ export const TMPanel: React.FC<TMPanelProps> = ({
   }
 
   return (
-    <div className="h-full flex flex-col bg-surface">
+    <div className="h-full flex flex-col bg-surface-panel">
       <div
         className={
           selectedTM && activeSegmentId
@@ -157,13 +157,13 @@ export const TMPanel: React.FC<TMPanelProps> = ({
                 ? 'Working TM'
                 : `Main TM: ${tmMatch!.tmName}`
             : `Term Base: ${tbMatch!.tbName}`;
-          const scoreBg = isTM
+          const scoreClass = isTM
             ? tmMatch!.kind === 'concordance'
-              ? 'bg-[#808080]'
+              ? 'bg-match-concordance text-match-concordance-contrast'
               : tmMatch!.similarity >= 100
-                ? 'bg-success'
-                : 'bg-warning'
-            : 'bg-[#B8930B]';
+                ? 'bg-match-exact text-match-exact-contrast'
+                : 'bg-match-fuzzy text-match-fuzzy-contrast'
+            : 'bg-match-term text-match-term-contrast';
           const scoreText = isTM
             ? tmMatch!.kind === 'concordance'
               ? 'C'
@@ -177,8 +177,9 @@ export const TMPanel: React.FC<TMPanelProps> = ({
           return (
             <div
               key={key}
-              className={`border-l-2 border-b border-border/60 last:border-b-0 ${
-                isSelected ? 'border-l-border bg-muted/60' : 'border-l-transparent'
+              data-selected={isSelected || undefined}
+              className={`cat-reference-match relative bg-surface-panel border-l-2 border-b border-border-subtle last:border-b-0 ${
+                isSelected ? 'border-l-border' : 'border-l-transparent'
               }`}
             >
               <div className="px-2 py-1 flex items-center justify-between text-[9px] text-text-faint">
@@ -204,21 +205,21 @@ export const TMPanel: React.FC<TMPanelProps> = ({
                 title="Double click to apply match"
               >
                 <div
-                  className={`px-2 py-2 border-r border-border/60 text-xs text-text-muted leading-snug ${
+                  className={`content-text px-2 py-2 border-r border-border-subtle text-sm text-text-muted leading-snug ${
                     isTM ? 'line-clamp-5' : ''
                   }`}
                 >
                   {sourceText}
                 </div>
 
-                <div className={`${scoreBg} text-white flex items-center justify-center px-[1px]`}>
+                <div className={`${scoreClass} flex items-center justify-center px-[1px]`}>
                   <span className="text-[8px] font-bold leading-none whitespace-nowrap">
                     {scoreText}
                   </span>
                 </div>
 
                 <div
-                  className={`px-2 py-2 border-l border-border/60 text-xs text-text leading-snug ${
+                  className={`content-text px-2 py-2 border-l border-border-subtle text-sm text-text leading-snug ${
                     isTM ? 'line-clamp-5' : ''
                   }`}
                 >
@@ -231,7 +232,7 @@ export const TMPanel: React.FC<TMPanelProps> = ({
       </div>
 
       {selectedTM && activeSegmentId && (
-        <div className="min-h-0 basis-2/5 border-t border-border">
+        <div className="min-h-0 basis-2/5 border-t border-border-subtle">
           <SourceDiffPane
             tmSourceTokens={selectedTM.payload.sourceTokens}
             currentSourceTokens={currentSourceTokens}

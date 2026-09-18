@@ -15,3 +15,4 @@ export * from './Checkbox';
 export * from './ToggleButton';
 export * from './ChoiceGroup';
 export * from './SearchInput';
+export * from './AppearancePicker';

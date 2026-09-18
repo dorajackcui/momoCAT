@@ -36,26 +36,26 @@ export const codeMirrorEditorThemeSpec = {
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
     padding: '0',
+    caretColor: 'rgb(var(--color-caret))',
     // The shared target layer owns the minimum height. Repeating it here adds
     // the host padding twice and makes a segment grow when it becomes active.
   },
   '.cm-line': {
     padding: '0',
   },
+  '.cm-content::selection, .cm-content ::selection': {
+    backgroundColor: 'rgb(var(--color-selection))',
+    color: 'rgb(var(--color-selection-text))',
+  },
+  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
+    backgroundColor: 'rgb(var(--color-selection))',
+  },
   '.cm-focused': {
     outline: 'none',
   },
   '.cm-cursor': {
-    borderLeftColor: 'rgb(var(--color-brand))',
+    borderLeftColor: 'rgb(var(--color-caret))',
     borderLeftWidth: '2px',
-  },
-  '.cm-target-highlight': {
-    backgroundColor: 'rgba(var(--color-warning), 0.58)',
-    boxShadow:
-      'inset 0 0 0 1px rgba(var(--color-warning), 0.92), 0 0 0 1px rgba(var(--color-warning), 0.55)',
-    borderRadius: '3px',
-    color: 'rgb(var(--color-text))',
-    fontWeight: '600',
   },
   '.cm-np-space, .cm-np-tab, .cm-np-nbsp, .cm-np-nnbsp': {
     position: 'relative',

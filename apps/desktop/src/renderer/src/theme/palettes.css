@@ -1,0 +1,132 @@
+/* Single owner of momoCAT color values. Components use semantic tokens, never
+   palette-specific colors. The unthemed workspace uses Classic's traditional warm surfaces. */
+:root,
+[data-color-theme='classic'] {
+  color-scheme: light;
+  --color-canvas: 231 219 208;
+  --color-surface: 235 224 216;
+  /* CAT uses one reading surface across content, chrome and references.
+     Subtle borders separate regions; border remains the control outline. */
+  --color-surface-chrome: var(--color-editor-surface);
+  --color-surface-panel: var(--color-editor-surface);
+  --color-border-subtle: 213 197 184;
+  --color-muted: 220 207 196;
+  --color-border: 165 143 128;
+  --color-secondary: 146 127 114;
+  --color-text: 30 30 30;
+  --color-text-muted: 93 80 71;
+  --color-text-faint: 100 85 74;
+  --color-editor-surface: 235 224 216;
+  --color-editor-text: 30 30 30;
+  --color-status-new: 137 122 110;
+  --color-status-draft: 146 125 94;
+  --color-status-translated: 96 125 139;
+  --color-status-reviewed: 101 127 121;
+  --color-status-confirmed: 104 127 93;
+  --color-brand: 52 94 118;
+  --color-brand-hover: 45 81 102;
+  --color-brand-soft: 217 229 236;
+  --color-brand-contrast: 255 255 255;
+  --color-brand-accent: 217 119 87;
+  --color-success: 65 101 70;
+  --color-success-hover: 54 85 59;
+  --color-success-soft: 223 233 225;
+  --color-success-contrast: 255 255 255;
+  --color-warning: 132 93 28;
+  --color-warning-hover: 120 84 27;
+  --color-warning-soft: 239 227 207;
+  --color-warning-contrast: 255 255 255;
+  --color-danger: 166 64 58;
+  --color-danger-hover: 151 61 54;
+  --color-danger-soft: 243 221 217;
+  --color-danger-contrast: 255 255 255;
+  --color-info: 79 105 112;
+  --color-info-hover: 65 87 93;
+  --color-info-soft: 223 232 234;
+  --color-info-contrast: 255 255 255;
+  --color-match-concordance: 112 112 112;
+  --color-match-term: 184 147 11;
+  --color-highlight: 239 221 177;
+  --color-highlight-text: 60 44 18;
+  --color-highlight-border: 155 115 40;
+  --color-selection: 196 219 232;
+  --color-selection-text: 25 42 53;
+  --color-backdrop: 30 24 20;
+  --shadow-panel:
+    0 1px 2px rgb(var(--color-backdrop) / 0.05), 0 8px 24px rgb(var(--color-backdrop) / 0.04);
+  --shadow-float: 0 18px 50px rgb(var(--color-backdrop) / 0.14);
+  --shadow-focus: 0 0 0 3px rgb(var(--color-focus) / 0.26);
+  --shadow-active:
+    0 1px 3px rgb(var(--color-backdrop) / 0.12), 0 3px 10px rgb(var(--color-backdrop) / 0.08);
+}
+
+/* Nord: https://www.nordtheme.com/docs/colors-and-palettes/ (Polar Night,
+   Snow Storm, Frost and Aurora). Role assignments are momoCAT's. Auxiliary
+   surfaces and danger/button hover colors are tints derived from its palette;
+   its red is lightened for small text and filled-button contrast. */
+[data-color-theme='nord'] {
+  color-scheme: dark;
+  --color-canvas: 46 52 64;
+  --color-surface: 46 52 64;
+  --color-surface-chrome: var(--color-editor-surface);
+  --color-surface-panel: var(--color-editor-surface);
+  --color-border-subtle: 67 76 94;
+  --color-muted: 67 76 94;
+  --color-border: 76 86 106;
+  --color-secondary: 216 222 233;
+  --color-text: 236 239 244;
+  --color-text-muted: 216 222 233;
+  --color-text-faint: 216 222 233;
+  --color-editor-surface: 46 52 64;
+  --color-editor-text: 216 222 233;
+  --color-brand: 136 192 208;
+  --color-brand-hover: 143 188 187;
+  --color-brand-soft: 54 71 82;
+  --color-brand-contrast: 46 52 64;
+  --color-brand-accent: 208 135 112;
+  --color-success: 163 190 140;
+  --color-success-hover: 184 205 166;
+  --color-success-soft: 56 65 62;
+  --color-success-contrast: 46 52 64;
+  --color-warning: 235 203 139;
+  --color-warning-hover: 240 215 166;
+  --color-warning-soft: 68 66 61;
+  --color-warning-contrast: 46 52 64;
+  --color-danger: 219 162 168;
+  --color-danger-hover: 224 175 179;
+  --color-danger-soft: 72 59 72;
+  --color-danger-contrast: 46 52 64;
+  --color-info: 143 188 187;
+  --color-info-hover: 171 208 207;
+  --color-info-soft: 55 70 77;
+  --color-info-contrast: 46 52 64;
+  --color-match-concordance: 76 86 106;
+  --color-match-term: 180 142 173;
+  --color-highlight: 235 203 139;
+  --color-highlight-text: 46 52 64;
+  --color-highlight-border: 208 135 112;
+  --color-selection: 76 86 106;
+  --color-selection-text: 236 239 244;
+  --color-status-new: 117 128 146;
+  --color-status-draft: 163 153 137;
+  --color-status-translated: 130 153 168;
+  --color-status-reviewed: 130 160 154;
+  --color-status-confirmed: 150 173 140;
+  --color-backdrop: 46 52 64;
+  --shadow-float: 0 18px 50px rgb(0 0 0 / 0.35);
+  --shadow-active: 0 1px 3px rgb(0 0 0 / 0.32), 0 3px 10px rgb(0 0 0 / 0.22);
+}
+
+/* Shared role relationships; declare on every palette scope so previews and
+   future nested surfaces resolve aliases against their own colors. */
+:root,
+[data-color-theme] {
+  --color-match-exact: var(--color-success);
+  --color-match-exact-contrast: 255 255 255;
+  --color-match-fuzzy: var(--color-warning);
+  --color-match-fuzzy-contrast: 255 255 255;
+  --color-match-term-contrast: 255 255 255;
+  --color-match-concordance-contrast: 255 255 255;
+  --color-focus: var(--color-brand);
+  --color-caret: var(--color-brand);
+}

@@ -158,10 +158,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
     (chunks: { text: string; isMatch: boolean }[]) =>
       chunks.map((chunk, index) =>
         chunk.isMatch ? (
-          <mark
-            key={index}
-            className="bg-warning/40 text-text rounded-[2px] shadow-[inset_0_0_0_1px_rgba(169,119,37,0.55)]"
-          >
+          <mark key={index} className="editor-search-highlight">
             {chunk.text}
           </mark>
         ) : (
@@ -186,7 +183,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
 
   return (
     <div
-      className={`group grid grid-cols-[30px_minmax(0,1fr)_4px_minmax(0,1fr)] border-b border-border transition-colors ${
+      className={`group grid grid-cols-[30px_minmax(0,1fr)_4px_minmax(0,1fr)] border-b border-border-subtle transition-colors ${
         isActive ? 'bg-brand-soft/20' : 'hover:bg-muted/30'
       }`}
       style={{ minHeight: EDITOR_ROW_MIN_HEIGHT }}
@@ -221,20 +218,15 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
       </div>
 
       <div
-        className={`px-1.5 py-0.5 relative flex min-h-full min-w-0 flex-col ${
+        data-active={isActive || undefined}
+        className={`editor-target-cell editor-cell-bg px-1.5 py-0.5 relative flex min-h-full min-w-0 flex-col ${
           showTagInsertionUI ? 'overflow-visible' : 'overflow-hidden'
-        } ${
-          qaIssues.some((issue) => issue.severity === 'error')
-            ? 'bg-danger-soft/40'
-            : qaIssues.some((issue) => issue.severity === 'warning')
-              ? 'bg-warning-soft/35'
-              : 'editor-cell-bg'
         }`}
       >
         <div
           aria-hidden="true"
-          className={`pointer-events-none absolute -top-px -bottom-px left-0 right-0 z-20 border-t-[3px] border-r-[3px] border-b-[3px] border-brand/70 transition-opacity duration-150 ${
-            isActive ? 'opacity-100 shadow-sm' : 'opacity-0'
+          className={`pointer-events-none absolute inset-0 z-20 border-t-2 border-r-2 border-b-2 border-focus/80 transition-opacity duration-150 ${
+            isActive ? 'opacity-100' : 'opacity-0'
           }`}
         />
 

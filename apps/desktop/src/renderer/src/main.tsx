@@ -1,5 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './theme/palettes.css';
+import './theme/typography.css';
 import './index.css';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
