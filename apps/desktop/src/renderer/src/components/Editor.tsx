@@ -56,7 +56,8 @@ export const Editor: React.FC<EditorProps> = ({
   const [manualActivationSegmentId, setManualActivationSegmentId] = useState<string | null>(null);
   const [suppressAutoFocusSegmentId, setSuppressAutoFocusSegmentId] = useState<string | null>(null);
   const [showNonPrintingSymbols, setShowNonPrintingSymbols] = useState(false);
-  const listScrollRef = useRef<HTMLDivElement>(null);
+  // Notify the list when its parent mounts; changing ref.current alone cannot rebind scroll observers.
+  const [listScrollElement, setListScrollElement] = useState<HTMLDivElement | null>(null);
   const sourceSearchInputRef = useRef<HTMLInputElement>(null);
   const targetSearchInputRef = useRef<HTMLInputElement>(null);
   const activeTargetEditorRef = useRef<{
@@ -358,7 +359,7 @@ export const Editor: React.FC<EditorProps> = ({
 
       <div ref={layoutRef as React.RefObject<HTMLDivElement>} className="flex-1 flex min-h-0">
         <div
-          ref={listScrollRef}
+          ref={setListScrollElement}
           className="editor-scrollbar min-w-0 flex-1 overflow-auto bg-surface"
           style={{ scrollbarGutter: 'stable' }}
         >
@@ -407,7 +408,7 @@ export const Editor: React.FC<EditorProps> = ({
             />
 
             <EditorListPane
-              scrollParentRef={listScrollRef}
+              scrollElement={listScrollElement}
               virtualized={isVirtualizedListEnabled}
               filteredSegments={filteredSegments}
               segmentStore={segmentStore}

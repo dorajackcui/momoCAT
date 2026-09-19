@@ -11,7 +11,7 @@ import {
 } from './editorVirtualizationFlag';
 
 interface EditorListPaneProps {
-  scrollParentRef: React.RefObject<HTMLDivElement | null>;
+  scrollElement: HTMLDivElement | null;
   virtualized: boolean;
   filteredSegments: SearchableEditorSegment[];
   segmentStore: EditorSegmentStore;
@@ -77,7 +77,7 @@ const StoreBackedEditorRow = React.memo(function StoreBackedEditorRow({
 });
 
 const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
-  scrollParentRef,
+  scrollElement,
   virtualized,
   filteredSegments,
   segmentStore,
@@ -171,7 +171,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
   const virtualizer = useVirtualizer({
     count: filteredSegments.length,
     estimateSize: () => ESTIMATED_EDITOR_ROW_HEIGHT,
-    getScrollElement: () => scrollParentRef.current,
+    getScrollElement: () => scrollElement,
     getItemKey: (index) => filteredSegments[index]?.segment.segmentId ?? index,
     initialRect: initialVirtualizerRect,
     overscan: 8,
@@ -180,7 +180,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
   const lastScrolledTargetRef = useRef<{ segmentId: string; index: number } | null>(null);
 
   useEffect(() => {
-    if (!virtualized || !activeSegmentId) return;
+    if (!virtualized || !scrollElement || !activeSegmentId) return;
     const activeIndex = activeFilteredIndex;
     if (activeIndex < 0) return;
     // Segment edits replace array items without moving the active row; only
@@ -195,7 +195,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
     }
     lastScrolledTargetRef.current = { segmentId: activeSegmentId, index: activeIndex };
     virtualizer.scrollToIndex(activeIndex, { align: 'auto' });
-  }, [activeFilteredIndex, activeSegmentId, virtualized, virtualizer]);
+  }, [activeFilteredIndex, activeSegmentId, scrollElement, virtualized, virtualizer]);
 
   return (
     <>

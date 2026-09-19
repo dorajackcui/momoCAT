@@ -10,33 +10,31 @@ describe('pasted source file helpers', () => {
     expect(normalizePastedSources([' A ', '', '  ', 'BB'])).toEqual(['A', 'BB']);
   });
 
-  it('creates recognizable sanitized file names from the first source and timestamp', () => {
+  it('creates sanitized file names from the first five source characters and date', () => {
     const now = new Date(2026, 5, 23, 8, 30);
 
     expect(buildPastedSourceFileName('Login: failed / retry?', now, [])).toBe(
-      'Login failed retry-2026-06-23-08-30.csv',
+      'Login-2026-06-23.csv',
     );
   });
 
   it('truncates long source summaries and resolves duplicate file names', () => {
     const now = new Date(2026, 5, 23, 8, 30);
-    const existing = ['This is a very long source title that sh-2026-06-23-08-30.csv'];
+    const existing = ['This-2026-06-23.csv'];
 
     expect(
       buildPastedSourceFileName(
-        'This is a very long source title that should be clipped after forty chars',
+        'This is a very long source title',
         now,
         existing,
       ),
-    ).toBe('This is a very long source title that sh-2026-06-23-08-30-2.csv');
+    ).toBe('This-2026-06-23-2.csv');
   });
 
   it('falls back when the first source cannot produce a name', () => {
     const now = new Date(2026, 5, 23, 8, 30);
 
-    expect(buildPastedSourceFileName('////', now, [])).toBe(
-      'Pasted Source-2026-06-23-08-30.csv',
-    );
+    expect(buildPastedSourceFileName('////', now, [])).toBe('Pasted Source-2026-06-23.csv');
   });
 
   it('serializes sources to a two-column CSV with blank targets', () => {

@@ -1,5 +1,5 @@
 const INVALID_FILE_NAME_CHARS = new Set(['<', '>', ':', '"', '/', '\\', '|', '?', '*']);
-const MAX_SOURCE_SUMMARY_LENGTH = 40;
+const MAX_SOURCE_SUMMARY_LENGTH = 5;
 
 export function normalizePastedSources(sources: string[]): string[] {
   return sources.map((source) => source.trim()).filter((source) => source.length > 0);
@@ -10,9 +10,9 @@ export function buildPastedSourceFileName(
   now: Date,
   existingFileNames: string[],
 ): string {
-  const timestamp = formatTimestamp(now);
+  const date = formatDate(now);
   const summary = sanitizeFileSummary(firstSource) || 'Pasted Source';
-  const baseName = `${summary}-${timestamp}`;
+  const baseName = `${summary}-${date}`;
   const existing = new Set(existingFileNames);
   let candidate = `${baseName}.csv`;
   let suffix = 2;
@@ -31,23 +31,19 @@ export function buildPastedSourceCsv(sources: string[]): string {
 }
 
 function sanitizeFileSummary(source: string): string {
-  return source
-    .split('')
+  const sanitized = Array.from(source)
     .filter((char) => char.charCodeAt(0) > 0x1f && !INVALID_FILE_NAME_CHARS.has(char))
     .join('')
     .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, MAX_SOURCE_SUMMARY_LENGTH)
     .trim();
+  return Array.from(sanitized).slice(0, MAX_SOURCE_SUMMARY_LENGTH).join('').trim();
 }
 
-function formatTimestamp(date: Date): string {
+function formatDate(date: Date): string {
   const year = date.getFullYear();
   const month = pad(date.getMonth() + 1);
   const day = pad(date.getDate());
-  const hours = pad(date.getHours());
-  const minutes = pad(date.getMinutes());
-  return `${year}-${month}-${day}-${hours}-${minutes}`;
+  return `${year}-${month}-${day}`;
 }
 
 function pad(value: number): string {

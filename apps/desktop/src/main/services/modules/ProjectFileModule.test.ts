@@ -420,7 +420,7 @@ describe('ProjectFileModule.createPastedSourceFile', () => {
       getFile: vi.fn().mockReturnValue({
         id: createdFileId,
         projectId: 1,
-        name: 'A-2026-06-23-08-30.csv',
+        name: 'A-2026-06-23.csv',
       }),
     } as unknown as ProjectRepository;
 
@@ -460,7 +460,7 @@ describe('ProjectFileModule.createPastedSourceFile', () => {
     expect(file.id).toBe(createdFileId);
     expect(projectRepo.createFile).toHaveBeenCalledWith(
       1,
-      'A-2026-06-23-08-30.csv',
+      'A-2026-06-23.csv',
       JSON.stringify({
         hasHeader: true,
         sourceCol: 0,
