@@ -1,6 +1,6 @@
 import { useAutoFocusProps } from './autoFocus';
 import React from 'react';
-import { fieldClasses, type FieldStyleProps } from './fieldStyles';
+import { fieldVariants, type FieldStyleProps } from './controlVariants';
 
 export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
   tone?: FieldStyleProps['tone'];
@@ -13,7 +13,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(function 
 ) {
   const focusProps = useAutoFocusProps(rest.autoFocus);
   return (
-    <select ref={ref} {...rest} {...focusProps} className={fieldClasses(tone, size, className)}>
+    <select ref={ref} {...rest} {...focusProps} className={fieldVariants({ tone, size, className })}>
       {children}
     </select>
   );

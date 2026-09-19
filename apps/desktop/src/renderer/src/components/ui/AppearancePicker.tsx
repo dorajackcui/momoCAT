@@ -13,8 +13,6 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { COLOR_THEMES } from '../../theme/colorThemes';
 
 export function AppearancePicker({ label = 'Appearance' }: { label?: string }) {
-  const { typography, setTypography } = useTypography();
-  const { theme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
   const id = useId();
@@ -42,62 +40,70 @@ export function AppearancePicker({ label = 'Appearance' }: { label?: string }) {
           placement="bottom-start"
           className="w-96"
         >
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <p className="text-xs text-text-muted">Color scheme</p>
-              <ChoiceGroup
-                label="Color scheme"
-                value={theme}
-                onValueChange={setTheme}
-                variant="cards"
-                options={COLOR_THEMES.map((choice) => ({
-                  value: choice.id,
-                  label: (
-                    <span className="appearance-color-swatch" data-color-theme={choice.id}>
-                      {choice.label}
-                    </span>
-                  ),
-                }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <p className="text-xs text-text-muted">Chinese font</p>
-              <ChoiceGroup
-                label="Chinese font"
-                value={typography.cjk}
-                onValueChange={(cjk) => setTypography({ ...typography, cjk })}
-                options={CJK_FONTS.map((font) => ({ value: font.id, label: font.label }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <p className="text-xs text-text-muted">Western font</p>
-              <ChoiceGroup
-                label="Western font"
-                value={typography.latin}
-                onValueChange={(latin) => setTypography({ ...typography, latin })}
-                options={LATIN_FONTS.map((font) => ({ value: font.id, label: font.label }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <p className="text-xs text-text-muted">Font size</p>
-              <ChoiceGroup
-                label="Font size"
-                value={String(typography.fontSize)}
-                onValueChange={(size) =>
-                  setTypography({
-                    ...typography,
-                    fontSize: Number(size) as TypographyPreference['fontSize'],
-                  })
-                }
-                options={CONTENT_FONT_SIZES.map((size) => ({
-                  value: String(size),
-                  label: `${size} px`,
-                }))}
-              />
-            </div>
-          </div>
+          <AppearanceControls />
         </Popover>
       )}
     </>
+  );
+}
+
+export function AppearanceControls() {
+  const { typography, setTypography } = useTypography();
+  const { theme, setTheme } = useTheme();
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <p className="text-xs text-text-muted">Color scheme</p>
+        <ChoiceGroup
+          label="Color scheme"
+          value={theme}
+          onValueChange={setTheme}
+          variant="cards"
+          options={COLOR_THEMES.map((choice) => ({
+            value: choice.id,
+            label: (
+              <span className="appearance-color-swatch" data-color-theme={choice.id}>
+                {choice.label}
+              </span>
+            ),
+          }))}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <p className="text-xs text-text-muted">Chinese font</p>
+        <ChoiceGroup
+          label="Chinese font"
+          value={typography.cjk}
+          onValueChange={(cjk) => setTypography({ ...typography, cjk })}
+          options={CJK_FONTS.map((font) => ({ value: font.id, label: font.label }))}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <p className="text-xs text-text-muted">Western font</p>
+        <ChoiceGroup
+          label="Western font"
+          value={typography.latin}
+          onValueChange={(latin) => setTypography({ ...typography, latin })}
+          options={LATIN_FONTS.map((font) => ({ value: font.id, label: font.label }))}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <p className="text-xs text-text-muted">Font size</p>
+        <ChoiceGroup
+          label="Font size"
+          value={String(typography.fontSize)}
+          onValueChange={(size) =>
+            setTypography({
+              ...typography,
+              fontSize: Number(size) as TypographyPreference['fontSize'],
+            })
+          }
+          options={CONTENT_FONT_SIZES.map((size) => ({
+            value: String(size),
+            label: `${size} px`,
+          }))}
+        />
+      </div>
+    </div>
   );
 }

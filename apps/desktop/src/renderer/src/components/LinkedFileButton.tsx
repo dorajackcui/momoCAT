@@ -17,7 +17,7 @@ export const LinkedFileButton: React.FC<LinkedFileButtonProps> = ({ filePath, on
   return (
     <Button
       size="xs"
-      tone="success"
+      tone="neutral"
       variant="soft"
       type="button"
       onClick={() => onOpen(filePath)}

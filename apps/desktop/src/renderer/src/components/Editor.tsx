@@ -38,7 +38,7 @@ function getAIJobProgressColor(status: string): string {
   if (status === 'failed') return 'bg-danger';
   if (status === 'completed') return 'bg-success';
   if (status === 'cancelled') return 'bg-warning';
-  return 'bg-brand';
+  return 'bg-brand-solid';
 }
 
 export const Editor: React.FC<EditorProps> = ({
@@ -338,7 +338,7 @@ export const Editor: React.FC<EditorProps> = ({
 
       {activeBatchAIJob && (
         <div className="border-b border-border-subtle bg-surface-chrome px-4 py-2">
-          <div className="flex items-center justify-between gap-3 text-[11px] font-medium text-text-muted">
+          <div className="flex items-center justify-between gap-3 text-2xs font-medium text-text-muted">
             <span className="truncate">
               {activeBatchAIJob.message ||
                 (activeBatchAIJob.status === 'completed' ? 'Completed' : 'AI translation running')}

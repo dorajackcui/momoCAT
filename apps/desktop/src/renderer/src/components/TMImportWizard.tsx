@@ -164,10 +164,10 @@ export function TMImportWizard({
           <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-brand-soft">
             <div
               style={{ width: `${clampedProgress}%` }}
-              className="shadow-none flex flex-col text-center whitespace-nowrap text-brand-contrast justify-center bg-brand transition-all duration-300"
+              className="shadow-none flex flex-col text-center whitespace-nowrap text-brand-contrast justify-center bg-brand-solid transition-all duration-300"
             />
           </div>
-          <p className="text-[10px] text-text-faint font-medium">Job ID: {jobId}</p>
+          <p className="text-caption text-text-faint font-medium">Job ID: {jobId}</p>
         </div>
 
         {mode === 'sync' && onCancelSync && (
@@ -223,7 +223,7 @@ export function TMImportWizard({
       <div className="grid grid-cols-2 gap-8 mb-8">
         <div className="space-y-2">
           <label className="text-sm font-bold text-text-muted flex items-center gap-2">
-            <span className="w-2 h-2 bg-brand rounded-full"></span>
+            <span className="w-2 h-2 bg-brand-solid rounded-full"></span>
             Source Text Column (原文)
           </label>
           <Select
@@ -241,7 +241,7 @@ export function TMImportWizard({
 
         <div className="space-y-2">
           <label className="text-sm font-bold text-text-muted flex items-center gap-2">
-            <span className="w-2 h-2 bg-success rounded-full"></span>
+            <span className="w-2 h-2 bg-info rounded-full"></span>
             Target Text Column (译文)
           </label>
           <Select
@@ -259,10 +259,7 @@ export function TMImportWizard({
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-6">
-        <Card
-          variant="subtle"
-          className="flex items-center gap-3 p-4 border-brand/20 bg-brand-soft/50"
-        >
+        <Card variant="subtle" className="flex items-center gap-3 p-4">
           <Checkbox
             id="hasHeader"
             checked={hasHeader}
@@ -277,12 +274,8 @@ export function TMImportWizard({
         </Card>
 
         {mode === 'import' && (
-          <Card
-            variant="subtle"
-            className="flex items-center gap-3 p-4 border-info/20 bg-info-soft/50"
-          >
+          <Card variant="subtle" className="flex items-center gap-3 p-4">
             <Checkbox
-              tone="info"
               id="overwrite"
               checked={overwrite}
               onChange={(e) => setOverwrite(e.target.checked)}
@@ -301,27 +294,31 @@ export function TMImportWizard({
         <h3 className="text-xs font-bold text-text-faint uppercase tracking-wider">
           Preview & Filtering
         </h3>
-        <p className="text-[11px] text-text-muted italic mb-2">
+        <p className="text-2xs text-text-muted italic mb-2">
           Note: Empty source/target rows will be filtered out automatically.
         </p>
-        <Card variant="surface" className="table-shell !rounded-xl !shadow-sm">
+        <Card variant="surface" className="table-shell">
           <table className="w-full text-sm text-left border-collapse">
             <thead className="table-head">
               <tr>
                 {colIndexes.map((i) => (
                   <th
                     key={i}
-                    className={`px-4 py-3 font-bold text-[11px] uppercase tracking-tight ${
+                    className={`px-4 py-3 font-bold text-2xs uppercase tracking-tight ${
                       i === sourceCol
                         ? 'text-brand bg-brand-soft/50'
                         : i === targetCol
-                          ? 'text-success bg-success-soft/50'
+                          ? 'text-info bg-info-soft/50'
                           : 'text-text-muted'
                     }`}
                   >
                     Col {XLSX_COL_NAME(i)}
-                    {i === sourceCol && <span className="block text-[9px] mt-0.5">Source</span>}
-                    {i === targetCol && <span className="block text-[9px] mt-0.5">Target</span>}
+                    {i === sourceCol && (
+                      <span className="block text-reference-meta mt-0.5">Source</span>
+                    )}
+                    {i === targetCol && (
+                      <span className="block text-reference-meta mt-0.5">Target</span>
+                    )}
                   </th>
                 ))}
               </tr>
@@ -339,7 +336,7 @@ export function TMImportWizard({
                         i === sourceCol
                           ? 'bg-brand-soft/20 font-medium'
                           : i === targetCol
-                            ? 'bg-success-soft/20'
+                            ? 'bg-info-soft/20'
                             : ''
                       }`}
                     >

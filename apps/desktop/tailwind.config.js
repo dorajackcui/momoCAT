@@ -9,6 +9,7 @@ module.exports = {
           DEFAULT: 'rgb(var(--color-surface) / <alpha-value>)',
           chrome: 'rgb(var(--color-surface-chrome) / <alpha-value>)',
           panel: 'rgb(var(--color-surface-panel) / <alpha-value>)',
+          navigation: 'rgb(var(--color-navigation) / <alpha-value>)',
         },
         muted: 'rgb(var(--color-muted) / <alpha-value>)',
         border: {
@@ -48,6 +49,7 @@ module.exports = {
         },
         brand: {
           DEFAULT: 'rgb(var(--color-brand) / <alpha-value>)',
+          solid: 'rgb(var(--color-brand-solid) / <alpha-value>)',
           hover: 'rgb(var(--color-brand-hover) / <alpha-value>)',
           soft: 'rgb(var(--color-brand-soft) / <alpha-value>)',
           contrast: 'rgb(var(--color-brand-contrast) / <alpha-value>)',
@@ -88,7 +90,29 @@ module.exports = {
       },
       fontFamily: {
         sans: ['var(--font-interface)'],
+        mono: ['var(--font-mono)'],
       },
+      lineHeight: { gutter: 'var(--line-height-gutter)' },
+      fontSize: Object.fromEntries(
+        [
+          '2xs',
+          'xs',
+          'sm',
+          'base',
+          'lg',
+          'xl',
+          '2xl',
+          '3xl',
+          'caption',
+          'reference',
+          'reference-meta',
+          'reference-badge',
+          'gutter-marker',
+        ].map((size) => [
+          size,
+          [`var(--font-size-${size})`, { lineHeight: 'var(--line-height-interface)' }],
+        ]),
+      ),
     },
   },
   plugins: [],

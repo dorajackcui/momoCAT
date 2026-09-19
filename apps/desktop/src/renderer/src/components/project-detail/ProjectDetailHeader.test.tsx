@@ -22,7 +22,6 @@ function renderHeader(overrides: Partial<Parameters<typeof ProjectDetailHeader>[
     project: PROJECT,
     loading: false,
     activeTab: 'files',
-    onOpenQASettings: vi.fn(),
     isAddFileMenuOpen: false,
     onToggleAddFileMenu: vi.fn(),
     onCloseAddFileMenu: vi.fn(),
@@ -56,6 +55,12 @@ describe('ProjectDetailHeader', () => {
 
     expect(props.onTabChange).toHaveBeenNthCalledWith(1, 'tm');
     expect(props.onTabChange).toHaveBeenNthCalledWith(2, 'tb');
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Settings' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(props.onTabChange).toHaveBeenNthCalledWith(3, 'settings');
+    expect(screen.queryByRole('button', { name: 'QA Settings' })).not.toBeInTheDocument();
   });
 
   it('delegates add-file menu actions', () => {

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
 import type { DesktopApi } from '../src/shared/ipc';
+import { IPC_CHANNELS } from '../src/shared/ipcChannels';
 import { prepareEditorReadingScene } from './support/editorReadingScene';
 import { closeEditorSmokeSession, createEditorSmokeSession } from './support/editorSmokeSession';
 
@@ -22,6 +23,104 @@ function contrast(a: string, b: string): number {
   return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
 }
 
+test('shares control and typography tokens across workspace and CAT with independent appearance choices', async () => {
+  const session = await createEditorSmokeSession();
+  try {
+    const { page, projectName } = session;
+    await page.getByRole('button', { name: 'Back to Project', exact: true }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-color-theme', 'sand');
+    await expect(page.locator('.workspace-sidebar')).toHaveCSS(
+      'background-color',
+      'rgb(249, 249, 248)',
+    );
+    await expect(page.getByRole('button', { name: '+ Add File', exact: true })).toHaveCSS(
+      'background-color',
+      'rgb(183, 88, 56)',
+    );
+    await page.evaluate(() => document.fonts.ready);
+    await page.screenshot({
+      path: test.info().outputPath('sand-workspace.png'),
+      animations: 'disabled',
+    });
+
+    // One design-token change reaches text buttons, icon buttons and editor controls.
+    await page.evaluate(() => {
+      document.documentElement.style.setProperty('--control-size-sm', '34px');
+      document.documentElement.style.setProperty('--font-size-xs', '13px');
+    });
+    const match = page.getByRole('button', { name: 'Match', exact: true });
+    await expect(match).toHaveCSS('height', '34px');
+    await expect(match).toHaveCSS('font-size', '13px');
+    await page.getByText('cm6-smoke-fixture.xlsx', { exact: true }).click();
+    const appearance = page.getByRole('button', { name: 'Editor appearance', exact: true });
+    await expect(appearance).toHaveCSS('height', '34px');
+    await expect(appearance).toHaveCSS('font-size', '13px');
+    await expect(page.locator('html')).toHaveAttribute('data-color-theme', 'classic');
+    await page.evaluate(() => {
+      document.documentElement.style.removeProperty('--control-size-sm');
+      document.documentElement.style.removeProperty('--font-size-xs');
+    });
+    await expect(appearance).toHaveCSS('height', '28px');
+    await appearance.click();
+    await page
+      .getByRole('group', { name: 'Color scheme' })
+      .getByText('Nord', { exact: true })
+      .click();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Back to Project', exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('tab', { name: 'Appearance', exact: true }).click();
+    await expect(page.getByRole('radio', { name: 'Sand', exact: true })).toBeChecked();
+    await page
+      .getByRole('group', { name: 'Color scheme' })
+      .getByText('Classic', { exact: true })
+      .click();
+    for (const [group, label] of [
+      ['Chinese font', 'Noto Serif SC · 宋体'],
+      ['Western font', 'Source Sans 3'],
+      ['Font size', '14 px'],
+    ])
+      await page.getByRole('group', { name: group }).getByText(label, { exact: true }).click();
+    await page.evaluate(() =>
+      (window as unknown as { api: DesktopApi }).api.createTM('Typography preview', 'en', 'zh'),
+    );
+    await session.electronApp.evaluate(({ ipcMain }, channel) => {
+      ipcMain.removeHandler(channel);
+      ipcMain.handle(channel, (_event, tmId) => ({
+        tmId,
+        rows: [
+          {
+            id: 'type-preview',
+            source: 'Reading text',
+            target: '阅读正文',
+            updatedAt: '2026-09-19T00:00:00Z',
+            usageCount: 1,
+          },
+        ],
+      }));
+    }, IPC_CHANNELS.tm.preview);
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-color-theme', 'classic');
+    await page.getByRole('button', { name: 'Translation memory', exact: true }).click();
+    await page.getByRole('button', { name: 'Preview Typography preview', exact: true }).click();
+    const source = page.getByRole('cell', { name: 'Reading text', exact: true });
+    await expect(source).toHaveCSS('font-size', '14px');
+    await expect(source).toHaveCSS('font-family', /Source Sans 3 Variable.*Noto Serif SC Variable/);
+    await expect(page.getByRole('cell', { name: '阅读正文', exact: true })).toHaveCSS(
+      'font-size',
+      '14px',
+    );
+    await page
+      .getByRole('navigation', { name: 'Projects', exact: true })
+      .getByRole('button', { name: projectName, exact: true })
+      .click();
+    await page.getByText('cm6-smoke-fixture.xlsx', { exact: true }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-color-theme', 'nord');
+  } finally {
+    await closeEditorSmokeSession(session);
+  }
+});
+
 test('coordinates complete palettes across CAT and portals while preserving editing and preferences', async () => {
   const testInfo = test.info();
   const session = await createEditorSmokeSession();
@@ -41,7 +140,7 @@ test('coordinates complete palettes across CAT and portals while preserving edit
     await button.click();
     const popup = page.getByRole('dialog', { name: 'Editor appearance', exact: true });
     const colors = popup.getByRole('group', { name: 'Color scheme' });
-    await expect(colors.getByRole('radio')).toHaveCount(2);
+    await expect(colors.getByRole('radio')).toHaveCount(3);
     await expect(colors.getByRole('radio', { name: 'Classic' })).toBeChecked();
     await expect(page.locator('.workspace-editor')).toHaveCSS(
       'background-color',
@@ -55,6 +154,12 @@ test('coordinates complete palettes across CAT and portals while preserving edit
 
     // Official reading colors, with momoCAT's semantic surfaces.
     for (const palette of [
+      {
+        id: 'sand',
+        label: 'Sand',
+        background: 'rgb(253, 253, 252)',
+        text: 'rgb(33, 32, 28)',
+      },
       {
         id: 'classic',
         label: 'Classic',
@@ -110,6 +215,7 @@ test('coordinates complete palettes across CAT and portals while preserving edit
           'surface-panel',
           'muted',
           'brand',
+          'brand-solid',
           'success',
           'warning',
           'danger',
@@ -151,7 +257,7 @@ test('coordinates complete palettes across CAT and portals while preserving edit
         ['match-concordance-contrast', 'match-concordance'],
         ...['brand', 'success', 'warning', 'danger', 'info'].flatMap((tone) => [
           [tone, `${tone}-soft`],
-          [`${tone}-contrast`, tone],
+          [`${tone}-contrast`, tone === 'brand' ? 'brand-solid' : tone],
         ]),
       ];
       for (const [foreground, background] of pairs) {
@@ -229,11 +335,11 @@ test('coordinates complete palettes across CAT and portals while preserving edit
       .getByText('Nord', { exact: true })
       .click();
     await page.getByRole('button', { name: 'Back to Project' }).click();
-    await expect(page.locator('html')).toHaveAttribute('data-color-theme', 'classic');
+    await expect(page.locator('html')).toHaveAttribute('data-color-theme', 'sand');
     await page.getByText('cm6-smoke-fixture.xlsx', { exact: true }).click();
     await expect(page.locator('html')).toHaveAttribute('data-color-theme', 'nord');
     await page.reload();
-    await expect(page.locator('html')).toHaveAttribute('data-color-theme', 'classic');
+    await expect(page.locator('html')).toHaveAttribute('data-color-theme', 'sand');
     await page
       .getByRole('navigation', { name: 'Projects', exact: true })
       .getByRole('button', { name: projectName, exact: true })

@@ -6,6 +6,22 @@
 
 :root {
   --font-interface: 'Source Sans 3 Variable', 'Noto Sans SC Variable', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-size-2xs: 11px;
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-base: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 30px;
+  --font-size-caption: 10px;
+  --font-size-reference-meta: 9px;
+  --font-size-reference-badge: 8px;
+  --font-size-gutter-marker: 7px;
+  --font-size-reference: 12px;
+  --line-height-interface: 1.5;
+  --line-height-gutter: 10px;
   --font-content-latin: 'Source Serif 4 Variable';
   --font-content-cjk: 'Noto Sans SC Variable';
   --font-content: var(--font-content-latin), var(--font-content-cjk), serif;

@@ -1,6 +1,6 @@
 import { useAutoFocusProps } from './autoFocus';
 import React from 'react';
-import { fieldClasses, type FieldStyleProps } from './fieldStyles';
+import { fieldVariants, type FieldStyleProps } from './controlVariants';
 
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   tone?: FieldStyleProps['tone'];
@@ -18,7 +18,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(fun
       ref={ref}
       {...rest}
       {...focusProps}
-      className={fieldClasses(tone, size, className, appearance)}
+      className={fieldVariants({ tone, size, className, appearance })}
     />
   );
 });

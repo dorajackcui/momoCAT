@@ -47,7 +47,7 @@ export function ProxySettingsTab({ controller, busy }: ProxySettingsTabProps) {
         />
       )}
 
-      <p className="text-[11px] text-text-muted">
+      <p className="text-2xs text-text-muted">
         Active proxy: {controller.effectiveProxyUrl || 'None (direct)'}
       </p>
 

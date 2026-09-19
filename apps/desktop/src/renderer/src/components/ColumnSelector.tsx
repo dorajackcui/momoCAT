@@ -117,7 +117,7 @@ export function ColumnSelector({
       <div className="grid grid-cols-3 gap-8 mb-8">
         <div className="space-y-2">
           <label className="text-sm font-bold text-text-muted flex items-center gap-2">
-            <span className="w-2 h-2 bg-brand rounded-full"></span>
+            <span className="w-2 h-2 bg-brand-solid rounded-full"></span>
             {sourceLabel}
           </label>
           <Select
@@ -135,7 +135,7 @@ export function ColumnSelector({
 
         <div className="space-y-2">
           <label className="text-sm font-bold text-text-muted flex items-center gap-2">
-            <span className="w-2 h-2 bg-success rounded-full"></span>
+            <span className="w-2 h-2 bg-info rounded-full"></span>
             {targetLabel}
           </label>
           <Select
@@ -153,7 +153,7 @@ export function ColumnSelector({
 
         <div className="space-y-2">
           <label className="text-sm font-bold text-text-muted flex items-center gap-2">
-            <span className="w-2 h-2 bg-info rounded-full"></span>
+            <span className="w-2 h-2 bg-secondary rounded-full"></span>
             {contextLabel}
           </label>
           <Select
@@ -180,10 +180,7 @@ export function ColumnSelector({
         </div>
       </div>
 
-      <Card
-        variant="subtle"
-        className="mb-6 p-4 flex flex-wrap items-center justify-between gap-4 border-brand/20 bg-brand-soft/50"
-      >
+      <Card variant="subtle" className="mb-6 p-4 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Checkbox
             id="hasHeader"
@@ -215,32 +212,32 @@ export function ColumnSelector({
         <h3 className="text-xs font-bold text-text-faint uppercase tracking-wider">
           Preview (First 10 rows)
         </h3>
-        <Card variant="surface" className="table-shell !rounded-xl !shadow-sm">
+        <Card variant="surface" className="table-shell">
           <table className="w-full text-sm text-left border-collapse">
             <thead className="table-head">
               <tr>
                 {colIndexes.map((i) => (
                   <th
                     key={i}
-                    className={`px-4 py-3 font-bold text-[11px] uppercase tracking-tight ${
+                    className={`px-4 py-3 font-bold text-2xs uppercase tracking-tight ${
                       i === sourceCol
                         ? 'text-brand bg-brand-soft/50'
                         : i === targetCol
-                          ? 'text-success bg-success-soft/50'
+                          ? 'text-info bg-info-soft/50'
                           : i === contextCol
-                            ? 'text-info bg-info-soft/50'
+                            ? 'text-text-muted bg-muted'
                             : 'text-text-muted'
                     }`}
                   >
                     Col {XLSX_COL_NAME(i)}
                     {i === sourceCol && (
-                      <span className="block text-[9px] mt-0.5">{sourceTagLabel}</span>
+                      <span className="block text-reference-meta mt-0.5">{sourceTagLabel}</span>
                     )}
                     {i === targetCol && (
-                      <span className="block text-[9px] mt-0.5">{targetTagLabel}</span>
+                      <span className="block text-reference-meta mt-0.5">{targetTagLabel}</span>
                     )}
                     {i === contextCol && (
-                      <span className="block text-[9px] mt-0.5">{contextTagLabel}</span>
+                      <span className="block text-reference-meta mt-0.5">{contextTagLabel}</span>
                     )}
                   </th>
                 ))}
@@ -259,9 +256,9 @@ export function ColumnSelector({
                         i === sourceCol
                           ? 'bg-brand-soft/20 font-medium'
                           : i === targetCol
-                            ? 'bg-success-soft/20'
+                            ? 'bg-info-soft/20'
                             : i === contextCol
-                              ? 'bg-info-soft/20'
+                              ? 'bg-muted/40'
                               : ''
                       }`}
                     >

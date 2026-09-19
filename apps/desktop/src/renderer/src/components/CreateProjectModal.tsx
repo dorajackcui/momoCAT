@@ -55,14 +55,14 @@ export function CreateProjectModal({
             </ToggleButton>
             <ToggleButton
               pressed={projectType === 'review'}
-              tone="warning"
+              tone="brand"
               onClick={() => setProjectType('review')}
             >
               Review
             </ToggleButton>
             <ToggleButton
               pressed={projectType === 'custom'}
-              tone="success"
+              tone="brand"
               onClick={() => setProjectType('custom')}
             >
               Custom

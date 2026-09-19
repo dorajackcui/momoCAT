@@ -71,7 +71,6 @@ function createAIControllerMock(): {
     effectiveSystemPromptPreview: 'You are a professional translator.',
     promptDraft: '',
     setPromptDraft: vi.fn(),
-    promptSavedAt: null,
     savingPrompt: false,
     testSource: '',
     setTestSource: vi.fn(),
@@ -99,6 +98,7 @@ function createAIControllerMock(): {
       deletePrompt: vi.fn().mockResolvedValue(true),
     },
     savePrompt: vi.fn().mockResolvedValue(undefined),
+    discardChanges: vi.fn(),
     testPrompt: vi.fn().mockResolvedValue(undefined),
     startAITranslateFile,
     cancelAITranslateFile: vi.fn().mockResolvedValue(undefined),
@@ -131,8 +131,7 @@ describe('ProjectFilesPane wiring', () => {
         onRunFileQA: vi.fn().mockResolvedValue(undefined),
         ai,
         projectType: 'translation',
-        aiSettingsExpanded: false,
-        onToggleAISettings: vi.fn(),
+        onOpenAISettings: vi.fn(),
       }),
     );
 

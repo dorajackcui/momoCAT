@@ -84,6 +84,19 @@ describe("CATDatabase", () => {
     expect(project?.qaSettings?.instantQaOnConfirm).toBe(false);
   });
 
+  it("saves a prompt without a provider and can clear an existing provider", () => {
+    const projectId = db.createProject("Prompt Only", "en", "fr");
+    db.updateProjectAISettings(projectId, "Use concise wording.", null);
+    expect(db.getProject(projectId)).toMatchObject({
+      aiPrompt: "Use concise wording.",
+      aiModel: "",
+    });
+
+    db.updateProjectAISettings(projectId, "Use concise wording.", "provider:demo");
+    db.updateProjectAISettings(projectId, null, null);
+    expect(db.getProject(projectId)).toMatchObject({ aiPrompt: null, aiModel: "" });
+  });
+
   describe("project saved prompts", () => {
     it("creates, lists, updates and deletes saved prompts", () => {
       const projectId = db.createProject("Prompt Project", "en-US", "zh-CN");

@@ -1,6 +1,6 @@
 import { useAutoFocusProps } from './autoFocus';
 import React from 'react';
-import { fieldClasses, type FieldStyleProps } from './fieldStyles';
+import { fieldVariants, type FieldStyleProps } from './controlVariants';
 
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
   tone?: FieldStyleProps['tone'];
@@ -18,7 +18,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
       ref={ref}
       {...rest}
       {...focusProps}
-      className={fieldClasses(tone, size, className, appearance)}
+      className={fieldVariants({ tone, size, className, appearance })}
     />
   );
 });

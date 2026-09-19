@@ -137,19 +137,19 @@ export function TBImportWizard({
     return (
       <Modal open={isOpen} title={WIZARD_COPY[mode].progressTitle} bodyClassName="text-center">
         <div className="mb-6">
-          <div className="w-16 h-16 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-4">
-            <Spinner size="lg" tone="success" />
+          <div className="w-16 h-16 bg-brand-soft rounded-full flex items-center justify-center mx-auto mb-4">
+            <Spinner size="lg" />
           </div>
           <p className="text-sm text-text-muted mt-1">{progressMessage}</p>
         </div>
 
-        <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-success-soft/80">
+        <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-muted">
           <div
             style={{ width: `${clampedProgress}%` }}
-            className="shadow-none flex flex-col text-center whitespace-nowrap text-success-contrast justify-center bg-success transition-all duration-300"
+            className="h-full bg-brand-solid transition-all duration-300"
           />
         </div>
-        <p className="text-[10px] text-text-faint font-medium">Job ID: {jobId}</p>
+        <p className="text-caption text-text-faint font-medium">Job ID: {jobId}</p>
       </Modal>
     );
   }
@@ -236,32 +236,19 @@ export function TBImportWizard({
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-6">
-        <Card
-          variant="subtle"
-          className="flex items-center gap-3 p-4 border-success/30 bg-success-soft/50"
-        >
-          <Checkbox
-            tone="success"
-            checked={hasHeader}
-            onChange={(e) => setHasHeader(e.target.checked)}
-          />
+        <Card variant="subtle" className="flex items-center gap-3 p-4">
+          <Checkbox checked={hasHeader} onChange={(e) => setHasHeader(e.target.checked)} />
           <span className="text-sm font-medium text-text-muted">First row is header</span>
         </Card>
         {mode === 'import' ? (
-          <Card
-            variant="subtle"
-            className="flex items-center gap-3 p-4 border-brand/20 bg-brand-soft/50"
-          >
+          <Card variant="subtle" className="flex items-center gap-3 p-4">
             <Checkbox checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />
             <span className="text-sm font-medium text-text-muted">
               Overwrite existing source terms
             </span>
           </Card>
         ) : (
-          <Card
-            variant="subtle"
-            className="flex items-center gap-3 p-4 border-brand/20 bg-brand-soft/50"
-          >
+          <Card variant="subtle" className="flex items-center gap-3 p-4">
             <span className="text-sm font-medium text-text-muted">
               Sync replaces all terms with the Excel contents.
             </span>
@@ -269,14 +256,14 @@ export function TBImportWizard({
         )}
       </div>
 
-      <Card variant="surface" className="table-shell !rounded-xl !shadow-sm">
+      <Card variant="surface" className="table-shell">
         <table className="w-full text-sm text-left border-collapse">
           <thead className="table-head">
             <tr>
               {colIndexes.map((i) => (
                 <th
                   key={i}
-                  className="px-4 py-3 font-bold text-[11px] uppercase tracking-tight text-text-muted"
+                  className="px-4 py-3 font-bold text-2xs uppercase tracking-tight text-text-muted"
                 >
                   Col {XLSX_COL_NAME(i)}
                 </th>

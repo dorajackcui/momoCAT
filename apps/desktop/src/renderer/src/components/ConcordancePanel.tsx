@@ -92,10 +92,10 @@ export const ConcordancePanel: React.FC<ConcordancePanelProps> = ({
               <div className="content-text text-sm text-text leading-snug italic">
                 {serializeTokensToDisplayText(entry.targetTokens)}
               </div>
-              <div className="mt-2 flex items-center justify-between text-[10px] text-text-faint">
+              <div className="mt-2 flex items-center justify-between text-caption text-text-faint">
                 <div className="flex items-center gap-2">
                   <span
-                    className={`px-1 py-0.5 rounded-[3px] font-bold uppercase text-[8px] ${entry.tmType === 'working' ? 'bg-brand-soft text-brand' : 'bg-info-soft text-info'}`}
+                    className={`px-1 py-0.5 rounded-[3px] font-bold uppercase text-reference-badge ${entry.tmType === 'working' ? 'bg-brand-soft text-brand' : 'bg-info-soft text-info'}`}
                   >
                     {entry.tmType === 'working' ? 'Working' : entry.tmName}
                   </span>

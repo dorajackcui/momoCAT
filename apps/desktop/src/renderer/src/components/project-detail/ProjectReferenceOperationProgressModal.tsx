@@ -34,7 +34,7 @@ export function ProjectReferenceOperationProgressModal({
       </div>
       <div className="overflow-hidden h-2 rounded bg-brand-soft">
         <div
-          className="h-full bg-brand transition-all duration-300"
+          className="h-full bg-brand-solid transition-all duration-300"
           style={{ width: `${percentage}%` }}
         />
       </div>

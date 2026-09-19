@@ -103,10 +103,10 @@ function renderTMTable(preview: TMAssetPreview) {
       <tbody className="divide-y divide-border/50">
         {preview.rows.map((row) => (
           <tr key={row.id} className="bg-canvas">
-            <td className="px-3 py-2 align-top text-text whitespace-pre-wrap break-words">
+            <td className="reading-text px-3 py-2 align-top text-text whitespace-pre-wrap break-words">
               {row.source}
             </td>
-            <td className="px-3 py-2 align-top text-text whitespace-pre-wrap break-words">
+            <td className="reading-text px-3 py-2 align-top text-text whitespace-pre-wrap break-words">
               {row.target}
             </td>
             <td className="px-3 py-2 align-top text-text-muted">{row.usageCount}</td>
@@ -139,13 +139,13 @@ function renderTBTable(preview: TBAssetPreview) {
       <tbody className="divide-y divide-border/50">
         {preview.rows.map((row) => (
           <tr key={row.id} className="bg-canvas">
-            <td className="px-3 py-2 align-top text-text whitespace-pre-wrap break-words">
+            <td className="reading-text px-3 py-2 align-top text-text whitespace-pre-wrap break-words">
               {row.sourceTerm}
             </td>
-            <td className="px-3 py-2 align-top text-text whitespace-pre-wrap break-words">
+            <td className="reading-text px-3 py-2 align-top text-text whitespace-pre-wrap break-words">
               {row.targetTerm}
             </td>
-            <td className="px-3 py-2 align-top text-text-muted whitespace-pre-wrap break-words">
+            <td className="reading-text px-3 py-2 align-top text-text-muted whitespace-pre-wrap break-words">
               {row.note || '-'}
             </td>
             <td className="px-3 py-2 align-top text-text-muted">{row.usageCount}</td>

@@ -55,7 +55,7 @@ const EditorSidebarComponent: React.FC<EditorSidebarProps> = ({
         onMouseDown={onStartResize}
         className="absolute -left-1 top-0 h-full w-2 cursor-col-resize group z-20"
       >
-        <span className="absolute left-1/2 -translate-x-1/2 h-full w-[2px] bg-transparent group-hover:bg-brand/40 transition-colors" />
+        <span className="absolute left-1/2 -translate-x-1/2 h-full w-[2px] bg-transparent group-hover:bg-brand-solid/40 transition-colors" />
       </button>
 
       <TabsList

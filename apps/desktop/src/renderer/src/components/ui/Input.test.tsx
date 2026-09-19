@@ -9,12 +9,12 @@ describe('Input', () => {
   test('applies default field class', () => {
     render(<Input aria-label="name" />);
     const input = screen.getByLabelText('name');
-    expect(input).toHaveClass('field-input');
+    expect(input).toHaveClass('ui-field');
   });
 
   test('applies tone class', () => {
     render(<Input aria-label="temp" tone="danger" />);
     const input = screen.getByLabelText('temp');
-    expect(input).toHaveClass('field-input-danger');
+    expect(input).toHaveClass('ui-field-danger');
   });
 });

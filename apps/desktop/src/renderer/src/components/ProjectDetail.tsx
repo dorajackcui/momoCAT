@@ -1,6 +1,5 @@
 import { Tabs, TabsPanel, Button } from './ui';
 import { useEffect, useState } from 'react';
-import { DEFAULT_PROJECT_QA_SETTINGS, type ProjectQASettings } from '@cat/core/project';
 import type { ProjectFileRecord, TMCommitScope } from '../../../shared/ipc';
 import { apiClient } from '../services/apiClient';
 import { feedbackService } from '../services/feedbackService';
@@ -8,6 +7,11 @@ import type { AIFileJobTracker } from '../hooks/aiFileJobs';
 import { useProjectDetailData } from '../hooks/projectDetail/useProjectDetailData';
 import { useProjectFileImport } from '../hooks/projectDetail/useProjectFileImport';
 import { useProjectAI } from '../hooks/projectDetail/useProjectAI';
+import { useProjectQASettings } from '../hooks/projectDetail/useProjectQASettings';
+import {
+  ProjectSettingsPane,
+  type ProjectSettingsSection,
+} from './project-detail/ProjectSettingsPane';
 import { ProjectDetailDialogs } from './project-detail/ProjectDetailDialogs';
 import { ProjectDetailHeader, type ProjectDetailTab } from './project-detail/ProjectDetailHeader';
 import { ProjectFilesPane } from './project-detail/ProjectFilesPane';
@@ -39,12 +43,7 @@ export function ProjectDetail({
   const [commitScope, setCommitScope] = useState<TMCommitScope>('confirmed-only');
   const [matchModalFile, setMatchModalFile] = useState<ProjectFileRecord | null>(null);
   const [matchTmId, setMatchTmId] = useState('');
-  const [qaSettingsOpen, setQaSettingsOpen] = useState(false);
-  const [qaSettingsSaving, setQaSettingsSaving] = useState(false);
-  const [qaSettingsDraft, setQaSettingsDraft] = useState<ProjectQASettings>(
-    DEFAULT_PROJECT_QA_SETTINGS,
-  );
-  const [aiSettingsExpanded, setAISettingsExpanded] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<ProjectSettingsSection>('ai');
 
   const {
     project,
@@ -85,6 +84,7 @@ export function ProjectDetail({
     runMutation,
     fileJobTracker: aiFileJobTracker,
   });
+  const qa = useProjectQASettings({ project, setProject, runMutation });
   const workingTMActions = project
     ? createProjectWorkingTMActions({
         projectId,
@@ -268,32 +268,6 @@ export function ProjectDetail({
     }
   };
 
-  const openQaSettings = () => {
-    if (!project) return;
-    setQaSettingsDraft(project.qaSettings || DEFAULT_PROJECT_QA_SETTINGS);
-    setQaSettingsOpen(true);
-  };
-
-  const saveQaSettings = async () => {
-    if (!project) return;
-    setQaSettingsSaving(true);
-    try {
-      await runMutation(async () => {
-        await apiClient.updateProjectQASettings(project.id, qaSettingsDraft);
-        await loadData();
-      });
-      setProject((prev) => (prev ? { ...prev, qaSettings: qaSettingsDraft } : prev));
-      setQaSettingsOpen(false);
-      feedbackService.success('QA settings updated');
-    } catch (error) {
-      feedbackService.error(
-        `Failed to update QA settings: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    } finally {
-      setQaSettingsSaving(false);
-    }
-  };
-
   const handleRunFileQA = async (fileId: number, fileName: string) => {
     try {
       const report = await runFileQaWithRefresh({
@@ -345,19 +319,12 @@ export function ProjectDetail({
         }}
         onConfirmMatch={() => void confirmMatchModal()}
         referenceActions={referenceActions}
-        qaSettingsOpen={qaSettingsOpen}
-        qaSettingsDraft={qaSettingsDraft}
-        qaSettingsSaving={qaSettingsSaving}
-        onQASettingsChange={setQaSettingsDraft}
-        onCloseQASettings={() => setQaSettingsOpen(false)}
-        onSaveQASettings={() => void saveQaSettings()}
       />
 
       <ProjectDetailHeader
         project={project}
         loading={loading}
         activeTab={activeTab}
-        onOpenQASettings={openQaSettings}
         isAddFileMenuOpen={isAddFileMenuOpen}
         onToggleAddFileMenu={fileImport.toggleAddFileMenu}
         onCloseAddFileMenu={closeAddFileMenu}
@@ -365,14 +332,18 @@ export function ProjectDetail({
         onOpenPasteSource={() => void fileImport.openPasteSource()}
       />
 
-      <TabsPanel value={activeTab} className="flex-1 min-h-0 overflow-auto p-6 custom-scrollbar">
+      <TabsPanel
+        value={activeTab}
+        className="flex-1 min-h-0 overflow-auto p-6 custom-scrollbar"
+        style={{ scrollbarGutter: 'stable' }}
+      >
         {!project ? (
           loading ? (
-            <div className="max-w-4xl mx-auto text-center py-20 surface-subtle">
+            <div className="w-full max-w-4xl text-center py-20 surface-subtle">
               <p className="text-text-muted">Loading project details...</p>
             </div>
           ) : (
-            <div className="max-w-4xl mx-auto text-center py-20 surface-card border-danger/40 bg-danger-soft">
+            <div className="w-full max-w-4xl text-center py-20 surface-card border-danger/40 bg-danger-soft">
               <p className="text-danger font-medium">
                 Error: Project with ID {projectId} could not be found.
               </p>
@@ -394,8 +365,18 @@ export function ProjectDetail({
             onRunFileQA={handleRunFileQA}
             ai={ai}
             projectType={project.projectType || 'translation'}
-            aiSettingsExpanded={aiSettingsExpanded}
-            onToggleAISettings={() => setAISettingsExpanded((expanded) => !expanded)}
+            onOpenAISettings={() => {
+              setSettingsSection('ai');
+              setActiveTab('settings');
+            }}
+          />
+        ) : activeTab === 'settings' ? (
+          <ProjectSettingsPane
+            ai={ai}
+            qa={qa}
+            projectType={project.projectType || 'translation'}
+            section={settingsSection}
+            onSectionChange={setSettingsSection}
           />
         ) : activeTab === 'tm' ? (
           <ProjectTMPane

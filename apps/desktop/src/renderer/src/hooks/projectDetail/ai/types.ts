@@ -68,7 +68,6 @@ export interface ProjectAIController {
   effectiveSystemPromptPreview: string;
   promptDraft: string;
   setPromptDraft: Dispatch<SetStateAction<string>>;
-  promptSavedAt: string | null;
   savingPrompt: boolean;
   testSource: string;
   setTestSource: Dispatch<SetStateAction<string>>;
@@ -86,6 +85,7 @@ export interface ProjectAIController {
   hasTestDetails: boolean;
   savedPrompts: ProjectSavedPromptsController;
   savePrompt: () => Promise<void>;
+  discardChanges: () => void;
   testPrompt: () => Promise<void>;
   startAITranslateFile: (
     fileId: number,

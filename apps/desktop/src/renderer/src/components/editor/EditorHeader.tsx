@@ -48,11 +48,11 @@ const EditorHeaderComponent: React.FC<EditorHeaderProps> = ({
         <div>
           <h2 className="text-sm font-bold text-text leading-tight">{fileName || 'Loading...'}</h2>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-[10px] text-brand font-bold uppercase tracking-wider">
+            <span className="text-caption text-brand font-bold uppercase tracking-wider">
               {projectName}
             </span>
-            <span className="text-[10px] text-text-faint">•</span>
-            <span className="text-[10px] text-text-muted font-medium uppercase tracking-wider">
+            <span className="text-caption text-text-faint">•</span>
+            <span className="text-caption text-text-muted font-medium uppercase tracking-wider">
               {srcLang} → {tgtLang}
             </span>
           </div>
@@ -61,7 +61,7 @@ const EditorHeaderComponent: React.FC<EditorHeaderProps> = ({
 
       <div className="flex items-center gap-6">
         {saveErrorCount > 0 && (
-          <div className="px-2.5 py-1 bg-danger-soft border border-danger/40 rounded-md text-[11px] font-bold text-danger">
+          <div className="px-2.5 py-1 bg-danger-soft border border-danger/40 rounded-md text-2xs font-bold text-danger">
             {saveErrorCount} 段保存失败
           </div>
         )}
@@ -80,7 +80,7 @@ const EditorHeaderComponent: React.FC<EditorHeaderProps> = ({
               style={{ width: `${progress}%` }}
             />
           </span>
-          <span className="text-[11px] tabular-nums text-text-muted">
+          <span className="text-2xs tabular-nums text-text-muted">
             {confirmedSegments}/{totalSegments}
           </span>
         </div>

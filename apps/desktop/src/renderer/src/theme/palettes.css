@@ -1,7 +1,64 @@
-/* Single owner of momoCAT color values. Components use semantic tokens, never
-   palette-specific colors. The unthemed workspace uses Classic's traditional warm surfaces. */
+/* Single owner of palette values. Sand uses Radix's light Sand scale:
+   https://github.com/radix-ui/colors/blob/main/src/light.ts
+   Brand orange is momoCAT's existing logo accent. Semantic colors are momoCAT's. */
 :root,
+[data-color-theme='sand'] {
+  color-scheme: light;
+  --color-canvas: 253 253 252;
+  --color-surface: 253 253 252;
+  --color-surface-chrome: var(--color-editor-surface);
+  --color-surface-panel: var(--color-editor-surface);
+  --color-navigation: 249 249 248;
+  --color-border-subtle: 233 232 230;
+  --color-muted: 241 240 239;
+  --color-border: 218 217 214;
+  --color-secondary: 141 141 134;
+  --color-text: 33 32 28;
+  --color-text-muted: 99 99 94;
+  --color-text-faint: 99 99 94;
+  --color-editor-surface: 253 253 252;
+  --color-editor-text: 33 32 28;
+  --color-status-new: 140 129 119;
+  --color-status-draft: 165 118 50;
+  --color-status-translated: 91 127 170;
+  --color-status-confirmed: 95 132 87;
+  /* Text and solid fill have separate contrast requirements. */
+  --color-brand: 165 78 49;
+  --color-brand-solid: 183 88 56;
+  --color-brand-hover: 168 77 49;
+  --color-brand-soft: 251 237 231;
+  --color-brand-contrast: 255 252 248;
+  --color-brand-accent: 217 119 87;
+  --color-success: 77 115 89;
+  --color-success-hover: 65 101 76;
+  --color-success-soft: 234 241 235;
+  --color-success-contrast: 255 255 255;
+  --color-warning: 132 93 28;
+  --color-warning-hover: 120 84 27;
+  --color-warning-soft: 248 241 225;
+  --color-warning-contrast: 255 255 255;
+  --color-danger: 166 64 58;
+  --color-danger-hover: 151 61 54;
+  --color-danger-soft: 250 236 234;
+  --color-danger-contrast: 255 255 255;
+  --color-info: 79 105 112;
+  --color-info-hover: 65 87 93;
+  --color-info-soft: 232 241 244;
+  --color-info-contrast: 255 255 255;
+  --color-highlight: 250 227 176;
+  --color-highlight-text: 60 44 18;
+  --color-highlight-border: 155 115 40;
+  --color-selection: 249 216 204;
+  --color-selection-text: 64 37 28;
+  --color-backdrop: 33 32 28;
+  --shadow-float: 0 8px 28px rgb(var(--color-backdrop) / 0.12);
+  --shadow-focus: 0 0 0 3px rgb(var(--color-focus) / 0.2);
+  --shadow-active:
+    0 1px 3px rgb(var(--color-backdrop) / 0.12), 0 3px 10px rgb(var(--color-backdrop) / 0.08);
+}
+
 [data-color-theme='classic'] {
+  --color-navigation: var(--color-surface-panel);
   color-scheme: light;
   --color-canvas: 231 219 208;
   --color-surface: 235 224 216;
@@ -23,6 +80,7 @@
   --color-status-translated: 91 127 170;
   --color-status-confirmed: 95 132 87;
   --color-brand: 52 94 118;
+  --color-brand-solid: var(--color-brand);
   --color-brand-hover: 45 81 102;
   --color-brand-soft: 217 229 236;
   --color-brand-contrast: 255 255 255;
@@ -49,8 +107,6 @@
   --color-selection: 196 219 232;
   --color-selection-text: 25 42 53;
   --color-backdrop: 30 24 20;
-  --shadow-panel:
-    0 1px 2px rgb(var(--color-backdrop) / 0.05), 0 8px 24px rgb(var(--color-backdrop) / 0.04);
   --shadow-float: 0 18px 50px rgb(var(--color-backdrop) / 0.14);
   --shadow-focus: 0 0 0 3px rgb(var(--color-focus) / 0.26);
   --shadow-active:
@@ -63,6 +119,7 @@
    its red is lightened for small text and filled-button contrast. Workflow
    markers use separated gray, ochre, blue and green hues for easier scanning. */
 [data-color-theme='nord'] {
+  --color-navigation: var(--color-surface-panel);
   color-scheme: dark;
   --color-canvas: 46 52 64;
   --color-surface: 46 52 64;
@@ -78,6 +135,7 @@
   --color-editor-surface: 46 52 64;
   --color-editor-text: 216 222 233;
   --color-brand: 136 192 208;
+  --color-brand-solid: var(--color-brand);
   --color-brand-hover: 143 188 187;
   --color-brand-soft: 54 71 82;
   --color-brand-contrast: 46 52 64;

@@ -27,7 +27,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ segments, compact }) =
             style={{ width: `${draftPct}%` }}
           />
         </div>
-        <div className="flex justify-between text-[8px] font-bold text-text-faint uppercase tracking-tight">
+        <div className="flex justify-between text-reference-badge font-bold text-text-faint uppercase tracking-tight">
           <span>{Math.round(completedPct)}% Confirmed</span>
           <span>{total} Segments</span>
         </div>

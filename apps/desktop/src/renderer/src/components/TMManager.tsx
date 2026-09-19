@@ -372,9 +372,9 @@ export const TMManager: React.FC = () => {
 
         {showCreate && (
           <div className="mb-8 p-6 surface-card animate-in fade-in slide-in-from-top-4">
-            <h2 className="field-label !text-[10px] mb-4">Create New Main TM</h2>
+            <h2 className="field-label !text-caption mb-4">Create New Main TM</h2>
             <div className="mb-4">
-              <label className="field-label !text-[10px]">Type</label>
+              <label className="field-label !text-caption">Type</label>
               <ChoiceGroup
                 label="TM creation type"
                 variant="cards"
@@ -390,7 +390,7 @@ export const TMManager: React.FC = () => {
             </div>
             <form onSubmit={handleCreate} className="grid grid-cols-4 gap-4 items-end">
               <div className="col-span-2">
-                <label className="field-label !text-[10px]">TM Name</label>
+                <label className="field-label !text-caption">TM Name</label>
                 <Input
                   size="compact"
                   type="text"
@@ -401,11 +401,11 @@ export const TMManager: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="field-label !text-[10px]">Source</label>
+                <label className="field-label !text-caption">Source</label>
                 <LanguageSelect size="compact" value={newSrc} onChange={setNewSrc} />
               </div>
               <div>
-                <label className="field-label !text-[10px]">Target</label>
+                <label className="field-label !text-caption">Target</label>
                 <LanguageSelect size="compact" value={newTgt} onChange={setNewTgt} />
               </div>
               <div className="col-span-4 flex justify-end gap-2 mt-2">

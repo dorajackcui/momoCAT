@@ -1,4 +1,4 @@
-import { Tabs, TabsList, TabsPanel } from './ui';
+import { AppearanceControls, Tabs, TabsList, TabsPanel } from './ui';
 import { useState } from 'react';
 import type { AppUpdatesController } from '../hooks/useAppUpdates';
 import { AIConnectionsTab } from './settings/AIConnectionsTab';
@@ -8,10 +8,11 @@ import { UpdatesTab } from './settings/UpdatesTab';
 import { useAIConnectionsController } from './settings/useAIConnectionsController';
 import { useProxySettingsController } from './settings/useProxySettingsController';
 
-type SettingsTabId = 'connections' | 'term-extraction' | 'proxy' | 'updates';
+type SettingsTabId = 'connections' | 'term-extraction' | 'proxy' | 'updates' | 'appearance';
 
 const SETTINGS_TABS: Array<{ id: SettingsTabId; label: string }> = [
   { id: 'connections', label: 'AI Connections' },
+  { id: 'appearance', label: 'Appearance' },
   { id: 'term-extraction', label: 'Term Extraction' },
   { id: 'proxy', label: 'Proxy' },
   { id: 'updates', label: 'Updates' },
@@ -34,12 +35,12 @@ export function SettingsPage({ updates }: { updates: AppUpdatesController }) {
         <h2 className="text-xl font-bold text-text">Settings</h2>
       </div>
 
-      <TabsList
-        label="Settings sections"
-        variant="brand"
-        className="px-6 py-3 border-b border-border"
-        items={SETTINGS_TABS.map((tab) => ({ value: tab.id, label: tab.label }))}
-      />
+      <div className="px-6 py-3 border-b border-border">
+        <TabsList
+          label="Settings sections"
+          items={SETTINGS_TABS.map((tab) => ({ value: tab.id, label: tab.label }))}
+        />
+      </div>
 
       <TabsPanel
         value={activeTab}
@@ -49,6 +50,11 @@ export function SettingsPage({ updates }: { updates: AppUpdatesController }) {
         {activeTab === 'connections' && <AIConnectionsTab controller={aiConnections} busy={busy} />}
         {activeTab === 'term-extraction' && <TermExtractionPromptTab />}
         {activeTab === 'proxy' && <ProxySettingsTab controller={proxySettings} busy={busy} />}
+        {activeTab === 'appearance' && (
+          <div className="max-w-md">
+            <AppearanceControls />
+          </div>
+        )}
         {activeTab === 'connections' && aiConnections.status && (
           <div className="status-note">{aiConnections.status}</div>
         )}

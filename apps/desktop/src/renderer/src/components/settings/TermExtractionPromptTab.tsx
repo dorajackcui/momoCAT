@@ -172,7 +172,7 @@ export function TermExtractionPromptTab() {
           <p className="mt-1 text-xs text-text-muted">
             Save multiple selection policies and choose which one future extraction jobs use.
           </p>
-          <p className="mt-1 text-[11px] text-text-muted">
+          <p className="mt-1 text-2xs text-text-muted">
             Source text, historical terms, injection protection, and strict JSON formatting remain
             application-controlled.
           </p>
@@ -191,7 +191,7 @@ export function TermExtractionPromptTab() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(220px,0.75fr)_minmax(0,1.5fr)]">
         <div className="surface-card p-3 space-y-2">
-          <div className="px-1 text-[11px] font-bold uppercase tracking-wider text-text-faint">
+          <div className="px-1 text-2xs font-bold uppercase tracking-wider text-text-faint">
             Prompt Library
           </div>
           {settings?.prompts.map((prompt) => {
@@ -200,7 +200,7 @@ export function TermExtractionPromptTab() {
             return (
               <div
                 key={prompt.id}
-                className={`surface-subtle rounded-xl p-3 space-y-2 ${
+                className={`surface-subtle p-3 space-y-2 ${
                   selected ? 'ring-1 ring-brand' : ''
                 }`}
               >
@@ -208,17 +208,17 @@ export function TermExtractionPromptTab() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-sm font-semibold text-text">{prompt.name}</span>
                     {active && (
-                      <span className="text-[10px] uppercase tracking-wider text-success">
+                      <span className="text-caption uppercase tracking-wider text-text-muted">
                         In use
                       </span>
                     )}
                     {prompt.isBuiltin && (
-                      <span className="text-[10px] uppercase tracking-wider text-text-faint">
+                      <span className="text-caption uppercase tracking-wider text-text-faint">
                         Built-in
                       </span>
                     )}
                   </div>
-                  <p className="mt-1 truncate text-[11px] text-text-muted">{prompt.prompt}</p>
+                  <p className="mt-1 truncate text-2xs text-text-muted">{prompt.prompt}</p>
                 </div>
                 <div className="flex flex-wrap justify-end gap-1">
                   {!active && (
@@ -269,7 +269,7 @@ export function TermExtractionPromptTab() {
               {creating ? 'New Prompt' : selectedPrompt?.name || 'Prompt Editor'}
             </h4>
             {selectedPrompt?.isBuiltin && (
-              <span className="rounded-full bg-muted px-2 py-1 text-[10px] font-semibold text-text-muted">
+              <span className="rounded-full bg-muted px-2 py-1 text-caption font-semibold text-text-muted">
                 Read only
               </span>
             )}
@@ -314,7 +314,7 @@ export function TermExtractionPromptTab() {
             />
           </div>
 
-          <div className="flex items-center justify-between gap-3 text-[11px] text-text-muted">
+          <div className="flex items-center justify-between gap-3 text-2xs text-text-muted">
             <span>{draft.length.toLocaleString()} characters</span>
             {settings && <span>Maximum {settings.maxChars.toLocaleString()}</span>}
           </div>
@@ -336,7 +336,7 @@ export function TermExtractionPromptTab() {
           )}
 
           {selectedPrompt?.isBuiltin && (
-            <p className="text-[11px] text-text-faint">
+            <p className="text-2xs text-text-faint">
               The built-in prompt cannot be overwritten. Choose New Prompt to use it as a starting
               point for a custom version.
             </p>

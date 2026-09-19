@@ -3,7 +3,7 @@ import { cx } from './cx';
 
 interface SpinnerProps {
   size?: 'sm' | 'md' | 'lg';
-  tone?: 'brand' | 'neutral' | 'success' | 'warning' | 'danger' | 'info';
+  tone?: 'brand' | 'neutral' | 'success' | 'warning' | 'danger' | 'info' | 'inherit';
   className?: string;
 }
 
@@ -14,6 +14,7 @@ const sizeClass: Record<NonNullable<SpinnerProps['size']>, string> = {
 };
 
 const toneClass: Record<NonNullable<SpinnerProps['tone']>, string> = {
+  inherit: 'border-current border-t-transparent',
   brand: 'border-brand border-t-transparent',
   neutral: 'border-text-faint border-t-transparent',
   success: 'border-success border-t-transparent',

@@ -46,7 +46,7 @@ Validate facade behavior in [TMRepo.test.ts](../packages/db/src/repos/TMRepo.tes
 Important project fields:
 
 - `projectType` controls translation/review/custom behavior.
-- `aiModel` stores the selected provider id, not a secret.
+- `aiModel` stores the selected provider id, not a secret. An unset provider uses the empty-string default; nullable API inputs are normalized on write so a project prompt can be saved before a provider is configured.
 - `aiPrompt` is the legacy/default project prompt surface.
 - `aiTemperature` remains for compatibility but is not the runtime tuning source of truth.
 - `qaSettingsJson` stores the project QA rule configuration.

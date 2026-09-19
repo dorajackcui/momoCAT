@@ -33,7 +33,7 @@ export const TMCard: React.FC<TMCardProps> = ({
           onRename={(name) => onRename(tm.id, name)}
         />
         <div className="flex flex-wrap items-center gap-2 mt-1 break-words">
-          <span className="text-[10px] font-semibold text-brand bg-brand-soft px-1.5 py-0.5 rounded-control uppercase tracking-wider">
+          <span className="text-caption font-semibold text-brand bg-brand-soft px-1.5 py-0.5 rounded-control uppercase tracking-wider">
             {tm.srcLang} → {tm.tgtLang}
           </span>
           {tm.syncConfig && (
@@ -68,7 +68,7 @@ export const TMCard: React.FC<TMCardProps> = ({
         {tm.syncConfig ? (
           <IconButton
             size="sm"
-            tone="success"
+            tone="neutral"
             variant="ghost"
             onClick={() => onSync(tm)}
             title={`Sync from ${fileBaseName(tm.syncConfig.filePath)}`}
@@ -121,14 +121,14 @@ export const TMCard: React.FC<TMCardProps> = ({
     </div>
     <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-border/40">
       <div className="flex flex-col">
-        <span className="text-[10px] font-semibold text-text-faint uppercase tracking-widest mb-0.5">
+        <span className="text-caption font-semibold text-text-faint uppercase tracking-widest mb-0.5">
           Size
         </span>
         <span className="text-sm font-semibold text-text-muted">
           {tm.stats.entryCount} segments
         </span>
       </div>
-      <div className="text-[10px] text-text-faint font-medium text-right">
+      <div className="text-caption text-text-faint font-medium text-right">
         {tm.syncConfig?.lastSyncAttemptedAt || tm.syncConfig?.lastSyncedAt ? (
           <span className={tm.syncConfig.lastSyncStatus === 'failed' ? 'text-danger' : undefined}>
             Last sync{' '}

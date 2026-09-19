@@ -1,0 +1,15 @@
+/* Shared control geometry. Workspace, CAT and portals consume the same scale. */
+:root {
+  --radius-control: 6px;
+  --radius-panel: 8px;
+  --radius-dialog: 10px;
+  --control-size-xs: 24px;
+  --control-size-sm: 28px;
+  --control-size-md: 32px;
+  --control-size-lg: 40px;
+  --control-inset-xs: 8px;
+  --control-inset-sm: 10px;
+  --control-inset-md: 12px;
+  --control-inset-lg: 16px;
+  --shadow-panel: none;
+}

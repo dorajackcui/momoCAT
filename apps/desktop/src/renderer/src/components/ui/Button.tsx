@@ -1,41 +1,28 @@
 import { useAutoFocusProps } from './autoFocus';
 import React from 'react';
-import { cx } from './cx';
 import { Spinner } from './Spinner';
+import { buttonVariants } from './controlVariants';
 
-type ButtonTone = 'brand' | 'success' | 'danger';
+type ButtonTone = 'neutral' | 'brand' | 'success' | 'danger' | 'warning';
 
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   loading?: boolean;
+  shape?: 'text' | 'icon';
 } & (
     | {
-        variant?: 'primary' | 'secondary' | 'soft' | 'ghost';
+        variant?: 'primary' | 'secondary' | 'soft' | 'ghost' | 'overlay';
         tone?: ButtonTone;
         size?: 'xs' | 'sm' | 'md' | 'lg';
       }
-    | { variant: 'link'; tone?: ButtonTone | 'neutral' | 'inherit'; size?: never }
+    | { variant: 'link'; tone?: ButtonTone | 'inherit'; size?: never }
   );
-
-const variantClass: Record<NonNullable<ButtonProps['variant']>, string> = {
-  primary: 'btn-primary',
-  secondary: 'btn-secondary',
-  soft: 'btn-soft',
-  ghost: 'btn-ghost',
-  link: 'btn-link',
-};
-
-const sizeClass: Record<NonNullable<ButtonProps['size']>, string> = {
-  xs: 'text-[11px] px-2.5 py-1',
-  sm: 'text-xs px-3 py-1.5',
-  md: 'text-sm px-4 py-2',
-  lg: 'text-sm px-5 py-2.5',
-};
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   {
     variant = 'secondary',
     tone,
     size = 'md',
+    shape = 'text',
     loading = false,
     disabled,
     className,
@@ -55,15 +42,20 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
       {...rest}
       {...focusProps}
       disabled={isDisabled}
-      data-tone={tone}
-      className={cx(
-        'btn-base',
-        variantClass[variant],
-        variant !== 'link' && sizeClass[size],
+      data-slot="button"
+      data-tone={
+        tone ??
+        (variant === 'primary' || variant === 'soft' || variant === 'link' ? 'brand' : 'neutral')
+      }
+      aria-busy={loading || rest['aria-busy']}
+      className={buttonVariants({
+        variant,
+        size: variant === 'link' ? null : size,
+        shape,
         className,
-      )}
+      })}
     >
-      {loading && <Spinner size="sm" tone={tone === 'danger' ? 'danger' : 'brand'} />}
+      {loading && <Spinner size="sm" tone="inherit" />}
       {!loading && children}
       {loading && children && <span className="opacity-80">{children}</span>}
     </button>

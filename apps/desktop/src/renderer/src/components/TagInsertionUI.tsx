@@ -55,7 +55,7 @@ export const TagInsertionUI: React.FC<TagInsertionUIProps> = ({
             >
               {/* Tag Preview Capsule */}
               <span
-                className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold rounded bg-brand-soft text-brand border border-brand/30 flex-shrink-0"
+                className="inline-flex items-center px-1.5 py-0.5 text-caption font-bold rounded bg-brand-soft text-brand border border-brand/30 flex-shrink-0"
                 aria-hidden="true"
               >
                 {marker}

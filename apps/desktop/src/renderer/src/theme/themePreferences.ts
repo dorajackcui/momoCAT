@@ -1,4 +1,4 @@
-import { DEFAULT_COLOR_THEME, isColorTheme, type ColorTheme } from './colorThemes';
+import { DEFAULT_COLOR_THEMES, isColorTheme, type ColorTheme } from './colorThemes';
 
 // Separate preferences let a surface opt in without changing other workspaces.
 export const THEME_STORAGE_KEYS = {
@@ -14,9 +14,9 @@ function readTheme(scope: ThemeScope): ColorTheme {
     const saved = window.localStorage.getItem(THEME_STORAGE_KEYS[scope]);
     // Preserve the light/dark intent of the earlier reader palette trial.
     if (saved === 'charcoal') return 'nord';
-    return isColorTheme(saved) ? saved : DEFAULT_COLOR_THEME;
+    return isColorTheme(saved) ? saved : DEFAULT_COLOR_THEMES[scope];
   } catch {
-    return DEFAULT_COLOR_THEME;
+    return DEFAULT_COLOR_THEMES[scope];
   }
 }
 

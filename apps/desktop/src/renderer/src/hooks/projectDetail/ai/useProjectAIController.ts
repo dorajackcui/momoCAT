@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Project, ProjectAIModel, ProjectType } from '@cat/core/project';
 import type {
   AIBatchMode,
@@ -88,8 +88,10 @@ export function useProjectAI({
   const [providerOptions, setProviderOptions] = useState<AIProviderSummary[]>([]);
   const [modelDraft, setModelDraft] = useState<ProjectAIModel>(DEFAULT_PROJECT_AI_MODEL);
   const [savedModelValue, setSavedModelValue] = useState<ProjectAIModel>(DEFAULT_PROJECT_AI_MODEL);
-  const [promptSavedAt, setPromptSavedAt] = useState<string | null>(null);
   const [savingPrompt, setSavingPrompt] = useState(false);
+  const savePending = useRef(false);
+  const activeProjectId = useRef(project?.id);
+  activeProjectId.current = project?.id;
   const [testSource, setTestSource] = useState('');
   const [testContext, setTestContext] = useState('');
   const [testResult, setTestResult] = useState<string | null>(null);
@@ -195,20 +197,28 @@ export function useProjectAI({
     });
   }, [normalizedSavedPrompt, project]);
 
+  const discardChanges = useCallback(() => {
+    if (savingPrompt) return;
+    setPromptDraft(savedPromptValue);
+    setModelDraft(savedModelValue);
+  }, [savedPromptValue, savedModelValue, savingPrompt]);
+
   const savePrompt = useCallback(async () => {
-    if (!project) return;
+    if (!project || savePending.current) return;
     if (normalizedPromptDraft === normalizedSavedPrompt && modelDraft === savedModelValue) {
       return;
     }
 
+    savePending.current = true;
     setSavingPrompt(true);
     try {
       await runMutation(async () => {
         const promptValue = normalizedPromptDraft.length > 0 ? normalizedPromptDraft : null;
         const providerValue = normalizeProjectAIProviderPersistenceValue(modelDraft);
         await apiClient.updateProjectAISettings(project.id, promptValue, providerValue);
+        if (activeProjectId.current !== project.id) return;
         setProject((prev: Project | null) => {
-          if (!prev) return prev;
+          if (!prev || prev.id !== project.id) return prev;
           return {
             ...prev,
             aiPrompt: promptValue,
@@ -217,11 +227,11 @@ export function useProjectAI({
         });
         setSavedPromptValue(normalizedPromptDraft);
         setSavedModelValue(modelDraft);
-        setPromptSavedAt(new Date().toLocaleTimeString());
       });
     } catch {
       feedbackService.error('Failed to save AI settings');
     } finally {
+      savePending.current = false;
       setSavingPrompt(false);
     }
   }, [
@@ -344,7 +354,6 @@ export function useProjectAI({
       effectiveSystemPromptPreview,
       promptDraft,
       setPromptDraft,
-      promptSavedAt,
       savingPrompt,
       testSource,
       setTestSource,
@@ -362,6 +371,7 @@ export function useProjectAI({
       hasTestDetails,
       savedPrompts,
       savePrompt,
+      discardChanges,
       testPrompt,
       startAITranslateFile,
       cancelAITranslateFile,
@@ -379,9 +389,9 @@ export function useProjectAI({
       modelDraft,
       effectiveSystemPromptPreview,
       promptDraft,
-      promptSavedAt,
       savedPrompts,
       savePrompt,
+      discardChanges,
       savingPrompt,
       showTestDetails,
       startAITranslateFile,

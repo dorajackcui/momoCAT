@@ -1,14 +1,13 @@
 import { useRef } from 'react';
-import { Menu, MenuItem, TabsList, Button } from '../ui';
+import { Menu, MenuItem, TabsList, Button, Badge } from '../ui';
 import type { Project } from '@cat/core/project';
 
-export type ProjectDetailTab = 'files' | 'tm' | 'tb';
+export type ProjectDetailTab = 'files' | 'tm' | 'tb' | 'settings';
 
 interface ProjectDetailHeaderProps {
   project: Project | null;
   loading: boolean;
   activeTab: ProjectDetailTab;
-  onOpenQASettings: () => void;
   isAddFileMenuOpen: boolean;
   onToggleAddFileMenu: () => void;
   onCloseAddFileMenu: () => void;
@@ -20,7 +19,6 @@ export function ProjectDetailHeader({
   project,
   loading,
   activeTab,
-  onOpenQASettings,
   isAddFileMenuOpen,
   onToggleAddFileMenu,
   onCloseAddFileMenu,
@@ -47,15 +45,11 @@ export function ProjectDetailHeader({
             { value: 'files', label: 'Tasks' },
             { value: 'tm', label: 'Translation Memory' },
             { value: 'tb', label: 'Term Bases' },
+            { value: 'settings', label: 'Settings' },
           ]}
         />
         {project && activeTab === 'files' ? (
           <div className="flex items-center gap-2">
-            {project.projectType === 'translation' ? (
-              <Button variant="secondary" onClick={onOpenQASettings} disabled={loading}>
-                QA Settings
-              </Button>
-            ) : null}
             <div className="relative">
               <Button
                 variant="primary"
@@ -93,21 +87,12 @@ function ProjectSummary({ project }: { project: Project }) {
       : project.projectType === 'custom'
         ? 'Custom'
         : 'Translation';
-  const projectTypeClass =
-    project.projectType === 'review'
-      ? 'bg-warning-soft/80 text-warning'
-      : project.projectType === 'custom'
-        ? 'bg-success-soft/80 text-success'
-        : 'bg-brand-soft text-brand';
-
   return (
     <div className="text-xs text-text-muted flex items-center gap-2">
       <span>
         {project.srcLang} → {project.tgtLang}
       </span>
-      <span className={`px-1.5 py-0.5 rounded-control font-semibold ${projectTypeClass}`}>
-        {projectTypeLabel}
-      </span>
+      <Badge tone="neutral">{projectTypeLabel}</Badge>
     </div>
   );
 }

@@ -22,7 +22,7 @@ function FeedbackLine({
   const tone =
     severity === 'error' ? 'text-danger' : severity === 'warning' ? 'text-warning' : 'text-info';
   return (
-    <div className="flex items-start gap-1.5 px-1 py-0.5 text-[11px] text-text-muted">
+    <div className="flex items-start gap-1.5 px-1 py-0.5 text-2xs text-text-muted">
       <span className={`inline-flex shrink-0 items-center gap-1 font-medium ${tone}`}>
         <svg
           className="h-3.5 w-3.5"
@@ -151,7 +151,7 @@ export const EditorRowFeedback: React.FC<EditorRowFeedbackProps> = ({
           <div
             onClick={(event) => void handleCopyContext(event)}
             title={contextText}
-            className="flex min-w-0 max-w-full items-center gap-1 text-[10px] text-text-faint italic leading-4 cursor-copy hover:text-text-muted transition-colors"
+            className="flex min-w-0 max-w-full items-center gap-1 text-caption text-text-faint italic leading-4 cursor-copy hover:text-text-muted transition-colors"
           >
             <span className="block min-w-0 flex-1 truncate whitespace-nowrap">
               {contextContent}

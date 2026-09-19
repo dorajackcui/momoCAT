@@ -1,6 +1,6 @@
 import type { MountedTM, TMRecord } from '../../../../shared/ipc';
 import type { ProjectTMLoadState } from '../../hooks/projectDetail/useProjectDetailData';
-import { Button, Card, IconButton, Select } from '../ui';
+import { Button, Card, Icon, IconButton, Select } from '../ui';
 
 interface ProjectTMPaneProps {
   mountedTMs: MountedTM[];
@@ -31,7 +31,7 @@ export function ProjectTMPane({
 
   if (loadState.status === 'loading' || initialError) {
     return (
-      <div className="max-w-4xl mx-auto">
+      <div className="w-full max-w-4xl">
         <Card variant="surface" className="p-8 text-center">
           <p
             className={initialError ? 'text-sm text-danger' : 'text-sm text-text-muted'}
@@ -52,7 +52,7 @@ export function ProjectTMPane({
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="w-full max-w-4xl space-y-8">
       {loadState.status === 'error' ? (
         <Card variant="surface" className="p-4 flex items-center justify-between gap-4">
           <p className="text-sm text-danger" role="alert">
@@ -77,7 +77,10 @@ export function ProjectTMPane({
             workingTMs.map((tm) => (
               <div key={tm.id} className="flex flex-wrap justify-between items-center gap-5">
                 <div>
-                  <h4 className="font-bold text-brand">{tm.name}</h4>
+                  <h4 className="flex items-center gap-2 font-bold text-brand">
+                    <Icon name="database" />
+                    {tm.name}
+                  </h4>
                   <p className="text-xs text-brand mt-1">
                     Automatic updates on segment confirmation. Read/Write enabled.
                   </p>
@@ -85,7 +88,7 @@ export function ProjectTMPane({
                 <div className="flex items-center gap-5">
                   <div className="text-right min-w-14">
                     <span className="block text-lg font-bold text-brand">{tm.entryCount || 0}</span>
-                    <span className="text-[10px] font-bold text-brand/80 uppercase tracking-tight">
+                    <span className="text-caption font-bold text-brand/80 uppercase tracking-tight">
                       Segments
                     </span>
                   </div>
@@ -154,19 +157,10 @@ export function ProjectTMPane({
             {mountedMainTMs.map((tm) => (
               <Card key={tm.id} variant="surface" className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-info-soft/80 rounded-lg flex items-center justify-center text-info">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                      />
-                    </svg>
-                  </div>
+                  <Icon name="database" className="h-5 w-5 shrink-0 text-text-muted" />
                   <div>
                     <h4 className="font-bold text-text">{tm.name}</h4>
-                    <p className="text-[10px] text-text-faint font-medium uppercase tracking-wider">
+                    <p className="text-caption text-text-faint font-medium uppercase tracking-wider">
                       {tm.srcLang} → {tm.tgtLang}
                     </p>
                   </div>
@@ -176,7 +170,9 @@ export function ProjectTMPane({
                     <span className="block text-sm font-bold text-text-muted">
                       {tm.entryCount || 0}
                     </span>
-                    <span className="text-[9px] font-bold text-text-faint uppercase">Segments</span>
+                    <span className="text-reference-meta font-bold text-text-faint uppercase">
+                      Segments
+                    </span>
                   </div>
                   <IconButton
                     onClick={() => onUnmountTM(tm.id)}

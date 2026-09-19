@@ -187,7 +187,7 @@ export const TMPanel: React.FC<TMPanelProps> = ({
                 isSelected ? 'border-l-border' : 'border-l-transparent'
               }`}
             >
-              <div className="px-2 py-1 flex items-center justify-between gap-2 text-[9px] text-text-faint">
+              <div className="px-2 py-1 flex items-center justify-between gap-2 text-reference-meta text-text-faint">
                 <span className="truncate" title={tmLabel}>
                   <span aria-hidden="true">{referenceName}</span>
                   <span className="sr-only">{tmLabel}</span>
@@ -215,7 +215,7 @@ export const TMPanel: React.FC<TMPanelProps> = ({
                 title="Double click to apply match"
               >
                 <div
-                  className={`content-text px-2 py-2 text-xs text-text-muted leading-snug ${
+                  className={`content-text px-2 py-2 text-reference text-text-muted leading-snug ${
                     isTM ? 'line-clamp-5' : ''
                   }`}
                 >
@@ -223,13 +223,13 @@ export const TMPanel: React.FC<TMPanelProps> = ({
                 </div>
 
                 <div className={`${scoreClass} flex items-center justify-center px-[1px]`}>
-                  <span className="text-[8px] font-bold leading-none whitespace-nowrap">
+                  <span className="text-reference-badge font-bold leading-none whitespace-nowrap">
                     {scoreText}
                   </span>
                 </div>
 
                 <div
-                  className={`content-text px-2 py-2 text-xs text-text leading-snug ${
+                  className={`content-text px-2 py-2 text-reference text-text leading-snug ${
                     isTM ? 'line-clamp-5' : ''
                   }`}
                 >

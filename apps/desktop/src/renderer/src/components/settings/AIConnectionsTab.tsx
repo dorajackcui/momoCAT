@@ -113,7 +113,7 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
         <h3 className="text-sm font-bold text-text">Connections</h3>
         <div className="space-y-2">
           {controller.connections.length === 0 ? (
-            <div className="surface-subtle rounded-xl px-3 py-4 text-sm text-text-muted">
+            <div className="surface-subtle px-3 py-4 text-sm text-text-muted">
               No AI connections saved.
             </div>
           ) : (
@@ -122,19 +122,19 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
               return (
                 <div
                   key={connectionItem.id}
-                  className="surface-subtle rounded-xl px-3 py-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+                  className="surface-subtle px-3 py-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-text">{connectionItem.name}</span>
-                      <span className="text-[10px] uppercase tracking-wider text-text-faint">
+                      <span className="text-caption uppercase tracking-wider text-text-faint">
                         {formatModelCount(connectionItem.discoveredModels.length)}
                       </span>
                     </div>
-                    <div className="text-[11px] text-text-muted break-all">
+                    <div className="text-2xs text-text-muted break-all">
                       {connectionItem.baseUrl}
                     </div>
-                    <div className="text-[11px] text-text-faint">
+                    <div className="text-2xs text-text-faint">
                       API Key:{' '}
                       {connectionItem.apiKeyLast4
                         ? `****${connectionItem.apiKeyLast4}`
@@ -170,7 +170,7 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
         <h3 className="text-sm font-bold text-text">AI Providers</h3>
         <div className="space-y-2">
           {controller.providers.length === 0 ? (
-            <div className="surface-subtle rounded-xl px-3 py-4 text-sm text-text-muted">
+            <div className="surface-subtle px-3 py-4 text-sm text-text-muted">
               No AI providers configured.
             </div>
           ) : (
@@ -179,19 +179,19 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
               return (
                 <div
                   key={provider.id}
-                  className="surface-subtle rounded-xl px-3 py-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+                  className="surface-subtle px-3 py-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-text">{provider.name}</span>
-                      <span className="text-[10px] uppercase tracking-wider text-text-faint">
+                      <span className="text-caption uppercase tracking-wider text-text-faint">
                         {provider.kind}
                       </span>
                     </div>
-                    <div className="text-[11px] text-text-muted break-all">
+                    <div className="text-2xs text-text-muted break-all">
                       {provider.baseUrl} - {provider.model}
                     </div>
-                    <div className="text-[11px] text-text-faint">
+                    <div className="text-2xs text-text-faint">
                       Connection: {provider.connectionName || 'Legacy'} - Key{' '}
                       {provider.apiKeyLast4 ? `****${provider.apiKeyLast4}` : 'not configured'}
                     </div>
@@ -206,7 +206,7 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
                       {isDeleting ? 'Deleting...' : 'Delete Provider'}
                     </Button>
                   ) : (
-                    <span className="text-[11px] font-medium uppercase tracking-wider text-text-faint">
+                    <span className="text-2xs font-medium uppercase tracking-wider text-text-faint">
                       Read only
                     </span>
                   )}

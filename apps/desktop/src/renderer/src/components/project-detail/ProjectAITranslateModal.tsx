@@ -48,8 +48,7 @@ export function ProjectAITranslateModal({
             Cancel
           </Button>
           <Button
-            tone="success"
-            variant="soft"
+            variant="primary"
             disabled={selectedCount === 0}
             onClick={() => onConfirm({ targetBaseline, ...(hasFilteredScope ? { scope } : {}) })}
           >
@@ -109,7 +108,7 @@ export function ProjectAITranslateModal({
         </label>
       </div>
 
-      <p className="text-[11px] text-text-faint mt-4">Confirmed segments stay locked.</p>
+      <p className="text-2xs text-text-faint mt-4">Confirmed segments stay locked.</p>
     </Modal>
   );
 }

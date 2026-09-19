@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import type { Project, ProjectType } from '@cat/core/project';
 import type { WorkspaceView } from '../hooks/useWorkspaceNavigation';
-import { Menu, MenuItem, MenuHeading, MenuSeparator } from './ui';
+import { Icon, IconButton, Menu, MenuItem, MenuHeading, MenuSeparator } from './ui';
 
 type IconName = 'project' | 'plus' | 'pin' | 'tm' | 'tb' | 'settings' | 'trash';
 
@@ -63,15 +63,17 @@ function NavIcon({
   name: IconName;
   projectType?: ProjectType;
 }) {
-  const paths: Record<IconName, string> = {
+  if (name === 'tm' || name === 'tb' || name === 'settings') {
+    const sharedIcons = { tm: 'database', tb: 'book-open', settings: 'settings-2' } as const;
+    return (
+      <Icon name={sharedIcons[name]} className="h-[18px] w-[18px] shrink-0" strokeWidth="1.6" />
+    );
+  }
+  const paths: Record<Exclude<IconName, 'tm' | 'tb' | 'settings'>, string> = {
     project: 'M3.5 5h6l2 2h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z',
     plus: 'M12 5v14 M5 12h14',
     pin: 'M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6Z M12 14v7',
     trash: 'M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13 M10 11v5 M14 11v5',
-    tm: 'M4 5h16v11H9l-5 4z M8 9h8 M8 12h5',
-    tb: 'M4 4h7l1 2 1-2h7v15h-7l-1 2-1-2H4z M12 6v15',
-    settings:
-      'M12 3v3 M12 18v3 M3 12h3 M18 12h3 M5.6 5.6l2.1 2.1 M16.3 16.3l2.1 2.1 M5.6 18.4l2.1-2.1 M16.3 7.7l2.1-2.1 M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
   };
   return (
     <svg
@@ -92,8 +94,7 @@ function NavIcon({
           textAnchor="middle"
           fill="currentColor"
           stroke="none"
-          fontSize="10"
-          fontWeight="700"
+          className="text-caption font-bold"
         >
           {projectTypeLabels[projectType][0]}
         </text>
@@ -181,7 +182,11 @@ export function WorkspaceSidebar({
   };
 
   const renderProject = (project: Project) => (
-    <div key={project.id} className="workspace-project">
+    <div
+      key={project.id}
+      className="workspace-project"
+      data-pinned={pinnedProjectIds.has(project.id!)}
+    >
       <button
         type="button"
         className="workspace-nav-item"
@@ -241,18 +246,17 @@ export function WorkspaceSidebar({
         >
           momoCAT<span className="workspace-brand-dot">.</span>
         </button>
+        <IconButton
+          variant="ghost"
+          size="sm"
+          onClick={onCreate}
+          disabled={disabled}
+          title="New project"
+          aria-label="New project"
+        >
+          <NavIcon name="plus" />
+        </IconButton>
       </div>
-      <button
-        type="button"
-        className="workspace-nav-item"
-        onClick={onCreate}
-        disabled={disabled}
-        title="New project"
-        aria-label="New project"
-      >
-        <NavIcon name="plus" />
-        <span>New project</span>
-      </button>
       <nav className="workspace-project-list custom-scrollbar" aria-label="Projects">
         {pinnedProjects.length > 0 && (
           <div className="workspace-project-section">

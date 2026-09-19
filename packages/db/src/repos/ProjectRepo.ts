@@ -140,7 +140,7 @@ export class ProjectRepo {
       .prepare(
         "UPDATE projects SET aiPrompt = ?, aiModel = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?"
       )
-      .run(aiPrompt, aiModel, projectId);
+      .run(aiPrompt, normalizeProjectAIModel(aiModel), projectId);
   }
 
   public updateProjectQASettings(projectId: number, qaSettings: ProjectQASettings) {

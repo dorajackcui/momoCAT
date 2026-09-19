@@ -1,5 +1,5 @@
 import type { MountedTB, TBWithStats } from '../../../../shared/ipc';
-import { Card, IconButton, Select } from '../ui';
+import { Card, Icon, IconButton, Select } from '../ui';
 
 interface ProjectTBPaneProps {
   mountedTBs: MountedTB[];
@@ -10,7 +10,7 @@ interface ProjectTBPaneProps {
 
 export function ProjectTBPane({ mountedTBs, allTBs, onMountTB, onUnmountTB }: ProjectTBPaneProps) {
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="w-full max-w-4xl space-y-8">
       <div>
         <div className="flex justify-between items-end mb-4">
           <h3 className="text-sm font-bold text-text-faint uppercase tracking-wider">
@@ -48,19 +48,10 @@ export function ProjectTBPane({ mountedTBs, allTBs, onMountTB, onUnmountTB }: Pr
             {mountedTBs.map((tb) => (
               <Card key={tb.id} variant="surface" className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-success-soft/80 rounded-lg flex items-center justify-center text-success">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 21H5a2 2 0 01-2-2V7a2 2 0 012-2h5l2-2h7a2 2 0 012 2v14a2 2 0 01-2 2z"
-                      />
-                    </svg>
-                  </div>
+                  <Icon name="book-open" className="h-5 w-5 shrink-0 text-text-muted" />
                   <div>
                     <h4 className="font-bold text-text">{tb.name}</h4>
-                    <p className="text-[10px] text-text-faint font-medium uppercase tracking-wider">
+                    <p className="text-caption text-text-faint font-medium uppercase tracking-wider">
                       {tb.srcLang} → {tb.tgtLang}
                     </p>
                   </div>
@@ -70,7 +61,9 @@ export function ProjectTBPane({ mountedTBs, allTBs, onMountTB, onUnmountTB }: Pr
                     <span className="block text-sm font-bold text-text-muted">
                       {tb.stats?.entryCount || 0}
                     </span>
-                    <span className="text-[9px] font-bold text-text-faint uppercase">Terms</span>
+                    <span className="text-reference-meta font-bold text-text-faint uppercase">
+                      Terms
+                    </span>
                   </div>
                   <IconButton
                     onClick={() => onUnmountTB(tb.id)}

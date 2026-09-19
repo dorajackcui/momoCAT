@@ -50,7 +50,7 @@ export function ChoiceGroup<Value extends string>({
           <span className="ui-choice-content">
             <span className="block font-semibold">{option.label}</span>
             {option.description && (
-              <span className="block text-[10px] opacity-70">{option.description}</span>
+              <span className="block text-caption opacity-70">{option.description}</span>
             )}
           </span>
         </label>

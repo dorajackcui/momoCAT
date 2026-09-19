@@ -47,7 +47,7 @@ export function ProjectMatchModal({
           </option>
         ))}
       </Select>
-      <p className="text-[11px] text-text-faint">
+      <p className="text-2xs text-text-faint">
         Current behavior only applies exact 100% matches, skips already confirmed segments, and sets
         applied matches to confirmed.
       </p>

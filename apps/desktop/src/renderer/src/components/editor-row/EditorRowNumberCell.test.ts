@@ -16,7 +16,7 @@ describe('EditorRowNumberCell', () => {
     expect(html).toContain('aria-label="First occurrence of repeated source"');
     expect(html).toContain('title="First occurrence of repeated source"');
     expect(html).toContain('>↻</span>');
-    expect(html).toContain('-right-[3px] -top-[2px] text-[7px]');
+    expect(html).toContain('-right-[3px] -top-[2px] text-gutter-marker');
     expect(html).toContain('>1</span>');
   });
 

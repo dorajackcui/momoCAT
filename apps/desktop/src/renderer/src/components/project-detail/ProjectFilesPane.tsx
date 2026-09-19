@@ -4,8 +4,7 @@ import type { ProjectFileRecord } from '../../../../shared/ipc';
 import { ProjectAIController } from '../../hooks/projectDetail/useProjectAI';
 import type { TrackedAIJob } from '../../hooks/projectDetail/ai/types';
 import { AssetNameEditor } from '../AssetNameEditor';
-import { Button, Card, IconButton } from '../ui';
-import { ProjectAIPane } from './ProjectAIPane';
+import { Button, Card, Icon, IconButton } from '../ui';
 import { ProjectAITranslateModal, type ProjectAITranslateSubmit } from './ProjectAITranslateModal';
 import { deriveFileProgressBuckets, toPercent } from './fileProgressStats';
 
@@ -21,8 +20,7 @@ interface ProjectFilesPaneProps {
   onRunFileQA: (fileId: number, fileName: string) => Promise<void>;
   ai: ProjectAIController;
   projectType?: ProjectType;
-  aiSettingsExpanded: boolean;
-  onToggleAISettings: () => void;
+  onOpenAISettings: () => void;
 }
 
 export function buildProjectAITranslateStartOptions(options: ProjectAITranslateSubmit) {
@@ -85,7 +83,7 @@ function ProjectFileCard({
       ? 'bg-danger'
       : job?.status === 'cancelled'
         ? 'bg-warning'
-        : 'bg-brand';
+        : 'bg-brand-solid';
   const jobMessage =
     job?.message ||
     (job?.status === 'completed'
@@ -111,42 +109,72 @@ function ProjectFileCard({
         <AssetNameEditor
           name={editableName}
           suffix={extension}
+          leadingIcon={
+            <Icon name="file-spreadsheet" className="h-4 w-4 shrink-0 text-text-muted" />
+          }
           headingLevel="h4"
           assetLabel="file"
           onOpen={() => onOpenFile(file.id)}
           onRename={(name) => onRenameFile(file.id, `${name}${extension}`)}
         />
-        <div className="flex items-center gap-4 mt-1">
-          <div className="w-32 h-1.5 bg-muted rounded-full overflow-hidden flex">
-            <div className="h-full bg-danger" style={{ width: `${progress.qaProblemPct}%` }} />
-            <div className="h-full bg-success" style={{ width: `${progress.confirmedPct}%` }} />
-            <div className="h-full bg-warning" style={{ width: `${progress.inProgressPct}%` }} />
-          </div>
-          <span className="text-[10px] text-text-faint font-medium">
-            {progress.confirmedDisplayPct}% ({progressBuckets.confirmedSegmentsForBar}/
-            {progressBuckets.totalSegments})
-          </span>
-        </div>
-        {job && (
-          <div className="mt-2 w-48">
-            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-              <div
-                className={`h-full ${jobProgressColor}`}
-                style={{ width: `${job.progress || 0}%` }}
-              />
+        <div className="workspace-task-details">
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            <div
+              className="w-16 h-1 bg-muted rounded-full overflow-hidden"
+              role="progressbar"
+              aria-label="Confirmed segments"
+              aria-valuenow={progressBuckets.confirmedSegmentsForBar}
+              aria-valuemin={0}
+              aria-valuemax={progressBuckets.totalSegments}
+            >
+              <div className="h-full bg-success" style={{ width: `${progress.confirmedPct}%` }} />
             </div>
-            <div className="text-[10px] text-text-faint mt-1">{jobMessage}</div>
+            <span className="text-2xs text-text-faint tabular-nums">
+              {progressBuckets.confirmedSegmentsForBar} / {progressBuckets.totalSegments}
+            </span>
+            {progressBuckets.qaProblemSegments > 0 && (
+              <span
+                className="inline-flex items-center gap-1 text-2xs text-warning"
+                aria-label={`${progressBuckets.qaProblemSegments} segments with QA issues`}
+                title="Segments with QA issues"
+              >
+                <svg
+                  aria-hidden="true"
+                  className="h-3 w-3"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="m12 3 10 18H2L12 3Zm0 5v5m0 4h.01" />
+                </svg>
+                {progressBuckets.qaProblemSegments}
+              </span>
+            )}
           </div>
-        )}
+          {job && (
+            <div className="mt-2 w-48 max-w-full">
+              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${jobProgressColor}`}
+                  style={{ width: `${job.progress || 0}%` }}
+                />
+              </div>
+              <div className="text-caption text-text-faint mt-1">{jobMessage}</div>
+            </div>
+          )}
+        </div>
       </div>
       <div className="workspace-task-actions">
         {supportsTMWorkflow && (
-          <Button onClick={() => void onOpenMatchModal(file)} variant="secondary" size="sm">
+          <Button onClick={() => void onOpenMatchModal(file)} variant="ghost" size="sm">
             Match
           </Button>
         )}
         {supportsTMWorkflow && (
-          <Button onClick={() => onOpenReferenceActions(file)} variant="secondary" size="sm">
+          <Button onClick={() => onOpenReferenceActions(file)} variant="ghost" size="sm">
             TM/TB
           </Button>
         )}
@@ -186,21 +214,18 @@ function ProjectFileCard({
           </Button>
         )}
         {supportsTMWorkflow && (
-          <Button
-            onClick={() => void onRunFileQA(file.id, file.name)}
-            variant="secondary"
-            size="sm"
-          >
+          <Button onClick={() => void onRunFileQA(file.id, file.name)} variant="ghost" size="sm">
             QA
           </Button>
         )}
         {supportsTMWorkflow && (
-          <Button onClick={() => void onOpenCommitModal(file)} variant="secondary" size="sm">
+          <Button onClick={() => void onOpenCommitModal(file)} variant="ghost" size="sm">
             Commit
           </Button>
         )}
         <IconButton
           onClick={() => void onExportFile(file.id, file.name)}
+          variant="ghost"
           size="sm"
           title="Export File"
           aria-label="Export File"
@@ -222,6 +247,7 @@ function ProjectFileCard({
         </IconButton>
         <IconButton
           onClick={() => void onDeleteFile(file.id, file.name)}
+          variant="ghost"
           tone="danger"
           size="sm"
           title="Delete File"
@@ -259,8 +285,7 @@ export function ProjectFilesPane({
   onRunFileQA,
   ai,
   projectType = 'translation',
-  aiSettingsExpanded,
-  onToggleAISettings,
+  onOpenAISettings,
 }: ProjectFilesPaneProps) {
   const [aiTranslateFile, setAiTranslateFile] = useState<{ id: number; name: string } | null>(null);
   const isReviewProject = projectType === 'review';
@@ -271,13 +296,17 @@ export function ProjectFilesPane({
   }, []);
 
   return (
-    <div className="w-full max-w-6xl mx-auto">
-      <ProjectAIPane
-        ai={ai}
-        projectType={projectType}
-        expanded={aiSettingsExpanded}
-        onToggle={onToggleAISettings}
-      />
+    <div className="w-full max-w-6xl">
+      {(ai.providerSetupRequired || ai.providerUnavailable) && (
+        <div className="mb-4 flex items-center gap-2 text-xs text-text-muted">
+          <span>
+            {ai.providerSetupRequired ? 'AI provider not configured.' : 'AI provider unavailable.'}
+          </span>
+          <Button variant="link" onClick={onOpenAISettings}>
+            Open settings
+          </Button>
+        </div>
+      )}
       {aiTranslateFile && (
         <ProjectAITranslateModal
           open={true}

@@ -6,6 +6,9 @@ import {
   createEditorSmokeSession as createSmokeSession,
 } from './support/editorSmokeSession';
 
+const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+const redoShortcut = process.platform === 'darwin' ? 'Meta+Shift+z' : 'Control+y';
+
 test.describe('CodeMirror editor engine smoke', () => {
   test('keeps task actions and direct project navigation visible outside CAT', async () => {
     const session = await createSmokeSession();
@@ -285,9 +288,9 @@ test.describe('CodeMirror editor engine smoke', () => {
       await insertionMenu.getByRole('menuitem', { name: 'Insert tag 1: <b>' }).click();
       await expect(targetEditor).toHaveText('A{1>B');
       await expect(targetEditor).toBeFocused();
-      await page.keyboard.press('Control+z');
+      await page.keyboard.press(`${modifier}+z`);
       await expect(targetEditor).toHaveText('AB');
-      await page.keyboard.press('Control+y');
+      await page.keyboard.press(redoShortcut);
       await expect(targetEditor).toHaveText('A{1>B');
       await page.keyboard.insertText('X');
       await expect(targetEditor).toHaveText('A{1>XB');
@@ -300,7 +303,7 @@ test.describe('CodeMirror editor engine smoke', () => {
       await expect(targetEditor).toHaveText('A{1>XB');
 
       await targetEditor.focus();
-      await page.keyboard.press('Control+a');
+      await page.keyboard.press(`${modifier}+a`);
       await page.keyboard.press('Backspace');
       await targetEditor.dispatchEvent('keydown', {
         key: '!',
@@ -331,7 +334,7 @@ test.describe('CodeMirror editor engine smoke', () => {
       const targetEditor = filteredRow.locator('.editor-target-editor-host .cm-content');
       await expect(targetEditor).toBeVisible();
       await targetEditor.focus();
-      await page.keyboard.press(process.platform === 'darwin' ? 'Meta+a' : 'Control+a');
+      await page.keyboard.press(`${modifier}+a`);
       await page.keyboard.insertText('pomme');
 
       await expect(targetEditor).toContainText('pomme');
@@ -425,11 +428,11 @@ test.describe('CodeMirror editor engine smoke', () => {
       await expect(firstEditorContent).toBeFocused();
       await page.keyboard.insertText('X');
       await expect(firstEditorContent).toContainText('DX');
-      await page.keyboard.press('Control+z');
+      await page.keyboard.press(`${modifier}+z`);
       await expect(firstEditorContent).not.toContainText('DX');
-      await page.keyboard.press('Control+z');
+      await page.keyboard.press(`${modifier}+z`);
       await expect(firstEditorContent).not.toContainText('D');
-      await page.keyboard.press('Control+a');
+      await page.keyboard.press(`${modifier}+a`);
       await page.keyboard.insertText('A B\tC\nD');
 
       const firstEditor = page.locator('.editor-target-editor-host .cm-editor').first();

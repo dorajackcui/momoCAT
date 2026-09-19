@@ -1,11 +1,10 @@
-import type { ProjectQASettings, ProjectType } from '@cat/core/project';
+import type { ProjectType } from '@cat/core/project';
 import type { MountedTM, ProjectFileRecord, TMCommitScope } from '../../../../shared/ipc';
 import type { useProjectFileImport } from '../../hooks/projectDetail/useProjectFileImport';
 import { ColumnSelector } from '../ColumnSelector';
 import { PasteSourceModal } from './PasteSourceModal';
 import { ProjectCommitModal } from './ProjectCommitModal';
 import { ProjectMatchModal } from './ProjectMatchModal';
-import { ProjectQASettingsModal } from './ProjectQASettingsModal';
 import { ProjectReferenceActionsModal } from './ProjectReferenceActionsModal';
 import { ProjectReferenceOperationProgressModal } from './ProjectReferenceOperationProgressModal';
 import type { useProjectReferenceActions } from './useProjectReferenceActions';
@@ -27,12 +26,6 @@ interface ProjectDetailDialogsProps {
   onCancelMatch: () => void;
   onConfirmMatch: () => void;
   referenceActions: ReturnType<typeof useProjectReferenceActions>;
-  qaSettingsOpen: boolean;
-  qaSettingsDraft: ProjectQASettings;
-  qaSettingsSaving: boolean;
-  onQASettingsChange: (settings: ProjectQASettings) => void;
-  onCloseQASettings: () => void;
-  onSaveQASettings: () => void;
 }
 
 export function ProjectDetailDialogs({
@@ -52,12 +45,6 @@ export function ProjectDetailDialogs({
   onCancelMatch,
   onConfirmMatch,
   referenceActions,
-  qaSettingsOpen,
-  qaSettingsDraft,
-  qaSettingsSaving,
-  onQASettingsChange,
-  onCloseQASettings,
-  onSaveQASettings,
 }: ProjectDetailDialogsProps) {
   return (
     <>
@@ -98,14 +85,6 @@ export function ProjectDetailDialogs({
         onClose={referenceActions.close}
         onPrecheckSourceTerms={referenceActions.precheckSourceTerms}
         onExportReferences={referenceActions.exportReferences}
-      />
-      <ProjectQASettingsModal
-        isOpen={qaSettingsOpen}
-        draft={qaSettingsDraft}
-        onChange={onQASettingsChange}
-        onClose={onCloseQASettings}
-        onSave={onSaveQASettings}
-        saving={qaSettingsSaving}
       />
       <ProjectReferenceOperationProgressModal
         progress={referenceActions.progress}

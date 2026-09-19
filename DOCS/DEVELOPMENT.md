@@ -70,7 +70,7 @@ The root `package.json` is the command source of truth.
 | `npm run ai-prompts:generate`   | Regenerate the TypeScript catalog from prompt Markdown sources.                |
 | `npm run ai-prompts:check`      | Fail when the generated prompt catalog is stale.                               |
 | `npm run gate:arch`             | Enforce package/service architecture guardrails.                               |
-| `npm run gate:style`            | Enforce renderer style-class rules.                                            |
+| `npm run gate:style`            | Enforce shared UI, palette, typography, and renderer style boundaries.         |
 | `npm run gate:file-size`        | Enforce large-file thresholds.                                                 |
 | `npm run gate:smoke:large-file` | Rebuild for host Node and run the large-file TM regression.                    |
 | `npm run gate:check`            | Run the repository quality gate.                                               |

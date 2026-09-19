@@ -8,6 +8,7 @@ export * from './Textarea';
 export * from './Modal';
 export * from './Badge';
 export * from './IconButton';
+export * from './Icon';
 export * from './ControlGroup';
 export * from './Notice';
 export * from './Popup';

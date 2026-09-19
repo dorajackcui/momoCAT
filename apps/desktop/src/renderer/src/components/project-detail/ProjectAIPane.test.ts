@@ -44,7 +44,6 @@ function createController(overrides?: Partial<ProjectAIController>): ProjectAICo
       'You are a professional translator.\n\nFrom en to zh. Output in zh ONLY.\nKeep all protected markers exactly as they appear, including forms such as {1>, <2}, {3}\nPreserve all escape sequences exactly as they appear, including \\n and \\r.\nReturn only the translated text, without quotes or extra commentary',
     promptDraft: '',
     setPromptDraft: vi.fn(),
-    promptSavedAt: null,
     savingPrompt: false,
     testSource: '',
     setTestSource: vi.fn(),
@@ -72,6 +71,7 @@ function createController(overrides?: Partial<ProjectAIController>): ProjectAICo
       deletePrompt: vi.fn().mockResolvedValue(true),
     },
     savePrompt: vi.fn().mockResolvedValue(undefined),
+    discardChanges: vi.fn(),
     testPrompt: vi.fn().mockResolvedValue(undefined),
     startAITranslateFile: vi.fn().mockResolvedValue(undefined),
     cancelAITranslateFile: vi.fn().mockResolvedValue(undefined),
@@ -87,15 +87,11 @@ type ElementPredicate = (element: TestElement) => boolean;
 function renderPane(
   controller: ProjectAIController,
   projectType?: 'translation' | 'review' | 'custom',
-  expanded = true,
-  onToggle = vi.fn(),
 ) {
   return renderToStaticMarkup(
     React.createElement(ProjectAIPane, {
       ai: controller,
       projectType: projectType ?? 'translation',
-      expanded,
-      onToggle,
     }),
   );
 }
@@ -136,13 +132,9 @@ function findElement(node: React.ReactNode, predicate: ElementPredicate): TestEl
 function findElementForController(
   controller: ProjectAIController,
   predicate: ElementPredicate,
-  expanded = true,
-  onToggle = vi.fn(),
 ): TestElement {
   const root = React.createElement(ProjectAIPane, {
     ai: controller,
-    expanded,
-    onToggle,
   });
   const match = findElement(root, predicate);
   if (!match) {
@@ -159,35 +151,15 @@ function findTestPromptButton(controller: ProjectAIController): TestElement {
 }
 
 describe('ProjectAIPane', () => {
-  it('renders a compact provider summary and hides the settings form when collapsed', () => {
-    const onToggle = vi.fn();
-    const controller = createController();
-    const html = renderPane(controller, 'translation', false, onToggle);
-    const toggle = findElementForController(
-      controller,
-      (element) => element.type === 'button' && element.props['aria-expanded'] === false,
-      false,
-      onToggle,
-    );
-
-    expect(html).toContain('AI Settings');
-    expect(html).toContain('OpenAI / gpt-demo');
-    expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain('border-border');
-    expect(html).not.toContain('surface-subtle');
-    expect(html).not.toContain('project-ai-effective-prompt');
-    expect(html).not.toContain('AI Settings Saved');
-
-    (toggle.props.onClick as () => void)();
-    expect(onToggle).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps the save action available while collapsed when settings have changed', () => {
-    const controller = createController({ hasUnsavedPromptChanges: true });
-    const html = renderPane(controller, 'translation', false);
-
-    expect(html).toContain('Unsaved Changes');
-    expect(html).toContain('Save AI Settings');
+  it('keeps the editable form visible and supplementary sections collapsed', () => {
+    const html = renderPane(createController());
+    expect(html).toContain('project-ai-provider');
+    expect(html).toContain('project-ai-custom-prompt');
+    expect(html).toContain('Prompt preview');
+    expect(html).toContain('Test prompt');
+    expect(html.match(/<details/g)).toHaveLength(2);
+    expect(html).not.toMatch(/<details[^>]*open/);
+    expect(html).not.toContain('Save AI Settings');
   });
 
   it('renders a read-only effective prompt preview and editable custom prompt', () => {
@@ -209,9 +181,7 @@ describe('ProjectAIPane', () => {
     );
     expect(effectivePrompt.props.readOnly).toBe(true);
     expect(customPrompt.props.value).toBe('Use concise style.');
-    expect(html).toContain(
-      'This is the saved system prompt used at runtime. It updates after you save AI settings.',
-    );
+    expect(html).toContain('Saved system prompt used at runtime.');
   });
 
   it('renders configured providers in the provider select', () => {

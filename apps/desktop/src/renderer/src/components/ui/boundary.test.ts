@@ -29,13 +29,12 @@ function controlViolations(
       .map((a) => [a.name.getText(source), a.initializer]),
   );
   const cls = attributes.get('className')?.getText(source) ?? '';
-  // Deliberate domain owners: workspace navigation, resize handle, AI disclosure header.
+  // Deliberate domain owners: workspace navigation and resize handle.
   const domainButton =
     (relative === 'components/WorkspaceSidebar.tsx' &&
       /^"workspace-(nav-item|project-more|brand|project-heading)"$/.test(cls)) ||
     (relative === 'components/editor/EditorSidebar.tsx' &&
-      attributes.get('aria-label')?.getText(source) === '"Resize sidebar"') ||
-    (relative === 'components/project-detail/ProjectAIPane.tsx' && attributes.has('aria-expanded'));
+      attributes.get('aria-label')?.getText(source) === '"Resize sidebar"');
   const errors: string[] = [];
   if (tag === 'button' && !domainButton) errors.push('use Button or IconButton');
   if (controls.test(tag)) {
@@ -73,7 +72,7 @@ it('keeps primitive dependencies and standard control markup in the UI owner lay
         if (
           ts.isImportDeclaration(node) &&
           ts.isStringLiteral(node.moduleSpecifier) &&
-          /^(@radix-ui\/|@floating-ui\/)/.test(node.moduleSpecifier.text)
+          /^(@radix-ui\/|@floating-ui\/|class-variance-authority$)/.test(node.moduleSpecifier.text)
         ) {
           violations.push(`${relative}: import primitives through components/ui`);
         }
@@ -87,7 +86,7 @@ it('keeps primitive dependencies and standard control markup in the UI owner lay
             if (!ts.isJsxAttribute(attribute) || !attribute.initializer) continue;
             if (
               attribute.name.getText(source) === 'className' &&
-              /\b(modal-backdrop|modal-card|btn-[\w-]+|icon-btn[\w-]*|field-input[\w-]*|ui-choice[\w-]*|ui-menu-item)\b/.test(
+              /\b(modal-backdrop|modal-card|btn-[\w-]+|icon-btn[\w-]*|field-input[\w-]*|ui-button[\w-]*|ui-field[\w-]*|ui-size-[\w-]+|ui-choice[\w-]*|ui-menu-item)\b/.test(
                 attribute.initializer.getText(source),
               )
             ) {

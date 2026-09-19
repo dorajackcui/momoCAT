@@ -70,19 +70,19 @@ export function ProjectPromptManagerModal({
               Save
             </Button>
           </div>
-          <p className="mt-1 text-[11px] text-text-muted">
+          <p className="mt-1 text-2xs text-text-muted">
             Saves the custom prompt text currently in the editor under a new name.
           </p>
         </div>
         <div className="space-y-2">
           {savedPrompts.prompts.length === 0 ? (
-            <div className="surface-subtle rounded-xl px-3 py-4 text-sm text-text-muted">
+            <div className="surface-subtle px-3 py-4 text-sm text-text-muted">
               No saved prompts yet.
             </div>
           ) : (
             savedPrompts.prompts.map((prompt) =>
               editingId === prompt.id ? (
-                <div key={prompt.id} className="surface-subtle rounded-xl px-3 py-3 space-y-2">
+                <div key={prompt.id} className="surface-subtle px-3 py-3 space-y-2">
                   <Input
                     type="text"
                     aria-label="Prompt Name"
@@ -113,7 +113,7 @@ export function ProjectPromptManagerModal({
               ) : (
                 <div
                   key={prompt.id}
-                  className="surface-subtle rounded-xl px-3 py-3 flex items-center justify-between gap-3"
+                  className="surface-subtle px-3 py-3 flex items-center justify-between gap-3"
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -121,12 +121,12 @@ export function ProjectPromptManagerModal({
                         {prompt.name}
                       </span>
                       {savedPrompts.selectedPromptId === prompt.id && (
-                        <span className="text-[10px] uppercase tracking-wider text-success">
+                        <span className="text-caption uppercase tracking-wider text-text-muted">
                           In use
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-text-muted truncate">
+                    <div className="text-2xs text-text-muted truncate">
                       {prompt.content.trim() || 'Empty prompt'}
                     </div>
                   </div>
@@ -171,7 +171,7 @@ export function ProjectPromptManagerModal({
           )}
         </div>
         {currentDraft.trim().length === 0 && (
-          <p className="text-[11px] text-text-faint">
+          <p className="text-2xs text-text-faint">
             Tip: the custom prompt editor is currently empty; applying a saved prompt fills it.
           </p>
         )}

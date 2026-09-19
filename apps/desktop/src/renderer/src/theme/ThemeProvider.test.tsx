@@ -28,13 +28,13 @@ it('restores independent workspace and editor preferences across navigation and 
   fireEvent.click(screen.getByRole('button', { name: 'Appearance' }));
   const colors = await screen.findByRole('group', { name: 'Color scheme' });
   expect(within(colors).getByRole('radio', { name: 'Classic' })).toBeChecked();
-  expect(within(colors).getAllByRole('radio')).toHaveLength(2);
+  expect(within(colors).getAllByRole('radio')).toHaveLength(3);
   fireEvent.click(within(colors).getByRole('radio', { name: 'Nord' }));
   expect(root).toHaveAttribute('data-color-theme', 'nord');
   expect(localStorage.getItem(THEME_STORAGE_KEYS.editor)).toBe('nord');
 
   rerender(example('workspace'));
-  expect(root).toHaveAttribute('data-color-theme', 'classic');
+  expect(root).toHaveAttribute('data-color-theme', 'sand');
   fireEvent.click(within(colors).getByRole('radio', { name: 'Nord' }));
   expect(localStorage.getItem(THEME_STORAGE_KEYS.workspace)).toBe('nord');
   rerender(example('editor'));

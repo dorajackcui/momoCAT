@@ -33,7 +33,7 @@ export const TBCard: React.FC<TBCardProps> = ({
           onRename={(name) => onRename(tb.id, name)}
         />
         <div className="flex flex-wrap items-center gap-2 mt-1 break-words">
-          <span className="text-[10px] font-semibold text-brand bg-brand-soft px-1.5 py-0.5 rounded-control uppercase tracking-wider">
+          <span className="text-caption font-semibold text-brand bg-brand-soft px-1.5 py-0.5 rounded-control uppercase tracking-wider">
             {tb.srcLang} → {tb.tgtLang}
           </span>
           {tb.syncConfig && (
@@ -68,7 +68,7 @@ export const TBCard: React.FC<TBCardProps> = ({
         {tb.syncConfig ? (
           <IconButton
             size="sm"
-            tone="success"
+            tone="neutral"
             variant="ghost"
             onClick={() => onSync(tb)}
             title={`Sync from ${fileBaseName(tb.syncConfig.filePath)}`}
@@ -121,12 +121,12 @@ export const TBCard: React.FC<TBCardProps> = ({
     </div>
     <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-border/40">
       <div className="flex flex-col">
-        <span className="text-[10px] font-semibold text-text-faint uppercase tracking-widest mb-0.5">
+        <span className="text-caption font-semibold text-text-faint uppercase tracking-widest mb-0.5">
           Size
         </span>
         <span className="text-sm font-semibold text-text-muted">{tb.stats.entryCount} terms</span>
       </div>
-      <div className="text-[10px] text-text-faint font-medium">
+      <div className="text-caption text-text-faint font-medium">
         Last updated {new Date(tb.updatedAt).toLocaleDateString()}
       </div>
     </div>

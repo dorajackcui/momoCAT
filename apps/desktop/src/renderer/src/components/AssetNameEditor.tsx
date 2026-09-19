@@ -4,6 +4,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 interface AssetNameEditorProps {
   name: string;
   suffix?: string;
+  leadingIcon?: React.ReactNode;
   headingLevel?: 'h3' | 'h4';
   assetLabel: string;
   onRename: (name: string) => Promise<void>;
@@ -13,6 +14,7 @@ interface AssetNameEditorProps {
 export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
   name,
   suffix = '',
+  leadingIcon,
   headingLevel = 'h3',
   assetLabel,
   onRename,
@@ -58,82 +60,78 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
     }
   };
 
-  if (isEditing) {
-    return (
-      <form
-        onSubmit={submit}
-        onClick={(event) => event.stopPropagation()}
-        className="flex items-center gap-1 min-w-0"
+  const content = isEditing ? (
+    <form
+      onSubmit={submit}
+      onClick={(event) => event.stopPropagation()}
+      className="flex w-full max-w-md items-center gap-1 min-w-0"
+    >
+      <Input
+        size="compact"
+        appearance="inline"
+        ref={inputRef}
+        type="text"
+        value={draftName}
+        onChange={(event) => setDraftName(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            cancel();
+          }
+        }}
+        className="min-w-0"
+        aria-label={`Rename ${assetLabel}`}
+        aria-describedby={suffix ? suffixDescriptionId : undefined}
+        disabled={isSaving}
+      />
+      {suffix && (
+        <span id={suffixDescriptionId} className="shrink-0 text-sm font-bold text-text">
+          {suffix}
+        </span>
+      )}
+      <IconButton
+        size="xs"
+        tone="brand"
+        variant="ghost"
+        type="submit"
+        title="Save name"
+        aria-label={`Save ${assetLabel} name`}
+        disabled={isSaving || !draftName.trim()}
       >
-        <Input
-          size="compact"
-          appearance="inline"
-          ref={inputRef}
-          type="text"
-          value={draftName}
-          onChange={(event) => setDraftName(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              cancel();
-            }
-          }}
-          className="min-w-0"
-          aria-label={`Rename ${assetLabel}`}
-          aria-describedby={suffix ? suffixDescriptionId : undefined}
-          disabled={isSaving}
-        />
-        {suffix && (
-          <span id={suffixDescriptionId} className="text-sm font-bold text-text">
-            {suffix}
-          </span>
-        )}
-        <IconButton
-          size="xs"
-          tone="success"
-          variant="ghost"
-          type="submit"
-          title="Save name"
-          aria-label={`Save ${assetLabel} name`}
-          disabled={isSaving || !draftName.trim()}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        </IconButton>
-        <IconButton
-          size="xs"
-          tone="danger"
-          variant="ghost"
-          type="button"
-          onClick={cancel}
-          title="Cancel rename"
-          aria-label={`Cancel ${assetLabel} rename`}
-          disabled={isSaving}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </IconButton>
-      </form>
-    );
-  }
-
-  return (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+      </IconButton>
+      <IconButton
+        size="xs"
+        tone="danger"
+        variant="ghost"
+        type="button"
+        onClick={cancel}
+        title="Cancel rename"
+        aria-label={`Cancel ${assetLabel} rename`}
+        disabled={isSaving}
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M6 18L18 6M6 6l12 12"
+          />
+        </svg>
+      </IconButton>
+    </form>
+  ) : (
     <div className="flex items-center gap-1 min-w-0">
-      <Heading className="font-bold text-text group-hover:text-brand transition-colors">
+      <Heading className="min-w-0 break-words font-medium text-text group-hover:text-brand transition-colors">
         {onOpen ? (
           <Button
             tone="inherit"
             variant="link"
             type="button"
             onClick={onOpen}
-            className="text-left"
+            className="max-w-full whitespace-normal break-words text-left"
           >
             {displayName}
           </Button>
@@ -164,6 +162,15 @@ export const AssetNameEditor: React.FC<AssetNameEditorProps> = ({
           />
         </svg>
       </IconButton>
+    </div>
+  );
+
+  if (!leadingIcon) return content;
+
+  return (
+    <div className={`flex min-w-0 items-start gap-2 ${isEditing ? 'w-full max-w-md' : ''}`}>
+      <span className="flex h-6 w-4 shrink-0 items-center">{leadingIcon}</span>
+      <div className="min-w-0 flex-1">{content}</div>
     </div>
   );
 };

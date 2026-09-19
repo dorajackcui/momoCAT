@@ -16,8 +16,8 @@ describe('EditorRowFeedback', () => {
 
     expect(html).toContain('tail-marker');
     expect(html).toContain('mt-auto');
-    expect(html).toContain('text-[10px]');
-    expect(html).not.toContain('text-[11px]');
+    expect(html).toContain('text-caption');
+    expect(html).not.toContain('text-2xs');
     expect(html).toContain('truncate');
     expect(html).toContain('whitespace-nowrap');
     expect(html).not.toContain('more');

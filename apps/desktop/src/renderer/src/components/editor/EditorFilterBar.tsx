@@ -5,6 +5,7 @@ import {
   Popover,
   ToggleButton,
   IconButton,
+  Icon,
   SearchInput,
   SearchInputGroup,
 } from '../ui';
@@ -156,7 +157,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
           </IconButton>
 
           {sortBy !== 'default' && (
-            <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-brand" />
+            <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-brand-solid" />
           )}
 
           {isSortMenuOpen && (
@@ -252,17 +253,10 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
             aria-expanded={isFilterMenuOpen}
             title="Open filters"
           >
-            <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3 4h18M6 12h12M10 20h4"
-              />
-            </svg>
+            <Icon name="funnel" />
           </IconButton>
           {activeFilterCount > 0 && (
-            <span className="absolute -top-1 -right-1 rounded-full bg-brand px-1.5 py-0.5 text-[9px] text-brand-contrast leading-none">
+            <span className="absolute -top-1 -right-1 rounded-full bg-brand-solid px-1.5 py-0.5 text-reference-meta text-brand-contrast leading-none">
               {activeFilterCount}
             </span>
           )}
@@ -275,7 +269,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
               className="w-80 space-y-3"
             >
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-text-faint mb-2">
+                <div className="text-caption font-bold uppercase tracking-wider text-text-faint mb-2">
                   Quick Presets
                 </div>
                 <div className="flex flex-wrap gap-1.5">
@@ -297,7 +291,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
               </div>
 
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-text-faint mb-2">
+                <div className="text-caption font-bold uppercase tracking-wider text-text-faint mb-2">
                   Match Mode
                 </div>
                 <div className="flex flex-wrap gap-1.5">
@@ -319,7 +313,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
               </div>
 
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-text-faint mb-2">
+                <div className="text-caption font-bold uppercase tracking-wider text-text-faint mb-2">
                   Status
                 </div>
                 <div className="flex flex-wrap gap-1.5">
@@ -341,7 +335,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
               </div>
 
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-text-faint mb-2">
+                <div className="text-caption font-bold uppercase tracking-wider text-text-faint mb-2">
                   Quality
                 </div>
                 <div className="flex flex-wrap gap-1.5">
