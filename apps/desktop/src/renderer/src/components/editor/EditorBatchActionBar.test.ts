@@ -10,11 +10,9 @@ function renderBar(overrides?: Partial<EditorBatchActionBarProps>) {
     canRunActions: true,
     isBatchAITranslating: false,
     isBatchQARunning: false,
-    showNonPrintingSymbols: false,
     onOpenBatchAIModal: vi.fn(),
     onCancelBatchAITranslate: vi.fn(),
     onRunBatchQA: vi.fn(),
-    onToggleNonPrintingSymbols: vi.fn(),
     ...overrides,
   };
 
@@ -24,7 +22,7 @@ function renderBar(overrides?: Partial<EditorBatchActionBarProps>) {
 
 function getButtons(
   element: ReturnType<typeof EditorBatchActionBar>,
-): [React.ReactElement, React.ReactElement, React.ReactElement] {
+): [React.ReactElement, React.ReactElement] {
   if (!element || !React.isValidElement(element)) {
     throw new Error('Expected EditorBatchActionBar to return a valid React element');
   }
@@ -32,8 +30,8 @@ function getButtons(
     (child): child is React.ReactElement =>
       React.isValidElement(child) && child.type === IconButton,
   );
-  expect(children).toHaveLength(3);
-  return [children[0], children[1], children[2]];
+  expect(children).toHaveLength(2);
+  return [children[0], children[1]];
 }
 
 function resolveIconClassName(iconButtonElement: React.ReactElement): string {
@@ -48,14 +46,12 @@ describe('EditorBatchActionBar', () => {
 
   it('renders two icon buttons with expected labels and titles', () => {
     const { element } = renderBar();
-    const [aiButton, qaButton, toggleButton] = getButtons(element);
+    const [aiButton, qaButton] = getButtons(element);
 
     expect(aiButton.props.title).toBe('AI Batch Translate');
     expect(qaButton.props.title).toBe('Batch QA');
-    expect(toggleButton.props.title).toBe('Show non-printing symbols');
     expect(aiButton.props['aria-label']).toBe('AI batch translate');
     expect(qaButton.props['aria-label']).toBe('Run batch QA');
-    expect(toggleButton.props['aria-label']).toBe('Toggle non-printing symbols');
   });
 
   it('turns the AI button into a cancel control when AI translation is running', () => {
@@ -81,30 +77,19 @@ describe('EditorBatchActionBar', () => {
     expect(resolveIconClassName(qaButton)).toContain('animate-spin');
   });
 
-  it('uses active title for non-printing symbols toggle when enabled', () => {
-    const { element } = renderBar({ showNonPrintingSymbols: true });
-    const [, , toggleButton] = getButtons(element);
-
-    expect(toggleButton.props.title).toBe('Hide non-printing symbols');
-  });
-
   it('invokes callbacks on click', () => {
     const onOpenBatchAIModal = vi.fn();
     const onRunBatchQA = vi.fn();
-    const onToggleNonPrintingSymbols = vi.fn();
     const { element } = renderBar({
       onOpenBatchAIModal,
       onRunBatchQA,
-      onToggleNonPrintingSymbols,
     });
-    const [aiButton, qaButton, toggleButton] = getButtons(element);
+    const [aiButton, qaButton] = getButtons(element);
 
     aiButton.props.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
     qaButton.props.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
-    toggleButton.props.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
 
     expect(onOpenBatchAIModal).toHaveBeenCalledTimes(1);
     expect(onRunBatchQA).toHaveBeenCalledTimes(1);
-    expect(onToggleNonPrintingSymbols).toHaveBeenCalledTimes(1);
   });
 });

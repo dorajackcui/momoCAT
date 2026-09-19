@@ -72,7 +72,7 @@ describe('EditorRow layout containment', () => {
       }),
     );
 
-    expect(html).toContain('grid-cols-[30px_minmax(0,1fr)_4px_minmax(0,1fr)]');
+    expect(html).toContain('grid-cols-[30px_minmax(0,1fr)_8px_minmax(0,1fr)]');
     expect(html).toContain('min-w-0');
     expect(html).toContain('overflow-hidden');
     expect(html).toContain('truncate whitespace-nowrap');

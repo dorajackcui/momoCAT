@@ -157,6 +157,11 @@ export const TMPanel: React.FC<TMPanelProps> = ({
                 ? 'Working TM'
                 : `Main TM: ${tmMatch!.tmName}`
             : `Term Base: ${tbMatch!.tbName}`;
+          const referenceName = isTM
+            ? tmMatch!.tmType === 'working'
+              ? 'Working TM'
+              : tmMatch!.tmName
+            : tbMatch!.tbName;
           const scoreClass = isTM
             ? tmMatch!.kind === 'concordance'
               ? 'bg-match-concordance text-match-concordance-contrast'
@@ -182,9 +187,14 @@ export const TMPanel: React.FC<TMPanelProps> = ({
                 isSelected ? 'border-l-border' : 'border-l-transparent'
               }`}
             >
-              <div className="px-2 py-1 flex items-center justify-between text-[9px] text-text-faint">
-                <span className="truncate">{tmLabel}</span>
-                <span>{isTM && ` · ${new Date(tmMatch!.updatedAt).toLocaleDateString()}`}</span>
+              <div className="px-2 py-1 flex items-center justify-between gap-2 text-[9px] text-text-faint">
+                <span className="truncate" title={tmLabel}>
+                  <span aria-hidden="true">{referenceName}</span>
+                  <span className="sr-only">{tmLabel}</span>
+                </span>
+                <span className="shrink-0">
+                  {isTM && new Date(tmMatch!.updatedAt).toLocaleDateString()}
+                </span>
               </div>
 
               <div
@@ -205,7 +215,7 @@ export const TMPanel: React.FC<TMPanelProps> = ({
                 title="Double click to apply match"
               >
                 <div
-                  className={`content-text px-2 py-2 border-r border-border-subtle text-sm text-text-muted leading-snug ${
+                  className={`content-text px-2 py-2 text-xs text-text-muted leading-snug ${
                     isTM ? 'line-clamp-5' : ''
                   }`}
                 >
@@ -219,7 +229,7 @@ export const TMPanel: React.FC<TMPanelProps> = ({
                 </div>
 
                 <div
-                  className={`content-text px-2 py-2 border-l border-border-subtle text-sm text-text leading-snug ${
+                  className={`content-text px-2 py-2 text-xs text-text leading-snug ${
                     isTM ? 'line-clamp-5' : ''
                   }`}
                 >

@@ -268,6 +268,11 @@ test('offers editor appearance in review projects without batch actions', async 
     await page.getByRole('button', { name: 'Theme review fixture', exact: true }).click();
     await page.getByText('cm6-smoke-fixture.xlsx', { exact: true }).click();
     await expect(page.getByRole('button', { name: 'AI batch translate' })).toHaveCount(0);
+    await expect(
+      page
+        .getByRole('group', { name: 'Display settings' })
+        .getByRole('button', { name: 'Toggle non-printing symbols' }),
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Editor appearance' }).click();
     await page
       .getByRole('group', { name: 'Color scheme' })
@@ -284,6 +289,14 @@ test('coordinates status, QA, reference badges and search in complete reading sc
   try {
     const { page } = session;
     await prepareEditorReadingScene(session);
+    const translationTools = page.getByRole('group', { name: 'Translation tools' });
+    await expect(
+      translationTools.getByRole('button', { name: 'AI batch translate' }),
+    ).toBeVisible();
+    await expect(translationTools.getByRole('button', { name: 'Run batch QA' })).toBeVisible();
+    const search = page.getByRole('group', { name: 'Source and target filters' });
+    await expect(search.getByRole('textbox')).toHaveCount(2);
+    await expect(page.getByRole('progressbar', { name: 'Confirmed segments' })).toBeVisible();
     await page.getByPlaceholder('Filter source text').fill('window');
     await page.getByPlaceholder('Filter target text').fill('窗');
     await page.locator('.editor-source-text').nth(2).click();

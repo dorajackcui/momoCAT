@@ -6,6 +6,7 @@ const variantClasses = {
   neutral: 'ui-tabs-neutral',
   brand: 'ui-tabs-brand',
   underline: 'ui-tabs-underline',
+  segmented: 'ui-tabs-segmented',
 };
 
 export const Tabs = Primitive.Root;
@@ -18,7 +19,7 @@ export function TabsList({
 }: {
   label: string;
   items: Array<{ value: string; label: ReactNode; title?: string; disabled?: boolean }>;
-  variant?: 'neutral' | 'brand' | 'underline';
+  variant?: keyof typeof variantClasses;
   className?: string;
 }) {
   return (

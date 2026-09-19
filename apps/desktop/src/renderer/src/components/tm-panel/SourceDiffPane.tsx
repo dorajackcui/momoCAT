@@ -16,7 +16,7 @@ function DiffLine({
   visibleChange: 'remove' | 'add';
 }) {
   return (
-    <p className="content-text whitespace-pre-wrap break-words text-sm leading-relaxed text-text">
+    <p className="content-text whitespace-pre-wrap break-words text-xs leading-relaxed text-text">
       {parts
         .filter((part) => part.kind === 'equal' || part.kind === visibleChange)
         .map((part, index) => (

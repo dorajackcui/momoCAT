@@ -2,7 +2,17 @@
 import { createRef } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
-import { Button, Checkbox, IconButton, Input, Radio, SearchInput, Select, Textarea } from './index';
+import {
+  Button,
+  Checkbox,
+  IconButton,
+  Input,
+  Radio,
+  SearchInput,
+  SearchInputGroup,
+  Select,
+  Textarea,
+} from './index';
 
 it('preserves native form values, refs, disabled behavior and explicit submission', () => {
   const submit = vi.fn((event) => event.preventDefault());
@@ -44,21 +54,24 @@ it('preserves native form values, refs, disabled behavior and explicit submissio
   });
 });
 
-it('forwards search input refs and keyboard events without making its trailing action submit', () => {
+it('groups independent search inputs while preserving refs, keys and trailing actions', () => {
   const ref = createRef<HTMLInputElement>();
   const keyDown = vi.fn();
   const submit = vi.fn((event) => event.preventDefault());
   const toggle = vi.fn();
   render(
     <form onSubmit={submit}>
-      <SearchInput
-        name="query"
-        aria-label="Search"
-        ref={ref}
-        defaultValue="Demo"
-        onKeyDown={keyDown}
-        trailingAction={<IconButton aria-label="Change scope" onClick={toggle} variant="ghost" />}
-      />
+      <SearchInputGroup label="Bilingual search">
+        <SearchInput name="source" aria-label="Source" defaultValue="Source text" />
+        <SearchInput
+          name="query"
+          aria-label="Search"
+          ref={ref}
+          defaultValue="Demo"
+          onKeyDown={keyDown}
+          trailingAction={<IconButton aria-label="Change scope" onClick={toggle} variant="ghost" />}
+        />
+      </SearchInputGroup>
     </form>,
   );
   expect(ref.current).toBe(screen.getByRole('textbox', { name: 'Search' }));
@@ -67,5 +80,11 @@ it('forwards search input refs and keyboard events without making its trailing a
   fireEvent.click(screen.getByRole('button', { name: 'Change scope' }));
   expect(toggle).toHaveBeenCalledOnce();
   expect(submit).not.toHaveBeenCalled();
-  expect(new FormData(ref.current!.form!).get('query')).toBe('Demo');
+  fireEvent.change(screen.getByRole('textbox', { name: 'Source' }), {
+    target: { value: 'Changed' },
+  });
+  expect(Object.fromEntries(new FormData(ref.current!.form!))).toEqual({
+    source: 'Changed',
+    query: 'Demo',
+  });
 });

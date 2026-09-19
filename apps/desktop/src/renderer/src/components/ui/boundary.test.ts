@@ -4,7 +4,7 @@ import ts from 'typescript';
 import { expect, it } from 'vitest';
 
 const controls =
-  /^(Button|IconButton|ToggleButton|ChoiceGroup|MenuItem|Input|SearchInput|Select|LanguageSelect|Textarea|Checkbox|Radio)$/;
+  /^(Button|IconButton|ControlGroup|ToggleButton|ChoiceGroup|MenuItem|Input|SearchInput|SearchInputGroup|Select|LanguageSelect|Textarea|Checkbox|Radio)$/;
 // Pages own layout/visibility and content typography, but not control appearance.
 const controlStyles =
   /(?:^|[\s'"`:{])!?(?:bg-|border(?:-|\b)|rounded(?:-|\b)|shadow(?:-|\b)|ring(?:-|\b)|outline(?:-|\b)|accent-|p[xytrblse]?-|text-(?!left\b|right\b|center\b|justify\b|ellipsis\b|wrap\b|nowrap\b)|font-(?!mono\b)|transition(?:-|\b)|disabled:)/;

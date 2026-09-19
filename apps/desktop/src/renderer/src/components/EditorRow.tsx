@@ -183,7 +183,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
 
   return (
     <div
-      className={`group grid grid-cols-[30px_minmax(0,1fr)_4px_minmax(0,1fr)] border-b border-border-subtle transition-colors ${
+      className={`group grid grid-cols-[30px_minmax(0,1fr)_8px_minmax(0,1fr)] border-b border-border-subtle transition-colors ${
         isActive ? 'bg-brand-soft/20' : 'hover:bg-muted/30'
       }`}
       style={{ minHeight: EDITOR_ROW_MIN_HEIGHT }}

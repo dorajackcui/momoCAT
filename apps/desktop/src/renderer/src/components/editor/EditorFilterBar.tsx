@@ -6,10 +6,11 @@ import {
   ToggleButton,
   IconButton,
   SearchInput,
-  AppearancePicker,
+  SearchInputGroup,
 } from '../ui';
 import React from 'react';
 import { EditorBatchActionBar } from './EditorBatchActionBar';
+import { EditorDisplayControls } from './EditorDisplayControls';
 import {
   FILTER_MATCH_MODE_OPTIONS,
   FILTER_QUALITY_OPTIONS,
@@ -113,23 +114,22 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
   const sortMenuRef = React.useRef<HTMLButtonElement>(null);
   return (
     <div className="sticky top-0 z-20 bg-surface-chrome border-b border-border-subtle">
-      <div className="flex items-center gap-1.5 px-4 py-1.5">
+      <div className="flex items-center gap-2 px-4 py-1.5">
         <EditorBatchActionBar
           visible={supportsBatchActions}
           canRunActions={canRunActions}
           isBatchAITranslating={isBatchAITranslating}
           isBatchAIStopping={isBatchAIStopping}
           isBatchQARunning={isBatchQARunning}
-          showNonPrintingSymbols={showNonPrintingSymbols}
           onOpenBatchAIModal={onOpenBatchAIModal}
           onCancelBatchAITranslate={onCancelBatchAITranslate}
           onRunBatchQA={onRunBatchQA}
+        />
+        <EditorDisplayControls
+          canRunActions={canRunActions}
+          showNonPrintingSymbols={showNonPrintingSymbols}
           onToggleNonPrintingSymbols={onToggleNonPrintingSymbols}
         />
-        {supportsBatchActions && (
-          <span className="mx-1 h-4 w-px bg-border-subtle" aria-hidden="true" />
-        )}
-        <AppearancePicker label="Editor appearance" />
       </div>
 
       <div className="flex items-center gap-2 px-4 py-2.5">
@@ -137,6 +137,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
           <IconButton
             type="button"
             ref={sortMenuRef}
+            variant="ghost"
             onClick={toggleSortMenu}
             tone={isSortMenuOpen || sortBy !== 'default' ? 'brand' : 'neutral'}
             title="Sort options"
@@ -184,64 +185,66 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
           )}
         </div>
 
-        <SearchInput
-          ref={sourceSearchInputRef as React.RefObject<HTMLInputElement>}
-          value={sourceQueryInput}
-          onChange={(event) => setSourceQueryInput(event.target.value)}
-          onFocus={onSearchInputFocus}
-          onBlur={onSearchInputBlur}
-          placeholder="Filter source text"
-          className="flex-1"
-        />
+        <SearchInputGroup label="Source and target filters" className="flex-1">
+          <SearchInput
+            ref={sourceSearchInputRef as React.RefObject<HTMLInputElement>}
+            value={sourceQueryInput}
+            onChange={(event) => setSourceQueryInput(event.target.value)}
+            onFocus={onSearchInputFocus}
+            onBlur={onSearchInputBlur}
+            aria-label="Filter source text"
+            placeholder="Filter source text"
+          />
 
-        <SearchInput
-          ref={targetSearchInputRef as React.RefObject<HTMLInputElement>}
-          value={targetQueryInput}
-          onChange={(event) => setTargetQueryInput(event.target.value)}
-          onFocus={onSearchInputFocus}
-          onBlur={onSearchInputBlur}
-          aria-label={targetSearchScope === 'context' ? 'Filter context' : 'Filter target text'}
-          placeholder={targetSearchScope === 'context' ? 'Filter context' : 'Filter target text'}
-          className="flex-1"
-          trailingAction={
-            <IconButton
-              variant="ghost"
-              tone="brand"
-              size="xs"
-              type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
-                toggleTargetSearchScope();
-                targetSearchInputRef.current?.focus();
-              }}
-              aria-pressed={targetSearchScope === 'context'}
-              aria-label={
-                targetSearchScope === 'context'
-                  ? 'Search context; switch to target text'
-                  : 'Search target text; switch to context'
-              }
-              title={
-                targetSearchScope === 'context'
-                  ? 'Switch to target text search'
-                  : 'Switch to context search'
-              }
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.8}
-                  d="M8 7h11m0 0-4-4m4 4-4 4M16 17H5m0 0 4 4m-4-4 4-4"
-                />
-              </svg>
-            </IconButton>
-          }
-        />
+          <SearchInput
+            ref={targetSearchInputRef as React.RefObject<HTMLInputElement>}
+            value={targetQueryInput}
+            onChange={(event) => setTargetQueryInput(event.target.value)}
+            onFocus={onSearchInputFocus}
+            onBlur={onSearchInputBlur}
+            aria-label={targetSearchScope === 'context' ? 'Filter context' : 'Filter target text'}
+            placeholder={targetSearchScope === 'context' ? 'Filter context' : 'Filter target text'}
+            trailingAction={
+              <IconButton
+                variant="ghost"
+                tone="brand"
+                size="xs"
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  toggleTargetSearchScope();
+                  targetSearchInputRef.current?.focus();
+                }}
+                aria-pressed={targetSearchScope === 'context'}
+                aria-label={
+                  targetSearchScope === 'context'
+                    ? 'Search context; switch to target text'
+                    : 'Search target text; switch to context'
+                }
+                title={
+                  targetSearchScope === 'context'
+                    ? 'Switch to target text search'
+                    : 'Switch to context search'
+                }
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.8}
+                    d="M8 7h11m0 0-4-4m4 4-4 4M16 17H5m0 0 4 4m-4-4 4-4"
+                  />
+                </svg>
+              </IconButton>
+            }
+          />
+        </SearchInputGroup>
 
         <div className="relative shrink-0">
           <IconButton
             type="button"
             ref={filterMenuRef}
+            variant="ghost"
             onClick={toggleFilterMenu}
             tone={isFilterMenuOpen || activeFilterCount > 0 ? 'brand' : 'neutral'}
             aria-label="Open filters"
@@ -365,7 +368,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
         <IconButton
           size="md"
           tone="neutral"
-          variant="outline"
+          variant="ghost"
           type="button"
           onClick={clearFilters}
           disabled={!hasActiveFilter}

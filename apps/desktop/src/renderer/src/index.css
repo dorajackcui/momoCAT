@@ -246,6 +246,15 @@
   .ui-tabs-underline .ui-tab[data-state='active'] {
     @apply border-brand text-brand;
   }
+  .ui-tabs-segmented {
+    @apply p-1.5 border-b border-border-subtle;
+  }
+  .ui-tabs-segmented .ui-tab {
+    @apply flex-1 py-2 text-[11px];
+  }
+  .ui-tabs-segmented .ui-tab[data-state='active'] {
+    @apply bg-brand-soft text-brand;
+  }
 
   .surface-card {
     @apply bg-surface border border-border rounded-panel shadow-panel;
@@ -360,6 +369,19 @@
     @apply rounded bg-surface/80 border-border/70 text-text-muted shadow-sm hover:bg-brand-soft/80 hover:border-brand/40 hover:text-brand;
   }
 
+  .ui-control-group {
+    @apply inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-border/60 bg-surface p-0.5;
+  }
+  .ui-control-group[data-orientation='vertical'] {
+    @apply flex-col gap-0 py-0;
+  }
+  .ui-control-group > .icon-btn {
+    @apply border-transparent;
+  }
+  .ui-control-group > .icon-btn[data-variant='overlay'] {
+    @apply bg-transparent shadow-none hover:bg-brand-soft/80;
+  }
+
   .field-input {
     @apply w-full bg-surface border border-border rounded-control focus:outline-none focus:ring-0 disabled:opacity-60;
     box-shadow: none;
@@ -387,6 +409,27 @@
   }
   .field-input.field-search {
     @apply rounded-lg py-1.5 text-sm text-text-muted;
+  }
+  .ui-search-group {
+    @apply flex min-w-0 rounded-control border border-border/60 bg-surface;
+  }
+  .ui-search-group > div {
+    @apply min-w-0 flex-1;
+  }
+  .ui-search-group > div + div {
+    @apply border-l border-border/60;
+  }
+  .ui-search-group .field-search {
+    @apply min-h-8 rounded-none border-0 bg-transparent text-xs;
+  }
+  .ui-search-group > div:first-child .field-search {
+    @apply rounded-l-control;
+  }
+  .ui-search-group > div:last-child .field-search {
+    @apply rounded-r-control;
+  }
+  .ui-search-group .field-search:focus {
+    @apply ring-2 ring-inset ring-focus/50;
   }
 
   .field-label {

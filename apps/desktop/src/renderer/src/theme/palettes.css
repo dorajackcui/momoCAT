@@ -18,11 +18,10 @@
   --color-text-faint: 100 85 74;
   --color-editor-surface: 235 224 216;
   --color-editor-text: 30 30 30;
-  --color-status-new: 137 122 110;
-  --color-status-draft: 146 125 94;
-  --color-status-translated: 96 125 139;
-  --color-status-reviewed: 101 127 121;
-  --color-status-confirmed: 104 127 93;
+  --color-status-new: 140 129 119;
+  --color-status-draft: 165 118 50;
+  --color-status-translated: 91 127 170;
+  --color-status-confirmed: 95 132 87;
   --color-brand: 52 94 118;
   --color-brand-hover: 45 81 102;
   --color-brand-soft: 217 229 236;
@@ -44,8 +43,6 @@
   --color-info-hover: 65 87 93;
   --color-info-soft: 223 232 234;
   --color-info-contrast: 255 255 255;
-  --color-match-concordance: 112 112 112;
-  --color-match-term: 184 147 11;
   --color-highlight: 239 221 177;
   --color-highlight-text: 60 44 18;
   --color-highlight-border: 155 115 40;
@@ -63,7 +60,8 @@
 /* Nord: https://www.nordtheme.com/docs/colors-and-palettes/ (Polar Night,
    Snow Storm, Frost and Aurora). Role assignments are momoCAT's. Auxiliary
    surfaces and danger/button hover colors are tints derived from its palette;
-   its red is lightened for small text and filled-button contrast. */
+   its red is lightened for small text and filled-button contrast. Workflow
+   markers use separated gray, ochre, blue and green hues for easier scanning. */
 [data-color-theme='nord'] {
   color-scheme: dark;
   --color-canvas: 46 52 64;
@@ -100,32 +98,34 @@
   --color-info-hover: 171 208 207;
   --color-info-soft: 55 70 77;
   --color-info-contrast: 46 52 64;
-  --color-match-concordance: 76 86 106;
-  --color-match-term: 180 142 173;
   --color-highlight: 235 203 139;
   --color-highlight-text: 46 52 64;
   --color-highlight-border: 208 135 112;
   --color-selection: 76 86 106;
   --color-selection-text: 236 239 244;
-  --color-status-new: 117 128 146;
-  --color-status-draft: 163 153 137;
-  --color-status-translated: 130 153 168;
-  --color-status-reviewed: 130 160 154;
-  --color-status-confirmed: 150 173 140;
+  --color-status-new: 139 149 164;
+  --color-status-draft: 215 170 98;
+  --color-status-translated: 129 169 210;
+  --color-status-confirmed: 156 189 133;
   --color-backdrop: 46 52 64;
   --shadow-float: 0 18px 50px rgb(0 0 0 / 0.35);
   --shadow-active: 0 1px 3px rgb(0 0 0 / 0.32), 0 3px 10px rgb(0 0 0 / 0.22);
 }
 
-/* Shared role relationships; declare on every palette scope so previews and
+/* Shared roles; declare on every palette scope so previews and
    future nested surfaces resolve aliases against their own colors. */
 :root,
 [data-color-theme] {
-  --color-match-exact: var(--color-success);
+  /* AI-reviewed output in review projects shares the AI-translated blue. */
+  --color-status-reviewed: var(--color-status-translated);
+  /* Filled reference badges share a white-text palette, independent of QA tones. */
+  --color-match-exact: 77 115 89;
   --color-match-exact-contrast: 255 255 255;
-  --color-match-fuzzy: var(--color-warning);
+  --color-match-fuzzy: 88 120 151;
   --color-match-fuzzy-contrast: 255 255 255;
+  --color-match-term: 146 112 24;
   --color-match-term-contrast: 255 255 255;
+  --color-match-concordance: 104 113 125;
   --color-match-concordance-contrast: 255 255 255;
   --color-focus: var(--color-brand);
   --color-caret: var(--color-brand);

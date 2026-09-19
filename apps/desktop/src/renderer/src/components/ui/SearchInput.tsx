@@ -2,6 +2,22 @@ import { forwardRef, type ReactNode } from 'react';
 import { Input, type InputProps } from './Input';
 import { cx } from './cx';
 
+export function SearchInputGroup({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div role="group" aria-label={label} className={cx('ui-search-group', className)}>
+      {children}
+    </div>
+  );
+}
+
 export const SearchInput = forwardRef<
   HTMLInputElement,
   Omit<InputProps, 'appearance' | 'size'> & {

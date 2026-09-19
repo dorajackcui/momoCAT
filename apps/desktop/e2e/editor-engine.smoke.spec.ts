@@ -220,7 +220,7 @@ test.describe('CodeMirror editor engine smoke', () => {
     }
   });
 
-  test('keeps segment height stable when activation mounts CodeMirror', async () => {
+  test('keeps compact rows stable and leaves room around both segment actions', async () => {
     const session = await createSmokeSession();
 
     try {
@@ -228,14 +228,15 @@ test.describe('CodeMirror editor engine smoke', () => {
       const rows = page.locator('div.group.grid');
       await expect(rows).toHaveCount(3);
 
-      const secondRow = rows.nth(1);
-      const inactiveHeight = await secondRow.evaluate(
+      await rows.nth(1).click();
+      const firstRow = rows.first();
+      const inactiveHeight = await firstRow.evaluate(
         (element) => element.getBoundingClientRect().height,
       );
       expect(inactiveHeight).toBeGreaterThanOrEqual(64);
 
-      await secondRow.click();
-      await expect(secondRow.locator('.editor-target-editor-host .cm-content')).toBeVisible();
+      await firstRow.click();
+      await expect(firstRow.locator('.editor-target-editor-host .cm-content')).toBeVisible();
       await page.evaluate(
         () =>
           new Promise<void>((resolve) => {
@@ -243,10 +244,22 @@ test.describe('CodeMirror editor engine smoke', () => {
           }),
       );
 
-      const activeHeight = await secondRow.evaluate(
+      const activeHeight = await firstRow.evaluate(
         (element) => element.getBoundingClientRect().height,
       );
       expect(Math.abs(activeHeight - inactiveHeight)).toBeLessThanOrEqual(0.5);
+      const actions = firstRow.getByRole('group', { name: 'Segment actions' });
+      await expect(actions.getByRole('button')).toHaveCount(2);
+      const cellBox = await firstRow.locator('.editor-target-cell').boundingBox();
+      const actionsBox = await actions.boundingBox();
+      expect(cellBox).not.toBeNull();
+      expect(actionsBox).not.toBeNull();
+      const topSpace = actionsBox!.y - cellBox!.y;
+      const bottomSpace = cellBox!.y + cellBox!.height - actionsBox!.y - actionsBox!.height;
+      expect(topSpace).toBeGreaterThanOrEqual(6);
+      expect(bottomSpace).toBeGreaterThanOrEqual(6);
+      expect(Math.abs(topSpace - bottomSpace)).toBeLessThanOrEqual(1);
+      await page.screenshot({ path: test.info().outputPath('compact-segment-actions.png') });
     } finally {
       await closeSmokeSession(session);
     }

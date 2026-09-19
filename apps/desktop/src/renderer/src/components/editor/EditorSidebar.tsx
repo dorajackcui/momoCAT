@@ -60,7 +60,7 @@ const EditorSidebarComponent: React.FC<EditorSidebarProps> = ({
 
       <TabsList
         label="Editor references"
-        variant="underline"
+        variant="segmented"
         items={[
           { value: 'tm', label: 'CAT' },
           { value: 'concordance', label: 'Concordance', title: 'Concordance (Ctrl/Cmd+K)' },

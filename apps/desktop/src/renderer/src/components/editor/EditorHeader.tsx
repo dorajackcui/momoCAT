@@ -24,6 +24,8 @@ const EditorHeaderComponent: React.FC<EditorHeaderProps> = ({
   onBack,
   onExport,
 }) => {
+  const progress =
+    totalSegments > 0 ? Math.min(100, Math.max(0, (confirmedSegments / totalSegments) * 100)) : 0;
   return (
     <header className="px-6 py-3 border-b border-border-subtle flex justify-between items-center bg-surface-chrome z-10">
       <div className="flex items-center gap-4">
@@ -63,13 +65,24 @@ const EditorHeaderComponent: React.FC<EditorHeaderProps> = ({
             {saveErrorCount} 段保存失败
           </div>
         )}
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] font-bold text-text-faint uppercase tracking-widest">
-            Progress
+        <div
+          role="progressbar"
+          aria-label="Confirmed segments"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progress}
+          aria-valuetext={`${confirmedSegments} of ${totalSegments} confirmed`}
+          className="flex items-center gap-2.5"
+        >
+          <span className="h-[3px] w-11 overflow-hidden rounded-full bg-border-subtle">
+            <span
+              className="block h-full rounded-full bg-status-confirmed"
+              style={{ width: `${progress}%` }}
+            />
           </span>
-          <div className="px-2.5 py-1 bg-muted rounded-md text-[11px] font-bold text-text-muted">
+          <span className="text-[11px] tabular-nums text-text-muted">
             {confirmedSegments}/{totalSegments}
-          </div>
+          </span>
         </div>
         <div className="h-4 w-[1px] bg-border-subtle" />
         <Button size="xs" variant="primary" onClick={onExport}>
