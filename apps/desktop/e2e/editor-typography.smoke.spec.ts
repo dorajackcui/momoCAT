@@ -1,6 +1,75 @@
 import { expect, test } from '@playwright/test';
 import { closeEditorSmokeSession, createEditorSmokeSession } from './support/editorSmokeSession';
 
+for (const family of ['Source Serif 4', 'Source Sans 3']) {
+  test(
+    'renders CAT ' + family + ' at 450 while preserving Chinese and context weights',
+    async () => {
+      const session = await createEditorSmokeSession();
+      try {
+        const { page } = session;
+        await page.getByRole('button', { name: 'Editor appearance' }).click();
+        await page
+          .getByRole('group', { name: 'Western font' })
+          .getByText(family, { exact: true })
+          .click();
+        await page.getByRole('button', { name: 'Editor appearance' }).click();
+        const row = page.locator('.editor-row').nth(1);
+        await row.click();
+        const target = row.locator('.cm-content');
+        await target.fill('中文 café œuvre — 0123456789');
+        await expect(target).toHaveCSS('font-family', new RegExp(family + ' Reading 450'));
+        // Inherited 400 preserves CJK; the selected Western face clamps its axis to 450.
+        await expect(target).toHaveCSS('font-weight', '400');
+        const widths = await target.evaluate(async (element, family) => {
+          const style = getComputedStyle(element);
+          for (const font of [
+            '400 16px "' + family + ' Reading 450"',
+            '400 16px "' + family + ' Variable"',
+            '450 16px "' + family + ' Variable"',
+            '400 16px "Noto Sans SC Variable"',
+          ])
+            await document.fonts.load(font, '中文 café œuvre — 0123456789');
+          await document.fonts.ready;
+          const context = document.createElement('canvas').getContext('2d')!;
+          const latin = 'Hamburgefontsiv café œuvre 0123456789';
+          const measure = (font: string, content: string) => {
+            context.font = font;
+            return context.measureText(content).width;
+          };
+          const actualFont = style.fontWeight + ' ' + style.fontSize + ' ' + style.fontFamily;
+          return {
+            actual: measure(actualFont, latin),
+            regular: measure('400 16px "' + family + ' Variable"', latin),
+            medium: measure('450 16px "' + family + ' Variable"', latin),
+            chinese: measure(actualFont, '中文'),
+            chineseRegular: measure('400 16px "Noto Sans SC Variable"', '中文'),
+          };
+        }, family);
+        expect(widths.actual).toBeCloseTo(widths.medium, 3);
+        expect(widths.actual).not.toBeCloseTo(widths.regular, 3);
+        expect(widths.chinese).toBeCloseTo(widths.chineseRegular, 3);
+        await expect(row.locator('[title="ctx-2"]')).toHaveCSS(
+          'font-family',
+          /Source Sans 3 Variable/,
+        );
+        await expect(row.locator('[title="ctx-2"]')).toHaveCSS('line-height', '12px');
+        await expect(row.locator('[title="ctx-2"]')).toHaveCSS('font-weight', '400');
+        await page.getByRole('button', { name: 'Editor appearance' }).click();
+        for (const theme of ['Sand', 'Classic', 'Nord']) {
+          await page
+            .getByRole('group', { name: 'Color scheme' })
+            .getByText(theme, { exact: true })
+            .click();
+          await expect(target).toHaveCSS('font-family', new RegExp(family + ' Reading 450'));
+        }
+      } finally {
+        await closeEditorSmokeSession(session);
+      }
+    },
+  );
+}
+
 test('loads local fonts and preserves editing while switching scripts and 14/16px sizes', async () => {
   const session = await createEditorSmokeSession();
   try {
@@ -79,6 +148,10 @@ test('loads local fonts and preserves editing while switching scripts and 14/16p
         ).toBe(true);
       }
       await expect(target).toHaveCSS('font-weight', '400');
+      await expect(target).toHaveCSS(
+        'font-family',
+        new RegExp(choice.family.replace(' Variable', ' Reading 450')),
+      );
       await expect(target).toHaveCSS('font-size', `${choice.fontSize}px`);
       await expect(row.locator('.editor-source-text')).toHaveCSS(
         'font-size',

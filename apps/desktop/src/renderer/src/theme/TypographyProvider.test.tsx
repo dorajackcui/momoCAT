@@ -22,6 +22,7 @@ it('keeps scripts, palettes and workspace preferences independent across remount
   expect(await screen.findByRole('radio', { name: 'Noto Sans SC · 黑体' })).toBeChecked();
   expect(screen.getByRole('radio', { name: 'Source Serif 4' })).toBeChecked();
   expect(screen.getByRole('radio', { name: '16 px' })).toBeChecked();
+  expect(document.documentElement).toHaveAttribute('data-typography-scope', 'editor');
   expect(screen.queryAllByRole('combobox')).toHaveLength(0);
   expect(screen.getAllByRole('group')).toHaveLength(4);
   fireEvent.click(screen.getByRole('radio', { name: 'Noto Serif SC · 宋体' }));
@@ -32,9 +33,11 @@ it('keeps scripts, palettes and workspace preferences independent across remount
   expect(document.documentElement).toHaveAttribute('data-content-cjk', 'noto-serif');
   expect(document.documentElement).toHaveAttribute('data-content-size', '14');
   rerender(example('workspace'));
+  expect(document.documentElement).toHaveAttribute('data-typography-scope', 'workspace');
   expect(document.documentElement).toHaveAttribute('data-content-cjk', 'noto-sans');
   expect(document.documentElement).toHaveAttribute('data-content-size', '16');
   unmount();
+  expect(document.documentElement).not.toHaveAttribute('data-typography-scope');
   expect(document.documentElement).not.toHaveAttribute('data-content-latin');
   expect(document.documentElement).not.toHaveAttribute('data-content-size');
   render(example('editor'));

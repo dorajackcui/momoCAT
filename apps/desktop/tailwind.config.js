@@ -46,6 +46,7 @@ module.exports = {
           DEFAULT: 'rgb(var(--color-text) / <alpha-value>)',
           muted: 'rgb(var(--color-text-muted) / <alpha-value>)',
           faint: 'rgb(var(--color-text-faint) / <alpha-value>)',
+          context: 'rgb(var(--color-editor-context) / <alpha-value>)',
         },
         brand: {
           DEFAULT: 'rgb(var(--color-brand) / <alpha-value>)',
@@ -92,7 +93,10 @@ module.exports = {
         sans: ['var(--font-interface)'],
         mono: ['var(--font-mono)'],
       },
-      lineHeight: { gutter: 'var(--line-height-gutter)' },
+      lineHeight: {
+        gutter: 'var(--line-height-gutter)',
+        context: 'var(--line-height-context)',
+      },
       fontSize: Object.fromEntries(
         [
           '2xs',

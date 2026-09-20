@@ -158,28 +158,39 @@ test('coordinates complete palettes across CAT and portals while preserving edit
         id: 'sand',
         label: 'Sand',
         background: 'rgb(253, 253, 252)',
+        alternateBackground: 'rgb(246, 246, 245)',
         text: 'rgb(33, 32, 28)',
       },
       {
         id: 'classic',
         label: 'Classic',
         background: 'rgb(235, 224, 216)',
+        alternateBackground: 'rgb(229, 218, 210)',
         text: 'rgb(30, 30, 30)',
       },
       {
         id: 'nord',
         label: 'Nord',
         background: 'rgb(46, 52, 64)',
+        alternateBackground: 'rgb(51, 57, 69)',
         text: 'rgb(216, 222, 233)',
       },
     ]) {
       await colors.getByText(palette.label, { exact: true }).click();
       await expect(page.locator('html')).toHaveAttribute('data-color-theme', palette.id);
       await expect(row.locator('.editor-source-text')).toHaveCSS('color', palette.text);
-      await expect(row.locator('.editor-cell-bg').first()).toHaveCSS(
-        'background-color',
-        palette.background,
-      );
+      for (const [index, background] of [
+        [0, palette.background],
+        [1, palette.alternateBackground],
+        [2, palette.background],
+      ] as const) {
+        for (const cell of await page
+          .locator('.editor-row')
+          .nth(index)
+          .locator('.editor-cell-bg')
+          .all())
+          await expect(cell).toHaveCSS('background-color', background);
+      }
       await expect(target).toHaveCSS('color', palette.text);
       await expect(page.locator('.workspace-editor')).toHaveCSS(
         'background-color',
@@ -211,6 +222,8 @@ test('coordinates complete palettes across CAT and portals while preserving edit
           'text-faint',
           'surface',
           'editor-text',
+          'editor-context',
+          'editor-surface-alternate',
           'surface-chrome',
           'surface-panel',
           'muted',
@@ -252,6 +265,8 @@ test('coordinates complete palettes across CAT and portals while preserving edit
         ['text-faint', 'surface-chrome'],
         ['text-muted', 'surface-panel'],
         ['text-faint', 'surface-panel'],
+        ['editor-text', 'editor-surface-alternate'],
+        ['editor-context', 'editor-surface-alternate'],
         ['highlight-text', 'highlight'],
         ['selection-text', 'selection'],
         ['match-concordance-contrast', 'match-concordance'],
@@ -306,6 +321,11 @@ test('coordinates complete palettes across CAT and portals while preserving edit
     // Search highlights in both the static source and live editor use valid themed colors.
     await page.getByPlaceholder('Filter source text').fill('Needle');
     await page.getByPlaceholder('Filter target text').fill('Needle');
+    await expect(page.locator('.editor-row')).toHaveCount(1);
+    await expect(page.locator('.editor-row .editor-cell-bg').first()).toHaveCSS(
+      'background-color',
+      'rgb(235, 224, 216)',
+    );
     await expect(page.locator('.editor-search-highlight').first()).toHaveCSS(
       'background-color',
       'rgb(239, 221, 177)',

@@ -151,9 +151,9 @@ export const EditorRowFeedback: React.FC<EditorRowFeedbackProps> = ({
           <div
             onClick={(event) => void handleCopyContext(event)}
             title={contextText}
-            className="flex min-w-0 max-w-full items-center gap-1 text-caption text-text-faint italic leading-4 cursor-copy hover:text-text-muted transition-colors"
+            className="flex min-w-0 max-w-full items-center gap-1 font-sans text-caption text-text-context italic leading-context cursor-copy hover:text-text-muted transition-colors"
           >
-            <span className="block min-w-0 flex-1 truncate whitespace-nowrap">
+            <span className="block min-w-0 flex-1 truncate whitespace-nowrap text-right">
               {contextContent}
             </span>
             <span className="inline-flex h-3 w-3 shrink-0 items-center justify-center text-success">

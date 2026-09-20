@@ -183,8 +183,16 @@
     @apply reading-text w-full min-h-[36px] whitespace-pre-wrap break-words;
   }
 
-  .editor-cell-bg {
+  .editor-row {
     background-color: rgb(var(--color-editor-surface));
+  }
+
+  .editor-row[data-alternate='true'] {
+    background-color: rgb(var(--color-editor-surface-alternate));
+  }
+
+  .editor-cell-bg {
+    background-color: inherit;
   }
 
   .editor-target-cell[data-active='true'],

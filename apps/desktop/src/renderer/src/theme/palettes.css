@@ -17,7 +17,9 @@
   --color-text-muted: 99 99 94;
   --color-text-faint: 99 99 94;
   --color-editor-surface: 253 253 252;
+  --color-editor-surface-alternate: 246 246 245;
   --color-editor-text: 33 32 28;
+  --color-editor-context: 110 110 104;
   --color-status-new: 140 129 119;
   --color-status-draft: 165 118 50;
   --color-status-translated: 91 127 170;
@@ -74,7 +76,9 @@
   --color-text-muted: 93 80 71;
   --color-text-faint: 100 85 74;
   --color-editor-surface: 235 224 216;
+  --color-editor-surface-alternate: 229 218 210;
   --color-editor-text: 30 30 30;
+  --color-editor-context: 106 94 84;
   --color-status-new: 140 129 119;
   --color-status-draft: 165 118 50;
   --color-status-translated: 91 127 170;
@@ -133,7 +137,9 @@
   --color-text-muted: 216 222 233;
   --color-text-faint: 216 222 233;
   --color-editor-surface: 46 52 64;
+  --color-editor-surface-alternate: 51 57 69;
   --color-editor-text: 216 222 233;
+  --color-editor-context: 156 169 186;
   --color-brand: 136 192 208;
   --color-brand-solid: var(--color-brand);
   --color-brand-hover: 143 188 187;

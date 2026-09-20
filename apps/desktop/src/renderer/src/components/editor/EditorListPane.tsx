@@ -111,7 +111,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
     [],
   );
   const renderRow = useCallback(
-    (item: SearchableEditorSegment) => (
+    (item: SearchableEditorSegment, displayIndex: number) => (
       <StoreBackedEditorRow
         key={item.segment.segmentId}
         segmentId={item.segment.segmentId}
@@ -119,6 +119,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
         segmentStore={segmentStore}
         repeatedSourceRole={item.repeatedSourceRole}
         isActive={item.segment.segmentId === activeSegmentId}
+        isAlternate={displayIndex % 2 === 1}
         disableAutoFocus={
           (isSearchInputFocused && manualActivationSegmentId !== item.segment.segmentId) ||
           suppressAutoFocusSegmentId === item.segment.segmentId
@@ -171,6 +172,9 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
   const virtualizer = useVirtualizer({
     count: filteredSegments.length,
     estimateSize: () => ESTIMATED_EDITOR_ROW_HEIGHT,
+    // Rounded heights let the next row cover a fractional part of the bottom border.
+    measureElement: (element, entry) =>
+      entry?.borderBoxSize?.[0]?.blockSize ?? element.getBoundingClientRect().height,
     getScrollElement: () => scrollElement,
     getItemKey: (index) => filteredSegments[index]?.segment.segmentId ?? index,
     initialRect: initialVirtualizerRect,
@@ -220,13 +224,13 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
                   zIndex: item.segment.segmentId === activeSegmentId ? 1 : undefined,
                 }}
               >
-                {renderRow(item)}
+                {renderRow(item, virtualItem.index)}
               </div>
             );
           })}
         </div>
       ) : (
-        filteredSegments.map((item) => renderRow(item))
+        filteredSegments.map((item, index) => renderRow(item, index))
       )}
 
       {filteredSegments.length === 0 && (

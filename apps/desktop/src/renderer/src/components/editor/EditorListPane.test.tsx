@@ -12,13 +12,18 @@ vi.mock('../EditorRow', () => ({
 
 afterEach(() => vi.restoreAllMocks());
 
-it('renders the scrolled range when the scroll container mounts with the list', () => {
+it.each([64, 79.375])('positions %spx rows without overlap and scrolls', (rowHeight) => {
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
     this: HTMLElement,
   ) {
-    return this.hasAttribute('data-index') ? 64 : 640;
+    return this.hasAttribute('data-index') ? Math.round(rowHeight) : 640;
   });
   vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(1000);
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return { height: this.hasAttribute('data-index') ? rowHeight : 640 } as DOMRect;
+  });
   const segments = Array.from({ length: 100 }, (_, index) => ({
     segmentId: `segment-${index}`,
     sourceTokens: [],
@@ -76,7 +81,13 @@ it('renders the scrolled range when the scroll container mounts with the list', 
   render(<Harness />);
   expect(screen.getByText('segment-0')).toBeInTheDocument();
   const container = screen.getByTestId('scroll-container');
-  fireEvent.scroll(container, { target: { scrollTop: 3200 } });
+  const rows = Array.from(container.querySelectorAll<HTMLElement>('[data-index]'));
+  const rowTop = (row: HTMLElement) =>
+    Number(row.style.transform.match(/translateY\((.+)px\)/)?.[1]);
+  for (let index = 1; index < rows.length; index += 1) {
+    expect(rowTop(rows[index]) - rowTop(rows[index - 1])).toBeCloseTo(rowHeight, 5);
+  }
+  fireEvent.scroll(container, { target: { scrollTop: rowHeight * 50 } });
   expect(screen.getByText('segment-50')).toBeInTheDocument();
   expect(screen.queryByText('segment-0')).not.toBeInTheDocument();
 });

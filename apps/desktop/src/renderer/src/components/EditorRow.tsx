@@ -20,6 +20,7 @@ interface EditorRowProps {
   segment: Segment;
   rowNumber: number;
   isActive: boolean;
+  isAlternate?: boolean;
   repeatedSourceRole?: RepeatedSourceRole;
   disableAutoFocus?: boolean;
   saveError?: string;
@@ -53,6 +54,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
   segment,
   rowNumber,
   isActive,
+  isAlternate = false,
   repeatedSourceRole,
   disableAutoFocus = false,
   saveError,
@@ -183,9 +185,8 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
 
   return (
     <div
-      className={`group grid grid-cols-[30px_minmax(0,1fr)_8px_minmax(0,1fr)] border-b border-border-subtle transition-colors ${
-        isActive ? 'bg-brand-soft/20' : 'hover:bg-muted/30'
-      }`}
+      className="editor-row group grid grid-cols-[30px_minmax(0,1fr)_8px_minmax(0,1fr)] border-b border-border-subtle transition-colors"
+      data-alternate={isAlternate || undefined}
       style={{ minHeight: EDITOR_ROW_MIN_HEIGHT }}
       onClick={(event) => {
         const preview = event.currentTarget.querySelector<HTMLElement>('.editor-target-preview');
@@ -279,6 +280,7 @@ const areEditorRowPropsEqual = (prev: EditorRowProps, next: EditorRowProps): boo
   prev.segment === next.segment &&
   prev.rowNumber === next.rowNumber &&
   prev.isActive === next.isActive &&
+  prev.isAlternate === next.isAlternate &&
   prev.repeatedSourceRole === next.repeatedSourceRole &&
   prev.disableAutoFocus === next.disableAutoFocus &&
   prev.saveError === next.saveError &&

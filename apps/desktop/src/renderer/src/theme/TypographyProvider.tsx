@@ -31,6 +31,7 @@ export function TypographyProvider({
       'data-content-latin': typography.latin,
       'data-content-cjk': typography.cjk,
       'data-content-size': String(typography.fontSize),
+      'data-typography-scope': scope,
     };
     const previous = Object.keys(attributes).map((key) => [key, root.getAttribute(key)] as const);
     Object.entries(attributes).forEach(([key, value]) => root.setAttribute(key, value));
@@ -39,7 +40,7 @@ export function TypographyProvider({
         if (value === null) root.removeAttribute(key);
         else root.setAttribute(key, value);
       });
-  }, [typography]);
+  }, [scope, typography]);
   const setTypography = useCallback(
     (next: TypographyPreference) => {
       setPreferences((current) => ({ ...current, [scope]: next }));
