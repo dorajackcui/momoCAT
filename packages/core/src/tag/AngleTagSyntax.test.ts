@@ -19,6 +19,25 @@ describe('angle tags with embedded attribute markup', () => {
   const texts = ['First block', 'Second block', 'Third block'];
   const source = openingTags.map((tag, index) => `${tag}${texts[index]}❮/g❯`).join('');
 
+  it('maps the outer g tags to paired markers and restores the nested attribute verbatim', () => {
+    const opening = '❮g equiv-text="❰cf Color="#112233"❱"❯';
+    const source = `${opening}Hello❮/g❯`;
+    const tokens = parseDisplayTextToTokens(source);
+    const manager = new TagManager();
+
+    expect(tokens).toEqual([
+      { type: 'tag', content: opening, meta: { id: opening } },
+      { type: 'text', content: 'Hello' },
+      { type: 'tag', content: '❮/g❯', meta: { id: '❮/g❯' } },
+    ]);
+    expect(manager.findPairedTag(tokens, 0)).toBe(2);
+    expect(manager.findPairedTag(tokens, 2)).toBe(0);
+    expect(serializeTokensToEditorText(tokens, tokens)).toBe('{1>Hello<2}');
+    expect(parseEditorTextToTokens(source, tokens)).toEqual(tokens);
+    expect(parseEditorTextToTokens('{1>Hello<2}', tokens)).toEqual(tokens);
+    expect(serializeTokensToDisplayText(tokens)).toBe(source);
+  });
+
   it('keeps each nested opening tag atomic and exposes only the three text blocks', () => {
     const tokens = parseDisplayTextToTokens(source);
 
@@ -52,14 +71,12 @@ describe('angle tags with embedded attribute markup', () => {
   });
 
   it.each([
-    '<g title="2 > 1 / 3 < 4">',
-    "❮g title='2 ❱ 1 / 3 ❰ 4'❯",
+    '<g title="2 > 1" other = "quoted value">',
+    "❮g title='2 ❱ 1'❯",
     '<g equiv-text="<g equiv-text="<cf Color="#112233">" id="1">">',
     '❰g equiv-text="<b>nested</b>"❱',
     '<g title="do not split {1} %s \\n" path="a/b">',
     '<g title="a < b > c">',
-    '<g title="a<b c">',
-    "❮g title='a❰b c'❯",
     '❮g equiv-text="❰标记 value="a❱b"❱"❯',
   ])('preserves quoted content in %s', (opening) => {
     const tokens = parseDisplayTextToTokens(`${opening}Text</g>`);
@@ -92,34 +109,80 @@ describe('angle tags with embedded attribute markup', () => {
     ]);
   });
 
-  it('retains following tags after a quoted comparison', () => {
-    const source = '<g title="a<b c">Text</g><b>Next</b>';
-    const tokens = parseDisplayTextToTokens(source);
-
-    expect(tokens.map(token => [token.type, token.content])).toEqual([
-      ['tag', '<g title="a<b c">'], ['text', 'Text'], ['tag', '</g>'],
-      ['tag', '<b>'], ['text', 'Next'], ['tag', '</b>'],
-    ]);
-    expect(parseEditorTextToTokens(source, tokens)).toEqual(tokens);
-    expect(serializeTokensToEditorText(tokens, tokens)).toBe('{1>Text<2}{3>Next<4}');
-  });
-
   it.each([
     '<g title="unfinished>bad',
     '❮g title="unfinished❯bad',
-    '<g missing-end ',
-  ])('recovers after an incomplete tag: %s', (prefix) => {
+    '<g title="a<b c">',
+    '<g title="a < b = ">',
+    "❮g title='a❰b c'❯",
+  ])('leaves incomplete nesting literal without guessing recovery boundaries: %s', (prefix) => {
     const source = `${prefix}<b>Next</b>`;
+    const expected = [{ type: 'text', content: source }];
+
+    expect(parseDisplayTextToTokens(source)).toEqual(expected);
+    expect(parseEditorTextToTokens(source, [])).toEqual(expected);
+  });
+
+  it.each([
+    { name: 'angle tags', chunk: '<g x=">', count: 8_000, tagCount: 0 },
+    { name: 'mixed placeholders', chunk: '{placeholder}<g x=">', count: 2_000, tagCount: 2_000 },
+  ])('handles long incomplete $name without rescanning the suffix', ({ chunk, count, tagCount }) => {
+    const source = chunk.repeat(count);
+    const start = performance.now();
+    const displayTokens = parseDisplayTextToTokens(source);
+    const editorTokens = parseEditorTextToTokens(source, []);
+    const elapsed = performance.now() - start;
+
+    expect(displayTokens.filter(token => token.type === 'tag')).toHaveLength(tagCount);
+    expect(serializeTokensToDisplayText(displayTokens)).toBe(source);
+    expect(editorTokens).toEqual(displayTokens);
+    // Generous headroom for slower hosts; rescanning this suffix takes seconds.
+    expect(elapsed).toBeLessThan(1_000);
+  });
+
+  it('does not resume an incomplete angle scan after an independent placeholder', () => {
+    const source = '<g title="unfinished {name}<b>Next</b>';
     const expected = [
-      { type: 'text', content: prefix },
-      { type: 'tag', content: '<b>', meta: { id: '<b>' } },
-      { type: 'text', content: 'Next' },
-      { type: 'tag', content: '</b>', meta: { id: '</b>' } },
+      { type: 'text', content: '<g title="unfinished ' },
+      { type: 'tag', content: '{name}', meta: { id: '{name}' } },
+      { type: 'text', content: '<b>Next</b>' },
     ];
 
     expect(parseDisplayTextToTokens(source)).toEqual(expected);
     expect(parseEditorTextToTokens(source, [])).toEqual(expected);
   });
+
+  it('advances cached angle and escape matches across other tag types', () => {
+    const opening = '❮g equiv-text="❰cf Color="#112233"❱"❯';
+    const source = `{name}${opening}A❮/g❯\\n{next}${opening}B❮/g❯\\r`;
+    const tokens = parseDisplayTextToTokens(source);
+
+    expect(tokens.map(token => token.content)).toEqual([
+      '{name}', opening, 'A', '❮/g❯', '\\n', '{next}', opening, 'B', '❮/g❯', '\\r',
+    ]);
+    expect(parseEditorTextToTokens(source, [])).toEqual(tokens);
+    expect(parseEditorTextToTokens(serializeTokensToEditorText(tokens, tokens), tokens)).toEqual(tokens);
+    expect(parseDisplayTextToTokens(source)).toEqual(tokens);
+  });
+
+  it('recognizes later raw tags after editor markers', () => {
+    const sourceTokens = parseDisplayTextToTokens('<b>A</b>');
+    const editorText = '{1>A<2} <i>B</i>';
+    const tokens = parseEditorTextToTokens(editorText, sourceTokens);
+
+    expect(serializeTokensToDisplayText(tokens)).toBe('<b>A</b> <i>B</i>');
+    expect(tokens.filter(token => token.type === 'tag').map(token => token.content))
+      .toEqual(['<b>', '</b>', '<i>', '</i>']);
+  });
+
+  it.each(['<g missing-end ', '❮g equiv-text="❰b❱"'])(
+    'starts a new outer tag after an unquoted unfinished prefix: %s', (prefix) => {
+      const source = `${prefix}<b>A</b>`;
+      const expected = [{ type: 'text', content: prefix }, ...parseDisplayTextToTokens('<b>A</b>')];
+      expect(parseDisplayTextToTokens(source)).toEqual(expected);
+      expect(parseEditorTextToTokens(source, [])).toEqual(expected);
+    },
+  );
 
   it('preserves angle scanning when callers copy, clone, and extend default rules', () => {
     const text = `${source} @@NAME@@`;

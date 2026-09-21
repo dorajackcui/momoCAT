@@ -97,33 +97,45 @@ const getCandidateLength = (candidate: CandidateMatch): number => (
     : candidate.value.length
 );
 
-function* findDisplayCandidates(
+function createDisplayCandidateFinder(
   text: string,
-  startIndex: number,
   rules: DisplayTagRule[],
-): Generator<DisplayCandidate> {
-  const escape = findNextProtectedLineBreakEscape(text, startIndex);
-  if (escape) yield { kind: 'protected-escape', ...escape };
+) {
+  let angleMatch: ReturnType<typeof findNextAngleTag> | undefined;
+  let escape = findNextProtectedLineBreakEscape(text, 0);
 
-  for (const rule of rules) {
-    if (rule.kind === 'angle') {
-      const match = findNextAngleTag(text, startIndex);
-      if (match) yield { kind: 'display', ...match };
-    } else {
-      rule.regex.lastIndex = startIndex;
-      const match = rule.regex.exec(text);
-      if (match && match[0].length > 0) {
-        yield { kind: 'display', value: match[0], index: match.index };
+  return (startIndex: number): DisplayCandidate[] => {
+    const candidates: DisplayCandidate[] = [];
+    if (escape && escape.index < startIndex) {
+      escape = findNextProtectedLineBreakEscape(text, startIndex);
+    }
+    if (escape) candidates.push({ kind: 'protected-escape', ...escape });
+
+    for (const rule of rules) {
+      if (rule.kind === 'angle') {
+        // Other tag rules may advance the cursor before this match. Reuse it,
+        // including null, so they cannot trigger repeated scans of the suffix.
+        if (angleMatch === undefined || (angleMatch && angleMatch.index < startIndex)) {
+          angleMatch = findNextAngleTag(text, startIndex);
+        }
+        if (angleMatch) candidates.push({ kind: 'display', ...angleMatch });
+      } else {
+        rule.regex.lastIndex = startIndex;
+        const match = rule.regex.exec(text);
+        if (match && match[0].length > 0) {
+          candidates.push({ kind: 'display', value: match[0], index: match.index });
+        }
       }
     }
-  }
+    return candidates;
+  };
 }
 
 const findNextCandidate = (
   text: string,
   startIndex: number,
   markerPatterns: EditorMarkerPattern[],
-  displayRules: DisplayTagRule[]
+  findDisplayCandidates: ReturnType<typeof createDisplayCandidateFinder>
 ): CandidateMatch | null => {
   let next: CandidateMatch | null = null;
 
@@ -140,7 +152,7 @@ const findNextCandidate = (
     if (isBetterMatch(candidate, next)) next = candidate;
   });
 
-  for (const candidate of findDisplayCandidates(text, startIndex, displayRules)) {
+  for (const candidate of findDisplayCandidates(startIndex)) {
     if (isBetterMatch(candidate, next)) next = candidate;
   }
 
@@ -191,14 +203,14 @@ export function parseDisplayTextToTokens(
     return [{ type: 'text', content: text }];
   }
 
-  const rules = getDisplayTagRules(customPatterns);
+  const findDisplayCandidates = createDisplayCandidateFinder(text, getDisplayTagRules(customPatterns));
   const tokens: Token[] = [];
   let cursor = 0;
 
   while (cursor < text.length) {
     let nextCandidate: DisplayCandidate | null = null;
 
-    for (const candidate of findDisplayCandidates(text, cursor, rules)) {
+    for (const candidate of findDisplayCandidates(cursor)) {
       if (!nextCandidate || candidate.index < nextCandidate.index) {
         nextCandidate = candidate;
       }
@@ -231,12 +243,12 @@ export function parseEditorTextToTokens(
   }
 
   const markerPatterns = getEditorMarkerPatterns(options?.editorMarkerPatterns);
-  const displayRules = getDisplayTagRules(options?.displayTagPatterns);
+  const findDisplayCandidates = createDisplayCandidateFinder(text, getDisplayTagRules(options?.displayTagPatterns));
   const tokens: Token[] = [];
   let cursor = 0;
 
   while (cursor < text.length) {
-    const candidate = findNextCandidate(text, cursor, markerPatterns, displayRules);
+    const candidate = findNextCandidate(text, cursor, markerPatterns, findDisplayCandidates);
 
     if (!candidate) {
       pushTextToken(tokens, text.substring(cursor));

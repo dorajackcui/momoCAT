@@ -1,84 +1,53 @@
 import type { TagType } from '../models';
 
-const isOpeningAngle = (value: string): boolean => /[<❮❰]/.test(value);
-const isClosingAngle = (value: string): boolean => /[>❯❱]/.test(value);
+const isOpeningAngle = (value: string): boolean => value === '<' || value === '❮' || value === '❰';
+const isClosingAngle = (value: string): boolean => value === '>' || value === '❯' || value === '❱';
 
-interface AngleFrame {
-  quote: string | null;
-  parentQuote: string | null;
-  previous: string;
-}
-
-interface AngleRead {
-  end: number | null;
-  resume: number;
-}
-
-/** Read delimiters and attribute quotes without interpreting embedded tag names. */
-function readAngleTag(text: string, start: number): AngleRead {
-  if (!isOpeningAngle(text[start] ?? '')) return { end: null, resume: start + 1 };
-  const frames: AngleFrame[] = [{ quote: null, parentQuote: null, previous: '' }];
-  let recoveryEnd = text.length;
-
-  for (let index = start + 1; index < text.length; index += 1) {
-    const character = text[index];
-    const frame = frames[frames.length - 1];
-
-    if (frame.quote !== null) {
-      if (character === frame.quote) {
-        frame.quote = null;
-      } else if (isOpeningAngle(character)) {
-        frames.push({ quote: null, parentQuote: frame.quote, previous: '' });
-      } else if (frames.length === 1 && isClosingAngle(character) && recoveryEnd === text.length) {
-        // If this quote never closes, resume after the first possible outer boundary.
-        // Delimiters in complete embedded tags are not recovery boundaries.
-        recoveryEnd = index + 1;
-      }
-    } else if ((character === '"' || character === "'") && frame.previous === '=') {
-      frame.quote = character;
-    } else if (character === frame.parentQuote) {
-      // An opening angle in quoted prose is tentative. Reaching the enclosing
-      // quote before its closing angle makes it literal content of that value.
-      frames.pop();
-      const parent = frames[frames.length - 1];
-      parent.quote = null;
-      parent.previous = character;
-    } else if (isOpeningAngle(character)) {
-      // An unquoted opener starts a new candidate; the partial prefix stays literal.
-      if (frames.length === 1) return { end: null, resume: index };
-      frames[frames.length - 1] = { quote: null, parentQuote: frame.parentQuote, previous: '' };
-    } else if (isClosingAngle(character)) {
-      frames.pop();
-      if (frames.length === 0) return { end: index + 1, resume: index + 1 };
-    }
-
-    if (!/\s/.test(character)) frame.previous = character;
-  }
-
-  return { end: null, resume: recoveryEnd };
-}
-
+/** Scan forward without interpreting embedded tag names or retrying quoted spans. */
 export function findNextAngleTag(
   text: string,
   start: number,
 ): { value: string; index: number } | null {
-  const opening = /[<❮❰]/g;
-  opening.lastIndex = start;
-  let match: RegExpExecArray | null;
+  // Each embedded tag owns its quotes; closing it resumes the enclosing value.
+  const quotes: (string | null)[] = [];
+  let tagStart = start;
+  let previous = '';
 
-  while ((match = opening.exec(text)) !== null) {
-    const { end, resume } = readAngleTag(text, match.index);
-    if (end !== null && end > match.index + 2) {
-      return { value: text.slice(match.index, end), index: match.index };
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index];
+    const depth = quotes.length - 1;
+    const quote = depth >= 0 ? quotes[depth] : null;
+
+    if (isOpeningAngle(character)) {
+      // Outside an attribute, a new outer opener replaces an unfinished prefix.
+      if (quotes.length === 0 || (quotes.length === 1 && quote === null)) {
+        tagStart = index;
+        quotes.length = 0;
+      }
+      quotes.push(null);
+    } else if (quotes.length === 0) {
+      continue;
+    } else if (quote !== null) {
+      if (character === quote) quotes[depth] = null;
+    } else if ((character === '"' || character === "'") && previous === '=') {
+      quotes[depth] = character;
+    } else if (isClosingAngle(character)) {
+      quotes.pop();
+      if (quotes.length === 0 && index > tagStart + 1) {
+        return { value: text.slice(tagStart, index + 1), index: tagStart };
+      }
     }
-    opening.lastIndex = resume;
+
+    if (!/\s/.test(character)) previous = character;
   }
 
   return null;
 }
 
 export function getAngleTagInfo(content: string): { name: string; type: TagType } | null {
-  if (readAngleTag(content, 0).end !== content.length) return null;
+  if (!isOpeningAngle(content[0] ?? '')) return null;
+  const tag = findNextAngleTag(content, 0);
+  if (tag?.index !== 0 || tag.value.length !== content.length) return null;
   const body = content.slice(1, -1);
   // Nameless closing tags remain paired-end markers, but have no name to pair by.
   const closing = body.match(/^\/([^\s/<>❮❰❯❱]*)\s*$/);
