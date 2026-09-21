@@ -1,9 +1,11 @@
-import type { Token, TagType } from '../models';
+import type { Token } from '../models';
 import {
   EditorMarkerPattern,
-  getDisplayTagPatterns,
-  getEditorMarkerPatterns
+  DisplayTagRule,
+  getDisplayTagRules,
+  getEditorMarkerPatterns,
 } from './TagPatternRegistry';
+import { findNextAngleTag, getAngleTagInfo } from './AngleTagSyntax';
 import { createTagNumberResolver, getTagContentByMarkerIndex, getUniqueTagContents } from './TagMapper';
 
 export type TagPolicy = 'default' | 'none';
@@ -66,13 +68,6 @@ const findNextProtectedLineBreakEscape = (
 const isActualLineBreak = (content: string): boolean =>
   content === '\r' || content === '\n';
 
-const detectTagType = (tagContent: string): TagType => {
-  // Allow nameless closing tags like </> as paired-end markers.
-  if (/^<\/[^>]*>$/.test(tagContent)) return 'paired-end';
-  if (/^<([^/>]+)>$/.test(tagContent)) return 'paired-start';
-  return 'standalone';
-};
-
 const isBetterMatch = (
   candidate: CandidateMatch,
   current: CandidateMatch | null
@@ -89,27 +84,48 @@ const isBetterMatch = (
   return getCandidateLength(candidate) > getCandidateLength(current);
 };
 
-type CandidateMatch =
-  | { kind: 'marker'; marker: EditorMarkerPattern; match: RegExpExecArray; index: number }
-  | { kind: 'display'; match: RegExpExecArray; index: number }
+type DisplayCandidate =
+  | { kind: 'display'; value: string; index: number }
   | { kind: 'protected-escape'; value: string; index: number };
 
+type CandidateMatch = DisplayCandidate
+  | { kind: 'marker'; marker: EditorMarkerPattern; match: RegExpExecArray; index: number };
+
 const getCandidateLength = (candidate: CandidateMatch): number => (
-  candidate.kind === 'protected-escape'
-    ? candidate.value.length
-    : candidate.match[0].length
+  candidate.kind === 'marker'
+    ? candidate.match[0].length
+    : candidate.value.length
 );
+
+function* findDisplayCandidates(
+  text: string,
+  startIndex: number,
+  rules: DisplayTagRule[],
+): Generator<DisplayCandidate> {
+  const escape = findNextProtectedLineBreakEscape(text, startIndex);
+  if (escape) yield { kind: 'protected-escape', ...escape };
+
+  for (const rule of rules) {
+    if (rule.kind === 'angle') {
+      const match = findNextAngleTag(text, startIndex);
+      if (match) yield { kind: 'display', ...match };
+    } else {
+      rule.regex.lastIndex = startIndex;
+      const match = rule.regex.exec(text);
+      if (match && match[0].length > 0) {
+        yield { kind: 'display', value: match[0], index: match.index };
+      }
+    }
+  }
+}
 
 const findNextCandidate = (
   text: string,
   startIndex: number,
   markerPatterns: EditorMarkerPattern[],
-  displayPatterns: RegExp[]
+  displayRules: DisplayTagRule[]
 ): CandidateMatch | null => {
-  const protectedEscape = findNextProtectedLineBreakEscape(text, startIndex);
-  let next: CandidateMatch | null = protectedEscape
-    ? { kind: 'protected-escape', ...protectedEscape }
-    : null;
+  let next: CandidateMatch | null = null;
 
   markerPatterns.forEach(marker => {
     marker.regex.lastIndex = startIndex;
@@ -124,24 +140,16 @@ const findNextCandidate = (
     if (isBetterMatch(candidate, next)) next = candidate;
   });
 
-  displayPatterns.forEach(regex => {
-    regex.lastIndex = startIndex;
-    const match = regex.exec(text);
-    if (!match || match[0].length === 0) return;
-    const candidate: CandidateMatch = {
-      kind: 'display',
-      match,
-      index: match.index
-    };
+  for (const candidate of findDisplayCandidates(text, startIndex, displayRules)) {
     if (isBetterMatch(candidate, next)) next = candidate;
-  });
+  }
 
   return next;
 };
 
 export function formatTagAsMemoQMarker(tagContent: string, tagNumber: number): string {
   const safeNumber = tagNumber > 0 ? tagNumber : 1;
-  const type = detectTagType(tagContent);
+  const type = getAngleTagInfo(tagContent)?.type ?? 'standalone';
 
   if (type === 'paired-start') return `{${safeNumber}>`;
   if (type === 'paired-end') return `<${safeNumber}}`;
@@ -179,23 +187,20 @@ export function parseDisplayTextToTokens(
   // Fast path for common plain-text rows.
   const customPatterns = normalizedOptions.displayTagPatterns;
   const hasCustomPatterns = Array.isArray(customPatterns) && customPatterns.length > 0;
-  if (!hasCustomPatterns && !/[<{%\\]/.test(text)) {
+  if (!hasCustomPatterns && !/[<❮❰{%\\]/.test(text)) {
     return [{ type: 'text', content: text }];
   }
 
-  const patterns = getDisplayTagPatterns(customPatterns);
+  const rules = getDisplayTagRules(customPatterns);
   const tokens: Token[] = [];
   let cursor = 0;
 
   while (cursor < text.length) {
-    let nextCandidate = findNextProtectedLineBreakEscape(text, cursor);
+    let nextCandidate: DisplayCandidate | null = null;
 
-    for (const pattern of patterns) {
-      pattern.lastIndex = cursor;
-      const match = pattern.exec(text);
-      if (!match || match[0].length === 0) continue;
-      if (!nextCandidate || match.index < nextCandidate.index) {
-        nextCandidate = { value: match[0], index: match.index };
+    for (const candidate of findDisplayCandidates(text, cursor, rules)) {
+      if (!nextCandidate || candidate.index < nextCandidate.index) {
+        nextCandidate = candidate;
       }
     }
 
@@ -226,12 +231,12 @@ export function parseEditorTextToTokens(
   }
 
   const markerPatterns = getEditorMarkerPatterns(options?.editorMarkerPatterns);
-  const displayPatterns = getDisplayTagPatterns(options?.displayTagPatterns);
+  const displayRules = getDisplayTagRules(options?.displayTagPatterns);
   const tokens: Token[] = [];
   let cursor = 0;
 
   while (cursor < text.length) {
-    const candidate = findNextCandidate(text, cursor, markerPatterns, displayPatterns);
+    const candidate = findNextCandidate(text, cursor, markerPatterns, displayRules);
 
     if (!candidate) {
       pushTextToken(tokens, text.substring(cursor));
@@ -258,12 +263,6 @@ export function parseEditorTextToTokens(
       } else {
         pushTextToken(tokens, candidate.match[0]);
       }
-    } else if (candidate.kind === 'display') {
-      tokens.push({
-        type: 'tag',
-        content: candidate.match[0],
-        meta: { id: candidate.match[0] }
-      });
     } else {
       tokens.push({
         type: 'tag',

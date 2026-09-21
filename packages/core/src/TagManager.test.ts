@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { TagManager } from './TagManager';
+import { parseDisplayTextToTokens } from './tag';
 import type { Token } from './models';
 
 describe('TagManager', () => {
@@ -1072,6 +1073,27 @@ describe('TagManager', () => {
 
   describe('Tag Pairing', () => {
     describe('findPairedTag()', () => {
+      test('pairs nested tags across Unicode and ASCII angle delimiters without rewriting them', () => {
+        const tokens = parseDisplayTextToTokens('❮b❯❰b>text</b❱❮/b❯');
+
+        expect(tagManager.findPairedTag(tokens, 0)).toBe(4);
+        expect(tagManager.findPairedTag(tokens, 1)).toBe(3);
+        expect(tagManager.findPairedTag(tokens, 3)).toBe(1);
+        expect(tagManager.findPairedTag(tokens, 4)).toBe(0);
+        expect(tagManager.getTagMetadata(tokens[0], 0, tokens)).toMatchObject({
+          type: 'paired-start',
+          pairedIndex: 4,
+          isPaired: true,
+        });
+        expect(tagManager.getTagMetadata(tokens[4], 4, tokens)).toMatchObject({
+          type: 'paired-end',
+          pairedIndex: 0,
+          isPaired: true,
+        });
+        expect(tokens[0].content).toBe('❮b❯');
+        expect(tokens[4].content).toBe('❮/b❯');
+      });
+
       test('finds closing tag for opening tag', () => {
         const tokens: Token[] = [
           { type: 'tag', content: '<bold>' },

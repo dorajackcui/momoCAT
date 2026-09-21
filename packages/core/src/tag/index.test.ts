@@ -317,6 +317,69 @@ describe("Editor Tag Marker Conversion", () => {
   });
 });
 
+describe("Unicode angle tag delimiters", () => {
+  const delimiters = ["<", "❮", "❰"].flatMap((left) =>
+    [">", "❯", "❱"].map((right) => ({ left, right })),
+  );
+
+  it.each(delimiters)("recognizes and preserves tags using $left and $right", ({ left, right }) => {
+    const opening = `${left}b${right}`;
+    const closing = `${left}/b${right}`;
+    const standalone = `${left}br/${right}`;
+    const text = `A${opening}B${closing}C${standalone}`;
+    const tokens = parseDisplayTextToTokens(text);
+
+    expect(tokens).toEqual([
+      { type: "text", content: "A" },
+      { type: "tag", content: opening, meta: { id: opening } },
+      { type: "text", content: "B" },
+      { type: "tag", content: closing, meta: { id: closing } },
+      { type: "text", content: "C" },
+      { type: "tag", content: standalone, meta: { id: standalone } },
+    ]);
+    expect(parseEditorTextToTokens(text, tokens)).toEqual(tokens);
+    expect(serializeTokensToEditorText(tokens, tokens)).toBe("A{1>B<2}C{3}");
+    expect(parseEditorTextToTokens("A{1>B<2}C{3}", tokens)).toEqual(tokens);
+    expect(serializeTokensToDisplayText(tokens)).toBe(text);
+    expect(getTagDisplayInfo(opening, 0)).toEqual({ display: "[1", type: "paired-start" });
+    expect(getTagDisplayInfo(closing, 1)).toEqual({ display: "2]", type: "paired-end" });
+    expect(getTagDisplayInfo(standalone, 2)).toEqual({ display: "⟨3⟩", type: "standalone" });
+    expect(formatTagAsMemoQMarker(`${left}/${right}`, 2)).toBe("<2}");
+  });
+
+  it("uses ASCII editor markers for Unicode source tags", () => {
+    const source = parseDisplayTextToTokens("❮b❯text❰/b❱");
+    const tokens = parseEditorTextToTokens("{1>translated<2}", source);
+
+    expect(serializeTokensToDisplayText(tokens)).toBe("❮b❯translated❰/b❱");
+    expect(serializeTokensToEditorText(tokens, source)).toBe("{1>translated<2}");
+    for (const text of ["{1❯", "❮2}", "{1❱", "❰2}"]) {
+      expect(parseEditorTextToTokens(text, source)).toEqual([{ type: "text", content: text }]);
+    }
+  });
+
+  it.each(["❮", "❰", "❯", "❱", "❮b", "❰/b", "b❯", "❮❯", "❰❱"])(
+    "keeps incomplete or empty delimiters as text: %s",
+    (text) => {
+      expect(parseDisplayTextToTokens(text)).toEqual([{ type: "text", content: text }]);
+      expect(parseEditorTextToTokens(text, [])).toEqual([{ type: "text", content: text }]);
+    },
+  );
+
+  it("respects the none policy and custom patterns", () => {
+    const text = "❮b❯text❰/b❱";
+    const plain = [{ type: "text", content: text }];
+    const source = parseDisplayTextToTokens(text);
+
+    expect(parseDisplayTextToTokens(text, { tagPolicy: "none" })).toEqual(plain);
+    expect(parseEditorTextToTokens(text, source, { tagPolicy: "none" })).toEqual(plain);
+    expect(parseDisplayTextToTokens(text, [/@@[A-Z]+@@/g])).toEqual(plain);
+    expect(parseEditorTextToTokens(text, source, {
+      displayTagPatterns: [/@@[A-Z]+@@/g],
+    })).toEqual(plain);
+  });
+});
+
 describe("TagMetadata Interface", () => {
   it("supports tag metadata shapes", () => {
     const pairedStart: TagMetadata = {

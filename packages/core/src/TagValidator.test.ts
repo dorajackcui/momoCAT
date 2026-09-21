@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach } from "vitest";
 import { TagValidator } from "./TagValidator";
+import { parseDisplayTextToTokens, parseEditorTextToTokens } from "./tag";
 import type { QaIssue, Token } from "./models";
 
 describe("TagValidator", () => {
@@ -10,6 +11,20 @@ describe("TagValidator", () => {
   });
 
   describe("validate() method signature", () => {
+    test("protects Unicode angle tags and requires their original spelling", () => {
+      const source = parseDisplayTextToTokens("❮b❯Hello❰/b❱");
+      const target = parseEditorTextToTokens("{1>Bonjour<2}", source);
+
+      expect(validator.validate(source, target).issues).toEqual([]);
+      expect(validator.validate(source, parseDisplayTextToTokens("Bonjour")).issues)
+        .toEqual([expect.objectContaining({ ruleId: "tag-missing" })]);
+      expect(validator.validate(source, parseDisplayTextToTokens("<b>Bonjour</b>")).issues)
+        .toEqual([
+          expect.objectContaining({ ruleId: "tag-missing" }),
+          expect.objectContaining({ ruleId: "tag-extra" }),
+        ]);
+    });
+
     test("should accept source and target tokens and return ValidationResult", () => {
       const sourceTokens: Token[] = [{ type: "text", content: "Hello world" }];
       const targetTokens: Token[] = [

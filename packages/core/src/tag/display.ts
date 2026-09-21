@@ -1,4 +1,5 @@
 import type { TagType } from '../models';
+import { getAngleTagInfo } from './AngleTagSyntax';
 
 export interface TagDisplayInfo {
   display: string;
@@ -6,17 +7,16 @@ export interface TagDisplayInfo {
 }
 
 export function getTagDisplayInfo(tagContent: string, index: number): TagDisplayInfo {
-  const pairedStartMatch = tagContent.match(/^<([^/>]+)>$/);
-  const pairedEndMatch = tagContent.match(/^<\/([^>]+)>$/);
+  const angleTag = getAngleTagInfo(tagContent);
 
-  if (pairedStartMatch) {
+  if (angleTag?.type === 'paired-start') {
     return {
       display: `[${index + 1}`,
       type: 'paired-start',
     };
   }
 
-  if (pairedEndMatch) {
+  if (angleTag?.type === 'paired-end') {
     return {
       display: `${index + 1}]`,
       type: 'paired-end',

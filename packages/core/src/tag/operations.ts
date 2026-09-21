@@ -1,4 +1,5 @@
 import type { TagMetadata, Token } from '../models';
+import { getAngleTagInfo } from './AngleTagSyntax';
 import { getTagDisplayInfo } from './display';
 
 export interface InsertTagResult {
@@ -157,51 +158,21 @@ export function findPairedTagIndex(tokens: Token[], tagIndex: number): number | 
     return undefined;
   }
 
-  const pairedStartMatch = tag.content.match(/^<([^/>]+)>$/);
-  const pairedEndMatch = tag.content.match(/^<\/([^>]+)>$/);
+  const angleTag = getAngleTagInfo(tag.content);
+  if (!angleTag?.name || angleTag.type === 'standalone') return undefined;
+  const direction = angleTag.type === 'paired-start' ? 1 : -1;
+  let nestingLevel = 0;
 
-  if (pairedStartMatch) {
-    const tagName = pairedStartMatch[1];
-    const closingPattern = `</${tagName}>`;
-    let nestingLevel = 0;
-
-    for (let i = tagIndex + 1; i < tokens.length; i++) {
-      if (tokens[i].type !== 'tag') continue;
-
-      const currentContent = tokens[i].content;
-      if (currentContent === tag.content) {
-        nestingLevel++;
-      } else if (currentContent === closingPattern) {
-        if (nestingLevel === 0) {
-          return i;
-        }
-        nestingLevel--;
-      }
+  for (let i = tagIndex + direction; i >= 0 && i < tokens.length; i += direction) {
+    if (tokens[i].type !== 'tag') continue;
+    const current = getAngleTagInfo(tokens[i].content);
+    if (current?.name !== angleTag.name || current.type === 'standalone') continue;
+    if (current.type === angleTag.type) {
+      nestingLevel++;
+    } else {
+      if (nestingLevel === 0) return i;
+      nestingLevel--;
     }
-
-    return undefined;
-  }
-
-  if (pairedEndMatch) {
-    const tagName = pairedEndMatch[1];
-    const openingPattern = `<${tagName}>`;
-    let nestingLevel = 0;
-
-    for (let i = tagIndex - 1; i >= 0; i--) {
-      if (tokens[i].type !== 'tag') continue;
-
-      const currentContent = tokens[i].content;
-      if (currentContent === tag.content) {
-        nestingLevel++;
-      } else if (currentContent === openingPattern) {
-        if (nestingLevel === 0) {
-          return i;
-        }
-        nestingLevel--;
-      }
-    }
-
-    return undefined;
   }
 
   return undefined;

@@ -1,5 +1,7 @@
 import type { TagType } from '../models';
 
+const ANGLE_TAG_PATTERN = /[<❮❰][^>❯❱]+[>❯❱]/g;
+
 export interface EditorMarkerPattern {
   /**
    * Marker semantic type. Used for ordering and debugging.
@@ -32,7 +34,7 @@ export interface TagPatternRegistryConfig {
 export const TAG_PATTERN_REGISTRY: TagPatternRegistryConfig = {
   displayTagPatterns: [
     /\{[^{}]+\}/g,
-    /<[^>]+>/g,
+    ANGLE_TAG_PATTERN,
     /%(?:\d+\$)?[-#+0]*\d*(?:\.\d+)?[hlLzjt]*[diuoxXfFeEgGaAcspn%]/g
   ],
   editorMarkerPatterns: [
@@ -60,6 +62,20 @@ export const getDisplayTagPatterns = (customPatterns?: RegExp[]): RegExp[] => {
   if (patterns === DEFAULT_DISPLAY_TAG_PATTERNS) return patterns;
   return patterns.map(ensureGlobalRegex);
 };
+
+export type DisplayTagRule = { kind: 'angle' } | { kind: 'regex'; regex: RegExp };
+
+/** Adapt the public regex configuration to explicit rules once per parse. */
+export function getDisplayTagRules(customPatterns?: RegExp[]): DisplayTagRule[] {
+  return getDisplayTagPatterns(customPatterns).map(regex => {
+    // Recognize the built-in entry by value so copying/extending default rules
+    // preserves angle scanning. Other custom regexes keep their exact behavior.
+    if (regex.source === ANGLE_TAG_PATTERN.source && regex.flags === ANGLE_TAG_PATTERN.flags) {
+      return { kind: 'angle' };
+    }
+    return { kind: 'regex', regex };
+  });
+}
 
 export const getEditorMarkerPatterns = (customPatterns?: EditorMarkerPattern[]): EditorMarkerPattern[] => {
   const patterns = customPatterns && customPatterns.length > 0

@@ -263,6 +263,45 @@ describe('MTModule', () => {
     }
   });
 
+  it('protects nested angle-tag attributes as one marker and restores them after translation', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('MT Nested Tag', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const project = db.getProject(projectId);
+      if (!project) throw new Error('Project not created');
+      const opening = '❮g id="0" equiv-text="❰g equiv-text="❰cf Color="#112233"❱" id="1"❱"❯';
+      const segment = createTransientSegment({ id: 'unit-1', source: `${opening}Hello❮/g❯` }, 0);
+      const transport = createTransport('{1>Bonjour<2}');
+      const module = createModule(db, transport);
+      const config = await module.resolveConfig(project);
+
+      const result = await module.translate({
+        unitId: 'unit-1',
+        project,
+        segment,
+        tm: createTMArtifact(segment),
+        tb: createTBArtifact(segment),
+        apiKey: config.apiKey,
+        baseUrl: config.provider.baseUrl,
+        model: config.model,
+        reasoningEffort: config.reasoningEffort,
+        provider: config.provider,
+        srcLang: 'en',
+        tgtLang: 'fr',
+      });
+
+      expect(result.prompt.sourcePayload).toBe('{1>Hello<2}');
+      expect(serializeTokensToDisplayText(result.targetTokens)).toBe(`${opening}Bonjour❮/g❯`);
+      expect(result.targetTokens.filter(token => token.type === 'tag').map(token => token.content))
+        .toEqual([opening, '❮/g❯']);
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
+      expect(transport.createResponse.mock.calls[0]?.[0].userPrompt).toContain('{1>Hello<2}');
+    } finally {
+      db.close();
+    }
+  });
+
   it('protects literal newline escape sequences as markers in MT prompts and retries when one is dropped', async () => {
     const db = new CATDatabase(':memory:');
     try {

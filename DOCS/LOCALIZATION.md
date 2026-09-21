@@ -47,6 +47,10 @@ File tag policy is resolved at import/planning time:
 
 Desktop imports persist this policy in file import options and reuse it for edit, AI, QA, TM commit, and export. Changing the policy for an already-tokenized file requires re-import rather than silently reparsing stored content.
 
+Under `default`, angle tags recognize `❮` and `❰` as alternatives to `<`, and `❯` and `❱` as alternatives to `>`, including mixed delimiters. Token content, identity, and display/export text retain the original characters; editor/MT markers use the ASCII forms `{1>`, `<2}`, and `{3}`. Empty or incomplete angle tags remain text, and `none` disables this recognition. Files imported with plain-text or truncated tags require re-import after recognition changes.
+
+Angle scanning tracks quoted attributes and embedded delimiters without interpreting inner tag names. An outer tag such as `❮g equiv-text="❰cf Color="#112233"❱"❯` is one protected tag. A tentative embedded span that reaches its enclosing quote without closing remains literal attribute content. After an incomplete outer tag, scanning resumes at its next candidate boundary without promoting complete embedded spans to outer tags. Classification and pairing use the outer tag name, ignore attributes, and skip self-closing tags. Display and editor parsing share these recognition rules. Copying, cloning, or extending the exported default regex list preserves its built-in angle-scanner rule; other custom regexes retain their explicit matching behavior.
+
 ## MT request planning
 
 Application defaults and option syntax are owned by [CLI](CLI.md#inspect-localization) and [Desktop](DESKTOP.md#files-and-background-jobs).
