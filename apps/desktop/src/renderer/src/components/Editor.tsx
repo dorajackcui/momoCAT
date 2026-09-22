@@ -109,9 +109,10 @@ export const Editor: React.FC<EditorProps> = ({
     targetQueryInput,
     targetSearchScope,
     matchMode,
-    statusFilter,
+    statusFilters,
     qualityFilters,
-    quickPreset,
+    firstRepeatOnly,
+    toggleFirstRepeatOnly,
     sortBy,
     sortDirection,
     isFilterMenuOpen,
@@ -128,10 +129,9 @@ export const Editor: React.FC<EditorProps> = ({
     setSourceQueryInput,
     setTargetQueryInput,
     toggleTargetSearchScope,
-    handleStatusFilterChange,
+    toggleStatusFilter,
     handleMatchModeChange,
     toggleQualityFilter,
-    applyQuickPreset,
     handleSortChange,
     clearFilters,
     debouncedSourceQuery,
@@ -395,12 +395,12 @@ export const Editor: React.FC<EditorProps> = ({
               activeFilterCount={activeFilterCount}
               toggleFilterMenu={toggleFilterMenu}
               closeFilterMenu={closeFilterMenu}
-              quickPreset={quickPreset}
-              applyQuickPreset={applyQuickPreset}
+              firstRepeatOnly={firstRepeatOnly}
+              toggleFirstRepeatOnly={toggleFirstRepeatOnly}
               matchMode={matchMode}
               handleMatchModeChange={handleMatchModeChange}
-              statusFilter={statusFilter}
-              handleStatusFilterChange={handleStatusFilterChange}
+              statusFilters={statusFilters}
+              toggleStatusFilter={toggleStatusFilter}
               qualityFilters={qualityFilters}
               toggleQualityFilter={toggleQualityFilter}
               clearFilters={clearFilters}

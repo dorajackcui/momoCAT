@@ -64,7 +64,7 @@ function createFile(overrides?: Partial<ProjectFileRecord>): ProjectFileRecord {
       qaProblemSegments: 0,
       confirmedSegmentsForBar: 0,
       inProgressSegments: 0,
-      newSegments: 10,
+      emptySegments: 10,
     },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

@@ -26,7 +26,7 @@ function createSegment(params: {
     orderIndex: 0,
     sourceTokens,
     targetTokens,
-    status: params.status ?? 'new',
+    status: params.status ?? 'empty',
     tagsSignature: '',
     matchKey: params.sourceText.toLowerCase(),
     srcHash: `hash-${params.segmentId}`,
@@ -133,13 +133,13 @@ describe('AI translation workflows', () => {
       1,
       's1',
       expect.any(Array),
-      'translated',
+      'draft',
     );
     expect(segmentService.updateSegment).toHaveBeenNthCalledWith(
       2,
       's2',
       expect.any(Array),
-      'translated',
+      'draft',
     );
   });
 
@@ -390,13 +390,13 @@ describe('AI translation workflows', () => {
       1,
       'custom-ok-1',
       expect.any(Array),
-      'translated',
+      'draft',
     );
     expect(segmentService.updateSegment).toHaveBeenNthCalledWith(
       2,
       'custom-ok-2',
       expect.any(Array),
-      'translated',
+      'draft',
     );
     expect(warnSpy).toHaveBeenCalledWith(
       '[AITranslationOrchestrator] Failed to translate segment in file workflow',

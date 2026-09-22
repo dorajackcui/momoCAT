@@ -13,7 +13,7 @@ function segment(id: string, orderIndex: number, target = '', confirmed = false)
     orderIndex,
     sourceTokens: [{ type: 'text', content: `Source-${id}` }],
     targetTokens: target ? [{ type: 'text', content: target }] : [],
-    status: confirmed ? 'confirmed' : target ? 'translated' : 'new',
+    status: confirmed ? 'confirmed' : target ? 'draft' : 'empty',
     tagsSignature: '',
     matchKey: id,
     srcHash: id,
@@ -139,7 +139,7 @@ describe('filtered localization file translation', () => {
           1,
           's10',
           [{ type: 'text', content: 'Translated-1-0' }],
-          'translated',
+          'draft',
         );
         expect(onProgress).toHaveBeenLastCalledWith(
           expect.objectContaining({ current: 6, total: 6 }),

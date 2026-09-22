@@ -273,7 +273,7 @@ describe("CATDatabase", () => {
         orderIndex: 0,
         sourceTokens: [{ type: "text", content: "Hello" }],
         targetTokens: [],
-        status: "new",
+        status: "empty",
         tagsSignature: "",
         matchKey: "hello",
         srcHash: "hash1",
@@ -307,7 +307,7 @@ describe("CATDatabase", () => {
         orderIndex: 0,
         sourceTokens: [{ type: "text", content: "A" }],
         targetTokens: [],
-        status: "new",
+        status: "empty",
         tagsSignature: "",
         matchKey: "a",
         srcHash: "ha",
@@ -319,7 +319,7 @@ describe("CATDatabase", () => {
         orderIndex: 1,
         sourceTokens: [{ type: "text", content: "B" }],
         targetTokens: [],
-        status: "new",
+        status: "empty",
         tagsSignature: "",
         matchKey: "b",
         srcHash: "hb",
@@ -375,7 +375,7 @@ describe("CATDatabase", () => {
       qaProblemSegments: 0,
       confirmedSegmentsForBar: 0,
       inProgressSegments: 0,
-      newSegments: 0,
+      emptySegments: 0,
     });
   });
 
@@ -391,7 +391,7 @@ describe("CATDatabase", () => {
         orderIndex: 0,
         sourceTokens: [{ type: "text", content: "First" }],
         targetTokens: [],
-        status: "new",
+        status: "empty",
         tagsSignature: "",
         matchKey: "first",
         srcHash: "cross-file-hash-1",
@@ -432,7 +432,7 @@ describe("CATDatabase", () => {
         orderIndex: 0,
         sourceTokens: [{ type: "text", content: "new" }],
         targetTokens: [],
-        status: "new",
+        status: "empty",
         tagsSignature: "",
         matchKey: "new",
         srcHash: "hash-new",
@@ -456,7 +456,7 @@ describe("CATDatabase", () => {
         orderIndex: 2,
         sourceTokens: [{ type: "text", content: "translated" }],
         targetTokens: [{ type: "text", content: "已翻译" }],
-        status: "translated",
+        status: "draft",
         tagsSignature: "",
         matchKey: "translated",
         srcHash: "hash-translated",
@@ -468,7 +468,7 @@ describe("CATDatabase", () => {
         orderIndex: 3,
         sourceTokens: [{ type: "text", content: "reviewed" }],
         targetTokens: [{ type: "text", content: "已润色" }],
-        status: "reviewed",
+        status: "draft",
         tagsSignature: "",
         matchKey: "reviewed",
         srcHash: "hash-reviewed",
@@ -522,13 +522,13 @@ describe("CATDatabase", () => {
     expect(stats?.qaProblemSegments).toBe(2);
     expect(stats?.confirmedSegmentsForBar).toBe(1);
     expect(stats?.inProgressSegments).toBe(3);
-    expect(stats?.newSegments).toBe(1);
+    expect(stats?.emptySegments).toBe(1);
 
     const totalFromBuckets =
       (stats?.qaProblemSegments ?? 0) +
       (stats?.confirmedSegmentsForBar ?? 0) +
       (stats?.inProgressSegments ?? 0) +
-      (stats?.newSegments ?? 0);
+      (stats?.emptySegments ?? 0);
     expect(totalFromBuckets).toBe(stats?.totalSegments);
   });
 
@@ -583,7 +583,7 @@ describe("CATDatabase", () => {
         orderIndex: 0,
         sourceTokens: [{ type: "text", content: "other reviewed" }],
         targetTokens: [{ type: "text", content: "other reviewed fr" }],
-        status: "reviewed",
+        status: "draft",
         tagsSignature: "",
         matchKey: "other-reviewed",
         srcHash: "other-reviewed",
@@ -595,7 +595,7 @@ describe("CATDatabase", () => {
         orderIndex: 1,
         sourceTokens: [{ type: "text", content: "other new" }],
         targetTokens: [],
-        status: "new",
+        status: "empty",
         tagsSignature: "",
         matchKey: "other-new",
         srcHash: "other-new",
@@ -613,7 +613,7 @@ describe("CATDatabase", () => {
       qaProblemSegments: 1,
       confirmedSegmentsForBar: 1,
       inProgressSegments: 0,
-      newSegments: 0,
+      emptySegments: 0,
     });
 
     const projectFiles = db.listFiles(projectId);
@@ -628,7 +628,7 @@ describe("CATDatabase", () => {
       qaProblemSegments: 0,
       confirmedSegmentsForBar: 0,
       inProgressSegments: 1,
-      newSegments: 0,
+      emptySegments: 0,
     });
   });
 
@@ -673,10 +673,15 @@ describe("CATDatabase", () => {
     expect(segment?.qaIssues).toBeUndefined();
   });
 
-  it("should update repeat state without changing target, status, or qa issues", () => {
+  it("should preserve existing metadata when updating targets without repeat state writes", () => {
     const projectId = db.createProject("Repeat State Project", "en", "zh");
     const fileId = db.createFile(projectId, "repeat-state.xlsx");
     const targetTokens = [{ type: "text" as const, content: "Existing target" }];
+    const legacyMeta = {
+      updatedAt: new Date().toISOString(),
+      context: "Keep this context",
+      repeatPropagation: { mode: "detached" },
+    };
 
     db.bulkInsertSegments([
       {
@@ -685,11 +690,11 @@ describe("CATDatabase", () => {
         orderIndex: 0,
         sourceTokens: [{ type: "text", content: "Repeat" }],
         targetTokens,
-        status: "translated",
+        status: "draft",
         tagsSignature: "",
         matchKey: "repeat",
         srcHash: "repeat-state-hash",
-        meta: { updatedAt: new Date().toISOString() },
+        meta: legacyMeta,
       },
     ]);
     db.updateSegmentQaIssues("repeat-state-1", [
@@ -700,17 +705,15 @@ describe("CATDatabase", () => {
       },
     ]);
 
-    db.updateSegmentRepeatPropagation("repeat-state-1", { mode: "leader" });
+    db.updateSegmentTarget("repeat-state-1", targetTokens, "confirmed");
 
     expect(db.getSegment("repeat-state-1")).toMatchObject({
       targetTokens,
-      status: "translated",
-      qaIssues: [{ ruleId: "test-warning" }],
-      meta: { repeatPropagation: { mode: "leader" } },
+      status: "confirmed",
+      meta: { context: legacyMeta.context, repeatPropagation: { mode: "detached" } },
     });
 
-    db.updateSegmentRepeatPropagation("repeat-state-1", null);
-    expect(db.getSegment("repeat-state-1")?.meta.repeatPropagation).toBeUndefined();
+    expect(db.getSegment("repeat-state-1")?.qaIssues).toBeUndefined();
   });
 
   it("should normalize invalid segment status values when reading", () => {
@@ -748,7 +751,7 @@ describe("CATDatabase", () => {
     expect(
       segments.find((segment) => segment.segmentId === "invalid-empty-target")
         ?.status,
-    ).toBe("new");
+    ).toBe("empty");
     expect(
       segments.find((segment) => segment.segmentId === "invalid-has-target")
         ?.status,

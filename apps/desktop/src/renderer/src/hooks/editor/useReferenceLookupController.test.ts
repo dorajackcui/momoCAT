@@ -13,7 +13,7 @@ function createSegment(segmentId: string, srcHash: string): Segment {
     orderIndex: 0,
     sourceTokens: [{ type: 'text', content: `Source ${segmentId}` }],
     targetTokens: [],
-    status: 'new',
+    status: 'empty',
     matchKey: `source-${segmentId}`,
     srcHash,
     tagsSignature: '',

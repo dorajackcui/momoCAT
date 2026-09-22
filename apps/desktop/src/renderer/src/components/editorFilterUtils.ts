@@ -1,10 +1,9 @@
 import type { Segment } from '@cat/core/models';
 
-export type EditorStatusFilter = 'all' | 'new' | 'draft' | 'translated' | 'reviewed' | 'confirmed';
+export type EditorStatusFilter = Segment['status'];
 export type EditorMatchMode = 'contains' | 'exact' | 'regex';
 export type EditorTargetSearchScope = 'target' | 'context';
 export type EditorQualityFilter = 'qa_error' | 'qa_warning' | 'save_error';
-export type EditorQuickPreset = 'none' | 'unconfirmed' | 'confirmed' | 'first_repeat' | 'issues';
 export type EditorSortBy = 'default' | 'source_length' | 'target_length';
 export type EditorSortDirection = 'asc' | 'desc';
 export type RepeatedSourceRole = 'first' | 'later';
@@ -17,7 +16,6 @@ export interface SearchableEditorSegment {
   hasQaError: boolean;
   hasQaWarning: boolean;
   hasSaveError: boolean;
-  hasIssue: boolean;
   repeatedSourceRole?: RepeatedSourceRole;
 }
 
@@ -25,10 +23,10 @@ export interface EditorFilterCriteria {
   sourceQuery: string;
   targetQuery: string;
   targetSearchScope: EditorTargetSearchScope;
-  status: EditorStatusFilter;
+  statuses: EditorStatusFilter[];
   matchMode: EditorMatchMode;
   qualityFilters: EditorQualityFilter[];
-  quickPreset: EditorQuickPreset;
+  firstRepeatOnly: boolean;
   sortBy: EditorSortBy;
   sortDirection: EditorSortDirection;
 }
@@ -45,10 +43,10 @@ export function createDefaultEditorFilterCriteria(): EditorFilterCriteria {
     sourceQuery: '',
     targetQuery: '',
     targetSearchScope: 'target',
-    status: 'all',
+    statuses: [],
     matchMode: 'contains',
     qualityFilters: [],
-    quickPreset: 'none',
+    firstRepeatOnly: false,
     sortBy: 'default',
     sortDirection: 'asc',
   };
@@ -87,30 +85,20 @@ const qualityFilterPredicates: Record<
   save_error: (item) => item.hasSaveError,
 };
 
-const quickPresetPredicates: Record<EditorQuickPreset, (item: SearchableEditorSegment) => boolean> =
-  {
-    none: () => true,
-    unconfirmed: (item) => item.segment.status !== 'confirmed',
-    confirmed: (item) => item.segment.status === 'confirmed',
-    first_repeat: (item) => item.repeatedSourceRole === 'first',
-    issues: (item) => item.hasIssue,
-  };
-
 export function countActiveFilterFields(criteria: EditorFilterCriteria): number {
   return (
     Number(criteria.sourceQuery.trim().length > 0) +
     Number(criteria.targetQuery.trim().length > 0) +
-    Number(criteria.status !== 'all') +
+    Number(criteria.statuses.length > 0) +
     Number(criteria.matchMode !== 'contains') +
-    Number(criteria.quickPreset !== 'none') +
-    criteria.qualityFilters.length
+    Number(criteria.firstRepeatOnly) +
+    Number(criteria.qualityFilters.length > 0)
   );
 }
 
-export function getQuickPresetPatch(
-  preset: EditorQuickPreset,
-): Pick<EditorFilterCriteria, 'status' | 'qualityFilters' | 'quickPreset'> {
-  return { status: 'all', qualityFilters: [], quickPreset: preset };
+export function toggleFilterSelection<T extends string>(selected: T[], value: T | 'all'): T[] {
+  if (value === 'all') return [];
+  return selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value];
 }
 
 export function filterSearchableSegments(
@@ -118,9 +106,9 @@ export function filterSearchableSegments(
   criteria: EditorFilterCriteria,
 ): SearchableEditorSegment[] {
   const hasFilterCriteria =
-    criteria.status !== 'all' ||
+    criteria.statuses.length > 0 ||
     criteria.qualityFilters.length > 0 ||
-    criteria.quickPreset !== 'none' ||
+    criteria.firstRepeatOnly ||
     criteria.sourceQuery.trim().length > 0 ||
     criteria.targetQuery.trim().length > 0;
 
@@ -129,7 +117,10 @@ export function filterSearchableSegments(
   }
 
   return segments.filter((item) => {
-    if (criteria.status !== 'all' && item.segment.status !== criteria.status) {
+    if (criteria.firstRepeatOnly && item.repeatedSourceRole !== 'first') {
+      return false;
+    }
+    if (criteria.statuses.length > 0 && !criteria.statuses.includes(item.segment.status)) {
       return false;
     }
 
@@ -140,10 +131,6 @@ export function filterSearchableSegments(
       if (!hasQualityMatch) {
         return false;
       }
-    }
-
-    if (!quickPresetPredicates[criteria.quickPreset](item)) {
-      return false;
     }
 
     if (!textMatchesQuery(item.sourceText, criteria.sourceQuery, criteria.matchMode)) {

@@ -5,7 +5,6 @@ import {
   countActiveFilterFields,
   createDefaultEditorFilterCriteria,
   filterSearchableSegments,
-  getQuickPresetPatch,
   sortSearchableSegments,
   textMatchesQuery,
   type SearchableEditorSegment,
@@ -48,14 +47,13 @@ describe('editorFilterUtils.textMatchesQuery', () => {
 describe('editorFilterUtils.filterSearchableSegments', () => {
   const segments: SearchableEditorSegment[] = [
     {
-      segment: makeSegment('s1', 'new'),
+      segment: makeSegment('s1', 'empty'),
       sourceText: 'Login successful',
       targetText: '',
       originalIndex: 0,
       hasQaError: false,
       hasQaWarning: false,
       hasSaveError: false,
-      hasIssue: false,
       repeatedSourceRole: 'first',
     },
     {
@@ -66,7 +64,6 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
       hasQaError: true,
       hasQaWarning: false,
       hasSaveError: false,
-      hasIssue: true,
       repeatedSourceRole: 'later',
     },
     {
@@ -77,7 +74,6 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
       hasQaError: false,
       hasQaWarning: true,
       hasSaveError: true,
-      hasIssue: true,
     },
   ];
 
@@ -101,10 +97,10 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
       sourceQuery: 'order',
       targetQuery: '提交',
       targetSearchScope: 'target',
-      status: 'draft',
+      statuses: ['draft'],
       matchMode: 'contains',
       qualityFilters: [],
-      quickPreset: 'none',
+      firstRepeatOnly: false,
       sortBy: 'default',
       sortDirection: 'asc',
     });
@@ -118,10 +114,10 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
       sourceQuery: 'order',
       targetQuery: '不存在',
       targetSearchScope: 'target',
-      status: 'all',
+      statuses: [],
       matchMode: 'contains',
       qualityFilters: [],
-      quickPreset: 'none',
+      firstRepeatOnly: false,
       sortBy: 'default',
       sortDirection: 'asc',
     });
@@ -129,15 +125,15 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
     expect(filtered).toHaveLength(0);
   });
 
-  it('supports quality filter + quick preset combination', () => {
+  it('filters QA warnings', () => {
     const filtered = filterSearchableSegments(segments, {
       sourceQuery: '',
       targetQuery: '',
       targetSearchScope: 'target',
-      status: 'all',
+      statuses: [],
       matchMode: 'contains',
       qualityFilters: ['qa_warning'],
-      quickPreset: 'issues',
+      firstRepeatOnly: false,
       sortBy: 'default',
       sortDirection: 'asc',
     });
@@ -148,14 +144,14 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
   it('filters to the first occurrence of each repeated source', () => {
     const filtered = filterSearchableSegments(segments, {
       ...createDefaultEditorFilterCriteria(),
-      quickPreset: 'first_repeat',
+      firstRepeatOnly: true,
     });
 
     expect(filtered.map((item) => item.segment.segmentId)).toEqual(['s1']);
   });
 
   it('filters to every segment that has not been confirmed', () => {
-    const candidates = (['new', 'draft', 'translated', 'reviewed', 'confirmed'] as const).map(
+    const candidates = (['empty', 'draft', 'confirmed'] as const).map(
       (status, index) => ({
         ...segments[0],
         segment: makeSegment(`status-${status}`, status),
@@ -164,21 +160,19 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
     );
     const filtered = filterSearchableSegments(candidates, {
       ...createDefaultEditorFilterCriteria(),
-      quickPreset: 'unconfirmed',
+      statuses: ['empty', 'draft'],
     });
 
     expect(filtered.map((item) => item.segment.status)).toEqual([
-      'new',
+      'empty',
       'draft',
-      'translated',
-      'reviewed',
     ]);
   });
 
   it('uses the target query against context when that scope is selected', () => {
     const contextSegment = {
       ...segments[0],
-      segment: makeSegment('context-match', 'new', 'menu.settings.audio'),
+      segment: makeSegment('context-match', 'empty', 'menu.settings.audio'),
       targetText: 'Audio settings',
     };
     const criteria = {
@@ -239,61 +233,46 @@ describe('editorFilterUtils helpers', () => {
       sourceQuery: '',
       targetQuery: '',
       targetSearchScope: 'target',
-      status: 'all',
+      statuses: [],
       matchMode: 'contains',
       qualityFilters: [],
-      quickPreset: 'none',
+      firstRepeatOnly: false,
       sortBy: 'default',
       sortDirection: 'asc',
     });
     expect(countActiveFilterFields(defaults)).toBe(0);
   });
 
-  it('returns quick preset patch', () => {
-    expect(getQuickPresetPatch('confirmed')).toEqual({
-      status: 'all',
-      qualityFilters: [],
-      quickPreset: 'confirmed',
-    });
-    expect(getQuickPresetPatch('first_repeat')).toEqual({
-      status: 'all',
-      qualityFilters: [],
-      quickPreset: 'first_repeat',
-    });
-  });
 });
 
 describe('editorFilterUtils.sortSearchableSegments', () => {
   const segments: SearchableEditorSegment[] = [
     {
-      segment: makeSegment('s1', 'new'),
+      segment: makeSegment('s1', 'empty'),
       sourceText: 'a',
       targetText: '1111',
       originalIndex: 0,
       hasQaError: false,
       hasQaWarning: false,
       hasSaveError: false,
-      hasIssue: false,
     },
     {
-      segment: makeSegment('s2', 'new'),
+      segment: makeSegment('s2', 'empty'),
       sourceText: 'abcd',
       targetText: '11',
       originalIndex: 1,
       hasQaError: false,
       hasQaWarning: false,
       hasSaveError: false,
-      hasIssue: false,
     },
     {
-      segment: makeSegment('s3', 'new'),
+      segment: makeSegment('s3', 'empty'),
       sourceText: 'ab',
       targetText: '1',
       originalIndex: 2,
       hasQaError: false,
       hasQaWarning: false,
       hasSaveError: false,
-      hasIssue: false,
     },
   ];
 

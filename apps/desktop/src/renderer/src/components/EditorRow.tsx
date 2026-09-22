@@ -185,7 +185,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
 
   return (
     <div
-      className="editor-row group grid grid-cols-[30px_minmax(0,1fr)_8px_minmax(0,1fr)] border-b border-border-subtle transition-colors"
+      className="editor-row group grid grid-cols-[30px_minmax(0,1fr)_minmax(0,1fr)_28px] border-b border-border-subtle transition-colors"
       data-alternate={isAlternate || undefined}
       style={{ minHeight: EDITOR_ROW_MIN_HEIGHT }}
       onClick={(event) => {
@@ -214,19 +214,15 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
         onCopySourceToTarget={handleCopySourceToTarget}
       />
 
-      <div className="relative overflow-visible" title={displayModel.statusTitle}>
-        <div className={`absolute inset-0 w-full ${displayModel.statusLine}`} />
-      </div>
-
       <div
         data-active={isActive || undefined}
-        className={`editor-target-cell editor-cell-bg px-1.5 py-0.5 relative flex min-h-full min-w-0 flex-col ${
+        className={`editor-target-cell editor-cell-bg border-l border-border-subtle px-1.5 py-0.5 relative flex min-h-full min-w-0 flex-col ${
           showTagInsertionUI ? 'overflow-visible' : 'overflow-hidden'
         }`}
       >
         <div
           aria-hidden="true"
-          className={`pointer-events-none absolute inset-0 z-20 border-t-2 border-r-2 border-b-2 border-focus/80 transition-opacity duration-150 ${
+          className={`pointer-events-none absolute inset-0 z-20 border-2 border-focus/80 transition-opacity duration-150 ${
             isActive ? 'opacity-100' : 'opacity-0'
           }`}
         />
@@ -270,6 +266,17 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
           contextText={segment.meta?.context}
           contextHighlightQuery={contextHighlightQuery}
           highlightMode={highlightMode}
+        />
+      </div>
+      <div
+        className="editor-status-cell border-l border-border-subtle flex items-end justify-center pb-2"
+        title={displayModel.statusTitle}
+      >
+        <span
+          role="img"
+          aria-label={displayModel.statusTitle}
+          data-segment-status={segment.status}
+          className={`h-2 w-2 shrink-0 rounded-full border ${displayModel.statusIndicatorClass}`}
         />
       </div>
     </div>

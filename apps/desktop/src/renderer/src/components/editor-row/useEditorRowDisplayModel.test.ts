@@ -26,7 +26,7 @@ describe('useEditorRowDisplayModel.buildEditorRowDisplayModel', () => {
         showNonPrintingSymbols: false,
       });
 
-      expect(model.statusLine).toBe('bg-status-confirmed');
+      expect(model.statusIndicatorClass).toBe('border-status-confirmed bg-status-confirmed');
       expect(model.statusTitle).toBe(`Status: confirmed (QA ${severity})`);
     },
   );
@@ -44,14 +44,14 @@ describe('useEditorRowDisplayModel.buildEditorRowDisplayModel', () => {
       showNonPrintingSymbols: true,
     });
 
-    expect(model.statusLine).toBe('bg-status-draft');
+    expect(model.statusIndicatorClass).toBe('border-status-empty bg-transparent');
     expect(model.sourceHighlightChunks.some((chunk) => chunk.isMatch)).toBe(true);
     expect(model.sourceDisplayText).toContain('·');
   });
 
   it('keeps action visibility and status signals while editing', () => {
     const model = buildEditorRowDisplayModel({
-      segmentStatus: 'translated',
+      segmentStatus: 'draft',
       qaIssues: [],
       isActive: true,
       draftText: 'Hello',
@@ -62,7 +62,7 @@ describe('useEditorRowDisplayModel.buildEditorRowDisplayModel', () => {
       showNonPrintingSymbols: true,
     });
 
-    expect(model.statusLine).toBe('bg-status-translated');
+    expect(model.statusIndicatorClass).toBe('border-status-empty bg-transparent');
     expect(model.canAITranslate).toBe(true);
     expect(model.showTargetActionButtons).toBe(true);
   });

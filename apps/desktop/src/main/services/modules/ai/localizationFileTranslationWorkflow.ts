@@ -1,4 +1,4 @@
-import type { Segment } from '@cat/core/models';
+import { normalizeSegmentStatus, type Segment } from '@cat/core/models';
 import type { Project } from '@cat/core/project';
 import { parseDisplayTextToTokens, type TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
@@ -161,9 +161,10 @@ async function applyLocalizationUnitResult(
     return;
   }
 
+  const targetTokens = parseDisplayTextToTokens(unitResult.target, { tagPolicy });
   await segmentService.updateSegment(
     segment.segmentId,
-    parseDisplayTextToTokens(unitResult.target, { tagPolicy }),
-    'translated',
+    targetTokens,
+    normalizeSegmentStatus('draft', targetTokens),
   );
 }

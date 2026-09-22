@@ -38,7 +38,7 @@ function createSegment(params: {
     orderIndex: 0,
     sourceTokens: [{ type: 'text', content: params.sourceText }],
     targetTokens: [],
-    status: 'new',
+    status: 'empty',
     tagsSignature: '',
     matchKey: params.sourceText.toLowerCase(),
     srcHash: params.srcHash,
@@ -180,7 +180,7 @@ describe('runAIFileFlowTrace', () => {
       });
       expect(transport.createResponse).toHaveBeenCalledTimes(1);
       const updated = db.getSegment('seg-1');
-      expect(updated?.status).toBe('translated');
+      expect(updated?.status).toBe('draft');
       expect(serializeTokensToDisplayText(updated?.targetTokens ?? [])).toBe('你好世界');
     } finally {
       db.close();

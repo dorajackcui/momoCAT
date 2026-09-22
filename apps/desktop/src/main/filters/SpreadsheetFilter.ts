@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import { readFile, writeFile } from 'fs/promises';
 import { extname } from 'path';
-import { type Segment } from '@cat/core/models';
+import { normalizeSegmentStatus, type Segment } from '@cat/core/models';
 import { parseDisplayTextToTokens, computeTagsSignature } from '@cat/core/tag';
 import { computeMatchKey, computeSrcHash } from '@cat/core/text';
 import { randomUUID } from 'crypto';
@@ -90,7 +90,7 @@ export class SpreadsheetFilter {
         orderIndex: row.rowIndex,
         sourceTokens,
         targetTokens,
-        status: targetText ? 'translated' : 'new',
+        status: normalizeSegmentStatus('draft', targetTokens),
         tagsSignature,
         matchKey,
         srcHash,

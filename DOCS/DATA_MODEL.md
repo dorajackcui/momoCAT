@@ -56,26 +56,17 @@ Important file/segment fields:
 - `files.importOptionsJson` persists column selection and file-level tag policy used by edit, translation, QA, TM commit, and export.
 - Renaming an imported file preserves its extension, identity, segments, statistics, import options, and `updatedAt`. When the internal project copy exists it is renamed with the metadata; if it is already missing, the metadata rename succeeds with an explicit degraded result so the desktop can warn that path-based operations remain unavailable.
 - `segments.sourceTokensJson` and `targetTokensJson` are authoritative token payloads.
+- Segment workflow status is `empty`, `draft`, or `confirmed`. Unconfirmed targets with non-whitespace content (including tags) are `draft`; the rest are `empty`. Explicit confirmation is retained until an edit replaces it. AI translation and review produce unconfirmed targets and do not encode their origin in workflow status.
+- This status change is repository-only compatibility on the existing v15 `TEXT` column: reads map legacy `new`, `translated`, and `reviewed` values by target content, while every insert/update writes a canonical state. Opening a database does not rewrite segment data or timestamps. Project/file aggregates use the same normalization for legacy rows, including readonly connections; file progress exposes `emptySegments` for the remaining empty bucket.
 - `tagsSignature`, `matchKey`, and `srcHash` support tag-aware TM/repeat matching.
-- `segments.metaJson` stores row/context metadata and repeat-propagation state.
+- `segments.metaJson` stores row/context metadata.
 - `segments.qaIssuesJson` stores current QA issues.
 - `files.totalSegments` and `confirmedSegments` are maintained statistics; segment state remains the behavioral source.
 
-Repeat state inside `metaJson` is one of:
-
-- `leader`: first source occurrence that can propagate when confirmed within its file;
-- `following` with `sourceSegmentId`: follows that leader and receives its confirmed target;
-- `detached`: a later occurrence that no longer receives automatic propagation.
-
-Leader identity is always determined by the first source occurrence in file order, even before its
-metadata is written. Repeat state is persisted lazily: touching a later occurrence writes only that
-occurrence, while changing or confirming the leader materializes the follower states needed for
-propagation. Later empty or same-target occurrences start `following`; a later non-empty different
-target starts `detached`. Manually changing or directly confirming a later occurrence also detaches
-it. AI translation alone does not detach a follower, and confirmation propagated from the leader
-keeps it following.
-
-This is a JSON contract, not a separate schema column. Changes require model, repository, service, and regression-test updates together.
+Repeat groups and their first occurrence are derived from `fileId`, `srcHash`, and `orderIndex`.
+No follow/detach state is persisted. Legacy `metaJson.repeatPropagation` values are ignored and
+left untouched; opening or editing an existing v15 database needs no metadata rewrite or schema
+change. Propagation behavior is owned by [Localization](LOCALIZATION.md#desktop-working-tm-and-repeated-segments).
 
 ### Translation memories
 

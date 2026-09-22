@@ -17,7 +17,7 @@ describe('fileProgressStats', () => {
         qaProblemSegments: 2,
         confirmedSegmentsForBar: 3,
         inProgressSegments: 4,
-        newSegments: 1,
+        emptySegments: 1,
       },
     });
 
@@ -26,14 +26,14 @@ describe('fileProgressStats', () => {
       qaProblemSegments: 2,
       confirmedSegmentsForBar: 3,
       inProgressSegments: 4,
-      newSegments: 1,
+      emptySegments: 1,
     });
 
     expect(toPercent(buckets)).toEqual({
       qaProblemPct: 20,
       confirmedPct: 30,
       inProgressPct: 40,
-      newPct: 10,
+      emptyPct: 10,
       confirmedDisplayPct: 30,
     });
   });
@@ -53,16 +53,16 @@ describe('fileProgressStats', () => {
         qaProblemSegments: 0,
         confirmedSegmentsForBar: 0,
         inProgressSegments: 0,
-        newSegments: 5,
+        emptySegments: 5,
       },
     });
 
-    expect(buckets.newSegments).toBe(5);
+    expect(buckets.emptySegments).toBe(5);
     expect(toPercent(buckets)).toMatchObject({
       qaProblemPct: 0,
       confirmedPct: 0,
       inProgressPct: 0,
-      newPct: 100,
+      emptyPct: 100,
     });
   });
 
@@ -81,7 +81,7 @@ describe('fileProgressStats', () => {
         qaProblemSegments: 4,
         confirmedSegmentsForBar: 0,
         inProgressSegments: 0,
-        newSegments: 0,
+        emptySegments: 0,
       },
     });
 
@@ -89,7 +89,7 @@ describe('fileProgressStats', () => {
       qaProblemPct: 100,
       confirmedPct: 0,
       inProgressPct: 0,
-      newPct: 0,
+      emptyPct: 0,
     });
   });
 });

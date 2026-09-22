@@ -15,11 +15,10 @@ import { EditorDisplayControls } from './EditorDisplayControls';
 import {
   FILTER_MATCH_MODE_OPTIONS,
   FILTER_QUALITY_OPTIONS,
-  FILTER_QUICK_PRESET_OPTIONS,
   FILTER_SORT_OPTIONS,
   FILTER_STATUS_OPTIONS,
 } from '../../hooks/useEditorFilters';
-import type { EditorQuickPreset, EditorTargetSearchScope } from '../editorFilterUtils';
+import type { EditorStatusFilter, EditorTargetSearchScope } from '../editorFilterUtils';
 
 interface EditorFilterBarProps {
   supportsBatchActions: boolean;
@@ -55,16 +54,14 @@ interface EditorFilterBarProps {
   activeFilterCount: number;
   toggleFilterMenu: () => void;
   closeFilterMenu: () => void;
-  quickPreset: EditorQuickPreset;
-  applyQuickPreset: (value: EditorQuickPreset) => void;
+  firstRepeatOnly: boolean;
+  toggleFirstRepeatOnly: () => void;
   matchMode: 'contains' | 'exact' | 'regex';
   handleMatchModeChange: (value: 'contains' | 'exact' | 'regex') => void;
-  statusFilter: 'all' | 'new' | 'draft' | 'translated' | 'reviewed' | 'confirmed';
-  handleStatusFilterChange: (
-    value: 'all' | 'new' | 'draft' | 'translated' | 'reviewed' | 'confirmed',
-  ) => void;
+  statusFilters: EditorStatusFilter[];
+  toggleStatusFilter: (value: EditorStatusFilter | 'all') => void;
   qualityFilters: Array<'qa_error' | 'qa_warning' | 'save_error'>;
-  toggleQualityFilter: (value: 'qa_error' | 'qa_warning' | 'save_error') => void;
+  toggleQualityFilter: (value: 'all' | 'qa_error' | 'qa_warning' | 'save_error') => void;
   clearFilters: () => void;
   hasActiveFilter: boolean;
 }
@@ -100,12 +97,12 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
   activeFilterCount,
   toggleFilterMenu,
   closeFilterMenu,
-  quickPreset,
-  applyQuickPreset,
+  firstRepeatOnly,
+  toggleFirstRepeatOnly,
   matchMode,
   handleMatchModeChange,
-  statusFilter,
-  handleStatusFilterChange,
+  statusFilters,
+  toggleStatusFilter,
   qualityFilters,
   toggleQualityFilter,
   clearFilters,
@@ -113,6 +110,9 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
 }) => {
   const filterMenuRef = React.useRef<HTMLButtonElement>(null);
   const sortMenuRef = React.useRef<HTMLButtonElement>(null);
+  const matchModeMenuRef = React.useRef<HTMLButtonElement>(null);
+  const [isMatchModeMenuOpen, setMatchModeMenuOpen] = React.useState(false);
+  const matchModeLabel = FILTER_MATCH_MODE_OPTIONS.find((option) => option.value === matchMode)?.label;
   return (
     <div className="sticky top-0 z-20 bg-surface-chrome border-b border-border-subtle">
       <div className="flex items-center gap-2 px-4 py-1.5">
@@ -243,6 +243,41 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
 
         <div className="relative shrink-0">
           <IconButton
+            ref={matchModeMenuRef}
+            size="sm"
+            variant="ghost"
+            tone={isMatchModeMenuOpen || matchMode !== 'contains' ? 'brand' : 'neutral'}
+            aria-label={`Search match mode: ${matchModeLabel}`}
+            title={`Search match mode: ${matchModeLabel}`}
+            aria-haspopup="menu"
+            aria-expanded={isMatchModeMenuOpen}
+            onClick={() => setMatchModeMenuOpen((open) => !open)}
+          >
+            <Icon name="settings-2" />
+          </IconButton>
+          {isMatchModeMenuOpen && (
+            <Menu
+              anchor={matchModeMenuRef}
+              onClose={() => setMatchModeMenuOpen(false)}
+              label="Search match mode"
+              className="max-w-40"
+            >
+              {FILTER_MATCH_MODE_OPTIONS.map((option) => (
+                <MenuItem
+                  size="sm"
+                  key={option.value}
+                  selected={matchMode === option.value}
+                  onClick={() => handleMatchModeChange(option.value)}
+                >
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Menu>
+          )}
+        </div>
+
+        <div className="relative shrink-0">
+          <IconButton
             type="button"
             ref={filterMenuRef}
             variant="ghost"
@@ -268,92 +303,60 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
               label="Filters"
               className="w-80 space-y-3"
             >
-              <div>
-                <div className="text-caption font-bold uppercase tracking-wider text-text-faint mb-2">
-                  Quick Presets
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {FILTER_QUICK_PRESET_OPTIONS.map((preset) => {
-                    const active = quickPreset === preset.value;
-                    return (
-                      <ToggleButton
-                        pressed={active}
-                        size="xs"
-                        key={preset.value}
-                        type="button"
-                        onClick={() => applyQuickPreset(preset.value)}
-                      >
-                        {preset.label}
-                      </ToggleButton>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-caption font-bold uppercase tracking-wider text-text-faint mb-2">
-                  Match Mode
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {FILTER_MATCH_MODE_OPTIONS.map((mode) => {
-                    const active = matchMode === mode.value;
-                    return (
-                      <ToggleButton
-                        pressed={active}
-                        size="xs"
-                        key={mode.value}
-                        type="button"
-                        onClick={() => handleMatchModeChange(mode.value)}
-                      >
-                        {mode.label}
-                      </ToggleButton>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
+              <div role="group" aria-label="Status">
                 <div className="text-caption font-bold uppercase tracking-wider text-text-faint mb-2">
                   Status
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {FILTER_STATUS_OPTIONS.map((option) => {
-                    const active = statusFilter === option.value;
-                    return (
-                      <ToggleButton
-                        pressed={active}
-                        size="xs"
-                        key={option.value}
-                        type="button"
-                        onClick={() => handleStatusFilterChange(option.value)}
-                      >
-                        {option.label}
-                      </ToggleButton>
-                    );
-                  })}
+                  {FILTER_STATUS_OPTIONS.map((option) => (
+                    <ToggleButton
+                      pressed={
+                        option.value === 'all'
+                          ? statusFilters.length === 0
+                          : statusFilters.includes(option.value)
+                      }
+                      size="xs"
+                      key={option.value}
+                      onClick={() => toggleStatusFilter(option.value)}
+                    >
+                      {option.label}
+                    </ToggleButton>
+                  ))}
                 </div>
               </div>
 
-              <div>
+              <div role="group" aria-label="QA">
                 <div className="text-caption font-bold uppercase tracking-wider text-text-faint mb-2">
-                  Quality
+                  QA
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {FILTER_QUALITY_OPTIONS.map((option) => {
-                    const active = qualityFilters.includes(option.value);
-                    return (
-                      <ToggleButton
-                        pressed={active}
-                        size="xs"
-                        key={option.value}
-                        type="button"
-                        onClick={() => toggleQualityFilter(option.value)}
-                      >
-                        {option.label}
-                      </ToggleButton>
-                    );
-                  })}
+                  <ToggleButton
+                    pressed={qualityFilters.length === 0}
+                    size="xs"
+                    onClick={() => toggleQualityFilter('all')}
+                  >
+                    All
+                  </ToggleButton>
+                  {FILTER_QUALITY_OPTIONS.map((option) => (
+                    <ToggleButton
+                      pressed={qualityFilters.includes(option.value)}
+                      size="xs"
+                      key={option.value}
+                      onClick={() => toggleQualityFilter(option.value)}
+                    >
+                      {option.label}
+                    </ToggleButton>
+                  ))}
                 </div>
+              </div>
+
+              <div role="group" aria-label="String">
+                <div className="text-caption font-bold uppercase tracking-wider text-text-faint mb-2">
+                  String
+                </div>
+                <ToggleButton pressed={firstRepeatOnly} size="xs" onClick={toggleFirstRepeatOnly}>
+                  First repetition
+                </ToggleButton>
               </div>
             </Popover>
           )}

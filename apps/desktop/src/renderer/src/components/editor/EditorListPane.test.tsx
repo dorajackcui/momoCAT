@@ -28,7 +28,7 @@ it.each([64, 79.375])('positions %spx rows without overlap and scrolls', (rowHei
     segmentId: `segment-${index}`,
     sourceTokens: [],
     targetTokens: [],
-    status: 'new',
+    status: 'empty',
   })) as Segment[];
   const store = createEditorSegmentStore(segments);
   const filteredSegments = segments.map((segment, originalIndex) => ({
@@ -39,7 +39,6 @@ it.each([64, 79.375])('positions %spx rows without overlap and scrolls', (rowHei
     hasQaError: false,
     hasQaWarning: false,
     hasSaveError: false,
-    hasIssue: false,
   }));
   const noop = () => {};
 

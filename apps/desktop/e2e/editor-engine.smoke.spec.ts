@@ -470,7 +470,7 @@ test.describe('CodeMirror editor engine smoke', () => {
         await api.updateSegment(
           first.segmentId,
           [{ type: 'text', content: 'TM pushed content' }],
-          'translated',
+          'draft',
         );
         return first.segmentId as string;
       }, fileId);
@@ -519,7 +519,7 @@ test.describe('CodeMirror editor engine smoke', () => {
           await api.updateSegment(
             nextSegmentId,
             [{ type: 'text', content: 'post-confirm remote' }],
-            'translated',
+            'draft',
           );
         },
         { nextSegmentId: firstSegmentId },

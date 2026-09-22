@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { Segment, TBMatch } from '@cat/core/models';
 import type { SegmentQaRuleId } from '@cat/core/project';
+import type { SegmentsUpdatedEvent } from '../../../../shared/ipc';
 import { evaluateSegmentQa, TagValidator } from '@cat/core/qa';
 import { apiClient } from '../../services/apiClient';
 import type { SetSegmentsWithChangeHint } from './editorSegmentState';
@@ -17,6 +18,7 @@ interface UseSegmentQaWorkflowParams {
   setSegmentSaveError: (segmentId: string, message: string) => void;
   clearSegmentSaveError: (segmentId: string) => void;
   tagValidator: TagValidator;
+  onConfirmed: (data: SegmentsUpdatedEvent) => void;
 }
 
 export function useSegmentQaWorkflow({
@@ -30,6 +32,7 @@ export function useSegmentQaWorkflow({
   setSegmentSaveError,
   clearSegmentSaveError,
   tagValidator,
+  onConfirmed,
 }: UseSegmentQaWorkflowParams): { confirmSegment: (segmentId: string) => Promise<void> } {
   // Read frequently-changing inputs through a ref so confirmSegment keeps a
   // stable identity (it is forwarded to every EditorRow as onConfirm).
@@ -123,7 +126,13 @@ export function useSegmentQaWorkflow({
       clearSegmentSaveError(segmentId);
 
       try {
-        await apiClient.updateSegment(segmentId, segment.targetTokens, 'confirmed');
+        const result = await apiClient.updateSegment(segmentId, segment.targetTokens, 'confirmed');
+        onConfirmed({
+          ...result,
+          segmentId,
+          targetTokens: segment.targetTokens,
+          status: 'confirmed',
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setSegments(
@@ -147,7 +156,7 @@ export function useSegmentQaWorkflow({
         setActiveSegmentId(segments[currentIndex + 1].segmentId);
       }
     },
-    [clearSegmentSaveError, setActiveSegmentId, setSegmentSaveError, setSegments],
+    [clearSegmentSaveError, onConfirmed, setActiveSegmentId, setSegmentSaveError, setSegments],
   );
 
   return {

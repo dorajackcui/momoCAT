@@ -10,6 +10,7 @@ import {
 import { randomUUID } from 'crypto';
 import type { FileSegmentStatusStats, ProjectFileRecord, ProjectSavedPromptRecord } from '../types';
 import { normalizeProjectFileName } from '../projectFileName';
+import { SEGMENT_STATUS_SQL } from './segmentStatus';
 
 interface FileWithSegmentStatsRow extends Omit<ProjectFileRecord, 'segmentStatusStats'> {
   derivedTotalSegments?: number | null;
@@ -42,7 +43,7 @@ export class ProjectRepo {
     ) as confirmedSegmentsForBar,
     COALESCE(
       SUM(CASE
-        WHEN s.status IN ('draft', 'translated', 'reviewed')
+        WHEN (${SEGMENT_STATUS_SQL}) = 'draft'
           AND (s.qaIssuesJson IS NULL OR s.qaIssuesJson = '' OR s.qaIssuesJson = '[]')
         THEN 1
         ELSE 0
@@ -355,7 +356,7 @@ export class ProjectRepo {
     const qaProblemSegments = Math.max(0, Number(row.qaProblemSegments ?? 0));
     const confirmedSegmentsForBar = Math.max(0, Number(row.confirmedSegmentsForBar ?? 0));
     const inProgressSegments = Math.max(0, Number(row.inProgressSegments ?? 0));
-    const newSegments = Math.max(
+    const emptySegments = Math.max(
       0,
       totalSegments - qaProblemSegments - confirmedSegmentsForBar - inProgressSegments,
     );
@@ -364,7 +365,7 @@ export class ProjectRepo {
       qaProblemSegments,
       confirmedSegmentsForBar,
       inProgressSegments,
-      newSegments,
+      emptySegments,
     };
 
     return {

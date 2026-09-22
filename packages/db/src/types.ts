@@ -10,7 +10,7 @@ export interface FileSegmentStatusStats {
   qaProblemSegments: number;
   confirmedSegmentsForBar: number;
   inProgressSegments: number;
-  newSegments: number;
+  emptySegments: number;
 }
 
 export type ProjectFileRecord = ProjectFile & {

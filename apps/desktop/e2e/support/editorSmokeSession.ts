@@ -14,23 +14,25 @@ export interface EditorSmokeSession {
   projectName: string;
 }
 
-function createFixtureSpreadsheet(tempDir: string): string {
+function createFixtureSpreadsheet(tempDir: string, rows?: string[][]): string {
   const fixturePath = join(tempDir, 'cm6-smoke-fixture.xlsx');
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.aoa_to_sheet([
     ['Source', 'Target', 'Context'],
-    ['Hello <b>World</b>', '', 'ctx-1'],
-    ['Needle source', 'Needle target', 'ctx-2'],
-    ['Space and tab\tsegment', 'A B', 'ctx-3'],
+    ...(rows ?? [
+      ['Hello <b>World</b>', '', 'ctx-1'],
+      ['Needle source', 'Needle target', 'ctx-2'],
+      ['Space and tab\tsegment', 'A B', 'ctx-3'],
+    ]),
   ]);
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Segments');
   XLSX.writeFile(workbook, fixturePath);
   return fixturePath;
 }
 
-export async function createEditorSmokeSession(): Promise<EditorSmokeSession> {
+export async function createEditorSmokeSession(rows?: string[][]): Promise<EditorSmokeSession> {
   const tempDir = mkdtempSync(join(tmpdir(), 'simple-cat-cm6-smoke-'));
-  const fixturePath = createFixtureSpreadsheet(tempDir);
+  const fixturePath = createFixtureSpreadsheet(tempDir, rows);
   const projectName = `cm6-smoke-${Date.now()}`;
   const launchEnv = { ...process.env };
   delete launchEnv.ELECTRON_RUN_AS_NODE;

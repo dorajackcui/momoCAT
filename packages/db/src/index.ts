@@ -1,7 +1,6 @@
 import Database from "better-sqlite3";
 import {
   QaIssue,
-  RepeatPropagationState,
   Segment,
   SegmentStatus,
   TBEntry,
@@ -30,6 +29,7 @@ import {
 import { ensureCurrentSchema } from './currentSchema';
 import { ProjectRepo } from "./repos/ProjectRepo";
 import { SegmentRepo } from "./repos/SegmentRepo";
+import { registerSegmentStatusFunction } from './repos/segmentStatus';
 import { SettingsRepo } from "./repos/SettingsRepo";
 import { TBRepo } from "./repos/TBRepo";
 import { TMRepo } from "./repos/TMRepo";
@@ -70,6 +70,7 @@ export class CATDatabase {
     }
 
     ensureCurrentSchema(this.db, { allowSchemaMaintenance: !readonly });
+    registerSegmentStatusFunction(this.db);
 
     this.projectRepo = new ProjectRepo(this.db);
     this.segmentRepo = new SegmentRepo(this.db, (fileId) =>
@@ -249,13 +250,8 @@ export class CATDatabase {
     segmentId: string,
     targetTokens: Token[],
     status: SegmentStatus,
-    repeatPropagation?: RepeatPropagationState | null,
   ) {
-    this.segmentRepo.updateSegmentTarget(segmentId, targetTokens, status, repeatPropagation);
-  }
-
-  public updateSegmentRepeatPropagation(segmentId: string, state: RepeatPropagationState | null) {
-    this.segmentRepo.updateSegmentRepeatPropagation(segmentId, state);
+    this.segmentRepo.updateSegmentTarget(segmentId, targetTokens, status);
   }
 
   public updateSegmentQaIssues(segmentId: string, qaIssues: QaIssue[]) {

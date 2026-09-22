@@ -74,6 +74,9 @@ describe('segment update handler', () => {
     ],
     ['missing status', 'seg-1', tokens, undefined, undefined],
     ['unknown status', 'seg-1', tokens, 'done', undefined],
+    ['retired new status', 'seg-1', tokens, 'new', undefined],
+    ['retired translated status', 'seg-1', tokens, 'translated', undefined],
+    ['retired reviewed status', 'seg-1', tokens, 'reviewed', undefined],
     ['prototype status', 'seg-1', tokens, 'toString', undefined],
     ['invalid request ID', 'seg-1', tokens, 'draft', 123],
   ])('rejects %s before calling the service', (_name, ...args) => {
@@ -82,7 +85,7 @@ describe('segment update handler', () => {
     expect(updateSegment).not.toHaveBeenCalled();
   });
 
-  it.each<SegmentStatus>(['new', 'draft', 'translated', 'confirmed', 'reviewed'])(
+  it.each<SegmentStatus>(['empty', 'draft', 'confirmed'])(
     'preserves valid tokens, metadata, and %s status',
     async (status) => {
       const { invoke, updateSegment, result } = setup();
@@ -121,7 +124,7 @@ describe('segment update handler', () => {
 
   it('allows clearing a target and omitting the request ID', async () => {
     const { invoke, updateSegment } = setup();
-    await invoke('seg-1', [], 'new');
-    expect(updateSegment).toHaveBeenCalledWith('seg-1', [], 'new', undefined);
+    await invoke('seg-1', [], 'empty');
+    expect(updateSegment).toHaveBeenCalledWith('seg-1', [], 'empty', undefined);
   });
 });

@@ -152,7 +152,7 @@ function createSegment(overrides: Partial<Segment> = {}): Segment {
     orderIndex: 0,
     sourceTokens: tokens('Hello world'),
     targetTokens: [],
-    status: 'new',
+    status: 'empty',
     tagsSignature: '',
     matchKey: 'hello world',
     srcHash: 'source-hash',

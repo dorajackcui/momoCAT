@@ -5,7 +5,7 @@ interface FileSegmentStatusStatsLike {
   qaProblemSegments: number;
   confirmedSegmentsForBar: number;
   inProgressSegments: number;
-  newSegments: number;
+  emptySegments: number;
 }
 
 type FileProgressInput = ProjectFile & {
@@ -17,14 +17,14 @@ export interface FileProgressBuckets {
   qaProblemSegments: number;
   confirmedSegmentsForBar: number;
   inProgressSegments: number;
-  newSegments: number;
+  emptySegments: number;
 }
 
 export interface FileProgressPercentages {
   qaProblemPct: number;
   confirmedPct: number;
   inProgressPct: number;
-  newPct: number;
+  emptyPct: number;
   confirmedDisplayPct: number;
 }
 
@@ -35,7 +35,7 @@ export function deriveFileProgressBuckets(file: FileProgressInput): FileProgress
   const qaProblemSegments = Math.max(0, Number(stats.qaProblemSegments));
   const confirmedSegmentsForBar = Math.max(0, Number(stats.confirmedSegmentsForBar));
   const inProgressSegments = Math.max(0, Number(stats.inProgressSegments));
-  const newSegments = Math.max(
+  const emptySegments = Math.max(
     0,
     totalSegments - qaProblemSegments - confirmedSegmentsForBar - inProgressSegments,
   );
@@ -45,7 +45,7 @@ export function deriveFileProgressBuckets(file: FileProgressInput): FileProgress
     qaProblemSegments,
     confirmedSegmentsForBar,
     inProgressSegments,
-    newSegments,
+    emptySegments,
   };
 }
 
@@ -58,7 +58,7 @@ export function toPercent(buckets: FileProgressBuckets): FileProgressPercentages
     qaProblemPct: ratio(buckets.qaProblemSegments),
     confirmedPct,
     inProgressPct: ratio(buckets.inProgressSegments),
-    newPct: ratio(buckets.newSegments),
+    emptyPct: ratio(buckets.emptySegments),
     confirmedDisplayPct: Math.round(confirmedPct),
   };
 }

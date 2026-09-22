@@ -25,12 +25,13 @@ export interface TagMetadata {
   validationState?: ValidationState;
 }
 
-export type SegmentStatus =
-  | "new"
-  | "draft"
-  | "translated"
-  | "confirmed"
-  | "reviewed";
+export type SegmentStatus = "empty" | "draft" | "confirmed";
+
+/** Confirmation is explicit; all other statuses follow the target content. */
+export function normalizeSegmentStatus(status: unknown, targetTokens: readonly Token[]): SegmentStatus {
+  if (status === "confirmed") return "confirmed";
+  return targetTokens.some(token => token.content.trim().length > 0) ? "draft" : "empty";
+}
 
 export type QaSeverity = "error" | "warning" | "info";
 
@@ -45,18 +46,6 @@ export interface AutoFixSuggestion {
   description: string;
   apply: (targetTokens: Token[]) => Token[];
 }
-
-export type RepeatPropagationState =
-  | {
-      mode: "leader";
-    }
-  | {
-      mode: "following";
-      sourceSegmentId: string;
-    }
-  | {
-      mode: "detached";
-    };
 
 export interface ValidationResult {
   issues: QaIssue[];
@@ -77,7 +66,6 @@ export interface Segment {
     rowRef?: number;
     context?: string;
     notes?: string[];
-    repeatPropagation?: RepeatPropagationState;
     updatedAt: string;
   };
   qaIssues?: QaIssue[];

@@ -23,7 +23,7 @@ describe('createTransientSegment', () => {
     );
     expect(segment.sourceTokens.some((token) => token.type === 'tag')).toBe(true);
     expect(segment.targetTokens).toEqual([]);
-    expect(segment.status).toBe('new');
+    expect(segment.status).toBe('empty');
   });
 
   it('computes a stable source hash from source text and tags', () => {
@@ -59,7 +59,7 @@ describe('createTransientSegment', () => {
       { projectId: 42 },
     );
 
-    expect(segment.status).toBe('translated');
+    expect(segment.status).toBe('draft');
     expect(serializeTokensToDisplayText(segment.targetTokens)).toBe('Bonjour');
     expect(segment.meta).toMatchObject({
       externalUnitId: 'row-3',

@@ -24,7 +24,7 @@ function createSegment(source = 'Hello world'): Segment {
     orderIndex: 0,
     sourceTokens: [{ type: 'text', content: source }],
     targetTokens: [],
-    status: 'new',
+    status: 'empty',
     tagsSignature: '',
     matchKey: source,
     srcHash: 'source-hash',

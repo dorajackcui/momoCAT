@@ -19,11 +19,9 @@ import {
 } from './argumentValidation';
 
 const SEGMENT_STATUSES = {
-  new: true,
+  empty: true,
   draft: true,
-  translated: true,
   confirmed: true,
-  reviewed: true,
 } satisfies Record<SegmentStatus, true>;
 
 const TOKEN_TYPES = {

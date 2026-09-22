@@ -9,7 +9,7 @@ function createSegment(segmentId: string, target = ''): Segment {
     orderIndex: Number(segmentId.replace(/\D/g, '')) || 0,
     sourceTokens: [{ type: 'text', content: `source-${segmentId}` }],
     targetTokens: target ? [{ type: 'text', content: target }] : [],
-    status: target ? 'draft' : 'new',
+    status: target ? 'draft' : 'empty',
     tagsSignature: '',
     matchKey: `source-${segmentId}`,
     srcHash: `hash-${segmentId}`,
@@ -31,7 +31,7 @@ describe('editorSegmentStore', () => {
           {
             ...second,
             targetTokens: [{ type: 'text' as const, content: 'translated' }],
-            status: 'translated' as const,
+            status: 'draft' as const,
           },
         ],
       ]),
@@ -41,7 +41,7 @@ describe('editorSegmentStore', () => {
     expect(store.getSegment('seg-1')).toBe(first);
     expect(store.getSegment('seg-2')).toMatchObject({
       targetTokens: [{ type: 'text', content: 'translated' }],
-      status: 'translated',
+      status: 'draft',
     });
     expect(changes).toHaveLength(1);
     expect(changes[0]).toMatchObject({ segmentId: 'seg-2', previous: second });

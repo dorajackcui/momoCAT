@@ -93,7 +93,6 @@ export class TMBatchOpsService {
       },
       {
         commitToWorkingTM: false,
-        preserveRepeatLink: true,
         propagateRepeats: false,
       },
     );
@@ -156,7 +155,6 @@ export class TMBatchOpsService {
     if (updates.length > 0) {
       await this.segmentService.updateSegmentsAtomically(updates, {
         commitToWorkingTM: false,
-        preserveRepeatLink: true,
       });
     }
 

@@ -424,7 +424,6 @@ test('coordinates status, QA, reference badges and search in complete reading sc
     await expect(search.getByRole('textbox')).toHaveCount(2);
     await expect(page.getByRole('progressbar', { name: 'Confirmed segments' })).toBeVisible();
     await page.getByPlaceholder('Filter source text').fill('window');
-    await page.getByPlaceholder('Filter target text').fill('窗');
     await page.locator('.editor-source-text').nth(2).click();
     await expect(page.locator('.bg-match-exact')).toBeVisible();
     await expect(page.locator('.bg-match-fuzzy')).toBeVisible();
@@ -442,19 +441,22 @@ test('coordinates status, QA, reference badges and search in complete reading sc
         .getByRole('group', { name: 'Color scheme' })
         .getByRole('radio', { checked: true })
         .press('Escape');
-      for (const role of ['new', 'draft', 'translated', 'reviewed', 'confirmed']) {
-        const marker = page.locator(`.bg-status-${role}`).first();
+      for (const status of ['empty', 'draft', 'confirmed']) {
+        const marker = page.locator(`[data-segment-status="${status}"]`).first();
         await expect(marker).toBeVisible();
-        const colors = await marker.evaluate((element, role) => {
+        const colors = await marker.evaluate((element, status) => {
           const token = getComputedStyle(document.documentElement)
-            .getPropertyValue(`--color-status-${role}`)
+            .getPropertyValue(`--color-status-${status === 'confirmed' ? 'confirmed' : 'empty'}`)
             .trim()
             .split(/\s+/)
             .join(', ');
-          return { actual: getComputedStyle(element).backgroundColor, expected: `rgb(${token})` };
-        }, role);
-        expect(colors.actual).toBe(colors.expected);
+          const style = getComputedStyle(element);
+          return { fill: style.backgroundColor, border: style.borderColor, expected: `rgb(${token})` };
+        }, status);
+        expect(colors.border).toBe(colors.expected);
+        expect(colors.fill).toBe(status === 'confirmed' ? colors.expected : 'rgba(0, 0, 0, 0)');
       }
+      await page.getByPlaceholder('Filter target text').fill('窗');
       await expect(page.locator('.editor-search-highlight').first()).toBeVisible();
       await expect(page.locator('.cm-target-highlight').first()).toBeVisible();
       await page.evaluate(() => document.fonts.ready);
@@ -462,6 +464,7 @@ test('coordinates status, QA, reference badges and search in complete reading sc
         path: test.info().outputPath(`${theme.toLowerCase()}-reading.png`),
         animations: 'disabled',
       });
+      await page.getByPlaceholder('Filter target text').fill('');
     }
   } finally {
     await closeEditorSmokeSession(session);

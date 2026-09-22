@@ -19,7 +19,7 @@ module.exports = {
         secondary: 'rgb(var(--color-secondary) / <alpha-value>)',
         focus: 'rgb(var(--color-focus) / <alpha-value>)',
         status: Object.fromEntries(
-          ['new', 'draft', 'translated', 'reviewed', 'confirmed'].map((status) => [
+          ['empty', 'confirmed'].map((status) => [
             status,
             `rgb(var(--color-status-${status}) / <alpha-value>)`,
           ]),

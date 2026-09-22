@@ -20,9 +20,7 @@
   --color-editor-surface-alternate: 246 246 245;
   --color-editor-text: 33 32 28;
   --color-editor-context: 110 110 104;
-  --color-status-new: 140 129 119;
-  --color-status-draft: 165 118 50;
-  --color-status-translated: 91 127 170;
+  --color-status-empty: 140 129 119;
   --color-status-confirmed: 95 132 87;
   /* Text and solid fill have separate contrast requirements. */
   --color-brand: 165 78 49;
@@ -79,9 +77,7 @@
   --color-editor-surface-alternate: 229 218 210;
   --color-editor-text: 30 30 30;
   --color-editor-context: 106 94 84;
-  --color-status-new: 140 129 119;
-  --color-status-draft: 165 118 50;
-  --color-status-translated: 91 127 170;
+  --color-status-empty: 140 129 119;
   --color-status-confirmed: 95 132 87;
   --color-brand: 52 94 118;
   --color-brand-solid: var(--color-brand);
@@ -167,9 +163,7 @@
   --color-highlight-border: 208 135 112;
   --color-selection: 76 86 106;
   --color-selection-text: 236 239 244;
-  --color-status-new: 139 149 164;
-  --color-status-draft: 215 170 98;
-  --color-status-translated: 129 169 210;
+  --color-status-empty: 139 149 164;
   --color-status-confirmed: 156 189 133;
   --color-backdrop: 46 52 64;
   --shadow-float: 0 18px 50px rgb(0 0 0 / 0.35);
@@ -180,8 +174,6 @@
    future nested surfaces resolve aliases against their own colors. */
 :root,
 [data-color-theme] {
-  /* AI-reviewed output in review projects shares the AI-translated blue. */
-  --color-status-reviewed: var(--color-status-translated);
   /* Filled reference badges share a white-text palette, independent of QA tones. */
   --color-match-exact: 77 115 89;
   --color-match-exact-contrast: 255 255 255;

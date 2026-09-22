@@ -46,8 +46,8 @@ describe('formatProjectsInspection', () => {
               confirmedSegments: 1,
               statusCounts: {
                 zeta: 1,
-                translated: 2,
-                new: 3,
+                draft: 2,
+                empty: 3,
                 alpha: 1,
                 confirmed: 1,
               },
@@ -63,7 +63,7 @@ describe('formatProjectsInspection', () => {
       'custom:missing (Missing Provider / unknown) apiKey: set last4=7890 baseUrl: not configured',
     );
     expect(output).toContain('model: custom:missing (Unknown custom provider), apiKey: set last4=7890');
-    expect(output).toContain('status=new:3, translated:2, confirmed:1, alpha:1, zeta:1');
+    expect(output).toContain('status=empty:3, draft:2, confirmed:1, alpha:1, zeta:1');
     expect(output).not.toContain('sk-test-1234567890');
     expect(output).not.toContain('null');
   });

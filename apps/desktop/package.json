@@ -11,7 +11,7 @@
     "release:win": "node ../../scripts/pack-platform.mjs --platform=win -- --publish always",
     "preview": "electron-vite preview",
     "test:e2e": "npm run build && playwright test --config=playwright.config.ts",
-    "test:e2e:smoke": "npm run build && playwright test --config=playwright.config.ts e2e/editor-engine.smoke.spec.ts e2e/ui-controls.smoke.spec.ts e2e/editor-themes.smoke.spec.ts e2e/editor-typography.smoke.spec.ts",
+    "test:e2e:smoke": "npm run build && playwright test --config=playwright.config.ts e2e/editor-engine.smoke.spec.ts e2e/editor-repeats.smoke.spec.ts e2e/ui-controls.smoke.spec.ts e2e/editor-themes.smoke.spec.ts e2e/editor-typography.smoke.spec.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "format": "prettier --write ."

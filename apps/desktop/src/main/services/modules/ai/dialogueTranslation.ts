@@ -1,4 +1,4 @@
-import { type Segment, type Token } from '@cat/core/models';
+import { normalizeSegmentStatus, type Segment, type Token } from '@cat/core/models';
 import {
   buildAIDialoguePromptBundle,
   type DialoguePromptPreviousGroup,
@@ -208,7 +208,7 @@ export async function translateDialogueUnit(
         updates.push({
           segmentId: draft.segment.segmentId,
           targetTokens,
-          status: 'translated',
+          status: normalizeSegmentStatus('draft', targetTokens),
         });
       }
 

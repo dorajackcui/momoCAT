@@ -13,9 +13,9 @@ export async function prepareEditorReadingScene(session: EditorSmokeSession): Pr
   );
   const scenes: [Segment['status'], string, string][] = [
     [
-      'new',
+      'empty',
       'Outside the window, the city slowly woke to the morning light.',
-      '窗外的城市，在晨光中缓缓醒来。',
+      '',
     ],
     [
       'draft',
@@ -23,12 +23,12 @@ export async function prepareEditorReadingScene(session: EditorSmokeSession): Pr
       '她推开窗，静静听着雨滴落在叶片上的声音。',
     ],
     [
-      'translated',
+      'draft',
       'Beside the window stood a table, a notebook and a cup of café au lait.',
       '窗边摆着一张桌子、一本笔记和一杯拿铁。',
     ],
     [
-      'reviewed',
+      'draft',
       'The light through the window softened the edges of every object.',
       '透过窗户的光，让每一件物品的轮廓都柔和起来。',
     ],
@@ -42,7 +42,7 @@ export async function prepareEditorReadingScene(session: EditorSmokeSession): Pr
       'Keep the window open for 15 minutes before starting work.',
       '开始工作前，请开窗通风 5 分钟。',
     ],
-    ['translated', 'Please close the window before you leave.', '离开前，请关上窗户'],
+    ['draft', 'Please close the window before you leave.', '离开前，请关上窗户'],
   ];
   const segments = scenes.map(
     ([status, source, target], index): Segment => ({

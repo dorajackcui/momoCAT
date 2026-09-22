@@ -14,7 +14,7 @@ export function validateSegmentTerminology(
   if (!Array.isArray(termMatches) || termMatches.length === 0) return [];
 
   const targetText = serializeTokensToSearchText(segment.targetTokens);
-  if (segment.status === 'new' && !targetText.trim()) return [];
+  if (segment.status === 'empty' && !targetText.trim()) return [];
 
   const issues: QaIssue[] = [];
   const seen = new Set<string>();

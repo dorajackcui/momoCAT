@@ -89,7 +89,6 @@
       "updateProjectPrompt",
       "updateProjectSavedPrompt",
       "updateSegmentQaIssues",
-      "updateSegmentRepeatPropagation",
       "updateSegmentTarget",
       "upsertTBEntryBySrcTerm",
       "upsertTMEntry",

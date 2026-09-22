@@ -6,6 +6,163 @@ import {
 } from './support/editorSmokeSession';
 
 test.describe('Shared UI controls smoke', () => {
+  test('shows right-side status circles and filters empty, draft and confirmed segments', async () => {
+    const session = await createSmokeSession();
+    try {
+      const { page } = session;
+      const rows = page.locator('.editor-row');
+      const marker = (status: string) => page.locator(`[data-segment-status="${status}"]`);
+      await expect(marker('empty')).toHaveCount(1);
+      await expect(marker('draft')).toHaveCount(2);
+      const emptyClass = await marker('empty').getAttribute('class');
+      expect(await marker('draft').first().getAttribute('class')).toBe(emptyClass);
+      const targetBounds = await rows.nth(1).locator('.editor-target-cell').boundingBox();
+      const statusBounds = await rows.nth(1).locator('.editor-status-cell').boundingBox();
+      expect(statusBounds!.x).toBeGreaterThanOrEqual(targetBounds!.x + targetBounds!.width - 1);
+      expect(await rows.nth(1).locator('.editor-status-cell').evaluate(element =>
+        parseFloat(getComputedStyle(element).borderLeftWidth),
+      )).toBeGreaterThan(0);
+
+      await rows.nth(1).locator('.editor-source-text').click();
+      await rows.nth(1).locator('.cm-content').click();
+      await page.keyboard.press('Control+Enter');
+      await expect(marker('confirmed')).toHaveCount(1);
+      await expect(marker('confirmed')).toHaveClass(/bg-status-confirmed/);
+      await page.getByRole('button', { name: 'Open filters', exact: true }).click();
+      const filters = page.getByRole('dialog', { name: 'Filters', exact: true });
+      for (const retired of ['New', 'AI Translated', 'AI Reviewed']) {
+        await expect(filters.getByRole('button', { name: retired, exact: true })).toHaveCount(0);
+      }
+      for (const status of ['Empty', 'Draft', 'Confirmed']) {
+        await filters.getByRole('group', { name: 'Status', exact: true }).getByRole('button', { name: 'All', exact: true }).click();
+        await filters.getByRole('button', { name: status, exact: true }).click();
+        await expect(rows).toHaveCount(1);
+        await expect(marker(status.toLowerCase())).toHaveCount(1);
+      }
+      await filters.getByRole('group', { name: 'Status', exact: true }).getByRole('button', { name: 'All', exact: true }).click();
+      await page.keyboard.press('Escape');
+      await expect(rows).toHaveCount(3);
+      await page.screenshot({ path: test.info().outputPath('segment-statuses.png') });
+
+      await rows.nth(1).locator('.editor-source-text').click();
+      const editor = rows.nth(1).locator('.cm-content');
+      await editor.fill('Revised translation');
+      await expect(rows.nth(1).locator('[data-segment-status="draft"]')).toBeVisible();
+      await editor.fill('');
+      await expect(marker('empty')).toHaveCount(2);
+      await rows.nth(2).locator('.editor-source-text').click();
+      await expect.poll(() => page.evaluate(async (fileId) => {
+        const api = (window as unknown as { api: { getSegments: (id: number, offset: number, limit: number) => Promise<Array<{ status: string }>> } }).api;
+        return (await api.getSegments(fileId, 0, 10)).map(segment => segment.status);
+      }, session.fileId)).toEqual(['empty', 'empty', 'draft']);
+    } finally {
+      await closeSmokeSession(session);
+    }
+  });
+
+  test('combines multiple statuses and QA choices with First repetition', async () => {
+    const session = await createSmokeSession();
+    try {
+      const { page, fileId, electronApp } = session;
+      const [template] = await page.evaluate(async (id) => {
+        const api = (window as unknown as { api: import('../src/shared/ipc').DesktopApi }).api;
+        return api.getSegments(id, 0, 1);
+      }, fileId);
+      const segments = (['empty', 'draft', 'confirmed'] as const).flatMap((status, group) =>
+        ['first', 'later'].map((role, index) => ({
+          ...template,
+          segmentId: `${status}-${role}`,
+          orderIndex: group * 2 + index,
+          status,
+          srcHash: status,
+          sourceTokens: [{ type: 'text' as const, content: `Repeated ${status}` }],
+          targetTokens: status === 'empty' ? [] : [{ type: 'text' as const, content: 'Target' }],
+          meta: { ...template.meta, rowRef: group * 2 + index + 1 },
+          qaIssues: status === 'confirmed' ? [] : [{ ruleId: 'fixture', severity: status === 'empty' ? 'error' as const : 'warning' as const, message: 'QA fixture' }],
+        })),
+      );
+      await page.getByRole('button', { name: 'Back to Project', exact: true }).click();
+      await electronApp.evaluate(({ ipcMain }, { channel, segments }) => {
+        ipcMain.removeHandler(channel);
+        ipcMain.handle(channel, (_event, _id, offset, limit) => segments.slice(offset, offset + limit));
+      }, { channel: IPC_CHANNELS.file.getSegments, segments });
+      await page.getByText('cm6-smoke-fixture.xlsx', { exact: true }).first().click();
+      const rows = page.locator('.editor-row');
+      await expect(rows).toHaveCount(6);
+      const sourceSearch = page.getByRole('textbox', { name: 'Filter source text', exact: true });
+      const matchModeButton = page.getByRole('button', { name: /^Search match mode:/ });
+      const matchModeMenu = page.getByRole('menu', { name: 'Search match mode', exact: true });
+      await sourceSearch.fill('Repeated');
+      await expect(rows).toHaveCount(6);
+      await matchModeButton.click();
+      await expect(matchModeMenu.getByRole('menuitem', { name: 'Contains', exact: true }))
+        .toHaveAttribute('data-selected', 'true');
+      await matchModeMenu.getByRole('menuitem', { name: 'Exact', exact: true }).click();
+      await expect(matchModeMenu).toBeHidden();
+      await expect(matchModeButton).toHaveAttribute('title', 'Search match mode: Exact');
+      await expect(rows).toHaveCount(0);
+      await matchModeButton.click();
+      await expect(matchModeMenu.getByRole('menuitem', { name: 'Contains', exact: true })).toBeFocused();
+      await page.keyboard.press('End');
+      await expect(matchModeMenu.getByRole('menuitem', { name: 'Regex', exact: true })).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(matchModeButton).toHaveAttribute('title', 'Search match mode: Regex');
+      await sourceSearch.fill('^Repeated (empty|draft)$');
+      await expect(rows).toHaveCount(4);
+      await matchModeButton.click();
+      await page.screenshot({
+        path: test.info().outputPath('search-match-mode.png'),
+        animations: 'disabled',
+      });
+      await page.keyboard.press('Escape');
+      await expect(matchModeMenu).toBeHidden();
+      await expect(matchModeButton).toBeFocused();
+      await page.getByRole('button', { name: 'Clear filter', exact: true }).click();
+      await expect(matchModeButton).toHaveAttribute('title', 'Search match mode: Contains');
+      await expect(rows).toHaveCount(6);
+      await page.getByRole('button', { name: 'Open filters', exact: true }).click();
+      const filters = page.getByRole('dialog', { name: 'Filters', exact: true });
+      await expect(filters.getByRole('group')).toHaveCount(3);
+      const statuses = filters.getByRole('group', { name: 'Status', exact: true });
+      const qa = filters.getByRole('group', { name: 'QA', exact: true });
+      const firstRepeat = filters.getByRole('group', { name: 'String', exact: true })
+        .getByRole('button', { name: 'First repetition', exact: true });
+      await expect(matchModeButton).toBeVisible();
+      await statuses.getByRole('button', { name: 'Empty', exact: true }).click();
+      await statuses.getByRole('button', { name: 'Draft', exact: true }).click();
+      await expect(rows).toHaveCount(4);
+      await firstRepeat.click();
+      await expect(rows).toHaveCount(2);
+      for (const name of ['Empty', 'Draft']) {
+        await expect(statuses.getByRole('button', { name, exact: true })).toHaveAttribute('aria-pressed', 'true');
+      }
+      await expect(rows.locator('[data-segment-status="empty"]')).toHaveCount(1);
+      await expect(rows.locator('[data-segment-status="draft"]')).toHaveCount(1);
+      await qa.getByRole('button', { name: 'QA error', exact: true }).click();
+      await expect(rows).toHaveCount(1);
+      await qa.getByRole('button', { name: 'QA warning', exact: true }).click();
+      await expect(rows).toHaveCount(2);
+      await qa.getByRole('button', { name: 'All', exact: true }).click();
+      await expect(rows).toHaveCount(2);
+      await statuses.getByRole('button', { name: 'All', exact: true }).click();
+      await expect(rows).toHaveCount(3);
+      await expect(firstRepeat).toHaveAttribute('aria-pressed', 'true');
+      await firstRepeat.click();
+      await expect(rows).toHaveCount(6);
+      await firstRepeat.click();
+      await statuses.getByRole('button', { name: 'Empty', exact: true }).click();
+      await statuses.getByRole('button', { name: 'Draft', exact: true }).click();
+      await expect(rows).toHaveCount(2);
+      await filters.getByText('Status', { exact: true }).hover();
+      await page.screenshot({
+        path: test.info().outputPath('multiselect-filter.png'),
+        animations: 'disabled',
+      });
+    } finally {
+      await closeSmokeSession(session);
+    }
+  });
+
   test('uses one AI entry on compact rows and waits for saves before AI dispatch', async () => {
     const session = await createSmokeSession();
     try {
@@ -32,7 +189,7 @@ test.describe('Shared UI controls smoke', () => {
               return {
                 fileId,
                 segmentId,
-                status: 'translated',
+                status: 'draft',
                 propagatedIds: [],
                 targetTokens: [{ type: 'text', content: `${kind} result` }],
                 serverAppliedAt: new Date().toISOString(),

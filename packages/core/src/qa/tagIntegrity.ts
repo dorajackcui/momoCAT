@@ -45,7 +45,7 @@ export function validateTagIntegrityTokens(
   const sourceTags = extractTags(sourceTokens);
   const targetTags = extractTags(targetTokens);
 
-  if (options?.status === 'new' && targetTags.length === 0) return [];
+  if (options?.status === 'empty' && targetTags.length === 0) return [];
 
   const sourceTagCounts = countTags(sourceTags);
   const targetTagCounts = countTags(targetTags);

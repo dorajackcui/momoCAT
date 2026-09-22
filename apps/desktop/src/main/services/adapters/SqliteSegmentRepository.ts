@@ -1,7 +1,6 @@
 import { CATDatabase } from '@cat/db';
 import type {
   QaIssue,
-  RepeatPropagationState,
   Segment,
   SegmentStatus,
   Token,
@@ -40,16 +39,8 @@ export class SqliteSegmentRepository implements SegmentRepository {
     segmentId: string,
     targetTokens: Token[],
     status: SegmentStatus,
-    repeatPropagation?: RepeatPropagationState | null,
   ): void {
-    this.db.updateSegmentTarget(segmentId, targetTokens, status, repeatPropagation);
-  }
-
-  updateSegmentRepeatPropagation(
-    segmentId: string,
-    repeatPropagation: RepeatPropagationState | null,
-  ): void {
-    this.db.updateSegmentRepeatPropagation(segmentId, repeatPropagation);
+    this.db.updateSegmentTarget(segmentId, targetTokens, status);
   }
 
   updateSegmentQaIssues(segmentId: string, qaIssues: QaIssue[]): void {

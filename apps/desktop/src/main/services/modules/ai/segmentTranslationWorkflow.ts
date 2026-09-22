@@ -1,4 +1,4 @@
-import { type Segment, type SegmentStatus, type Token } from '@cat/core/models';
+import { normalizeSegmentStatus, type Segment, type SegmentStatus, type Token } from '@cat/core/models';
 import { serializeTokensToEditorText, type TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import { resolveFileTagPolicy } from '../../../../shared/fileTagPolicy';
@@ -62,7 +62,6 @@ export async function runSegmentTranslation(
     );
     const context = segment.meta?.context ? String(segment.meta.context).trim() : '';
     const projectType = project.projectType || 'translation';
-    const aiStatus: SegmentStatus = projectType === 'review' ? 'reviewed' : 'translated';
     const runtimeConfig = await deps.aiRuntimeConfigProvider.getModelConfig(provider.model);
     const promptReferences =
       projectType === 'translation'
@@ -90,17 +89,18 @@ export async function runSegmentTranslation(
       tbReferences: promptReferences.tbReferences,
     });
 
+    const status = normalizeSegmentStatus('draft', targetTokens);
     const updateResult = await deps.segmentService.updateSegment(
       segment.segmentId,
       targetTokens,
-      aiStatus,
+      status,
     );
 
     return {
       fileId: updateResult?.fileId ?? segment.fileId,
       segmentId: segment.segmentId,
       targetTokens,
-      status: aiStatus,
+      status,
       propagatedIds: updateResult?.propagatedIds ?? [],
       serverAppliedAt: updateResult?.serverAppliedAt ?? new Date().toISOString(),
     };
@@ -156,7 +156,6 @@ export async function runSegmentRefinement(
     );
     const context = segment.meta?.context ? String(segment.meta.context).trim() : '';
     const projectType = project.projectType || 'translation';
-    const aiStatus: SegmentStatus = projectType === 'review' ? 'reviewed' : 'translated';
     const runtimeConfig = await deps.aiRuntimeConfigProvider.getModelConfig(provider.model);
     const promptReferences =
       projectType === 'translation'
@@ -186,17 +185,18 @@ export async function runSegmentRefinement(
       tbReferences: promptReferences.tbReferences,
     });
 
+    const status = normalizeSegmentStatus('draft', targetTokens);
     const updateResult = await deps.segmentService.updateSegment(
       segment.segmentId,
       targetTokens,
-      aiStatus,
+      status,
     );
 
     return {
       fileId: updateResult?.fileId ?? segment.fileId,
       segmentId: segment.segmentId,
       targetTokens,
-      status: aiStatus,
+      status,
       propagatedIds: updateResult?.propagatedIds ?? [],
       serverAppliedAt: updateResult?.serverAppliedAt ?? new Date().toISOString(),
     };

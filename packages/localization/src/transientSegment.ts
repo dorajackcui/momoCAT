@@ -1,4 +1,5 @@
 import type { Segment } from '@cat/core/models';
+import { normalizeSegmentStatus } from '@cat/core/models';
 import { computeTagsSignature, parseDisplayTextToTokens, type TagPolicy } from '@cat/core/tag';
 import { computeMatchKey, computeSrcHash } from '@cat/core/text';
 import type { ExternalTranslationUnit } from './types';
@@ -49,7 +50,7 @@ export function createTransientSegment(
     orderIndex,
     sourceTokens,
     targetTokens,
-    status: targetTokens.length > 0 ? 'translated' : 'new',
+    status: normalizeSegmentStatus('draft', targetTokens),
     tagsSignature,
     matchKey,
     srcHash: computeSrcHash(matchKey, tagsSignature),

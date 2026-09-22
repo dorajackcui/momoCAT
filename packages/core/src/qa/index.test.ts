@@ -6,7 +6,7 @@ import { validateSegmentTags, validateSegmentTerminology } from "./index";
 function buildSegment(
   sourceText: string,
   targetText: string,
-  status: "new" | "draft" = "draft",
+  status: "empty" | "draft" = "draft",
 ): Segment {
   return {
     segmentId: "seg-term",

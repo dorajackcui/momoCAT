@@ -86,7 +86,7 @@ function createSegment(sourceText: string, srcHash: string): Segment {
     orderIndex: 0,
     sourceTokens: [{ type: 'text', content: sourceText }],
     targetTokens: [],
-    status: 'new',
+    status: 'empty',
     tagsSignature: '',
     matchKey: sourceText.toLowerCase(),
     srcHash,

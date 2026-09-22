@@ -83,8 +83,8 @@ function createFixtureDb() {
 
   const fileId = db.createFile(projectId, 'fixture.xlsx');
   db.bulkInsertSegments([
-    createSegment(fileId, 1, '', 'new'),
-    createSegment(fileId, 2, 'Ni hao', 'translated'),
+    createSegment(fileId, 1, '', 'empty'),
+    createSegment(fileId, 2, 'Ni hao', 'draft'),
   ]);
   db.close();
 
@@ -142,8 +142,8 @@ describe('runInspectProjectsCommand', () => {
         targetRows: 1,
         confirmedSegments: 0,
         statusCounts: {
-          new: 1,
-          translated: 1,
+          empty: 1,
+          draft: 1,
         },
       });
     } finally {
@@ -320,7 +320,7 @@ describe('runInspectProjectsCommand', () => {
             fileId,
             row + 100,
             index % 2 === 0 ? `Target ${row}` : '',
-            index % 3 === 0 ? 'confirmed' : 'translated',
+            index % 3 === 0 ? 'confirmed' : 'draft',
           );
         }),
       );
@@ -342,7 +342,8 @@ describe('runInspectProjectsCommand', () => {
         targetRows: 501,
         statusCounts: {
           confirmed: 334,
-          translated: 667,
+          draft: 334,
+          empty: 333,
         },
       });
       const pagedFileCalls = pageSpy.mock.calls.filter(([calledFileId]) => calledFileId === fileId);

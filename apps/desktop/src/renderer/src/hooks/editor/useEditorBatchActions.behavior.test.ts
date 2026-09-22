@@ -108,7 +108,7 @@ describe('editor filtered AI translation', () => {
       srcHash: `hash${index}`,
       sourceTokens: [{ type: 'text', content: index === 0 ? 'Long name' : 'A' }],
       targetTokens: [],
-      status: 'new',
+      status: 'empty',
       meta: { context },
     })) as Segment[];
     const { result } = renderHook(() =>
@@ -135,7 +135,7 @@ describe('editor filtered AI translation', () => {
       srcHash: 'hash',
       sourceTokens: [{ type: 'text', content: 'Name' }],
       targetTokens: [],
-      status: 'new',
+      status: 'empty',
     } as Segment;
     const { result, rerender } = renderHook(
       ({ segments }) =>
@@ -148,8 +148,8 @@ describe('editor filtered AI translation', () => {
         }),
       { initialProps: { segments: [segment] } },
     );
-    act(() => result.current.handleStatusFilterChange('new'));
-    rerender({ segments: [{ ...segment, status: 'translated' }] });
+    act(() => result.current.toggleStatusFilter('empty'));
+    rerender({ segments: [{ ...segment, status: 'draft' }] });
     expect(result.current.filteredSegments).toHaveLength(1);
     expect(result.current.getFilteredSegmentIds()).toEqual(['s10']);
   });

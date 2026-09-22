@@ -1,4 +1,4 @@
-import { type Segment, type SegmentStatus, type Token } from '@cat/core/models';
+import { normalizeSegmentStatus, type Segment, type Token } from '@cat/core/models';
 import type { Project, ProjectType } from '@cat/core/project';
 import { serializeTokensToEditorText, type TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
@@ -104,8 +104,6 @@ export async function runStandardFileTranslation(
   let translated = 0;
   const skipped = totalSegments - total;
   let failed = 0;
-  const aiStatus: SegmentStatus =
-    (params.project.projectType || 'translation') === 'review' ? 'reviewed' : 'translated';
   const maxConcurrency = normalizeMaxConcurrency(params.maxConcurrency);
 
   logAIBatchDebug({
@@ -170,6 +168,7 @@ export async function runStandardFileTranslation(
         }
 
         stage = 'write';
+        const aiStatus = normalizeSegmentStatus('draft', targetTokens);
         logAIBatchSegmentEvent('segment_translated', params, segment, {
           targetChars: serializeTokensToDisplayText(targetTokens).trim().length,
           targetPreview: buildPreview(serializeTokensToDisplayText(targetTokens)),
@@ -278,6 +277,7 @@ export async function runStandardFileTranslation(
       }
 
       stage = 'write';
+      const aiStatus = normalizeSegmentStatus('draft', targetTokens);
       logAIBatchSegmentEvent('segment_translated', params, segment, {
         targetChars: serializeTokensToDisplayText(targetTokens).trim().length,
         targetPreview: buildPreview(serializeTokensToDisplayText(targetTokens)),

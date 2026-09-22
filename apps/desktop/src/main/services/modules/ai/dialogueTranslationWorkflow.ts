@@ -1,4 +1,5 @@
 import type { Project } from '@cat/core/project';
+import { normalizeSegmentStatus } from '@cat/core/models';
 import { TagValidator } from '@cat/core/qa';
 import { serializeTokensToEditorText, type TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
@@ -180,7 +181,7 @@ export async function runDialogueFileTranslation(
           await params.segmentService.updateSegment(
             draft.segment.segmentId,
             targetTokens,
-            'translated',
+            normalizeSegmentStatus('draft', targetTokens),
           );
           logAIBatchDialogueSegmentEvent(
             'dialogue_fallback_segment_write_success',

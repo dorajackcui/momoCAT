@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { RepeatPropagationState, Segment, Token } from '@cat/core/models';
+import type { Segment, Token } from '@cat/core/models';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -86,19 +86,11 @@ class FailingSegmentRepository implements SegmentRepository {
     segmentId: string,
     targetTokens: Token[],
     status: Segment['status'],
-    repeatPropagation?: RepeatPropagationState | null,
   ): void {
     if (this.shouldFail(segmentId, status)) {
       throw new Error('Forced segment update failure');
     }
-    this.delegate.updateSegmentTarget(segmentId, targetTokens, status, repeatPropagation);
-  }
-
-  updateSegmentRepeatPropagation(
-    segmentId: string,
-    repeatPropagation: RepeatPropagationState | null,
-  ): void {
-    this.delegate.updateSegmentRepeatPropagation(segmentId, repeatPropagation);
+    this.delegate.updateSegmentTarget(segmentId, targetTokens, status);
   }
 }
 
@@ -288,7 +280,7 @@ describe('TMModule.commitToMainTM', () => {
         matchKey: 'confirmed source',
       },
       {
-        ...createSegment('seg-translated', 'hash-translated', 'translated', 'translated target'),
+        ...createSegment('seg-translated', 'hash-translated', 'draft', 'translated target'),
         orderIndex: 1,
         sourceTokens: [{ type: 'text', content: 'Translated source' }],
         matchKey: 'translated source',
@@ -310,14 +302,14 @@ describe('TMModule.commitToMainTM', () => {
 
   it('can commit all statuses that have source and target text', async () => {
     const rows: Segment[] = [
-      createSegment('seg-new', 'hash-new', 'new', 'new target'),
+      createSegment('seg-new', 'hash-new', 'empty', 'new target'),
       createSegment('seg-draft', 'hash-draft', 'draft', 'draft target'),
-      createSegment('seg-translated', 'hash-translated', 'translated', 'translated target'),
-      createSegment('seg-reviewed', 'hash-reviewed', 'reviewed', 'reviewed target'),
+      createSegment('seg-translated', 'hash-translated', 'draft', 'translated target'),
+      createSegment('seg-reviewed', 'hash-reviewed', 'draft', 'reviewed target'),
       createSegment('seg-confirmed', 'hash-confirmed', 'confirmed', 'confirmed target'),
-      createSegment('seg-empty-target', 'hash-empty-target', 'translated'),
+      createSegment('seg-empty-target', 'hash-empty-target', 'draft'),
       {
-        ...createSegment('seg-empty-source', 'hash-empty-source', 'translated', 'target only'),
+        ...createSegment('seg-empty-source', 'hash-empty-source', 'draft', 'target only'),
         sourceTokens: [],
         matchKey: '',
       },
@@ -356,15 +348,15 @@ describe('TMModule.commitToMainTM', () => {
       'confirmed',
       'confirmed',
       'confirmed',
-      'translated',
-      'translated',
+      'draft',
+      'draft',
     ]);
   });
 });
 
 describe('TMModule.commitFileToTM', () => {
   it('commits and confirms translated file segments in the project writable Working TM', async () => {
-    const segment = createSegment('seg-translated', 'hash-translated', 'translated', 'target');
+    const segment = createSegment('seg-translated', 'hash-translated', 'draft', 'target');
     const { module, tmRepo } = createCommitHarness([segment], { tmType: 'working' });
 
     const result = await module.commitFileToTM('tm-working', 1, { scope: 'all' });
@@ -420,9 +412,9 @@ describe('TMModule.commitFileToTM', () => {
       const fileId = db.createFile(projectId, 'confirm-commit.xlsx');
       db.bulkInsertSegments(
         [
-          createSegment('seg-translated', 'hash-translated', 'translated', 'translated target'),
+          createSegment('seg-translated', 'hash-translated', 'draft', 'translated target'),
           createSegment('seg-confirmed', 'hash-confirmed', 'confirmed', 'confirmed target'),
-          createSegment('seg-empty', 'hash-empty', 'new'),
+          createSegment('seg-empty', 'hash-empty', 'empty'),
         ].map((segment, index) => ({ ...segment, fileId, orderIndex: index })),
       );
 
@@ -455,7 +447,7 @@ describe('TMModule.commitFileToTM', () => {
       expect(result).toEqual({ committedCount: 2, projectId, tmType: 'working' });
       expect(db.getSegment('seg-translated')?.status).toBe('confirmed');
       expect(db.getSegment('seg-confirmed')?.status).toBe('confirmed');
-      expect(db.getSegment('seg-empty')?.status).toBe('new');
+      expect(db.getSegment('seg-empty')?.status).toBe('empty');
       expect(db.findTMEntryByHash(workingTM.id, 'hash-translated')).toBeDefined();
       expect(db.findTMEntryByHash(workingTM.id, 'hash-confirmed')).toBeDefined();
       expect(db.findTMEntryByHash(workingTM.id, 'hash-empty')).toBeUndefined();
@@ -474,9 +466,9 @@ describe('TMModule.commitFileToTM', () => {
       const projectId = db.createProject('Atomic Working Commit', 'en', 'zh');
       const fileId = db.createFile(projectId, 'atomic-commit.xlsx');
       const segments: Segment[] = [
-        createSegment('seg-new', 'hash-new', 'translated', 'new target'),
-        createSegment('seg-existing', 'hash-existing', 'translated', 'replacement target'),
-        createSegment('seg-fail', 'hash-fail', 'translated', 'failing target'),
+        createSegment('seg-new', 'hash-new', 'draft', 'new target'),
+        createSegment('seg-existing', 'hash-existing', 'draft', 'replacement target'),
+        createSegment('seg-fail', 'hash-fail', 'draft', 'failing target'),
       ].map((segment, index) => ({ ...segment, fileId, orderIndex: index }));
       db.bulkInsertSegments(segments);
 
@@ -564,9 +556,9 @@ describe('TMModule.commitFileToTM', () => {
         raw.prepare('SELECT tgtText FROM tm_fts WHERE tmEntryId = ?').get(existingEntryId),
       ).toEqual({ tgtText: 'original target' });
       expect(db.getTMStats(workingTM.id).entryCount).toBe(1);
-      expect(db.getSegment('seg-new')?.status).toBe('translated');
-      expect(db.getSegment('seg-existing')?.status).toBe('translated');
-      expect(db.getSegment('seg-fail')?.status).toBe('translated');
+      expect(db.getSegment('seg-new')?.status).toBe('draft');
+      expect(db.getSegment('seg-existing')?.status).toBe('draft');
+      expect(db.getSegment('seg-fail')?.status).toBe('draft');
       expect(eventSpy).not.toHaveBeenCalled();
     } finally {
       db.close();
@@ -585,9 +577,9 @@ describe('TMModule.batchMatchFileWithTM', () => {
   it('uses segment confirmation flow instead of directly writing segment repository', async () => {
     const matchedTokens: Token[] = [{ type: 'text', content: '你好' }];
     const segments = [
-      createSegment('seg-1', 'hash-1', 'new'),
+      createSegment('seg-1', 'hash-1', 'empty'),
       createSegment('seg-2', 'hash-2', 'confirmed'),
-      createSegment('seg-3', 'hash-3', 'new'),
+      createSegment('seg-3', 'hash-3', 'empty'),
     ];
 
     const projectRepo = {
@@ -642,7 +634,7 @@ describe('TMModule.batchMatchFileWithTM', () => {
     expect(segmentService.updateSegmentsAtomically).toHaveBeenCalledTimes(1);
     expect(segmentService.updateSegmentsAtomically).toHaveBeenCalledWith(
       [{ segmentId: 'seg-1', targetTokens: matchedTokens, status: 'confirmed' }],
-      { commitToWorkingTM: false, preserveRepeatLink: true },
+      { commitToWorkingTM: false },
     );
     expect(segmentRepo.updateSegmentTarget).not.toHaveBeenCalled();
   });
@@ -694,10 +686,10 @@ describe('TMModule.batchMatchFileWithTM', () => {
     } as unknown as ProjectRepository;
 
     const firstPage: Segment[] = Array.from({ length: 2000 }, (_, index) =>
-      createSegment(`seg-${index}`, index === 0 ? 'hash-first' : `hash-${index}`, 'new'),
+      createSegment(`seg-${index}`, index === 0 ? 'hash-first' : `hash-${index}`, 'empty'),
     );
     const secondPage: Segment[] = [
-      createSegment('seg-last', 'hash-last', 'new'),
+      createSegment('seg-last', 'hash-last', 'empty'),
       createSegment('seg-confirmed', 'hash-confirmed', 'confirmed'),
     ];
 
@@ -762,7 +754,7 @@ describe('TMModule.batchMatchFileWithTM', () => {
         { segmentId: 'seg-0', targetTokens: matchedTokens, status: 'confirmed' },
         { segmentId: 'seg-last', targetTokens: matchedTokens, status: 'confirmed' },
       ],
-      { commitToWorkingTM: false, preserveRepeatLink: true },
+      { commitToWorkingTM: false },
     );
   });
 
@@ -773,9 +765,9 @@ describe('TMModule.batchMatchFileWithTM', () => {
     const srcHash = 'hash-hello';
 
     const segments: Segment[] = [
-      createSegment('seg-1', srcHash, 'new'),
-      createSegment('seg-2', srcHash, 'new'),
-      createSegment('seg-3', 'hash-miss', 'new'),
+      createSegment('seg-1', srcHash, 'empty'),
+      createSegment('seg-2', srcHash, 'empty'),
+      createSegment('seg-3', 'hash-miss', 'empty'),
     ].map((segment, index) => ({ ...segment, fileId, orderIndex: index }));
 
     db.bulkInsertSegments(segments);
@@ -837,7 +829,7 @@ describe('TMModule.batchMatchFileWithTM', () => {
     const seg3 = db.getSegment('seg-3');
     expect(seg1?.status).toBe('confirmed');
     expect(seg2?.status).toBe('confirmed');
-    expect(seg3?.status).toBe('new');
+    expect(seg3?.status).toBe('empty');
     expect(seg1?.targetTokens).toEqual(matchedTokens);
     expect(seg2?.targetTokens).toEqual(matchedTokens);
 
@@ -862,10 +854,7 @@ describe('TMModule.batchMatchFileWithTM', () => {
       propagatedIds: [],
     });
 
-    expect(db.getSegment('seg-2')?.meta.repeatPropagation).toEqual({
-      mode: 'following',
-      sourceSegmentId: 'seg-1',
-    });
+    expect(db.getSegment('seg-2')?.meta).not.toHaveProperty('repeatPropagation');
     const revisedTokens: Token[] = [{ type: 'text', content: '您好' }];
     const revision = await segmentService.updateSegment('seg-1', revisedTokens, 'confirmed');
     expect(revision.propagatedIds).toEqual(['seg-2']);
@@ -878,8 +867,8 @@ describe('TMModule.batchMatchFileWithTM', () => {
     const fileId = db.createFile(projectId, 'atomic.xlsx');
 
     const segments: Segment[] = [
-      createSegment('seg-1', 'hash-1', 'new'),
-      createSegment('seg-2', 'hash-2', 'new'),
+      createSegment('seg-1', 'hash-1', 'empty'),
+      createSegment('seg-2', 'hash-2', 'empty'),
     ].map((segment, index) => ({ ...segment, fileId, orderIndex: index }));
     db.bulkInsertSegments(segments);
 
@@ -952,8 +941,8 @@ describe('TMModule.batchMatchFileWithTM', () => {
 
     const seg1 = db.getSegment('seg-1');
     const seg2 = db.getSegment('seg-2');
-    expect(seg1?.status).toBe('new');
-    expect(seg2?.status).toBe('new');
+    expect(seg1?.status).toBe('empty');
+    expect(seg2?.status).toBe('empty');
     expect(seg1?.targetTokens).toEqual([]);
     expect(seg2?.targetTokens).toEqual([]);
 
@@ -1018,7 +1007,7 @@ describe('TMModule.batchMatchFileWithTM', () => {
         orderIndex: 0,
         sourceTokens: [{ type: 'text', content: '风荷立柱设计图' }],
         targetTokens: [],
-        status: 'new',
+        status: 'empty',
         tagsSignature: '',
         matchKey: '风荷立柱设计图',
         srcHash: 'active-cjk-hash',

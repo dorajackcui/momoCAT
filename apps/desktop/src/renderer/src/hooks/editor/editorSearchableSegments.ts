@@ -76,7 +76,6 @@ function buildSearchableEditorSegment(
     hasQaError,
     hasQaWarning,
     hasSaveError,
-    hasIssue: hasQaError || hasQaWarning || hasSaveError,
     repeatedSourceRole,
   };
 }
@@ -111,7 +110,6 @@ export function buildSearchableEditorSegmentsWithWeakCache(params: {
         ...cached,
         originalIndex: index,
         hasSaveError,
-        hasIssue: cached.hasQaError || cached.hasQaWarning || hasSaveError,
         repeatedSourceRole,
       };
       cache.set(segment, nextCached);

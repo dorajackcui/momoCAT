@@ -12,7 +12,7 @@ import {
 } from './EditorRow';
 import { resolveEditorRowShortcutAction } from './editor-row/useEditorRowCommandHandlers';
 import {
-  getEditorRowStatusLineClass,
+  getEditorRowStatusIndicatorClass,
   getEditorRowStatusTitle,
 } from './editor-row/useEditorRowDisplayModel';
 
@@ -48,7 +48,7 @@ describe('EditorRow layout containment', () => {
       orderIndex: 0,
       sourceTokens: [{ type: 'text', content: 'Source text' }],
       targetTokens: [],
-      status: 'new',
+      status: 'empty',
       tagsSignature: '',
       matchKey: 'source text',
       srcHash: 'source-text',
@@ -72,7 +72,7 @@ describe('EditorRow layout containment', () => {
       }),
     );
 
-    expect(html).toContain('grid-cols-[30px_minmax(0,1fr)_8px_minmax(0,1fr)]');
+    expect(html).toContain('grid-cols-[30px_minmax(0,1fr)_minmax(0,1fr)_28px]');
     expect(html).toContain('min-w-0');
     expect(html).toContain('overflow-hidden');
     expect(html).toContain('truncate whitespace-nowrap');
@@ -216,21 +216,19 @@ describe('EditorRow keyboard shortcut decisions', () => {
 });
 
 describe('EditorRow status display decisions', () => {
-  it('maps workflow status to status line classes', () => {
-    expect(getEditorRowStatusLineClass('translated')).toBe('bg-status-translated');
-    expect(getEditorRowStatusLineClass('reviewed')).toBe('bg-status-reviewed');
-    expect(getEditorRowStatusLineClass('confirmed')).toBe('bg-status-confirmed');
-    expect(getEditorRowStatusLineClass('draft')).toBe('bg-status-draft');
-    expect(getEditorRowStatusLineClass('new')).toBe('bg-status-new');
+  it('uses the same hollow circle for empty and draft and a filled green circle for confirmed', () => {
+    expect(getEditorRowStatusIndicatorClass('empty')).toBe('border-status-empty bg-transparent');
+    expect(getEditorRowStatusIndicatorClass('draft')).toBe(getEditorRowStatusIndicatorClass('empty'));
+    expect(getEditorRowStatusIndicatorClass('confirmed')).toBe('border-status-confirmed bg-status-confirmed');
   });
 
   it('includes qa suffix in status title when needed', () => {
-    expect(getEditorRowStatusTitle('translated', false, false)).toBe('Status: translated');
-    expect(getEditorRowStatusTitle('translated', false, true)).toBe(
-      'Status: translated (QA warning)',
+    expect(getEditorRowStatusTitle('draft', false, false)).toBe('Status: draft');
+    expect(getEditorRowStatusTitle('draft', false, true)).toBe(
+      'Status: draft (QA warning)',
     );
-    expect(getEditorRowStatusTitle('translated', true, false)).toBe(
-      'Status: translated (QA error)',
+    expect(getEditorRowStatusTitle('draft', true, false)).toBe(
+      'Status: draft (QA error)',
     );
   });
 });

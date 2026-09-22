@@ -20,7 +20,7 @@ function createSegment(segmentId: string, targetText: string): Segment {
     orderIndex: 0,
     sourceTokens: [{ type: 'text', content: 'Hello' }],
     targetTokens: targetText ? [{ type: 'text', content: targetText }] : [],
-    status: targetText ? 'draft' : 'new',
+    status: targetText ? 'draft' : 'empty',
     tagsSignature: '',
     matchKey: 'hello',
     srcHash: `hash-${segmentId}`,
@@ -473,7 +473,7 @@ describe('createSegmentPersistor', () => {
       fileId: 1,
       segmentId: first.segmentId,
       targetTokens: [{ type: 'text', content: 'AI target' }],
-      status: 'translated',
+      status: 'draft',
       propagatedIds: [propagated.segmentId],
       serverAppliedAt: '2026-07-10T00:00:00.000Z',
     });
@@ -483,7 +483,7 @@ describe('createSegmentPersistor', () => {
       first.segmentId,
       propagated.segmentId,
     ]);
-    expect(store.getSegment(first.segmentId)).toMatchObject({ status: 'translated' });
+    expect(store.getSegment(first.segmentId)).toMatchObject({ status: 'draft' });
     expect(store.getSegment(propagated.segmentId)).toMatchObject({ status: 'draft' });
     expect(store.getSegment(untouched.segmentId)).toBe(untouched);
   });
@@ -506,7 +506,7 @@ describe('resolveSegmentStateUpdate', () => {
           ? {
               ...segment,
               targetTokens: [{ type: 'text', content: 'AI target' }],
-              status: 'translated' as const,
+              status: 'draft' as const,
             }
           : segment,
       ),
@@ -529,7 +529,7 @@ describe('resolveSegmentStateUpdate', () => {
     });
     expect(afterEdit.find((segment) => segment.segmentId === 'seg-ai')).toMatchObject({
       targetTokens: [{ type: 'text', content: 'AI target' }],
-      status: 'translated',
+      status: 'draft',
     });
   });
 });

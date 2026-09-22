@@ -3,6 +3,7 @@ import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import type { SegmentsUpdatedEvent } from '../../../../shared/ipc';
 import {
   applyBatchSegmentUpdatesToStore,
+  applyConfirmedSegmentUpdate,
   buildBatchFinalState,
   drainQueuedSegmentsUpdatedEvents,
   handleIncomingSegmentsUpdatedBatch,
@@ -40,7 +41,7 @@ function createSegment(segmentId: string, target = ''): Segment {
     orderIndex: Number(segmentId.replace(/\D/g, '')) || 0,
     sourceTokens: [{ type: 'text', content: `source-${segmentId}` }],
     targetTokens: target ? [{ type: 'text', content: target }] : [],
-    status: target ? 'draft' : 'new',
+    status: target ? 'draft' : 'empty',
     tagsSignature: '',
     matchKey: `source-${segmentId}`,
     srcHash: `hash-${segmentId}`,
@@ -62,6 +63,28 @@ function createHandlers(overrides?: {
     applySegmentsUpdatedBatch: vi.fn(),
   };
 }
+
+describe('applyConfirmedSegmentUpdate', () => {
+  it('applies a local confirmation before focus advances and removes superseded draft echoes', () => {
+    const handlers = createHandlers({ activeFileId: 1, shouldDelay: () => true });
+    for (const id of ['A', 'B', 'C', 'unrelated']) {
+      handlers.queuedRemoteUpdates.set(id, createEvent(id));
+    }
+    const event: SegmentsUpdatedEvent = { ...createEvent('A'), status: 'confirmed', propagatedIds: ['B', 'C'] };
+    applyConfirmedSegmentUpdate(event, handlers);
+    expect(handlers.applySegmentsUpdatedEvent).toHaveBeenCalledWith(event);
+    expect([...handlers.queuedRemoteUpdates.keys()]).toEqual(['unrelated']);
+  });
+
+  it('ignores a confirmation for a file that is no longer active', () => {
+    const handlers = createHandlers({ activeFileId: 2 });
+    const event = createEvent('A');
+    handlers.queuedRemoteUpdates.set('A', event);
+    applyConfirmedSegmentUpdate(event, handlers);
+    expect(handlers.applySegmentsUpdatedEvent).not.toHaveBeenCalled();
+    expect(handlers.queuedRemoteUpdates.get('A')).toBe(event);
+  });
+});
 
 describe('handleIncomingSegmentsUpdatedEvent', () => {
   it('applies incoming remote update immediately when not stale and not delayed', () => {
@@ -250,7 +273,7 @@ describe('applyBatchSegmentUpdatesToStore', () => {
   const normalizeTokens = (tokens: unknown): Token[] =>
     Array.isArray(tokens) ? (tokens as Token[]) : [];
   const normalizeStatus = (status: unknown, targetTokens: Token[]): SegmentStatus =>
-    typeof status === 'string' && targetTokens.length > 0 ? (status as SegmentStatus) : 'new';
+    typeof status === 'string' && targetTokens.length > 0 ? (status as SegmentStatus) : 'empty';
 
   it('patches only changed ids while preserving the ordered segment array', () => {
     const first = createSegment('seg-1');
@@ -269,7 +292,7 @@ describe('applyBatchSegmentUpdatesToStore', () => {
         {
           ...createEvent('seg-2'),
           targetTokens: [{ type: 'text', content: 'translated target' }],
-          status: 'translated',
+          status: 'draft',
         },
       ]),
       normalizeTokens,
@@ -283,14 +306,14 @@ describe('applyBatchSegmentUpdatesToStore', () => {
     expect(store.getSegment('seg-3')).toBe(third);
     expect(store.getSegment('seg-2')).toMatchObject({
       targetTokens: [{ type: 'text', content: 'translated target' }],
-      status: 'translated',
+      status: 'draft',
     });
     expect(changes.map((change) => change.segmentId)).toEqual(['seg-2']);
     expect(firstListener).not.toHaveBeenCalled();
     expect(secondListener).toHaveBeenCalledTimes(1);
   });
 
-  it('marks same-source propagation from a confirmed segment as confirmed', () => {
+  it('confirms propagated targets and clears QA from their previous translations', () => {
     const source = createSegment('seg-1');
     const qaIssues = [
       { ruleId: 'term-check', severity: 'warning' as const, message: 'Check this term.' },
@@ -330,8 +353,8 @@ describe('applyBatchSegmentUpdatesToStore', () => {
       targetTokens: confirmEvent.targetTokens,
       status: 'confirmed',
     });
-    expect(store.getSegment(repeated.segmentId)?.qaIssues).toBe(qaIssues);
-    expect(store.getSegment(repeated.segmentId)?.autoFixSuggestions).toBe(autoFixSuggestions);
+    expect(store.getSegment(repeated.segmentId)?.qaIssues).toBeUndefined();
+    expect(store.getSegment(repeated.segmentId)?.autoFixSuggestions).toBeUndefined();
   });
 });
 

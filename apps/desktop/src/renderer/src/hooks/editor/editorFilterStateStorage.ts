@@ -2,7 +2,6 @@ import {
   EditorFilterCriteria,
   EditorMatchMode,
   EditorQualityFilter,
-  EditorQuickPreset,
   EditorSortBy,
   EditorSortDirection,
   EditorStatusFilter,
@@ -12,23 +11,12 @@ import {
 
 const FILTER_STATE_STORAGE_KEY_PREFIX = 'editor-filter-state:v1:file:';
 
-export interface PersistedFilterShape {
-  sourceQuery: string;
-  targetQuery: string;
-  targetSearchScope: EditorTargetSearchScope;
-  status: EditorStatusFilter;
-  matchMode: EditorMatchMode;
-  qualityFilters: EditorQualityFilter[];
-  quickPreset: EditorQuickPreset;
-  sortBy: EditorSortBy;
-  sortDirection: EditorSortDirection;
-}
+export type PersistedFilterShape = EditorFilterCriteria;
 
 interface FilterStateGuards {
   statusValues: Set<EditorStatusFilter>;
   matchModeValues: Set<EditorMatchMode>;
   qualityValues: Set<EditorQualityFilter>;
-  quickPresetValues: Set<EditorQuickPreset>;
   sortByValues: Set<EditorSortBy>;
   sortDirectionValues: Set<EditorSortDirection>;
   targetSearchScopeValues: Set<EditorTargetSearchScope>;
@@ -48,7 +36,10 @@ export function sanitizePersistedEditorFilterState(params: {
   }
 
   const { guards } = params;
-  const parsed = params.raw as Partial<PersistedFilterShape>;
+  const parsed = params.raw as Partial<PersistedFilterShape> & {
+    status?: string;
+    quickPreset?: string;
+  };
   const sourceQuery =
     typeof parsed.sourceQuery === 'string' ? parsed.sourceQuery : defaults.sourceQuery;
   const targetQuery =
@@ -58,20 +49,38 @@ export function sanitizePersistedEditorFilterState(params: {
   )
     ? (parsed.targetSearchScope as EditorTargetSearchScope)
     : defaults.targetSearchScope;
-  const status = guards.statusValues.has(parsed.status as EditorStatusFilter)
-    ? (parsed.status as EditorStatusFilter)
-    : defaults.status;
+  const legacyStatuses =
+    parsed.quickPreset === 'unconfirmed'
+      ? ['empty', 'draft']
+      : parsed.quickPreset === 'confirmed'
+        ? ['confirmed']
+        : [parsed.status];
+  const statuses = [
+    ...new Set(
+      (Array.isArray(parsed.statuses) ? parsed.statuses : legacyStatuses)
+        .map((value) =>
+          value === 'new'
+            ? 'empty'
+            : value === 'translated' || value === 'reviewed'
+              ? 'draft'
+              : value,
+        )
+        .filter((value): value is EditorStatusFilter =>
+          guards.statusValues.has(value as EditorStatusFilter),
+        ),
+    ),
+  ];
   const matchMode = guards.matchModeValues.has(parsed.matchMode as EditorMatchMode)
     ? (parsed.matchMode as EditorMatchMode)
     : defaults.matchMode;
-  const quickPreset = guards.quickPresetValues.has(parsed.quickPreset as EditorQuickPreset)
-    ? (parsed.quickPreset as EditorQuickPreset)
-    : defaults.quickPreset;
   const qualityFilters = Array.isArray(parsed.qualityFilters)
     ? parsed.qualityFilters.filter((value): value is EditorQualityFilter =>
         guards.qualityValues.has(value as EditorQualityFilter),
       )
     : defaults.qualityFilters;
+  if (parsed.quickPreset === 'issues' && qualityFilters.length === 0) {
+    qualityFilters.push(...guards.qualityValues);
+  }
   const sortBy = guards.sortByValues.has(parsed.sortBy as EditorSortBy)
     ? (parsed.sortBy as EditorSortBy)
     : defaults.sortBy;
@@ -83,10 +92,10 @@ export function sanitizePersistedEditorFilterState(params: {
     sourceQuery,
     targetQuery,
     targetSearchScope,
-    status,
+    statuses,
     matchMode,
     qualityFilters,
-    quickPreset,
+    firstRepeatOnly: parsed.firstRepeatOnly === true || parsed.quickPreset === 'first_repeat',
     sortBy,
     sortDirection,
   };

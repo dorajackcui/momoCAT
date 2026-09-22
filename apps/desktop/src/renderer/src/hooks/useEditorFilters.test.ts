@@ -12,6 +12,7 @@ import {
   resolveActiveSegmentIdForFilteredList,
   resolveActiveFilteredSegmentIndex,
   sanitizePersistedEditorFilterState,
+  FILTER_STATUS_OPTIONS,
 } from './useEditorFilters';
 
 function createSegment(params: {
@@ -28,7 +29,7 @@ function createSegment(params: {
     orderIndex: 0,
     sourceTokens: [{ type: 'text', content: params.source ?? 'source' }],
     targetTokens: params.target ? [{ type: 'text', content: params.target }] : [],
-    status: params.status ?? 'new',
+    status: params.status ?? 'empty',
     tagsSignature: '',
     matchKey: params.id,
     srcHash: params.id,
@@ -45,6 +46,20 @@ function createSegment(params: {
 }
 
 describe('useEditorFilters helpers', () => {
+  it('offers only the three workflow statuses', () => {
+    expect(FILTER_STATUS_OPTIONS.map(option => option.value)).toEqual([
+      'all', 'empty', 'draft', 'confirmed',
+    ]);
+  });
+
+  it.each([
+    ['new', 'empty'], ['translated', 'draft'], ['reviewed', 'draft'],
+    ['empty', 'empty'], ['draft', 'draft'], ['confirmed', 'confirmed'],
+  ])('restores the %s status filter as %s', (stored, expected) => {
+    expect(sanitizePersistedEditorFilterState({ status: stored, sourceQuery: 'window' }))
+      .toMatchObject({ statuses: [expected], sourceQuery: 'window' });
+  });
+
   it('keeps filtered membership stable until the filter criteria changes', () => {
     const cache = createEditorFilterSnapshotCache();
     const criteria = {
@@ -157,13 +172,13 @@ describe('useEditorFilters helpers', () => {
     expect(
       canReuseEditorSegmentListWithoutRefreshingSearchText({
         ...defaults,
-        status: 'confirmed',
+        statuses: ['confirmed'],
       }),
     ).toBe(false);
     expect(
       canReuseEditorSegmentListWithoutRefreshingSearchText({
         ...defaults,
-        quickPreset: 'first_repeat',
+        firstRepeatOnly: true,
       }),
     ).toBe(false);
     expect(
@@ -234,7 +249,6 @@ describe('useEditorFilters helpers', () => {
       status: 'draft',
       matchMode: 'regex',
       qualityFilters: ['qa_error', 'invalid'],
-      quickPreset: 'issues',
       sortBy: 'target_length',
       sortDirection: 'desc',
     });
@@ -243,24 +257,37 @@ describe('useEditorFilters helpers', () => {
       sourceQuery: 'abc',
       targetQuery: '',
       targetSearchScope: 'context',
-      status: 'draft',
+      statuses: ['draft'],
       matchMode: 'regex',
       qualityFilters: ['qa_error'],
-      quickPreset: 'issues',
+      firstRepeatOnly: false,
       sortBy: 'target_length',
       sortDirection: 'desc',
     });
   });
 
-  it('accepts the persisted first-repeat quick preset', () => {
-    expect(sanitizePersistedEditorFilterState({ quickPreset: 'first_repeat' }).quickPreset).toBe(
-      'first_repeat',
-    );
+  it('restores the old first-repeat preset as an independent filter', () => {
+    expect(sanitizePersistedEditorFilterState({ quickPreset: 'first_repeat', status: 'draft' }))
+      .toMatchObject({ firstRepeatOnly: true, statuses: ['draft'] });
+  });
+
+  it.each([
+    ['unconfirmed', ['empty', 'draft']],
+    ['confirmed', ['confirmed']],
+  ])('converts the legacy %s preset to selected statuses', (quickPreset, statuses) => {
+    expect(sanitizePersistedEditorFilterState({ quickPreset })).toMatchObject({ statuses });
+  });
+
+  it('converts the legacy issues preset and sanitizes duplicate multi-select values', () => {
+    expect(sanitizePersistedEditorFilterState({ quickPreset: 'issues' }).qualityFilters)
+      .toEqual(['qa_error', 'qa_warning', 'save_error']);
+    expect(sanitizePersistedEditorFilterState({ statuses: ['draft', 'invalid', 'draft', 'empty'] }).statuses)
+      .toEqual(['draft', 'empty']);
   });
 
   it('clears the retired untranslated quick preset from persisted state', () => {
-    expect(sanitizePersistedEditorFilterState({ quickPreset: 'untranslated' }).quickPreset).toBe(
-      'none',
+    expect(sanitizePersistedEditorFilterState({ quickPreset: 'untranslated' })).toEqual(
+      createDefaultEditorFilterCriteria(),
     );
   });
 
@@ -268,7 +295,7 @@ describe('useEditorFilters helpers', () => {
     const segments: Segment[] = [
       createSegment({
         id: 's1',
-        status: 'new',
+        status: 'empty',
         source: 'Hello',
         target: '',
         qaSeverities: [],
@@ -288,7 +315,6 @@ describe('useEditorFilters helpers', () => {
     expect(searchable[0]).toMatchObject({
       sourceText: 'Hello',
       targetText: '',
-      hasIssue: false,
     });
     expect(searchable[1]).toMatchObject({
       sourceText: 'World',
@@ -296,7 +322,6 @@ describe('useEditorFilters helpers', () => {
       hasQaError: true,
       hasQaWarning: true,
       hasSaveError: true,
-      hasIssue: true,
     });
   });
 
@@ -437,7 +462,6 @@ describe('useEditorFilters helpers', () => {
         hasQaError: false,
         hasQaWarning: false,
         hasSaveError: false,
-        hasIssue: false,
       },
       {
         segment: second,
@@ -447,7 +471,6 @@ describe('useEditorFilters helpers', () => {
         hasQaError: false,
         hasQaWarning: false,
         hasSaveError: false,
-        hasIssue: false,
       },
     ];
 

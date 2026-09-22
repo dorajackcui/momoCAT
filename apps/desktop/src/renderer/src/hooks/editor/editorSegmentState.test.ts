@@ -42,7 +42,7 @@ describe('editorSegmentState stats', () => {
 describe('editorSegmentState change hints', () => {
   it('allows order-stable hints when length and segment id order are unchanged', () => {
     const previous = [createSegment('s1', 'new'), createSegment('s2', 'draft')];
-    const next = [{ ...previous[0], status: 'translated' as const }, previous[1]];
+    const next = [{ ...previous[0], status: 'draft' as const }, previous[1]];
 
     expect(() =>
       assertSegmentChangeHintMatchesUpdate(previous, next, {

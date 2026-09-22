@@ -4,7 +4,6 @@ import {
   EditorFilterCriteria,
   EditorMatchMode,
   EditorQualityFilter,
-  EditorQuickPreset,
   SearchableEditorSegment,
   EditorSortBy,
   EditorSortDirection,
@@ -13,7 +12,7 @@ import {
   countActiveFilterFields,
   createDefaultEditorFilterCriteria,
   filterSearchableSegments,
-  getQuickPresetPatch,
+  toggleFilterSelection,
   sortSearchableSegments,
 } from '../components/editorFilterUtils';
 import {
@@ -35,12 +34,10 @@ import type { SegmentChangeHint } from './editor/editorSegmentState';
 
 const SEARCH_DEBOUNCE_MS = 120;
 
-export const FILTER_STATUS_OPTIONS: Array<{ value: EditorStatusFilter; label: string }> = [
+export const FILTER_STATUS_OPTIONS: Array<{ value: EditorStatusFilter | 'all'; label: string }> = [
   { value: 'all', label: 'All' },
-  { value: 'new', label: 'New' },
+  { value: 'empty', label: 'Empty' },
   { value: 'draft', label: 'Draft' },
-  { value: 'translated', label: 'AI Translated' },
-  { value: 'reviewed', label: 'AI Reviewed' },
   { value: 'confirmed', label: 'Confirmed' },
 ];
 
@@ -54,13 +51,6 @@ export const FILTER_QUALITY_OPTIONS: Array<{ value: EditorQualityFilter; label: 
   { value: 'qa_error', label: 'QA error' },
   { value: 'qa_warning', label: 'QA warning' },
   { value: 'save_error', label: 'Save error' },
-];
-
-export const FILTER_QUICK_PRESET_OPTIONS: Array<{ value: EditorQuickPreset; label: string }> = [
-  { value: 'unconfirmed', label: '未确认' },
-  { value: 'confirmed', label: '已确认' },
-  { value: 'first_repeat', label: '首次重复' },
-  { value: 'issues', label: '有问题段' },
 ];
 
 export const FILTER_SORT_OPTIONS: Array<{
@@ -85,10 +75,9 @@ export interface UseEditorFiltersParams {
   setActiveSegmentId: (segmentId: string) => void;
 }
 
-const STATUS_VALUES = new Set(FILTER_STATUS_OPTIONS.map((item) => item.value));
+const STATUS_VALUES = new Set(FILTER_STATUS_OPTIONS.map((item) => item.value).filter(value => value !== 'all'));
 const MATCH_MODE_VALUES = new Set(FILTER_MATCH_MODE_OPTIONS.map((item) => item.value));
 const QUALITY_VALUES = new Set(FILTER_QUALITY_OPTIONS.map((item) => item.value));
-const QUICK_PRESET_VALUES = new Set(FILTER_QUICK_PRESET_OPTIONS.map((item) => item.value));
 const SORT_BY_VALUES = new Set<EditorSortBy>(['default', 'source_length', 'target_length']);
 const SORT_DIRECTION_VALUES = new Set<EditorSortDirection>(['asc', 'desc']);
 const TARGET_SEARCH_SCOPE_VALUES = new Set<EditorTargetSearchScope>(['target', 'context']);
@@ -113,7 +102,6 @@ export function sanitizePersistedEditorFilterState(raw: unknown): EditorFilterCr
       statusValues: STATUS_VALUES,
       matchModeValues: MATCH_MODE_VALUES,
       qualityValues: QUALITY_VALUES,
-      quickPresetValues: QUICK_PRESET_VALUES,
       sortByValues: SORT_BY_VALUES,
       sortDirectionValues: SORT_DIRECTION_VALUES,
       targetSearchScopeValues: TARGET_SEARCH_SCOPE_VALUES,
@@ -125,9 +113,9 @@ export function canReuseEditorSegmentListWithoutRefreshingSearchText(
   criteria: EditorFilterCriteria,
 ): boolean {
   return (
-    criteria.status === 'all' &&
+    criteria.statuses.length === 0 &&
     criteria.qualityFilters.length === 0 &&
-    criteria.quickPreset === 'none' &&
+    !criteria.firstRepeatOnly &&
     criteria.sourceQuery.trim().length === 0 &&
     criteria.targetQuery.trim().length === 0 &&
     criteria.sortBy === 'default'
@@ -152,10 +140,10 @@ function buildEditorFilterSnapshotKey(
     criteria.sourceQuery,
     criteria.targetQuery,
     criteria.targetSearchScope,
-    criteria.status,
+    criteria.statuses,
     criteria.matchMode,
     criteria.qualityFilters,
-    criteria.quickPreset,
+    criteria.firstRepeatOnly,
     criteria.sortBy,
     criteria.sortDirection,
   ]);
@@ -307,12 +295,15 @@ export function useEditorFilters({
     }));
   }, []);
 
-  const handleStatusFilterChange = useCallback((nextStatus: EditorStatusFilter) => {
+  const toggleStatusFilter = useCallback((status: EditorStatusFilter | 'all') => {
     setFilterState((prev) => ({
       ...prev,
-      status: nextStatus,
-      quickPreset: 'none',
+      statuses: toggleFilterSelection(prev.statuses, status),
     }));
+  }, []);
+
+  const toggleFirstRepeatOnly = useCallback(() => {
+    setFilterState((prev) => ({ ...prev, firstRepeatOnly: !prev.firstRepeatOnly }));
   }, []);
 
   const handleMatchModeChange = useCallback((nextMode: EditorMatchMode) => {
@@ -322,26 +313,10 @@ export function useEditorFilters({
     }));
   }, []);
 
-  const toggleQualityFilter = useCallback((quality: EditorQualityFilter) => {
-    setFilterState((prev) => {
-      const qualityFilters = prev.qualityFilters.includes(quality)
-        ? prev.qualityFilters.filter((item) => item !== quality)
-        : [...prev.qualityFilters, quality];
-      return {
-        ...prev,
-        qualityFilters,
-        quickPreset: 'none',
-      };
-    });
-  }, []);
-
-  const applyQuickPreset = useCallback((preset: EditorQuickPreset) => {
-    const patch = getQuickPresetPatch(preset);
+  const toggleQualityFilter = useCallback((quality: EditorQualityFilter | 'all') => {
     setFilterState((prev) => ({
       ...prev,
-      status: patch.status,
-      qualityFilters: patch.qualityFilters,
-      quickPreset: patch.quickPreset,
+      qualityFilters: toggleFilterSelection(prev.qualityFilters, quality),
     }));
   }, []);
 
@@ -444,9 +419,10 @@ export function useEditorFilters({
     targetQueryInput: filterState.targetQuery,
     targetSearchScope: filterState.targetSearchScope,
     matchMode: filterState.matchMode,
-    statusFilter: filterState.status,
+    statusFilters: filterState.statuses,
     qualityFilters: filterState.qualityFilters,
-    quickPreset: filterState.quickPreset,
+    firstRepeatOnly: filterState.firstRepeatOnly,
+    toggleFirstRepeatOnly,
     sortBy: filterState.sortBy,
     sortDirection: filterState.sortDirection,
     isFilterMenuOpen,
@@ -462,10 +438,9 @@ export function useEditorFilters({
     setSourceQueryInput,
     setTargetQueryInput,
     toggleTargetSearchScope,
-    handleStatusFilterChange,
+    toggleStatusFilter,
     handleMatchModeChange,
     toggleQualityFilter,
-    applyQuickPreset,
     handleSortChange,
     clearFilters,
     debouncedSourceQuery,

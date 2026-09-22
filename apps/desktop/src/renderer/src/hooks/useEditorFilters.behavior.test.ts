@@ -47,7 +47,7 @@ describe('editor filter storage behaviors', () => {
     expect(state.sourceQuery).toBe('abc');
     expect(state.targetQuery).toBe('xyz');
     expect(state.targetSearchScope).toBe('target');
-    expect(state.status).toBe('draft');
+    expect(state.statuses).toEqual(['draft']);
   });
 
   it('falls back to defaults and reports malformed JSON', () => {

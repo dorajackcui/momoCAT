@@ -14,7 +14,7 @@ function buildSegment(sourceText: string | Token[]): Segment {
     orderIndex: 0,
     sourceTokens,
     targetTokens: [],
-    status: 'new',
+    status: 'empty',
     tagsSignature: '',
     matchKey: 'source-hash',
     srcHash: 'source-hash',

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { RepeatPropagationState, Segment, SegmentStatus, Token } from '@cat/core/models';
+import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import { CATDatabase } from '../../../../../packages/db/src';
 import { SegmentService } from './SegmentService';
 import { TMService } from './TMService';
@@ -21,7 +21,7 @@ function buildSegment(
     orderIndex,
     sourceTokens: [{ type: 'text', content: 'Hello' }],
     targetTokens: [],
-    status: 'new',
+    status: 'empty',
     tagsSignature: '',
     matchKey: 'hello',
     srcHash,
@@ -63,23 +63,11 @@ class FailingPropagationSegmentRepository implements SegmentRepository {
     return this.delegate.getProjectSegmentsByHash(projectId, srcHash, fileId);
   }
 
-  updateSegmentTarget(
-    segmentId: string,
-    targetTokens: Token[],
-    status: SegmentStatus,
-    repeatPropagation?: RepeatPropagationState | null,
-  ): void {
+  updateSegmentTarget(segmentId: string, targetTokens: Token[], status: SegmentStatus): void {
     if (segmentId === this.failingSegmentId) {
       throw new Error('Propagation failed');
     }
-    this.delegate.updateSegmentTarget(segmentId, targetTokens, status, repeatPropagation);
-  }
-
-  updateSegmentRepeatPropagation(
-    segmentId: string,
-    repeatPropagation: RepeatPropagationState | null,
-  ): void {
-    this.delegate.updateSegmentRepeatPropagation(segmentId, repeatPropagation);
+    this.delegate.updateSegmentTarget(segmentId, targetTokens, status);
   }
 }
 
@@ -124,43 +112,35 @@ class InMemorySegmentRepository implements SegmentRepository {
     );
   }
 
-  updateSegmentTarget(
-    segmentId: string,
-    targetTokens: Token[],
-    status: SegmentStatus,
-    repeatPropagation?: RepeatPropagationState | null,
-  ): void {
+  updateSegmentTarget(segmentId: string, targetTokens: Token[], status: SegmentStatus): void {
     const segment = this.segments.get(segmentId);
     if (!segment) return;
-    const meta = { ...segment.meta };
-    if (repeatPropagation !== undefined) {
-      if (repeatPropagation) meta.repeatPropagation = repeatPropagation;
-      else delete meta.repeatPropagation;
-    }
     this.segments.set(segmentId, {
       ...segment,
       targetTokens,
       status,
-      meta,
     });
-  }
-
-  updateSegmentRepeatPropagation(
-    segmentId: string,
-    repeatPropagation: RepeatPropagationState | null,
-  ): void {
-    const segment = this.segments.get(segmentId);
-    if (!segment) return;
-    const meta = { ...segment.meta };
-    if (repeatPropagation) meta.repeatPropagation = repeatPropagation;
-    else delete meta.repeatPropagation;
-    this.segments.set(segmentId, { ...segment, meta });
   }
 
   updateSegmentQaIssues(): void {}
 }
 
 describe('SegmentService segment update events', () => {
+  it('normalizes saved status and emitted status together for single and atomic edits', async () => {
+    const repo = new InMemorySegmentRepository([buildSegment('seg-1', 42, 0, 'hash-1')]);
+    const service = new SegmentService(repo, {} as TMService, { runInTransaction: (fn) => fn() });
+    const events = vi.fn();
+    service.on('segments-updated', events);
+    await service.updateSegment('seg-1', [{ type: 'text', content: 'Translation' }], 'empty');
+    expect(repo.getSegment('seg-1')?.status).toBe('draft');
+    expect(events).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'draft' }));
+    await service.updateSegmentsAtomically([
+      { segmentId: 'seg-1', targetTokens: [], status: 'draft' },
+    ]);
+    expect(repo.getSegment('seg-1')?.status).toBe('empty');
+    expect(events).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'empty' }));
+  });
+
   it('includes fileId in update results and emitted payloads', async () => {
     const fileId = 42;
     const repo = new InMemorySegmentRepository([buildSegment('seg-1', fileId, 0, 'hash-1')]);
@@ -173,367 +153,174 @@ describe('SegmentService segment update events', () => {
     service.on('working-tm-updated', workingTMUpdatedSpy);
 
     const targetTokens: Token[] = [{ type: 'text', content: 'translated' }];
-    const result = await service.updateSegment('seg-1', targetTokens, 'translated');
+    const result = await service.updateSegment('seg-1', targetTokens, 'draft');
 
     expect(result).toMatchObject({ fileId, propagatedIds: [] });
     expect(eventSpy).toHaveBeenCalledTimes(1);
     expect(eventSpy.mock.calls[0][0]).toMatchObject({
       fileId,
       segmentId: 'seg-1',
-      status: 'translated',
+      status: 'draft',
     });
     expect(workingTMUpdatedSpy).not.toHaveBeenCalled();
   });
+});
 
-  it('keeps a manual edit to a later auto-followed repeat local', async () => {
-    const fileId = 42;
-    const srcHash = 'hash-repeated';
-    const repo = new InMemorySegmentRepository([
-      buildSegment('seg-1', fileId, 0, srcHash),
-      buildSegment('seg-2', fileId, 1, srcHash),
-    ]);
+describe('SegmentService repeat propagation', () => {
+  function setup(
+    segments = [
+      buildSegment('A', 42, 0, 'repeat'),
+      buildSegment('B', 42, 1, 'repeat'),
+      buildSegment('C', 42, 2, 'repeat'),
+    ],
+  ) {
+    const repo = new InMemorySegmentRepository(segments);
     const tx = { runInTransaction: <T>(fn: () => T) => fn() };
     const tmService = { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService;
-    const service = new SegmentService(repo, tmService, tx);
-    const workingTMUpdatedSpy = vi.fn();
-    service.on('working-tm-updated', workingTMUpdatedSpy);
+    return { repo, service: new SegmentService(repo, tmService, tx) };
+  }
 
-    const initialTokens: Token[] = [{ type: 'text', content: 'initial' }];
-    await service.updateSegment('seg-1', initialTokens, 'confirmed');
+  it.each(['empty', 'draft', 'confirmed'] as const)(
+    'copies the first confirmation over all later %s targets',
+    async (status) => {
+      const { repo, service } = setup();
+      for (const id of ['B', 'C']) {
+        repo.updateSegmentTarget(
+          id,
+          status === 'empty' ? [] : [{ type: 'text', content: id }],
+          status,
+        );
+      }
+      const targetTokens: Token[] = [{ type: 'text', content: 'Shared translation' }];
+      const result = await service.updateSegment('A', targetTokens, 'confirmed');
+      expect(result.propagatedIds).toEqual(['B', 'C']);
+      for (const id of ['A', 'B', 'C']) {
+        expect(repo.getSegment(id)).toMatchObject({ targetTokens, status: 'confirmed' });
+        expect(repo.getSegment(id)?.meta).not.toHaveProperty('repeatPropagation');
+      }
+    },
+  );
 
-    expect(repo.getSegment('seg-1')?.meta.repeatPropagation).toEqual({ mode: 'leader' });
-    expect(repo.getSegment('seg-2')?.meta.repeatPropagation).toEqual({
-      mode: 'following',
-      sourceSegmentId: 'seg-1',
-    });
+  it.each(['draft', 'confirmed'] as const)(
+    'keeps a later %s edit local until the first occurrence is confirmed again',
+    async (status) => {
+      const { repo, service } = setup();
+      const initial: Token[] = [{ type: 'text', content: 'Initial' }];
+      await service.updateSegment('A', initial, 'confirmed');
+      const local: Token[] = [{ type: 'text', content: 'Only B' }];
+      await service.updateSegment('B', local, 'draft');
+      const localResult = await service.updateSegment('B', local, status);
+      expect(localResult.propagatedIds).toEqual([]);
+      expect(repo.getSegment('A')?.targetTokens).toEqual(initial);
+      expect(repo.getSegment('C')?.targetTokens).toEqual(initial);
 
-    const revisedTokens: Token[] = [{ type: 'text', content: 'local revision' }];
-    const draftResult = await service.updateSegment('seg-2', revisedTokens, 'draft');
-    const confirmedResult = await service.updateSegment('seg-2', revisedTokens, 'confirmed');
+      const revised: Token[] = [{ type: 'text', content: 'Revised A' }];
+      await service.updateSegment('A', revised, 'draft');
+      expect(repo.getSegment('B')?.targetTokens).toEqual(local);
+      expect(repo.getSegment('C')?.targetTokens).toEqual(initial);
+      const result = await service.updateSegment('A', revised, 'confirmed');
+      expect(result.propagatedIds).toEqual(['B', 'C']);
+      for (const id of ['B', 'C']) {
+        expect(repo.getSegment(id)).toMatchObject({ targetTokens: revised, status: 'confirmed' });
+      }
+    },
+  );
 
-    expect(draftResult.propagatedIds).toEqual([]);
-    expect(confirmedResult.propagatedIds).toEqual([]);
-    expect(toText(repo.getSegment('seg-1')?.targetTokens ?? [])).toBe('initial');
-    expect(toText(repo.getSegment('seg-2')?.targetTokens ?? [])).toBe('local revision');
-    expect(repo.getSegment('seg-2')?.meta.repeatPropagation).toEqual({ mode: 'detached' });
-    expect(workingTMUpdatedSpy).toHaveBeenLastCalledWith({ projectId: 1, srcHash });
+  it('never propagates from a later occurrence, regardless of repository result order', async () => {
+    const { repo, service } = setup([
+      buildSegment('B', 42, 1, 'repeat'),
+      buildSegment('C', 42, 2, 'repeat'),
+      buildSegment('A', 42, 0, 'repeat'),
+    ]);
+    const targetTokens: Token[] = [{ type: 'text', content: 'Local translation' }];
+    const result = await service.updateSegment('B', targetTokens, 'confirmed');
+    expect(result.propagatedIds).toEqual([]);
+    expect(repo.getSegment('A')?.status).toBe('empty');
+    expect(repo.getSegment('C')?.status).toBe('empty');
+    expect((await service.updateSegment('A', targetTokens, 'confirmed')).propagatedIds).toEqual([
+      'C',
+    ]);
+    expect(repo.getSegment('C')?.targetTokens).toEqual(targetTokens);
   });
 
-  it('does not materialize untouched repeat states during a later draft save', async () => {
-    const fileId = 42;
-    const srcHash = 'hash-lazy-repeat';
-    const repo = new InMemorySegmentRepository([
-      buildSegment('seg-1', fileId, 0, srcHash),
-      buildSegment('seg-2', fileId, 1, srcHash),
-      buildSegment('seg-3', fileId, 2, srcHash),
-    ]);
-    const repeatStateSpy = vi.spyOn(repo, 'updateSegmentRepeatPropagation');
-    const tx = { runInTransaction: <T>(fn: () => T) => fn() };
-    const tmService = { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService;
-    const service = new SegmentService(repo, tmService, tx);
-
-    await service.updateSegment(
-      'seg-3',
-      [{ type: 'text', content: 'Context-specific draft' }],
-      'draft',
-    );
-
-    expect(repeatStateSpy).not.toHaveBeenCalled();
-    expect(repo.getSegment('seg-1')?.meta.repeatPropagation).toBeUndefined();
-    expect(repo.getSegment('seg-2')?.meta.repeatPropagation).toBeUndefined();
-    expect(repo.getSegment('seg-3')?.meta.repeatPropagation).toEqual({ mode: 'detached' });
+  it('does not query repeats during draft saves and queries the group only once on confirmation', async () => {
+    const { repo, service } = setup();
+    const query = vi.spyOn(repo, 'getProjectSegmentsByHash');
+    const targetTokens: Token[] = [{ type: 'text', content: 'Draft' }];
+    await service.updateSegment('A', targetTokens, 'draft');
+    await service.updateSegment('B', targetTokens, 'draft');
+    await service.updateSegment('C', [], 'empty');
+    expect(query).not.toHaveBeenCalled();
+    await service.confirmSegment('A');
+    expect(query).toHaveBeenCalledExactlyOnceWith(1, 'repeat', 42);
   });
 
-  it('updates following repeats but preserves a manually detached repeat', async () => {
-    const fileId = 42;
-    const srcHash = 'hash-contextual-repeat';
-    const repo = new InMemorySegmentRepository([
-      buildSegment('seg-1', fileId, 0, srcHash),
-      buildSegment('seg-2', fileId, 1, srcHash),
-      buildSegment('seg-3', fileId, 2, srcHash),
+  it('ignores legacy detached metadata when confirming the first occurrence', async () => {
+    const legacy = buildSegment('B', 42, 1, 'repeat');
+    const meta = {
+      ...legacy.meta,
+      context: 'Keep context',
+      repeatPropagation: { mode: 'detached' },
+    };
+    legacy.meta = meta;
+    const { repo, service } = setup([buildSegment('A', 42, 0, 'repeat'), legacy]);
+    const targetTokens: Token[] = [{ type: 'text', content: 'Updated translation' }];
+    expect((await service.updateSegment('A', targetTokens, 'confirmed')).propagatedIds).toEqual([
+      'B',
     ]);
-    const tx = { runInTransaction: <T>(fn: () => T) => fn() };
-    const tmService = { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService;
-    const service = new SegmentService(repo, tmService, tx);
-
-    const initialTokens: Token[] = [{ type: 'text', content: 'shared translation' }];
-    await service.updateSegment('seg-1', initialTokens, 'confirmed');
-
-    const divergentTokens: Token[] = [{ type: 'text', content: 'context-specific translation' }];
-    await service.updateSegment('seg-3', divergentTokens, 'draft');
-    const divergentResult = await service.updateSegment('seg-3', divergentTokens, 'confirmed');
-
-    expect(divergentResult.propagatedIds).toEqual([]);
-    expect(repo.getSegment('seg-3')?.meta.repeatPropagation).toEqual({ mode: 'detached' });
-
-    const revisedTokens: Token[] = [{ type: 'text', content: 'revised shared translation' }];
-    const result = await service.updateSegment('seg-1', revisedTokens, 'confirmed');
-
-    expect(result.propagatedIds).toEqual(['seg-2']);
-    expect(toText(repo.getSegment('seg-2')?.targetTokens ?? [])).toBe('revised shared translation');
-    expect(toText(repo.getSegment('seg-3')?.targetTokens ?? [])).toBe(
-      'context-specific translation',
-    );
+    expect(repo.getSegment('B')).toMatchObject({ targetTokens, status: 'confirmed', meta });
   });
 
-  it('propagates a revised first AI translation to untouched AI-translated repeats', async () => {
-    const fileId = 42;
-    const srcHash = 'hash-ai-repeated';
-    const repo = new InMemorySegmentRepository([
-      buildSegment('seg-1', fileId, 0, srcHash),
-      buildSegment('seg-2', fileId, 1, srcHash),
-      buildSegment('seg-3', fileId, 2, srcHash),
-      buildSegment('seg-4', fileId, 3, srcHash),
+  it('scopes propagation to the same source in the same file', async () => {
+    const { repo, service } = setup([
+      buildSegment('other-file', 41, 0, 'repeat'),
+      buildSegment('A', 42, 0, 'repeat'),
+      buildSegment('B', 42, 1, 'repeat'),
+      buildSegment('other-source', 42, 2, 'different'),
     ]);
-    repo.updateSegmentTarget(
-      'seg-1',
-      [{ type: 'text', content: 'Shared AI translation' }],
-      'translated',
-    );
-    repo.updateSegmentTarget(
-      'seg-2',
-      [{ type: 'text', content: 'Shared AI translation' }],
-      'translated',
-    );
-    repo.updateSegmentTarget(
-      'seg-3',
-      [{ type: 'text', content: 'Shared AI translation' }],
-      'translated',
-    );
-    repo.updateSegmentTarget(
-      'seg-4',
-      [{ type: 'text', content: 'Shared AI translation' }],
-      'translated',
-    );
-    const tx = { runInTransaction: <T>(fn: () => T) => fn() };
-    const tmService = { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService;
-    const service = new SegmentService(repo, tmService, tx);
-
-    const confirmedTokens: Token[] = [{ type: 'text', content: 'Confirmed translation' }];
-    await service.updateSegment('seg-1', confirmedTokens, 'draft');
-    const result = await service.updateSegment('seg-1', confirmedTokens, 'confirmed');
-
-    expect(result.propagatedIds).toEqual(['seg-2', 'seg-3', 'seg-4']);
-    for (const segmentId of ['seg-2', 'seg-3', 'seg-4']) {
-      expect(repo.getSegment(segmentId)).toMatchObject({
-        targetTokens: confirmedTokens,
-        status: 'confirmed',
-        meta: {
-          repeatPropagation: {
-            mode: 'following',
-            sourceSegmentId: 'seg-1',
-          },
-        },
-      });
-    }
+    const targetTokens: Token[] = [{ type: 'text', content: 'Current file' }];
+    expect((await service.updateSegment('A', targetTokens, 'confirmed')).propagatedIds).toEqual([
+      'B',
+    ]);
+    expect(repo.getSegment('other-file')?.targetTokens).toEqual([]);
+    expect(repo.getSegment('other-source')?.targetTokens).toEqual([]);
   });
 
-  it('keeps a later AI translation following until the leader is confirmed', async () => {
-    const fileId = 42;
-    const srcHash = 'hash-ai-following';
-    const repo = new InMemorySegmentRepository([
-      buildSegment('seg-1', fileId, 0, srcHash),
-      buildSegment('seg-2', fileId, 1, srcHash),
-    ]);
-    const tx = { runInTransaction: <T>(fn: () => T) => fn() };
-    const tmService = { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService;
-    const service = new SegmentService(repo, tmService, tx);
+  it('avoids rewriting repeats that are already confirmed with the same target', async () => {
+    const { repo, service } = setup();
+    const targetTokens: Token[] = [{ type: 'text', content: 'Already shared' }];
+    await service.updateSegment('A', targetTokens, 'confirmed');
+    const write = vi.spyOn(repo, 'updateSegmentTarget');
+    expect((await service.updateSegment('A', targetTokens, 'confirmed')).propagatedIds).toEqual([]);
+    expect(write).toHaveBeenCalledExactlyOnceWith('A', targetTokens, 'confirmed');
+  });
 
-    await service.updateSegment(
-      'seg-1',
-      [{ type: 'text', content: 'First AI result' }],
-      'translated',
-    );
-    await service.updateSegment(
-      'seg-2',
-      [{ type: 'text', content: 'Different AI result' }],
-      'translated',
-    );
-
-    expect(repo.getSegment('seg-2')?.meta.repeatPropagation).toEqual({
-      mode: 'following',
-      sourceSegmentId: 'seg-1',
-    });
-
-    const confirmedTokens: Token[] = [{ type: 'text', content: 'Confirmed translation' }];
-    await service.updateSegment('seg-1', confirmedTokens, 'draft');
-    const result = await service.updateSegment('seg-1', confirmedTokens, 'confirmed');
-
-    expect(result.propagatedIds).toEqual(['seg-2']);
-    expect(repo.getSegment('seg-2')).toMatchObject({
-      targetTokens: confirmedTokens,
-      status: 'confirmed',
-      meta: {
-        repeatPropagation: {
-          mode: 'following',
-          sourceSegmentId: 'seg-1',
-        },
+  it('allows file commit workflows to confirm without propagating', async () => {
+    const { repo, service } = setup();
+    const query = vi.spyOn(repo, 'getProjectSegmentsByHash');
+    await service.updateSegmentsAtomically(
+      [{ segmentId: 'A', targetTokens: [{ type: 'text', content: 'Commit' }], status: 'confirmed' }],
+      {
+        propagateRepeats: false,
       },
-    });
-  });
-
-  it('initially detaches a different non-empty imported translation', async () => {
-    const fileId = 42;
-    const srcHash = 'hash-imported-repeat';
-    const repo = new InMemorySegmentRepository([
-      buildSegment('seg-1', fileId, 0, srcHash),
-      buildSegment('seg-2', fileId, 1, srcHash),
-    ]);
-    const importedLeaderTokens: Token[] = [{ type: 'text', content: 'Imported first target' }];
-    const importedLaterTokens: Token[] = [{ type: 'text', content: 'Imported contextual target' }];
-    repo.updateSegmentTarget('seg-1', importedLeaderTokens, 'translated');
-    repo.updateSegmentTarget('seg-2', importedLaterTokens, 'translated');
-    const tx = { runInTransaction: <T>(fn: () => T) => fn() };
-    const tmService = { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService;
-    const service = new SegmentService(repo, tmService, tx);
-
-    const confirmedTokens: Token[] = [{ type: 'text', content: 'Revised first target' }];
-    await service.updateSegment('seg-1', confirmedTokens, 'draft');
-    const result = await service.updateSegment('seg-1', confirmedTokens, 'confirmed');
-
-    expect(result.propagatedIds).toEqual([]);
-    expect(repo.getSegment('seg-2')).toMatchObject({
-      targetTokens: importedLaterTokens,
-      status: 'translated',
-      meta: { repeatPropagation: { mode: 'detached' } },
-    });
-  });
-
-  it('detaches a later occurrence when the user confirms it directly', async () => {
-    const fileId = 42;
-    const srcHash = 'hash-direct-confirm';
-    const repo = new InMemorySegmentRepository([
-      buildSegment('seg-1', fileId, 0, srcHash),
-      buildSegment('seg-2', fileId, 1, srcHash),
-    ]);
-    const tx = { runInTransaction: <T>(fn: () => T) => fn() };
-    const tmService = { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService;
-    const service = new SegmentService(repo, tmService, tx);
-
-    const initialTokens: Token[] = [{ type: 'text', content: 'Initial shared target' }];
-    await service.updateSegment('seg-1', initialTokens, 'confirmed');
-    await service.updateSegment('seg-2', initialTokens, 'confirmed');
-
-    expect(repo.getSegment('seg-2')?.meta.repeatPropagation).toEqual({ mode: 'detached' });
-
-    const revisedTokens: Token[] = [{ type: 'text', content: 'Revised leader target' }];
-    const result = await service.updateSegment('seg-1', revisedTokens, 'confirmed');
-
-    expect(result.propagatedIds).toEqual([]);
-    expect(repo.getSegment('seg-2')).toMatchObject({
-      targetTokens: initialTokens,
-      status: 'confirmed',
-      meta: { repeatPropagation: { mode: 'detached' } },
-    });
-  });
-
-  it('preserves a manually edited later occurrence when confirming the first repeat', async () => {
-    const fileId = 42;
-    const srcHash = 'hash-manual-repeat';
-    const repo = new InMemorySegmentRepository([
-      buildSegment('seg-1', fileId, 0, srcHash),
-      buildSegment('seg-2', fileId, 1, srcHash),
-      buildSegment('seg-3', fileId, 2, srcHash),
-    ]);
-    repo.updateSegmentTarget(
-      'seg-1',
-      [{ type: 'text', content: 'Shared AI translation' }],
-      'translated',
     );
-    repo.updateSegmentTarget(
-      'seg-2',
-      [{ type: 'text', content: 'Shared AI translation' }],
-      'translated',
-    );
-    repo.updateSegmentTarget(
-      'seg-3',
-      [{ type: 'text', content: 'Shared AI translation' }],
-      'translated',
-    );
-    const manualTokens: Token[] = [{ type: 'text', content: 'Manual contextual translation' }];
-    repo.updateSegmentTarget('seg-3', manualTokens, 'draft');
-    const tx = { runInTransaction: <T>(fn: () => T) => fn() };
-    const tmService = { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService;
-    const service = new SegmentService(repo, tmService, tx);
-
-    const confirmedTokens: Token[] = [{ type: 'text', content: 'Confirmed translation' }];
-    await service.updateSegment('seg-1', confirmedTokens, 'draft');
-    const result = await service.updateSegment('seg-1', confirmedTokens, 'confirmed');
-
-    expect(result.propagatedIds).toEqual(['seg-2']);
-    expect(repo.getSegment('seg-2')).toMatchObject({
-      targetTokens: confirmedTokens,
-      status: 'confirmed',
-    });
-    expect(repo.getSegment('seg-3')).toMatchObject({
-      targetTokens: manualTokens,
-      status: 'draft',
-    });
+    expect(query).not.toHaveBeenCalled();
+    expect(repo.getSegment('B')?.status).toBe('empty');
+    expect(repo.getSegment('C')?.status).toBe('empty');
   });
 
-  it('does not let an unlinked later occurrence start a new propagation chain', async () => {
-    const fileId = 42;
-    const srcHash = 'hash-later-local';
-    const repo = new InMemorySegmentRepository([
-      buildSegment('seg-1', fileId, 0, srcHash),
-      buildSegment('seg-2', fileId, 1, srcHash),
-      buildSegment('seg-3', fileId, 2, srcHash),
-    ]);
-    const localTokens: Token[] = [{ type: 'text', content: 'local middle translation' }];
-    repo.updateSegmentTarget('seg-2', localTokens, 'draft');
-
-    const tx = { runInTransaction: <T>(fn: () => T) => fn() };
-    const tmService = { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService;
-    const service = new SegmentService(repo, tmService, tx);
-
-    const result = await service.updateSegment('seg-2', localTokens, 'confirmed');
-
-    expect(result.propagatedIds).toEqual([]);
-    expect(repo.getSegment('seg-2')?.meta.repeatPropagation).toEqual({ mode: 'detached' });
-    expect(repo.getSegment('seg-1')?.status).toBe('new');
-    expect(repo.getSegment('seg-3')?.status).toBe('new');
-  });
-
-  it('scopes repeat leadership and propagation to the current file', async () => {
-    const srcHash = 'hash-cross-file-repeat';
-    const repo = new InMemorySegmentRepository([
-      buildSegment('file-a-seg', 1, 0, srcHash),
-      buildSegment('file-b-seg-1', 2, 0, srcHash),
-      buildSegment('file-b-seg-2', 2, 1, srcHash),
-    ]);
-    const tx = { runInTransaction: <T>(fn: () => T) => fn() };
-    const tmService = { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService;
-    const service = new SegmentService(repo, tmService, tx);
-    const targetTokens: Token[] = [{ type: 'text', content: 'current-file translation' }];
-
-    const result = await service.updateSegment('file-b-seg-1', targetTokens, 'confirmed');
-
-    expect(result.propagatedIds).toEqual(['file-b-seg-2']);
-    expect(repo.getSegment('file-a-seg')?.status).toBe('new');
-    expect(repo.getSegment('file-b-seg-1')?.meta.repeatPropagation).toEqual({ mode: 'leader' });
-    expect(repo.getSegment('file-b-seg-2')?.meta.repeatPropagation).toEqual({
-      mode: 'following',
-      sourceSegmentId: 'file-b-seg-1',
-    });
-  });
-
-  it('does not persist repeat metadata for a source that is unique in its file', async () => {
-    const srcHash = 'hash-unique-in-file';
-    const repo = new InMemorySegmentRepository([
-      buildSegment('other-file-seg', 41, 0, srcHash),
-      buildSegment('unique-seg', 42, 0, srcHash),
-    ]);
-    const tx = { runInTransaction: <T>(fn: () => T) => fn() };
-    const tmService = { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService;
-    const service = new SegmentService(repo, tmService, tx);
-    const targetTokens: Token[] = [{ type: 'text', content: 'unique translation' }];
-
-    await service.updateSegment('unique-seg', targetTokens, 'draft');
-    expect(repo.getSegment('unique-seg')?.meta.repeatPropagation).toBeUndefined();
-
-    await service.updateSegment('unique-seg', targetTokens, 'confirmed');
-    expect(repo.getSegment('unique-seg')?.meta.repeatPropagation).toBeUndefined();
-    expect(repo.getSegment('other-file-seg')?.status).toBe('new');
+  it('undoes the last propagation while preserving the first occurrence', async () => {
+    const { repo, service } = setup();
+    const initial: Token[] = [{ type: 'text', content: 'Initial' }];
+    await service.updateSegment('A', initial, 'confirmed');
+    const local: Token[] = [{ type: 'text', content: 'Local B' }];
+    await service.updateSegment('B', local, 'draft');
+    const revised: Token[] = [{ type: 'text', content: 'Revised' }];
+    await service.updateSegment('A', revised, 'confirmed');
+    await service.undoLastPropagation();
+    expect(repo.getSegment('A')).toMatchObject({ targetTokens: revised, status: 'confirmed' });
+    expect(repo.getSegment('B')).toMatchObject({ targetTokens: local, status: 'draft' });
+    expect(repo.getSegment('C')).toMatchObject({ targetTokens: initial, status: 'confirmed' });
   });
 });
 
@@ -578,10 +365,7 @@ describe('SegmentService transactional confirmation flow', () => {
     expect(source?.status).toBe('confirmed');
     expect(toText(source?.targetTokens ?? [])).toBe('你好');
     expect(repeated?.status).toBe('confirmed');
-    expect(repeated?.meta.repeatPropagation).toEqual({
-      mode: 'following',
-      sourceSegmentId: 'seg-1',
-    });
+    expect(repeated?.meta).not.toHaveProperty('repeatPropagation');
     expect(toText(repeated?.targetTokens ?? [])).toBe('你好');
 
     const workingTM = db.getProjectMountedTMs(projectId).find((tm) => tm.type === 'working');
@@ -634,9 +418,9 @@ describe('SegmentService transactional confirmation flow', () => {
 
     const source = db.getSegment('seg-1');
     const repeated = db.getSegment('seg-2');
-    expect(source?.status).toBe('new');
+    expect(source?.status).toBe('empty');
     expect(source?.targetTokens).toEqual([]);
-    expect(repeated?.status).toBe('new');
+    expect(repeated?.status).toBe('empty');
     expect(repeated?.targetTokens).toEqual([]);
     expect(db.getFile(fileId)?.confirmedSegments).toBe(0);
 
@@ -678,7 +462,7 @@ describe('SegmentService transactional confirmation flow', () => {
     const repeated = db.getSegment('seg-2');
     expect(source?.status).toBe('confirmed');
     expect(toText(source?.targetTokens ?? [])).toBe('审校后文本');
-    expect(repeated?.status).toBe('new');
+    expect(repeated?.status).toBe('empty');
     expect(repeated?.targetTokens).toEqual([]);
 
     const mountedTMs = db.getProjectMountedTMs(projectId);
@@ -711,7 +495,7 @@ describe('SegmentService transactional confirmation flow', () => {
     const repeated = db.getSegment('seg-2');
     expect(source?.status).toBe('confirmed');
     expect(toText(source?.targetTokens ?? [])).toBe('processed text');
-    expect(repeated?.status).toBe('new');
+    expect(repeated?.status).toBe('empty');
     expect(repeated?.targetTokens).toEqual([]);
 
     const mountedTMs = db.getProjectMountedTMs(projectId);

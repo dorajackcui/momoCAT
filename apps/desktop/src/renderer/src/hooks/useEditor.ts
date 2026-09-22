@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from 'react';
 import { DEFAULT_PROJECT_QA_SETTINGS, type SegmentQaRuleId } from '@cat/core/project';
-import type { Segment, SegmentStatus, Token } from '@cat/core/models';
+import type { Segment, Token } from '@cat/core/models';
+import { normalizeSegmentStatus } from '@cat/core/models';
 import { TagValidator } from '@cat/core/qa';
-import { serializeTokensToEditorText, type TagPolicy } from '@cat/core/tag';
+import type { TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { AISegmentTranslateResult } from '../../../shared/ipc';
 import { useReferenceLookupController } from './editor/useReferenceLookupController';
@@ -39,14 +40,6 @@ interface UseEditorProps {
   activeTab?: 'tm' | 'concordance';
 }
 
-const VALID_SEGMENT_STATUSES: Set<SegmentStatus> = new Set([
-  'new',
-  'draft',
-  'translated',
-  'confirmed',
-  'reviewed',
-]);
-
 export { createSegmentPersistor };
 
 export function applyAISegmentTranslateResultToStore(
@@ -59,7 +52,7 @@ export function applyAISegmentTranslateResultToStore(
     updates.set(result.segmentId, {
       ...translatedSegment,
       targetTokens: result.targetTokens,
-      status: result.status,
+      status: normalizeSegmentStatus(result.status, result.targetTokens),
       qaIssues: result.status === 'confirmed' ? translatedSegment.qaIssues : undefined,
       autoFixSuggestions:
         result.status === 'confirmed' ? translatedSegment.autoFixSuggestions : undefined,
@@ -73,7 +66,7 @@ export function applyAISegmentTranslateResultToStore(
     updates.set(propagatedId, {
       ...propagatedSegment,
       targetTokens: result.targetTokens,
-      status: 'draft',
+      status: normalizeSegmentStatus('draft', result.targetTokens),
       qaIssues: undefined,
       autoFixSuggestions: undefined,
     });
@@ -204,13 +197,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     [isTokenLike],
   );
 
-  const normalizeStatus = useCallback((status: unknown, targetTokens: Token[]): SegmentStatus => {
-    if (typeof status === 'string' && VALID_SEGMENT_STATUSES.has(status as SegmentStatus)) {
-      return status as SegmentStatus;
-    }
-    const hasTargetContent = targetTokens.some((token) => token.content.trim().length > 0);
-    return hasTargetContent ? 'draft' : 'new';
-  }, []);
+  const normalizeStatus = normalizeSegmentStatus;
 
   const setSegmentSaveError = useCallback((segmentId: string, message: string) => {
     setSegmentSaveErrors((prev) => {
@@ -246,7 +233,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     clearSegmentSaveError,
   });
 
-  const { loadEditorData } = useEditorDataLoader({
+  const { loadEditorData, applyConfirmation } = useEditorDataLoader({
     activeFileId,
     normalizeTokens,
     normalizeStatus,
@@ -291,6 +278,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     setSegmentSaveError,
     clearSegmentSaveError,
     tagValidator,
+    onConfirmed: applyConfirmation,
   });
 
   useEffect(
@@ -318,7 +306,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
         applyOptimisticSegmentUpdate(segmentId, (segment) => {
           const normalizedText = normalizeEditorInputText(text);
           const tokens = parseTargetEditorText(normalizedText, segment.sourceTokens, fileTagPolicy);
-          const nextStatus: SegmentStatus = normalizedText.trim() ? 'draft' : 'new';
+          const nextStatus = normalizeSegmentStatus('draft', tokens);
           return {
             ...segment,
             targetTokens: tokens,
@@ -353,13 +341,14 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
   const confirmSegment = useCallback(
     async (segmentId: string) => {
       try {
-        await flushSegmentDraft(segmentId);
+        // Confirmation can overwrite repeats, so their pending drafts must finish first.
+        await flushAllSegmentUpdates();
       } catch {
         return;
       }
       await confirmSegmentWithQa(segmentId);
     },
-    [confirmSegmentWithQa, flushSegmentDraft],
+    [confirmSegmentWithQa, flushAllSegmentUpdates],
   );
 
   const handleApplyMatch = useCallback(
@@ -369,7 +358,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
       applyOptimisticSegmentUpdate(activeSegmentId, (segment) => ({
         ...segment,
         targetTokens: tokens,
-        status: 'draft',
+        status: normalizeSegmentStatus('draft', tokens),
         qaIssues: undefined,
         autoFixSuggestions: undefined,
       }));
@@ -383,10 +372,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
 
       applyOptimisticSegmentUpdate(activeSegmentId, (segment) => {
         const nextTokens = appendTermToTargetTokens(segment, term, fileTagPolicy);
-        const nextText = normalizeEditorInputText(
-          serializeTokensToEditorText(nextTokens, segment.sourceTokens),
-        );
-        const nextStatus: SegmentStatus = nextText.trim() ? 'draft' : 'new';
+        const nextStatus = normalizeSegmentStatus('draft', nextTokens);
 
         return {
           ...segment,

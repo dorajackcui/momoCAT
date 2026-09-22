@@ -1,6 +1,5 @@
 import {
   QaIssue,
-  RepeatPropagationState,
   Segment,
   SegmentStatus,
   TBEntry,
@@ -106,11 +105,6 @@ export interface SegmentRepository {
     segmentId: string,
     targetTokens: Token[],
     status: SegmentStatus,
-    repeatPropagation?: RepeatPropagationState | null,
-  ): void;
-  updateSegmentRepeatPropagation(
-    segmentId: string,
-    repeatPropagation: RepeatPropagationState | null,
   ): void;
   updateSegmentQaIssues(segmentId: string, qaIssues: QaIssue[]): void;
 }

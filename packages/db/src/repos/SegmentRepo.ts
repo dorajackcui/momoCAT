@@ -1,7 +1,8 @@
 import Database from "better-sqlite3";
+import { normalizeSegmentStatus } from "@cat/core/models";
+import { SEGMENT_STATUS_SQL } from './segmentStatus';
 import type {
   QaIssue,
-  RepeatPropagationState,
   Segment,
   SegmentStatus,
   Token,
@@ -22,14 +23,6 @@ interface SegmentRow {
 }
 
 export class SegmentRepo {
-  private static readonly VALID_SEGMENT_STATUSES: Set<SegmentStatus> = new Set([
-    "new",
-    "draft",
-    "translated",
-    "confirmed",
-    "reviewed",
-  ]);
-
   constructor(
     private readonly db: Database.Database,
     private readonly updateFileStats: (fileId: number) => void,
@@ -52,7 +45,7 @@ export class SegmentRepo {
           segment.orderIndex,
           JSON.stringify(segment.sourceTokens),
           JSON.stringify(segment.targetTokens),
-          segment.status,
+          normalizeSegmentStatus(segment.status, segment.targetTokens),
           segment.tagsSignature,
           segment.matchKey,
           segment.srcHash,
@@ -139,57 +132,14 @@ export class SegmentRepo {
     segmentId: string,
     targetTokens: Token[],
     status: SegmentStatus,
-    repeatPropagation?: RepeatPropagationState | null,
   ) {
-    const normalizedStatus = this.normalizeStatus(status, targetTokens);
-    if (repeatPropagation !== undefined) {
-      const row = this.db
-        .prepare("SELECT metaJson FROM segments WHERE segmentId = ?")
-        .get(segmentId) as Pick<SegmentRow, "metaJson"> | undefined;
-      if (!row) return;
-
-      const meta = JSON.parse(row.metaJson) as Segment["meta"];
-      if (repeatPropagation) meta.repeatPropagation = repeatPropagation;
-      else delete meta.repeatPropagation;
-
-      this.db
-        .prepare(
-          "UPDATE segments SET targetTokensJson = ?, status = ?, metaJson = ?, qaIssuesJson = NULL, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE segmentId = ?",
-        )
-        .run(
-          JSON.stringify(targetTokens),
-          normalizedStatus,
-          JSON.stringify(meta),
-          segmentId,
-        );
-      return;
-    }
+    const normalizedStatus = normalizeSegmentStatus(status, targetTokens);
 
     this.db
       .prepare(
         "UPDATE segments SET targetTokensJson = ?, status = ?, qaIssuesJson = NULL, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE segmentId = ?",
       )
       .run(JSON.stringify(targetTokens), normalizedStatus, segmentId);
-  }
-
-  public updateSegmentRepeatPropagation(
-    segmentId: string,
-    repeatPropagation: RepeatPropagationState | null,
-  ) {
-    const row = this.db
-      .prepare("SELECT metaJson FROM segments WHERE segmentId = ?")
-      .get(segmentId) as Pick<SegmentRow, "metaJson"> | undefined;
-    if (!row) return;
-
-    const meta = JSON.parse(row.metaJson) as Segment["meta"];
-    if (repeatPropagation) meta.repeatPropagation = repeatPropagation;
-    else delete meta.repeatPropagation;
-
-    this.db
-      .prepare(
-        "UPDATE segments SET metaJson = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE segmentId = ?",
-      )
-      .run(JSON.stringify(meta), segmentId);
   }
 
   public updateSegmentQaIssues(segmentId: string, qaIssues: QaIssue[]) {
@@ -207,11 +157,11 @@ export class SegmentRepo {
       .prepare(
         `
       SELECT
-        status, COUNT(*) as count
-      FROM segments
-      JOIN files ON segments.fileId = files.id
+        ${SEGMENT_STATUS_SQL} as status, COUNT(*) as count
+      FROM segments s
+      JOIN files ON s.fileId = files.id
       WHERE files.projectId = ?
-      GROUP BY status
+      GROUP BY ${SEGMENT_STATUS_SQL}
     `,
       )
       .all(projectId) as Array<{ status: string; count: number }>;
@@ -224,7 +174,7 @@ export class SegmentRepo {
   private mapRowToSegment(row: SegmentRow): Segment {
     const sourceTokens = JSON.parse(row.sourceTokensJson) as Token[];
     const targetTokens = JSON.parse(row.targetTokensJson) as Token[];
-    const status = this.normalizeStatus(row.status, targetTokens);
+    const status = normalizeSegmentStatus(row.status, targetTokens);
     return {
       segmentId: row.segmentId,
       fileId: row.fileId,
@@ -261,22 +211,5 @@ export class SegmentRepo {
     } catch {
       return undefined;
     }
-  }
-
-  private normalizeStatus(
-    rawStatus: unknown,
-    targetTokens: Token[],
-  ): SegmentStatus {
-    if (
-      typeof rawStatus === "string" &&
-      SegmentRepo.VALID_SEGMENT_STATUSES.has(rawStatus as SegmentStatus)
-    ) {
-      return rawStatus as SegmentStatus;
-    }
-
-    const hasTargetContent = targetTokens.some(
-      (token) => token.content.trim().length > 0,
-    );
-    return hasTargetContent ? "draft" : "new";
   }
 }

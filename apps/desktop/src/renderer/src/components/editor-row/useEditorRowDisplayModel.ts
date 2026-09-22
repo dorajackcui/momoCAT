@@ -16,7 +16,7 @@ interface UseEditorRowDisplayModelParams {
 }
 
 interface EditorRowDisplayModel {
-  statusLine: string;
+  statusIndicatorClass: string;
   statusTitle: string;
   sourceHighlightChunks: ReturnType<typeof buildHighlightChunks>;
   sourceDisplayText: string;
@@ -40,12 +40,10 @@ interface EditorRowActionVisibility {
   showTargetActionButtons: boolean;
 }
 
-export function getEditorRowStatusLineClass(segmentStatus: Segment['status']): string {
-  if (segmentStatus === 'confirmed') return 'bg-status-confirmed';
-  if (segmentStatus === 'reviewed') return 'bg-status-reviewed';
-  if (segmentStatus === 'translated') return 'bg-status-translated';
-  if (segmentStatus === 'draft') return 'bg-status-draft';
-  return 'bg-status-new';
+export function getEditorRowStatusIndicatorClass(segmentStatus: Segment['status']): string {
+  return segmentStatus === 'confirmed'
+    ? 'border-status-confirmed bg-status-confirmed'
+    : 'border-status-empty bg-transparent';
 }
 
 export function getEditorRowStatusTitle(
@@ -90,7 +88,7 @@ export function buildEditorRowDisplayModel({
 }: UseEditorRowDisplayModelParams): EditorRowDisplayModel {
   const hasError = qaIssues.some((issue) => issue.severity === 'error');
   const hasWarning = qaIssues.some((issue) => issue.severity === 'warning');
-  const statusLine = getEditorRowStatusLineClass(segmentStatus);
+  const statusIndicatorClass = getEditorRowStatusIndicatorClass(segmentStatus);
   const statusTitle = getEditorRowStatusTitle(segmentStatus, hasError, hasWarning);
 
   const sourceDisplayText = showNonPrintingSymbols
@@ -113,7 +111,7 @@ export function buildEditorRowDisplayModel({
     });
 
   return {
-    statusLine,
+    statusIndicatorClass,
     statusTitle,
     sourceHighlightChunks,
     sourceDisplayText,

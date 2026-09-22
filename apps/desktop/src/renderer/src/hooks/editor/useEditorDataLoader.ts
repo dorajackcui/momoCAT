@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { Segment, SegmentStatus, Token } from '@cat/core/models';
+import { normalizeSegmentStatus } from '@cat/core/models';
 import type { SegmentQaRuleId } from '@cat/core/project';
 import { DEFAULT_PROJECT_QA_SETTINGS } from '@cat/core/project';
 import type { TagPolicy } from '@cat/core/tag';
@@ -103,13 +104,14 @@ function applyPropagatedSegmentUpdate(params: {
     params.event.targetTokens,
     `segment ${params.segment.segmentId} target (${params.context})`,
   );
-  const nextStatus: SegmentStatus = params.event.status === 'confirmed' ? 'confirmed' : 'draft';
+  const nextStatus = normalizeSegmentStatus(params.event.status, targetTokens);
   return {
     ...params.segment,
     targetTokens,
     status: nextStatus,
-    qaIssues: nextStatus === 'confirmed' ? params.segment.qaIssues : undefined,
-    autoFixSuggestions: nextStatus === 'confirmed' ? params.segment.autoFixSuggestions : undefined,
+    // Propagation replaces the target; QA from the previous translation is stale.
+    qaIssues: undefined,
+    autoFixSuggestions: undefined,
   };
 }
 
@@ -188,6 +190,22 @@ export function handleIncomingSegmentsUpdatedEvent(
 
   handlers.applySegmentsUpdatedEvent(data);
   return 'applied';
+}
+
+export function applyConfirmedSegmentUpdate(
+  data: SegmentsUpdatedEvent,
+  handlers: Pick<
+    RemoteUpdateQueueHandlers,
+    'activeFileId' | 'queuedRemoteUpdates' | 'applySegmentsUpdatedEvent'
+  >,
+): void {
+  if (!isSegmentUpdateForActiveFile(data, handlers.activeFileId)) return;
+  // The caller flushed local drafts and received this confirmation from the server.
+  // Apply it before focus advances into a repeat, superseding queued draft echoes.
+  for (const segmentId of [data.segmentId, ...(data.propagatedIds ?? [])]) {
+    handlers.queuedRemoteUpdates.delete(segmentId);
+  }
+  handlers.applySegmentsUpdatedEvent(data);
 }
 
 export function handleIncomingSegmentsUpdatedBatch(
@@ -277,7 +295,10 @@ export function useEditorDataLoader({
   syncStateVersion,
   clearPersistQueue,
   setLoading,
-}: UseEditorDataLoaderParams): { loadEditorData: () => Promise<void> } {
+}: UseEditorDataLoaderParams): {
+  loadEditorData: () => Promise<void>;
+  applyConfirmation: (data: SegmentsUpdatedEvent) => void;
+} {
   const queuedRemoteUpdatesRef = useRef<Map<string, SegmentsUpdatedEvent>>(new Map());
 
   const applySegmentsUpdatedEvent = useCallback(
@@ -488,7 +509,16 @@ export function useEditorDataLoader({
     syncStateVersion,
   ]);
 
-  return {
-    loadEditorData,
-  };
+  const applyConfirmation = useCallback(
+    (data: SegmentsUpdatedEvent) => {
+      applyConfirmedSegmentUpdate(data, {
+        activeFileId,
+        queuedRemoteUpdates: queuedRemoteUpdatesRef.current,
+        applySegmentsUpdatedEvent,
+      });
+    },
+    [activeFileId, applySegmentsUpdatedEvent],
+  );
+
+  return { loadEditorData, applyConfirmation };
 }

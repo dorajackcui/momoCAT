@@ -1,6 +1,6 @@
 import type { InspectProjectsResult, InspectProviderSummary } from '@cat/localization';
 
-const STATUS_ORDER = ['new', 'draft', 'translated', 'reviewed', 'confirmed'];
+const STATUS_ORDER = ['empty', 'draft', 'confirmed'];
 
 export function formatProjectsInspection(summary: InspectProjectsResult): string {
   const lines: string[] = [];

@@ -32,7 +32,7 @@ function createSegment(params: {
     orderIndex: params.orderIndex ?? 0,
     sourceTokens,
     targetTokens,
-    status: params.status ?? 'new',
+    status: params.status ?? 'empty',
     tagsSignature: '',
     matchKey: params.sourceText.toLowerCase(),
     srcHash: `hash-${params.segmentId}`,
@@ -309,7 +309,7 @@ describe('AIModule.aiTranslateFile', () => {
         target: '',
         context: 'Homepage title',
         rowNumber: 5,
-        metadata: { segmentId: 'loc-empty-1', orderIndex: 4, status: 'new' },
+        metadata: { segmentId: 'loc-empty-1', orderIndex: 4, status: 'empty' },
       },
       {
         id: 'loc-confirmed-1',
@@ -324,7 +324,7 @@ describe('AIModule.aiTranslateFile', () => {
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'loc-empty-1',
       expect.any(Array),
-      'translated',
+      'draft',
     );
     const translatedTokens = (segmentService.updateSegment as ReturnType<typeof vi.fn>).mock
       .calls[0][1];
@@ -471,7 +471,7 @@ describe('AIModule.aiTranslateFile', () => {
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'loc-flush-reject-success-1',
       expect.any(Array),
-      'translated',
+      'draft',
     );
     expect(translationAuditFlush).toHaveBeenCalledTimes(1);
   });
@@ -681,7 +681,7 @@ describe('AIModule.aiTranslateFile', () => {
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'loc-policy-none-1',
       expectedTokens,
-      'translated',
+      'draft',
     );
     expect(transport.createResponse).not.toHaveBeenCalled();
   });
@@ -813,7 +813,7 @@ describe('AIModule.aiTranslateFile', () => {
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'valid-1',
       expect.any(Array),
-      'translated',
+      'draft',
     );
 
     const translatedTokens = (segmentService.updateSegment as ReturnType<typeof vi.fn>).mock
@@ -830,7 +830,7 @@ describe('AIModule.aiTranslateFile', () => {
         sourceText,
         sourceTokens: [{ type: 'text', content: sourceText }],
         targetText: '',
-        status: 'new',
+        status: 'empty',
       }),
     ];
 
@@ -879,7 +879,7 @@ describe('AIModule.aiTranslateFile', () => {
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'standard-policy-none-1',
       expectedTokens,
-      'translated',
+      'draft',
     );
     expect(transport.createResponse).toHaveBeenCalledTimes(1);
   });
@@ -933,7 +933,7 @@ describe('AIModule.aiTranslateFile', () => {
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'standard-unchanged-1',
       expect.any(Array),
-      'translated',
+      'draft',
     );
     const translatedTokens = (segmentService.updateSegment as ReturnType<typeof vi.fn>).mock
       .calls[0][1];
@@ -995,7 +995,7 @@ describe('AIModule.aiTranslateFile', () => {
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'blank-only-empty',
       expect.any(Array),
-      'translated',
+      'draft',
     );
   });
 
@@ -1057,18 +1057,18 @@ describe('AIModule.aiTranslateFile', () => {
       1,
       'overwrite-empty',
       expect.any(Array),
-      'translated',
+      'draft',
     );
     expect(segmentService.updateSegment).toHaveBeenNthCalledWith(
       2,
       'overwrite-prefilled',
       expect.any(Array),
-      'translated',
+      'draft',
     );
     expect(segmentService.updateSegment).not.toHaveBeenCalledWith(
       'overwrite-confirmed',
       expect.any(Array),
-      'translated',
+      'draft',
     );
   });
 
@@ -1928,7 +1928,7 @@ describe('AIModule.aiTranslateFile', () => {
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'review-unchanged-1',
       expect.any(Array),
-      'reviewed',
+      'draft',
     );
   });
 
@@ -1983,7 +1983,7 @@ describe('AIModule.aiTranslateFile', () => {
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'custom-1',
       expect.any(Array),
-      'translated',
+      'draft',
     );
   });
 
@@ -2030,7 +2030,7 @@ describe('AIModule.aiTranslateFile', () => {
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'custom-unchanged-1',
       expect.any(Array),
-      'translated',
+      'draft',
     );
   });
 
@@ -2307,7 +2307,7 @@ describe('AIModule.aiTranslateFile', () => {
     const update = (segmentService.updateSegmentsAtomically as ReturnType<typeof vi.fn>).mock
       .calls[0][0][0];
     expect(update.segmentId).toBe('dlg-unchanged-1');
-    expect(update.status).toBe('translated');
+    expect(update.status).toBe('draft');
     expect(serializeTokensToDisplayText(update.targetTokens)).toBe(sourceText);
     expect(segmentService.updateSegment).not.toHaveBeenCalled();
   });
@@ -2642,7 +2642,7 @@ describe('AIModule.aiTranslateSegment', () => {
       fileId: segment.fileId,
       segmentId: 'single-1',
       targetTokens: expect.any(Array),
-      status: 'translated',
+      status: 'draft',
       propagatedIds: ['single-propagated-1'],
       serverAppliedAt: '2026-06-12T00:00:00.000Z',
     });
@@ -2650,7 +2650,7 @@ describe('AIModule.aiTranslateSegment', () => {
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'single-1',
       expect.any(Array),
-      'translated',
+      'draft',
     );
     const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(request.userPrompt).toContain('Context: UI button label');
@@ -2658,7 +2658,7 @@ describe('AIModule.aiTranslateSegment', () => {
     expect(request.userPrompt).toContain('Terminology References (hit terms):');
   });
 
-  it('returns reviewed status for review project', async () => {
+  it('returns draft status for review project', async () => {
     const segment = createSegment({
       segmentId: 'single-review-1',
       sourceText: 'Review this text',
@@ -2707,14 +2707,14 @@ describe('AIModule.aiTranslateSegment', () => {
       fileId: segment.fileId,
       segmentId: 'single-review-1',
       targetTokens: expect.any(Array),
-      status: 'reviewed',
+      status: 'draft',
       propagatedIds: [],
       serverAppliedAt: '2026-06-12T00:00:01.000Z',
     });
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'single-review-1',
       expect.any(Array),
-      'reviewed',
+      'draft',
     );
   });
 
@@ -2768,7 +2768,7 @@ describe('AIModule.aiTranslateSegment', () => {
       fileId: segment.fileId,
       segmentId: 'single-unchanged-1',
       targetTokens: expect.any(Array),
-      status: 'translated',
+      status: 'draft',
       propagatedIds: [],
       serverAppliedAt: '2026-06-12T00:00:02.000Z',
     });
@@ -2776,7 +2776,7 @@ describe('AIModule.aiTranslateSegment', () => {
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'single-unchanged-1',
       expect.any(Array),
-      'translated',
+      'draft',
     );
   });
 
@@ -2836,7 +2836,7 @@ describe('AIModule.aiTranslateSegment', () => {
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'single-policy-none-1',
       expectedTokens,
-      'translated',
+      'draft',
     );
     expect(transport.createResponse).toHaveBeenCalledTimes(1);
   });
@@ -2897,7 +2897,7 @@ describe('AIModule.aiTranslateSegment', () => {
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'single-display-policy-none-1',
       expectedTokens,
-      'translated',
+      'draft',
     );
     expect(transport.createResponse).toHaveBeenCalledTimes(1);
   });
@@ -2978,7 +2978,7 @@ describe('AIModule.aiRefineSegment', () => {
       expect.objectContaining({
         segmentId: 'refine-1',
         targetTokens: [{ type: 'text', content: 'hello world target' }],
-        status: 'translated',
+        status: 'draft',
         propagatedIds: [],
         serverAppliedAt: expect.any(String),
       }),
@@ -2986,7 +2986,7 @@ describe('AIModule.aiRefineSegment', () => {
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'refine-1',
       expect.any(Array),
-      'translated',
+      'draft',
     );
     const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(request.userPrompt).toContain('Context: UI button label');
@@ -3065,7 +3065,7 @@ describe('AIModule.aiRefineSegment', () => {
     expectTBPromptCap(request.userPrompt);
   });
 
-  it('returns reviewed status for review project', async () => {
+  it('returns draft status for review project', async () => {
     const segment = createSegment({
       segmentId: 'refine-review-1',
       sourceText: 'Review this text',
@@ -3111,7 +3111,7 @@ describe('AIModule.aiRefineSegment', () => {
       expect.objectContaining({
         segmentId: 'refine-review-1',
         targetTokens: [{ type: 'text', content: 'refined target' }],
-        status: 'reviewed',
+        status: 'draft',
         propagatedIds: [],
         serverAppliedAt: expect.any(String),
       }),
@@ -3119,7 +3119,7 @@ describe('AIModule.aiRefineSegment', () => {
     expect(segmentService.updateSegment).toHaveBeenCalledWith(
       'refine-review-1',
       expect.any(Array),
-      'reviewed',
+      'draft',
     );
   });
 
@@ -3171,7 +3171,7 @@ describe('AIModule.aiRefineSegment', () => {
       segmentId: 'refine-empty-target-1',
       sourceText: 'Hello',
       targetText: '',
-      status: 'new',
+      status: 'empty',
     });
 
     const projectRepo = {
@@ -3310,7 +3310,7 @@ describe('AIModule.segmentAIOperationLock', () => {
       expect.objectContaining({
         segmentId: 'lock-release-1',
         targetTokens: [{ type: 'text', content: 'hello world target' }],
-        status: 'translated',
+        status: 'draft',
         propagatedIds: [],
         serverAppliedAt: expect.any(String),
       }),
