@@ -1,23 +1,17 @@
 import { useCallback, useLayoutEffect, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { Segment, TBMatch } from '@cat/core/models';
-import type { SegmentQaRuleId } from '@cat/core/project';
+import type { Segment } from '@cat/core/models';
 import type { SegmentsUpdatedEvent } from '../../../../shared/ipc';
-import { evaluateSegmentQa, TagValidator } from '@cat/core/qa';
 import { apiClient } from '../../services/apiClient';
 import type { SetSegmentsWithChangeHint } from './editorSegmentState';
+import { checkSegmentConfirmation, type ConfirmationQaSettings } from './segmentConfirmationQa';
 
-interface UseSegmentQaWorkflowParams {
+interface UseSegmentQaWorkflowParams extends ConfirmationQaSettings {
   segments: Segment[];
-  projectId: number | null;
-  targetLocale: string | null;
-  enabledQaRuleIds: SegmentQaRuleId[];
-  instantQaOnConfirm: boolean;
   setSegments: SetSegmentsWithChangeHint;
   setActiveSegmentId: Dispatch<SetStateAction<string | null>>;
   setSegmentSaveError: (segmentId: string, message: string) => void;
   clearSegmentSaveError: (segmentId: string) => void;
-  tagValidator: TagValidator;
   onConfirmed: (data: SegmentsUpdatedEvent) => void;
 }
 
@@ -57,59 +51,30 @@ export function useSegmentQaWorkflow({
 
   const confirmSegment = useCallback(
     async (segmentId: string) => {
-      const { segments, projectId, targetLocale, enabledQaRuleIds, instantQaOnConfirm, tagValidator } =
-        workflowInputsRef.current;
+      const {
+        segments,
+        projectId,
+        targetLocale,
+        enabledQaRuleIds,
+        instantQaOnConfirm,
+        tagValidator,
+      } = workflowInputsRef.current;
       const segment = segments.find((item) => item.segmentId === segmentId);
       if (!segment) return;
       const previousStatus = segment.status;
 
-      if (instantQaOnConfirm) {
-        let termMatches: TBMatch[] = [];
-        if (projectId !== null && enabledQaRuleIds.includes('terminology-consistency')) {
-          try {
-            termMatches = (await apiClient.getTermMatches(projectId, segment)) || [];
-          } catch (error) {
-            console.error('[useEditor] Failed to run TB QA check:', error);
-          }
-        }
-
-        const combinedIssues = evaluateSegmentQa(segment, {
-          enabledRuleIds: enabledQaRuleIds,
-          termMatches,
-          targetLocale: targetLocale ?? undefined,
-        });
-        const hasBlockingErrors = combinedIssues.some((issue) => issue.severity === 'error');
-        const tagValidationResult = enabledQaRuleIds.includes('tag-integrity')
-          ? tagValidator.validate(segment.sourceTokens, segment.targetTokens)
-          : { issues: [], suggestions: [] };
-
-        setSegments(
-          (prev) =>
-            prev.map((item) => {
-              if (item.segmentId !== segmentId) return item;
-              return {
-                ...item,
-                qaIssues: combinedIssues,
-                autoFixSuggestions: tagValidationResult.suggestions,
-              };
-            }),
-          { orderChanged: false, changedSegmentIds: [segmentId] },
-        );
-
-        if (hasBlockingErrors) {
-          return;
-        }
-      } else {
-        setSegments(
-          (prev) =>
-            prev.map((item) =>
-              item.segmentId === segmentId
-                ? { ...item, qaIssues: undefined, autoFixSuggestions: undefined }
-                : item,
-            ),
-          { orderChanged: false, changedSegmentIds: [segmentId] },
-        );
-      }
+      const { blocked, ...qa } = await checkSegmentConfirmation(segment, {
+        projectId,
+        targetLocale,
+        enabledQaRuleIds,
+        instantQaOnConfirm,
+        tagValidator,
+      });
+      setSegments(
+        (prev) => prev.map((item) => (item.segmentId === segmentId ? { ...item, ...qa } : item)),
+        { orderChanged: false, changedSegmentIds: [segmentId] },
+      );
+      if (blocked) return;
 
       setSegments(
         (prev) =>

@@ -36,6 +36,7 @@ import type {
   FileSourceTerminologyPrecheckResult,
   ImportOptions,
   PastedSourceFileInput,
+  SelectedSegmentUpdate,
   ProxySettings,
   ProxySettingsInput,
   SourceTerminologyPromptSettings,
@@ -264,6 +265,10 @@ export class ProjectService {
 
   public async getSpreadsheetPreview(filePath: string): Promise<SpreadsheetPreviewData> {
     return this.projectModule.getSpreadsheetPreview(filePath);
+  }
+
+  public updateSelectedSegments(fileId: number, updates: SelectedSegmentUpdate[]) {
+    return this.segmentService.updateSelectedSegments(fileId, updates);
   }
 
   public async updateSegment(

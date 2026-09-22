@@ -358,6 +358,8 @@ export interface SegmentsUpdatedEvent {
 
 export type SegmentsUpdatedBatchEvent = SegmentsUpdatedEvent[];
 
+export type SelectedSegmentUpdate = Pick<Segment, 'segmentId' | 'targetTokens' | 'status'>;
+
 export interface AppProgressEvent {
   type: string;
   current: number;
@@ -489,6 +491,10 @@ export interface DesktopApi extends AssetRenameApi, AISettingsApi {
     status: SegmentStatus,
     clientRequestId?: string,
   ) => Promise<SegmentUpdateResult>;
+  updateSelectedSegments: (
+    fileId: number,
+    updates: SelectedSegmentUpdate[],
+  ) => Promise<SegmentsUpdatedEvent[]>;
 
   getMatches: (projectId: number, segment: Segment) => Promise<TMMatch[]>;
   searchConcordance: (projectId: number, query: string) => Promise<TMConcordanceEntry[]>;

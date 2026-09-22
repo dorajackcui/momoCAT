@@ -4,6 +4,16 @@ import type { SVGProps } from 'react';
 // License and Feather attribution: renderer/public/licenses/LUCIDE.txt.
 const shapes = {
   check: <path d="M5 13l4 4L19 7" />,
+  'shield-alert': (
+    <>
+      <path d="M12 3 4 7v5c0 5 8 9 8 9s8-4 8-9V7l-8-4ZM12 8v5" />
+      <path d="M12 16h.01" />
+    </>
+  ),
+  'chevrons-right': <path d="m13 5 7 7-7 7M5 5l7 7-7 7" />,
+  eraser: (
+    <path d="m16 3 5 5a2 2 0 0 1 0 3L11 21H6l-4-4a2 2 0 0 1 0-3L13 3a2 2 0 0 1 3 0ZM8 8l8 8M11 21h11" />
+  ),
   'file-spreadsheet': (
     <>
       <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />

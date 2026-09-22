@@ -17,6 +17,8 @@ interface EditorListPaneProps {
   segmentStore: EditorSegmentStore;
   activeFilteredIndex: number;
   activeSegmentId: string | null;
+  selectedSegmentIds?: ReadonlySet<string>;
+  onSelectSegment?: React.ComponentProps<typeof EditorRow>['onSelectSegment'];
   manualActivationSegmentId: string | null;
   suppressAutoFocusSegmentId: string | null;
   isSearchInputFocused: boolean;
@@ -83,6 +85,8 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
   segmentStore,
   activeFilteredIndex,
   activeSegmentId,
+  selectedSegmentIds,
+  onSelectSegment,
   manualActivationSegmentId,
   suppressAutoFocusSegmentId,
   isSearchInputFocused,
@@ -119,6 +123,14 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
         segmentStore={segmentStore}
         repeatedSourceRole={item.repeatedSourceRole}
         isActive={item.segment.segmentId === activeSegmentId}
+        isSelected={selectedSegmentIds?.has(item.segment.segmentId)}
+        selectionStart={
+          !selectedSegmentIds?.has(filteredSegments[displayIndex - 1]?.segment.segmentId)
+        }
+        selectionEnd={
+          !selectedSegmentIds?.has(filteredSegments[displayIndex + 1]?.segment.segmentId)
+        }
+        onSelectSegment={onSelectSegment}
         isAlternate={displayIndex % 2 === 1}
         disableAutoFocus={
           (isSearchInputFocused && manualActivationSegmentId !== item.segment.segmentId) ||
@@ -145,6 +157,9 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
     ),
     [
       activeSegmentId,
+      filteredSegments,
+      selectedSegmentIds,
+      onSelectSegment,
       aiTranslatingSegmentIds,
       contextHighlightQuery,
       highlightMode,

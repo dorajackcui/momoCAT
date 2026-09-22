@@ -12,7 +12,7 @@ export function EditorDisplayControls({
   onToggleNonPrintingSymbols,
 }: EditorDisplayControlsProps) {
   return (
-    <ControlGroup label="Display settings">
+    <ControlGroup label="Display settings" variant="plain">
       <IconButton
         tone={showNonPrintingSymbols ? 'brand' : 'neutral'}
         size="sm"
@@ -23,7 +23,7 @@ export function EditorDisplayControls({
         aria-pressed={showNonPrintingSymbols}
         title={showNonPrintingSymbols ? 'Hide non-printing symbols' : 'Show non-printing symbols'}
       >
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"

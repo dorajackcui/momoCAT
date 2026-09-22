@@ -28,7 +28,8 @@ type ProjectApiKeys =
   | 'exportReferencesForMt'
   | 'precheckSourceTerminology'
   | 'cancelSourceTerminologyPrecheck'
-  | 'updateSegment';
+  | 'updateSegment'
+  | 'updateSelectedSegments';
 
 export function createProjectApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<ProjectApiKeys> {
   return {
@@ -147,6 +148,10 @@ export function createProjectApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<
     cancelSourceTerminologyPrecheck: (fileId) =>
       ipcRenderer.invoke(IPC_CHANNELS.file.cancelSourceTerminologyPrecheck, fileId) as ReturnType<
         DesktopApi['cancelSourceTerminologyPrecheck']
+      >,
+    updateSelectedSegments: (fileId, updates) =>
+      ipcRenderer.invoke(IPC_CHANNELS.segment.updateSelected, fileId, updates) as ReturnType<
+        DesktopApi['updateSelectedSegments']
       >,
     updateSegment: (segmentId, targetTokens, status, clientRequestId) =>
       ipcRenderer.invoke(

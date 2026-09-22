@@ -5,6 +5,13 @@ import { createDesktopApi } from './createDesktopApi';
 import type { IpcRendererLike } from './types';
 
 describe('createDesktopApi smoke', () => {
+  it('forwards selected segment updates through the typed bridge', async () => {
+    const invoke = vi.fn().mockResolvedValue([]);
+    const api = createDesktopApi({ invoke } as unknown as IpcRendererLike);
+    const updates = [{ segmentId: 's1', targetTokens: [], status: 'empty' as const }];
+    expect(await api.updateSelectedSegments(7, updates)).toEqual([]);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.segment.updateSelected, 7, updates);
+  });
   it('preserves filtered translation IDs and baseline across preload', async () => {
     const invoke = vi.fn().mockResolvedValue('job-filtered');
     const api = createDesktopApi({ invoke } as unknown as IpcRendererLike);

@@ -41,6 +41,23 @@ function createStoredFile(db: CATDatabase, projectsDir: string): number {
 }
 
 describe('ProjectService.inspectFile', () => {
+  it('forwards selected edits to the segment transaction service', async () => {
+    const db = new CATDatabase(':memory:');
+    const updateSelectedSegments = vi.fn().mockResolvedValue([]);
+    try {
+      const service = new ProjectService(db, '.', ':memory:', {
+        segmentService: { updateSelectedSegments } as never,
+        tmModule: {} as never,
+        tbModule: {} as never,
+        aiModule: { applySavedProxySettings: vi.fn() } as never,
+      });
+      const updates = [{ segmentId: 's1', targetTokens: [], status: 'empty' as const }];
+      expect(await service.updateSelectedSegments(1, updates)).toEqual([]);
+      expect(updateSelectedSegments).toHaveBeenCalledWith(1, updates);
+    } finally {
+      db.close();
+    }
+  });
   it('forwards the filtered AI scope through the service facade', async () => {
     const db = new CATDatabase(':memory:');
     const aiTranslateFile = vi

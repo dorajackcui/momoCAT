@@ -12,6 +12,7 @@ import {
 import React from 'react';
 import { EditorBatchActionBar } from './EditorBatchActionBar';
 import { EditorDisplayControls } from './EditorDisplayControls';
+import { EditorSelectionActions, type EditorSelectionActionsProps } from './EditorSelectionActions';
 import {
   FILTER_MATCH_MODE_OPTIONS,
   FILTER_QUALITY_OPTIONS,
@@ -21,6 +22,7 @@ import {
 import type { EditorStatusFilter, EditorTargetSearchScope } from '../editorFilterUtils';
 
 interface EditorFilterBarProps {
+  selectionActions?: EditorSelectionActionsProps;
   supportsBatchActions: boolean;
   canRunActions: boolean;
   isBatchAITranslating: boolean;
@@ -67,6 +69,7 @@ interface EditorFilterBarProps {
 }
 
 const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
+  selectionActions,
   supportsBatchActions,
   canRunActions,
   isBatchAITranslating,
@@ -112,10 +115,12 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
   const sortMenuRef = React.useRef<HTMLButtonElement>(null);
   const matchModeMenuRef = React.useRef<HTMLButtonElement>(null);
   const [isMatchModeMenuOpen, setMatchModeMenuOpen] = React.useState(false);
-  const matchModeLabel = FILTER_MATCH_MODE_OPTIONS.find((option) => option.value === matchMode)?.label;
+  const matchModeLabel = FILTER_MATCH_MODE_OPTIONS.find(
+    (option) => option.value === matchMode,
+  )?.label;
   return (
     <div className="sticky top-0 z-20 bg-surface-chrome border-b border-border-subtle">
-      <div className="flex items-center gap-2 px-4 py-1.5">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-4 py-1.5">
         <EditorBatchActionBar
           visible={supportsBatchActions}
           canRunActions={canRunActions}
@@ -126,6 +131,11 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
           onCancelBatchAITranslate={onCancelBatchAITranslate}
           onRunBatchQA={onRunBatchQA}
         />
+        {supportsBatchActions && (
+          <span aria-hidden="true" className="h-4 w-px shrink-0 bg-border" />
+        )}
+        {selectionActions && <EditorSelectionActions {...selectionActions} />}
+        {selectionActions && <span aria-hidden="true" className="h-4 w-px shrink-0 bg-border" />}
         <EditorDisplayControls
           canRunActions={canRunActions}
           showNonPrintingSymbols={showNonPrintingSymbols}

@@ -5,7 +5,7 @@ import {
   type ProjectType,
 } from '@cat/core/project';
 import type { TagPolicy } from '@cat/core/tag';
-import type { ImportOptions, PastedSourceFileInput } from '../../shared/ipc';
+import type { ImportOptions, PastedSourceFileInput, SelectedSegmentUpdate } from '../../shared/ipc';
 import {
   isArrayOf,
   isBoolean,
@@ -33,6 +33,21 @@ const TOKEN_TYPES = {
 
 export function isSegmentStatus(value: unknown): value is SegmentStatus {
   return isString(value) && Object.hasOwn(SEGMENT_STATUSES, value);
+}
+
+export function isSelectedSegmentUpdates(value: unknown): value is SelectedSegmentUpdate[] {
+  return (
+    isArrayOf(
+      value,
+      (item): item is SelectedSegmentUpdate =>
+        isRecord(item) &&
+        isNonEmptyString(item.segmentId) &&
+        isTokenArray(item.targetTokens) &&
+        isSegmentStatus(item.status),
+    ) &&
+    value.length > 0 &&
+    new Set(value.map((item) => item.segmentId)).size === value.length
+  );
 }
 
 function isToken(value: unknown): value is Token {

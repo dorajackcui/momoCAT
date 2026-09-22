@@ -17,6 +17,7 @@ import {
   isProjectQASettings,
   isProjectType,
   isSegmentStatus,
+  isSelectedSegmentUpdates,
   isTokenArray,
 } from './projectPayloadValidation';
 
@@ -165,6 +166,16 @@ export function registerProjectHandlers({ ipcMain, projectService }: MainHandler
     const filePath = readArgument(args[0], 'filePath', isNonEmptyString);
     return projectService.getSpreadsheetPreview(filePath);
   });
+
+  registerHandle(
+    { ipcMain, projectService },
+    IPC_CHANNELS.segment.updateSelected,
+    (_event, ...args) => {
+      const fileId = readArgument(args[0], 'fileId', isId);
+      const updates = readArgument(args[1], 'selected segment updates', isSelectedSegmentUpdates);
+      return projectService.updateSelectedSegments(fileId, updates);
+    },
+  );
 
   registerHandle({ ipcMain, projectService }, IPC_CHANNELS.segment.update, (_event, ...args) => {
     const segmentId = readArgument(args[0], 'segmentId', isNonEmptyString);

@@ -299,7 +299,13 @@ describe('SegmentService repeat propagation', () => {
     const { repo, service } = setup();
     const query = vi.spyOn(repo, 'getProjectSegmentsByHash');
     await service.updateSegmentsAtomically(
-      [{ segmentId: 'A', targetTokens: [{ type: 'text', content: 'Commit' }], status: 'confirmed' }],
+      [
+        {
+          segmentId: 'A',
+          targetTokens: [{ type: 'text', content: 'Commit' }],
+          status: 'confirmed',
+        },
+      ],
       {
         propagateRepeats: false,
       },
@@ -330,6 +336,85 @@ describe('SegmentService transactional confirmation flow', () => {
   afterEach(() => {
     db?.close();
     db = undefined;
+  });
+
+  it('confirms only selected repeats with their own targets and updates file statistics', async () => {
+    db = new CATDatabase(':memory:');
+    const projectId = db.createProject('Selected scope', 'en', 'zh');
+    const fileId = db.createFile(projectId, 'selected.xlsx');
+    db.bulkInsertSegments(
+      [0, 1, 2].map((index) => buildSegment(`s${index}`, fileId, index, 'same')),
+    );
+    const tmService = new TMService(new SqliteProjectRepository(db), new SqliteTMRepository(db));
+    const service = new SegmentService(
+      new SqliteSegmentRepository(db),
+      tmService,
+      new SqliteTransactionManager(db),
+    );
+    const events = vi.fn(() => expect(db!.getFile(fileId)?.confirmedSegments).toBe(2));
+    service.on('segments-updated', events);
+    const result = await service.updateSelectedSegments(fileId, [
+      { segmentId: 's0', targetTokens: [{ type: 'text', content: 'First' }], status: 'confirmed' },
+      { segmentId: 's2', targetTokens: [{ type: 'text', content: 'Third' }], status: 'confirmed' },
+    ]);
+    expect(result.map((event) => event.propagatedIds)).toEqual([[], []]);
+    expect(toText(db.getSegment('s0')!.targetTokens)).toBe('First');
+    expect(toText(db.getSegment('s2')!.targetTokens)).toBe('Third');
+    expect(db.getSegment('s1')!.status).toBe('empty');
+    expect(events).toHaveBeenCalledTimes(2);
+    const working = db.getProjectMountedTMs(projectId).find((tm) => tm.type === 'working')!;
+    expect(db.findTMEntryByHash(working.id, 'same')).toBeDefined();
+  });
+
+  it('rolls back selected edits, statistics and TM writes if a later write fails', async () => {
+    db = new CATDatabase(':memory:');
+    const projectId = db.createProject('Selected rollback', 'en', 'zh');
+    const fileId = db.createFile(projectId, 'selected.xlsx');
+    db.bulkInsertSegments([
+      buildSegment('s0', fileId, 0, 'hash0'),
+      buildSegment('s1', fileId, 1, 'hash1'),
+    ]);
+    const tmService = new TMService(new SqliteProjectRepository(db), new SqliteTMRepository(db));
+    const service = new SegmentService(
+      new FailingPropagationSegmentRepository(new SqliteSegmentRepository(db), 's1'),
+      tmService,
+      new SqliteTransactionManager(db),
+    );
+    const events = vi.fn();
+    service.on('segments-updated', events);
+    await expect(
+      service.updateSelectedSegments(
+        fileId,
+        ['s0', 's1'].map((segmentId) => ({
+          segmentId,
+          targetTokens: [{ type: 'text', content: 'Target' }],
+          status: 'confirmed',
+        })),
+      ),
+    ).rejects.toThrow('Propagation failed');
+    expect(db.getSegment('s0')!.targetTokens).toEqual([]);
+    expect(db.getFile(fileId)?.confirmedSegments).toBe(0);
+    expect(events).not.toHaveBeenCalled();
+    const working = db.getProjectMountedTMs(projectId).find((tm) => tm.type === 'working')!;
+    expect(db.findTMEntryByHash(working.id, 'hash0')).toBeUndefined();
+  });
+
+  it('rejects empty, duplicate, missing and cross-file selected IDs before writes', async () => {
+    const repo = new InMemorySegmentRepository([
+      buildSegment('s1', 1, 0, 'h'),
+      buildSegment('s2', 2, 0, 'h'),
+    ]);
+    const service = new SegmentService(repo, {} as TMService, { runInTransaction: (fn) => fn() });
+    const write = vi.spyOn(repo, 'updateSegmentTarget');
+    for (const ids of [[], ['s1', 's1'], ['s1', 's2'], ['s1', 'missing']]) {
+      await expect(
+        service.updateSelectedSegments(
+          1,
+          ids.map((segmentId) => ({ segmentId, targetTokens: [], status: 'empty' })),
+        ),
+      ).rejects.toThrow();
+    }
+    expect(write).not.toHaveBeenCalled();
   });
 
   it('commits segment confirm + TM upsert + propagation in one transaction', async () => {

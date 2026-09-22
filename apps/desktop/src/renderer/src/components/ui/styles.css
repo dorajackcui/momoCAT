@@ -264,6 +264,9 @@
   .ui-control-group[data-orientation='vertical'] {
     @apply flex-col gap-0 py-0;
   }
+  .ui-control-group[data-variant='plain'] {
+    @apply rounded-none border-0 bg-transparent p-0;
+  }
   .ui-control-group > .ui-button-icon {
     @apply border-transparent;
   }

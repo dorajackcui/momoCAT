@@ -33,6 +33,7 @@ import {
 } from './editor/editorSegmentStore';
 import { useEditorDataLoader } from './editor/useEditorDataLoader';
 import { useSegmentQaWorkflow } from './editor/useSegmentQaWorkflow';
+import { useSelectedSegmentActions } from './editor/useSelectedSegmentActions';
 import { apiClient } from '../services/apiClient';
 
 interface UseEditorProps {
@@ -233,7 +234,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     clearSegmentSaveError,
   });
 
-  const { loadEditorData, applyConfirmation } = useEditorDataLoader({
+  const { loadEditorData, applyConfirmation, applySelectedUpdates } = useEditorDataLoader({
     activeFileId,
     normalizeTokens,
     normalizeStatus,
@@ -279,6 +280,23 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     clearSegmentSaveError,
     tagValidator,
     onConfirmed: applyConfirmation,
+  });
+
+  const selectedActions = useSelectedSegmentActions({
+    fileId: activeFileId,
+    getSegment: getSegmentById,
+    flushPending: flushAllSegmentUpdates,
+    applyUpdates: applySelectedUpdates,
+    setSegments,
+    clearSaveError: clearSegmentSaveError,
+    tagPolicy: fileTagPolicy,
+    qaSettings: {
+      projectId,
+      targetLocale: projectTgtLang,
+      enabledQaRuleIds,
+      instantQaOnConfirm,
+      tagValidator,
+    },
   });
 
   useEffect(
@@ -497,6 +515,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
 
   return {
     segments,
+    ...selectedActions,
     segmentStore,
     segmentChangeHint,
     segmentIndexById: segmentStore.getIndexById(),

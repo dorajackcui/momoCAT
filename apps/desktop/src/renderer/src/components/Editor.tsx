@@ -20,6 +20,11 @@ import { feedbackService } from '../services/feedbackService';
 import type { TargetEditorController } from './editor-row/useEditorRowDraftController';
 import { applyTermAtEditorSelection } from '../hooks/editor/editorTokenPolicy';
 import type { WorkspaceNavigationGuard } from '../hooks/useWorkspaceNavigation';
+import {
+  useEditorSelection,
+  type SegmentSelectionModifiers,
+} from '../hooks/editor/useEditorSelection';
+import type { SelectedSegmentAction } from '../hooks/editor/useSelectedSegmentActions';
 
 interface EditorProps {
   fileId: number;
@@ -102,6 +107,8 @@ export const Editor: React.FC<EditorProps> = ({
     segmentIndexById,
     segmentStats,
     fileTagPolicy,
+    runSelectedSegmentAction,
+    isSelectedSegmentActionRunning,
   } = useEditor({ activeFileId: fileId, activeTab });
 
   const {
@@ -147,6 +154,15 @@ export const Editor: React.FC<EditorProps> = ({
   });
 
   const { layoutRef, sidebarWidth, startSidebarResize } = useEditorLayout();
+  const selectableIds = useMemo(
+    () => filteredSegments.map((item) => item.segment.segmentId),
+    [filteredSegments],
+  );
+  const { selectedIds, selectSingle, selectSegment, selectAll } = useEditorSelection(
+    fileId,
+    selectableIds,
+    activeSegmentId,
+  );
 
   useEffect(() => {
     if (loading || segments.length === 0 || positionRestoredRef.current) return;
@@ -186,6 +202,7 @@ export const Editor: React.FC<EditorProps> = ({
   }, [handleBatchExport]);
 
   const prepareToLeave = useCallback(async () => {
+    if (isSelectedSegmentActionRunning) return false;
     const saved = await flushPendingSegmentUpdatesForAction({
       actionLabel: 'leaving the editor',
       flushPendingSegmentUpdates,
@@ -193,7 +210,13 @@ export const Editor: React.FC<EditorProps> = ({
     });
     if (saved && activeSegmentId) onRememberPosition?.(fileId, activeSegmentId);
     return saved;
-  }, [activeSegmentId, fileId, flushPendingSegmentUpdates, onRememberPosition]);
+  }, [
+    activeSegmentId,
+    fileId,
+    flushPendingSegmentUpdates,
+    isSelectedSegmentActionRunning,
+    onRememberPosition,
+  ]);
 
   useLayoutEffect(
     () => registerNavigationGuard(prepareToLeave),
@@ -240,6 +263,7 @@ export const Editor: React.FC<EditorProps> = ({
 
   const handleRowActivate = useCallback(
     (segmentId: string, options?: { autoFocusTarget?: boolean }) => {
+      selectSingle(segmentId);
       setManualActivationSegmentId(segmentId);
       if (options?.autoFocusTarget === false) {
         setSuppressAutoFocusSegmentId(segmentId);
@@ -248,8 +272,57 @@ export const Editor: React.FC<EditorProps> = ({
       }
       setActiveSegmentId(segmentId);
     },
-    [setActiveSegmentId],
+    [selectSingle, setActiveSegmentId],
   );
+
+  const handleSelectSegment = useCallback(
+    (segmentId: string, modifiers: SegmentSelectionModifiers) => {
+      selectSegment(segmentId, modifiers);
+      setSuppressAutoFocusSegmentId(segmentId);
+      setActiveSegmentId(segmentId);
+    },
+    [selectSegment, setActiveSegmentId],
+  );
+
+  const selectionActionsDisabled =
+    isSelectedSegmentActionRunning ||
+    batchActions.isBatchAITranslating ||
+    batchActions.isBatchQARunning ||
+    Object.values(aiTranslatingSegmentIds).some(Boolean);
+  const handleSelectionAction = useCallback(
+    (action: SelectedSegmentAction) => {
+      if (selectionActionsDisabled) return;
+      void runSelectedSegmentAction(action, [...selectedIds]);
+    },
+    [runSelectedSegmentAction, selectedIds, selectionActionsDisabled],
+  );
+
+  const handleSelectionShortcut = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.nativeEvent.isComposing || event.altKey || isSelectedSegmentActionRunning) return;
+    const target = event.target as HTMLElement;
+    if (
+      !target.closest('.editor-scrollbar') ||
+      target.closest('input, textarea, select, [role="dialog"]')
+    )
+      return;
+    if (!(event.ctrlKey || event.metaKey)) return;
+    if (event.shiftKey && event.key.toLowerCase() === 'a') {
+      event.preventDefault();
+      event.stopPropagation();
+      selectAll();
+      listScrollElement?.focus();
+    } else if (
+      event.key === 'Enter' &&
+      !event.shiftKey &&
+      selectedIds.size > 0 &&
+      (selectedIds.size > 1 || !target.closest('.cm-content'))
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (selectedIds.size > 1) handleSelectionAction('confirm');
+      else if (!selectionActionsDisabled) void confirmSegment([...selectedIds][0]);
+    }
+  };
 
   const handleRowAutoFocus = useCallback((segmentId: string) => {
     setManualActivationSegmentId((prev) => (prev === segmentId ? null : prev));
@@ -313,7 +386,12 @@ export const Editor: React.FC<EditorProps> = ({
   }
 
   return (
-    <div className="workspace-editor h-full w-full min-h-0 min-w-0 flex flex-col overflow-hidden bg-surface">
+    <div
+      className="workspace-editor h-full w-full min-h-0 min-w-0 flex flex-col overflow-hidden bg-surface"
+      onKeyDownCapture={handleSelectionShortcut}
+      aria-busy={isSelectedSegmentActionRunning}
+      {...(isSelectedSegmentActionRunning ? { inert: '' } : {})}
+    >
       {supportsBatchActions && batchActions.isBatchAIModalOpen && (
         <ProjectAITranslateModal
           open={batchActions.isBatchAIModalOpen}
@@ -360,11 +438,17 @@ export const Editor: React.FC<EditorProps> = ({
       <div ref={layoutRef as React.RefObject<HTMLDivElement>} className="flex-1 flex min-h-0">
         <div
           ref={setListScrollElement}
-          className="editor-scrollbar min-w-0 flex-1 overflow-auto bg-surface"
+          tabIndex={-1}
+          className="editor-scrollbar min-w-0 flex-1 overflow-auto bg-surface focus:outline-none"
           style={{ scrollbarGutter: 'stable' }}
         >
           <div className="min-w-[560px]">
             <EditorFilterBar
+              selectionActions={{
+                count: selectedIds.size,
+                disabled: selectionActionsDisabled,
+                onAction: handleSelectionAction,
+              }}
               supportsBatchActions={supportsBatchActions}
               canRunActions={Boolean(file)}
               isBatchAITranslating={batchActions.isBatchAITranslating}
@@ -408,6 +492,8 @@ export const Editor: React.FC<EditorProps> = ({
             />
 
             <EditorListPane
+              selectedSegmentIds={selectedIds}
+              onSelectSegment={handleSelectSegment}
               scrollElement={listScrollElement}
               virtualized={isVirtualizedListEnabled}
               filteredSegments={filteredSegments}

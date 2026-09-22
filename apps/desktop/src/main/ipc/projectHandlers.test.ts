@@ -8,17 +8,21 @@ function setup() {
   const handlers = new Map<string, IpcMainListener>();
   const result = { fileId: 1, propagatedIds: [], clientRequestId: 'request-1' };
   const updateSegment = vi.fn().mockResolvedValue(result);
+  const updateSelectedSegments = vi.fn().mockResolvedValue([]);
   registerProjectHandlers({
     ipcMain: {
       handle: (channel, handler) => {
         handlers.set(channel, handler);
       },
     },
-    projectService: { updateSegment } as never,
+    projectService: { updateSegment, updateSelectedSegments } as never,
   });
   return {
     invoke: (...args: unknown[]) => handlers.get(IPC_CHANNELS.segment.update)!({}, ...args),
     updateSegment,
+    updateSelectedSegments,
+    invokeSelected: (...args: unknown[]) =>
+      handlers.get(IPC_CHANNELS.segment.updateSelected)!({}, ...args),
     result,
   };
 }
@@ -126,5 +130,31 @@ describe('segment update handler', () => {
     const { invoke, updateSegment } = setup();
     await invoke('seg-1', [], 'empty');
     expect(updateSegment).toHaveBeenCalledWith('seg-1', [], 'empty', undefined);
+  });
+});
+
+describe('selected segment update handler', () => {
+  const valid = { segmentId: 's1', targetTokens: [], status: 'empty' };
+  it.each([
+    undefined,
+    [],
+    new Array(1),
+    [null],
+    [valid, valid],
+    [{ ...valid, status: 'bad' }],
+    [{ ...valid, targetTokens: [{ type: 'html', content: '<b>' }] }],
+    [{ ...valid, segmentId: '' }],
+  ])('rejects malformed or duplicate updates %j', (updates) => {
+    const { invokeSelected, updateSelectedSegments } = setup();
+    expect(() => invokeSelected(1, updates)).toThrow();
+    expect(updateSelectedSegments).not.toHaveBeenCalled();
+  });
+  it('validates file IDs and forwards a valid scope unchanged', async () => {
+    const { invokeSelected, updateSelectedSegments } = setup();
+    expect(() => invokeSelected('1', [valid])).toThrow();
+    const updates = [valid];
+    await invokeSelected(1, updates);
+    expect(updateSelectedSegments).toHaveBeenCalledWith(1, updates);
+    expect(updateSelectedSegments.mock.calls[0][1]).toBe(updates);
   });
 });

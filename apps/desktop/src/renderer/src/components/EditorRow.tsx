@@ -15,11 +15,16 @@ import {
 } from './editor-row/useEditorRowDraftController';
 import { useEditorRowCommandHandlers } from './editor-row/useEditorRowCommandHandlers';
 import { useEditorRowDisplayModel } from './editor-row/useEditorRowDisplayModel';
+import type { SegmentSelectionModifiers } from '../hooks/editor/useEditorSelection';
 
 interface EditorRowProps {
   segment: Segment;
   rowNumber: number;
   isActive: boolean;
+  isSelected?: boolean;
+  selectionStart?: boolean;
+  selectionEnd?: boolean;
+  onSelectSegment?: (id: string, modifiers: SegmentSelectionModifiers) => void;
   isAlternate?: boolean;
   repeatedSourceRole?: RepeatedSourceRole;
   disableAutoFocus?: boolean;
@@ -54,6 +59,10 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
   segment,
   rowNumber,
   isActive,
+  isSelected = isActive,
+  selectionStart = true,
+  selectionEnd = true,
+  onSelectSegment,
   isAlternate = false,
   repeatedSourceRole,
   disableAutoFocus = false,
@@ -183,11 +192,32 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
     };
   }, [editorController, isActive, onTargetEditorControllerChange, segment.segmentId]);
 
+  const isSelectionGesture = (event: React.MouseEvent<HTMLDivElement>) =>
+    onSelectSegment &&
+    (event.shiftKey || event.ctrlKey || event.metaKey) &&
+    !(event.target as HTMLElement).closest('button, input, textarea, select, a, [role="button"]');
+
   return (
     <div
-      className="editor-row group grid grid-cols-[30px_minmax(0,1fr)_minmax(0,1fr)_28px] border-b border-border-subtle transition-colors"
+      className="editor-row group grid grid-cols-[30px_minmax(0,1fr)_minmax(0,1fr)_28px] border-b border-border-subtle transition-colors focus:outline-none"
       data-alternate={isAlternate || undefined}
+      data-selected={isSelected || undefined}
+      tabIndex={-1}
       style={{ minHeight: EDITOR_ROW_MIN_HEIGHT }}
+      onMouseDownCapture={(event) => {
+        if (isSelectionGesture(event)) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
+      onClickCapture={(event) => {
+        if (isSelectionGesture(event)) {
+          event.preventDefault();
+          event.stopPropagation();
+          event.currentTarget.focus();
+          onSelectSegment?.(segment.segmentId, event);
+        }
+      }}
       onClick={(event) => {
         const preview = event.currentTarget.querySelector<HTMLElement>('.editor-target-preview');
         capturePendingSelection(
@@ -206,7 +236,14 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
         onActivate(segment.segmentId);
       }}
     >
-      <EditorRowNumberCell rowNumber={rowNumber} repeatedSourceRole={repeatedSourceRole} />
+      <EditorRowNumberCell
+        rowNumber={rowNumber}
+        repeatedSourceRole={repeatedSourceRole}
+        isSelected={isSelected}
+        onSelect={
+          onSelectSegment ? (modifiers) => onSelectSegment(segment.segmentId, modifiers) : undefined
+        }
+      />
 
       <EditorRowSourceCell
         sourceContent={renderChunks(displayModel.sourceHighlightChunks)}
@@ -215,18 +252,17 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
       />
 
       <div
-        data-active={isActive || undefined}
+        data-active={(isActive && isSelected && selectionStart && selectionEnd) || undefined}
         className={`editor-target-cell editor-cell-bg border-l border-border-subtle px-1.5 py-0.5 relative flex min-h-full min-w-0 flex-col ${
           showTagInsertionUI ? 'overflow-visible' : 'overflow-hidden'
         }`}
       >
         <div
           aria-hidden="true"
-          className={`pointer-events-none absolute inset-0 z-20 border-2 border-focus/80 transition-opacity duration-150 ${
-            isActive ? 'opacity-100' : 'opacity-0'
-          }`}
+          className={`editor-selection-outline pointer-events-none absolute inset-x-0 top-0 bottom-0 z-20 border-x-[3px] border-focus/80 ${
+            selectionStart ? 'border-t-[3px]' : ''
+          } ${selectionEnd ? 'border-b-[3px]' : ''} ${isSelected ? 'opacity-100' : 'opacity-0'}`}
         />
-
         <EditorRowTargetCell
           editorHostRef={editorHostRef as React.Ref<HTMLDivElement>}
           isActive={isActive}
@@ -287,6 +323,10 @@ const areEditorRowPropsEqual = (prev: EditorRowProps, next: EditorRowProps): boo
   prev.segment === next.segment &&
   prev.rowNumber === next.rowNumber &&
   prev.isActive === next.isActive &&
+  prev.isSelected === next.isSelected &&
+  prev.selectionStart === next.selectionStart &&
+  prev.selectionEnd === next.selectionEnd &&
+  prev.onSelectSegment === next.onSelectSegment &&
   prev.isAlternate === next.isAlternate &&
   prev.repeatedSourceRole === next.repeatedSourceRole &&
   prev.disableAutoFocus === next.disableAutoFocus &&

@@ -109,6 +109,27 @@ export class SegmentService extends EventEmitter {
     );
   }
 
+  public async updateSelectedSegments(fileId: number, updates: SegmentUpdateInput[]) {
+    if (updates.length === 0) throw new Error('No segments selected');
+    return this.runSegmentUpdatesAtomically(
+      (applyUpdate) => {
+        const ids = new Set<string>();
+        for (const update of updates) {
+          if (
+            ids.has(update.segmentId) ||
+            this.db.getSegment(update.segmentId)?.fileId !== fileId
+          ) {
+            throw new Error('Selected segments must be distinct and belong to the current file');
+          }
+          ids.add(update.segmentId);
+        }
+        // A selected-scope edit must never overwrite an unselected repeat.
+        return updates.map(applyUpdate);
+      },
+      { propagateRepeats: false },
+    );
+  }
+
   /**
    * Run a synchronous segment batch and any related persistence writes in one
    * transaction. Segment events are emitted only after the whole operation
@@ -260,11 +281,7 @@ export class SegmentService extends EventEmitter {
 
     console.log(`[SegmentService] Undoing propagation batch: ${this.lastBatch.id}`);
     for (const change of this.lastBatch.changes) {
-      this.db.updateSegmentTarget(
-        change.segmentId,
-        change.oldTargetTokens,
-        change.oldStatus,
-      );
+      this.db.updateSegmentTarget(change.segmentId, change.oldTargetTokens, change.oldStatus);
     }
 
     this.lastBatch = null;

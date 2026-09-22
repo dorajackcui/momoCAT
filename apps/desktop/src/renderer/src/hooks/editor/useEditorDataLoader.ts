@@ -298,6 +298,7 @@ export function useEditorDataLoader({
 }: UseEditorDataLoaderParams): {
   loadEditorData: () => Promise<void>;
   applyConfirmation: (data: SegmentsUpdatedEvent) => void;
+  applySelectedUpdates: (data: SegmentsUpdatedEvent[]) => void;
 } {
   const queuedRemoteUpdatesRef = useRef<Map<string, SegmentsUpdatedEvent>>(new Map());
 
@@ -520,5 +521,14 @@ export function useEditorDataLoader({
     [activeFileId, applySegmentsUpdatedEvent],
   );
 
-  return { loadEditorData, applyConfirmation };
+  const applySelectedUpdates = useCallback(
+    (events: SegmentsUpdatedEvent[]) => {
+      const current = events.filter((event) => event.fileId === activeFileId);
+      for (const event of current) queuedRemoteUpdatesRef.current.delete(event.segmentId);
+      applySegmentsUpdatedBatch(current);
+    },
+    [activeFileId, applySegmentsUpdatedBatch],
+  );
+
+  return { loadEditorData, applyConfirmation, applySelectedUpdates };
 }

@@ -195,6 +195,10 @@
     background-color: inherit;
   }
 
+  .editor-selection-outline {
+    filter: drop-shadow(0 0 3px rgb(var(--color-focus) / 0.24));
+  }
+
   .editor-target-cell[data-active='true'],
   .cat-reference-match[data-selected='true'] {
     @apply z-10;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ControlGroup, IconButton } from '../ui';
+import { ControlGroup, Icon, IconButton } from '../ui';
 
 export interface EditorBatchActionBarProps {
   visible: boolean;
@@ -14,7 +14,7 @@ export interface EditorBatchActionBarProps {
 
 function LoadingIcon(): JSX.Element {
   return (
-    <svg className="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -38,7 +38,7 @@ export function EditorBatchActionBar({
   if (!visible) return null;
 
   return (
-    <ControlGroup label="Translation tools">
+    <ControlGroup label="Translation tools" variant="plain">
       <IconButton
         tone={isBatchAITranslating ? 'danger' : 'brand'}
         size="sm"
@@ -55,7 +55,7 @@ export function EditorBatchActionBar({
         }
       >
         {isBatchAITranslating ? (
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -64,7 +64,7 @@ export function EditorBatchActionBar({
             />
           </svg>
         ) : (
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -84,18 +84,7 @@ export function EditorBatchActionBar({
         aria-label="Run batch QA"
         title={isBatchQARunning ? 'Running QA...' : 'Batch QA'}
       >
-        {isBatchQARunning ? (
-          <LoadingIcon />
-        ) : (
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 12l2 2 4-4m5 2a8 8 0 11-16 0 8 8 0 0116 0z"
-            />
-          </svg>
-        )}
+        {isBatchQARunning ? <LoadingIcon /> : <Icon name="shield-alert" />}
       </IconButton>
     </ControlGroup>
   );
