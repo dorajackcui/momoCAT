@@ -198,7 +198,7 @@ export const TMPanel: React.FC<TMPanelProps> = ({
               </div>
 
               <div
-                className={`group grid grid-cols-[1fr_20px_1fr] items-stretch cursor-pointer transition-colors ${
+                className={`group grid grid-cols-[minmax(0,1fr)_20px_minmax(0,1fr)] items-stretch cursor-pointer transition-colors ${
                   isSelected ? '' : 'hover:bg-muted/30'
                 }`}
                 onClick={() => {
@@ -215,7 +215,7 @@ export const TMPanel: React.FC<TMPanelProps> = ({
                 title="Double click to apply match"
               >
                 <div
-                  className={`content-text px-2 py-2 text-reference text-text-muted leading-snug ${
+                  className={`content-text break-words px-2 py-2 text-reference text-text-muted leading-snug ${
                     isTM ? 'line-clamp-5' : ''
                   }`}
                 >
@@ -229,7 +229,7 @@ export const TMPanel: React.FC<TMPanelProps> = ({
                 </div>
 
                 <div
-                  className={`content-text px-2 py-2 text-reference text-text leading-snug ${
+                  className={`content-text break-words px-2 py-2 text-reference text-text leading-snug ${
                     isTM ? 'line-clamp-5' : ''
                   }`}
                 >

@@ -64,7 +64,7 @@ export const ConcordancePanel: React.FC<ConcordancePanelProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-surface-panel w-80">
+    <div className="flex flex-col h-full bg-surface-panel w-full">
       <div className="p-4 border-b border-border-subtle bg-surface-chrome">
         <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted mb-3">
           Concordance Search
