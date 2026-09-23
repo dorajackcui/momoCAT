@@ -11,7 +11,7 @@ describe('desktop app version marker', () => {
       readFileSync(resolve(__dirname, '../../../package.json'), 'utf8'),
     ) as { version?: unknown };
 
-    expect(rootPackage.version).toBe('1.1.0');
-    expect(desktopPackage.version).toBe('1.1.0');
+    expect(rootPackage.version).toBe('1.2.0');
+    expect(desktopPackage.version).toBe('1.2.0');
   });
 });
