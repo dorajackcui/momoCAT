@@ -1037,7 +1037,6 @@ describe('ProjectFileModule.runFileQA', () => {
     expect(report.checkedSegments).toBe(2);
     expect(report.issueCount).toBe(1);
     expect(report.affectedSegments).toBe(1);
-    expect(report.warningCount).toBe(0);
     expect(report.issues).toHaveLength(1);
     expect(report.issues[0].segmentId).toBe('seg-has-error');
 
@@ -1116,7 +1115,8 @@ describe('ProjectFileModule.runFileQA', () => {
 
     expect(resolveTermMatches).toHaveBeenCalledWith(99, segment);
     expect(report.checkedSegments).toBe(1);
-    expect(report.warningCount).toBe(0);
+    expect(report.issueCount).toBe(0);
+    expect(report.affectedSegments).toBe(0);
     expect(report.issues).toEqual([]);
     expect(segmentRepo.updateSegmentQaIssues).toHaveBeenCalledWith(expect.any(String), []);
   });

@@ -38,7 +38,7 @@ describe('file QA persistence boundary', () => {
       expect(write).toHaveBeenCalledOnce();
     },
   );
-  it.each(['content', 'settings', 'qa-flags'] as const)(
+  it.each(['content', 'source', 'settings', 'import-policy', 'qa-flags'] as const)(
     'validates current %s before persisting worker results',
     async (change) => {
       let rows: Segment[] = [
@@ -55,13 +55,14 @@ describe('file QA persistence boundary', () => {
           meta: { rowRef: 2, updatedAt: '' },
         },
       ];
-      let settings = { enabledRuleIds: ['number'], instantQaOnConfirm: true };
+      const settings = { enabledRuleIds: ['number'], instantQaOnConfirm: true };
+      let importOptionsJson = '{}';
       if (change === 'qa-flags')
         rows[0].qaIssues = evaluateDocumentQa(rows, {
           settings: { enabledRuleIds: ['number'], instantQaOnConfirm: true },
         }).issues;
       const projectRepo = {
-        getFile: () => ({ id: 1, projectId: 1 }),
+        getFile: () => ({ id: 1, projectId: 1, importOptionsJson }),
         getProject: () => ({ id: 1, srcLang: 'en', tgtLang: 'fr', qaSettings: settings }),
       } as unknown as ProjectRepository;
       const write = vi.fn();
@@ -70,11 +71,13 @@ describe('file QA persistence boundary', () => {
         updateSegmentQaIssues: write,
       } as unknown as SegmentRepository;
       const evaluator = vi.fn(async (segments, options) => {
-        if (change === 'content')
-          rows = [{ ...rows[0], targetTokens: [{ type: 'text', content: 'Count 1' }] }];
-        else if (change === 'settings') settings = { ...settings, enabledRuleIds: [] };
+        const report = evaluateDocumentQa(segments, options);
+        if (change === 'content') rows[0].targetTokens[0].content = 'Count 1';
+        else if (change === 'source') rows[0].sourceTokens[0].content = 'Count 2';
+        else if (change === 'settings') settings.enabledRuleIds.length = 0;
+        else if (change === 'import-policy') importOptionsJson = '{"tagPolicy":"none"}';
         else rows = [{ ...rows[0], qaIssues: [] }];
-        return evaluateDocumentQa(segments, options);
+        return report;
       });
       const module = new ProjectFileModule(
         projectRepo,

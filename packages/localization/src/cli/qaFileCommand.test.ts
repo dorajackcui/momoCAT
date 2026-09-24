@@ -9,6 +9,27 @@ import { createTransientSegment } from '../transientSegment';
 import { runQAFileCommand } from './qaFileCommand';
 
 describe('shared CLI QA', () => {
+  it.each(['{broken', 'null', '{"tagPolicy":"unknown"}'])(
+    'reports corrupt stored import options without modifying the database: %s',
+    async (importOptionsJson) => {
+      const root = mkdtempSync(join(tmpdir(), 'momocat-qa-options-'));
+      try {
+        const dbPath = join(root, 'cat.db');
+        const db = new CATDatabase(dbPath);
+        const projectId = db.createProject('QA', 'en', 'zh');
+        const fileId = db.createFile(projectId, 'broken.xlsx', importOptionsJson);
+        db.close();
+        const before = readFileSync(dbPath);
+        await expect(runQAFileCommand({ dbPath, projectId, fileId })).rejects.toThrow(
+          `Invalid import options for file ${fileId}:`,
+        );
+        expect(readFileSync(dbPath)).toEqual(before);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
   it('uses saved subchecks and mounted TBs for stored and external files without writing inputs', async () => {
     const root = mkdtempSync(join(tmpdir(), 'momocat-qa-'));
     const dbPath = join(root, 'cat.db');

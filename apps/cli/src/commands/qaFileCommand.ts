@@ -63,7 +63,7 @@ export async function runQAFileCliCommand(
   if (flags.has('json')) io.stdout(`${JSON.stringify(report, null, 2)}\n`);
   else {
     io.stdout(
-      `QA: ${report.checkedSegments} rows checked; ${report.issues.length} findings in ${report.affectedSegments ?? new Set(report.issues.map((item) => item.segmentId)).size} rows.\n`,
+      `QA: ${report.checkedSegments} rows checked; ${report.issueCount} findings in ${report.affectedSegments} rows.\n`,
     );
     for (const issue of report.issues)
       io.stdout(

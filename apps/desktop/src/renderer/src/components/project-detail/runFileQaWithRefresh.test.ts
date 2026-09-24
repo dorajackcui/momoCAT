@@ -15,8 +15,8 @@ describe('runFileQaWithRefresh', () => {
       return {
         fileId,
         checkedSegments: 10,
-        errorCount: 0,
-        warningCount: 0,
+        issueCount: 0,
+        affectedSegments: 0,
         issues: [],
       };
     });

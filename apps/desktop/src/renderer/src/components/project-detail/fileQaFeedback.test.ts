@@ -6,8 +6,8 @@ function createReport(overrides?: Partial<FileQaReport>): FileQaReport {
   return {
     fileId: 1,
     checkedSegments: 10,
-    errorCount: 0,
-    warningCount: 0,
+    issueCount: 0,
+    affectedSegments: 0,
     issues: [],
     ...overrides,
   };
@@ -29,8 +29,8 @@ describe('buildFileQaFeedback', () => {
     const feedback = buildFileQaFeedback(
       'demo.xlsx',
       createReport({
-        errorCount: 1,
-        warningCount: 1,
+        issueCount: 2,
+        affectedSegments: 2,
         issues: [
           {
             segmentId: 's1',
@@ -68,7 +68,8 @@ describe('buildFileQaFeedback', () => {
     const feedback = buildFileQaFeedback(
       'demo.xlsx',
       createReport({
-        errorCount: 7,
+        issueCount: 7,
+        affectedSegments: 7,
         issues,
       }),
     );

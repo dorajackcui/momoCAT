@@ -28,7 +28,7 @@ export function buildFileQaFeedback(fileName: string, report: FileQaReport): Fil
     level: 'info',
     message:
       `QA finished for "${fileName}".\n` +
-      `${report.issues.length} findings in ${new Set(report.issues.map((issue) => issue.segmentId)).size} rows\n` +
+      `${report.issueCount} findings in ${report.affectedSegments} rows\n` +
       `${previewLines}${moreSuffix}`,
   };
 }

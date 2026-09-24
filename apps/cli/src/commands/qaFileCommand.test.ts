@@ -7,8 +7,8 @@ function harness() {
   const report: FileQaReport = {
     fileId: 2,
     checkedSegments: 1,
-    errorCount: 0,
-    warningCount: 0,
+    issueCount: 1,
+    affectedSegments: 1,
     issues: [
       { segmentId: 's', row: 2, ruleId: 'empty-target', severity: 'info', message: 'Empty target' },
     ],
@@ -28,6 +28,13 @@ function harness() {
 }
 
 describe('qa file command', () => {
+  it('prints the shared report counts in normal output', async () => {
+    const h = harness();
+    expect(await runCli(['qa', 'file', '--project-id', '1', '--file-id', '2'], h.deps, h.io)).toBe(
+      0,
+    );
+    expect(h.io.stdout).toHaveBeenCalledWith('QA: 1 rows checked; 1 findings in 1 rows.\n');
+  });
   it('passes repeated groups and reports findings with a successful exit code', async () => {
     const h = harness();
     const argv = [

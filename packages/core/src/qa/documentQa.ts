@@ -94,7 +94,5 @@ export function evaluateDocumentQa(
     issues,
     issueCount: issues.length,
     affectedSegments: findings.size,
-    errorCount: 0,
-    warningCount: 0,
   };
 }

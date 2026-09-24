@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CATDatabase } from '@cat/db';
 import type { Segment } from '@cat/core/models';
 import { normalizeQASettings } from '@cat/core/project';
@@ -40,6 +40,29 @@ beforeEach(() => {
 afterEach(() => db.close());
 
 describe('persisted QA lifecycle', () => {
+  it.each(['file', 'instant'] as const)(
+    'rejects corrupt import options before %s QA or writes',
+    async (scope) => {
+      fileId = db.createFile(projectId, 'broken.xlsx', '{broken');
+      add('a', 'Count 1', 'Count 2');
+      const previous = [
+        { ruleId: 'number', severity: 'info' as const, message: 'Previous finding' },
+      ];
+      db.updateSegmentQaIssues('a', previous);
+      const write = vi.spyOn(db, 'updateSegmentQaIssues');
+      const resolveTermMatches = vi.fn(async () => []);
+      const options = { ...inputs(), resolveTermMatches };
+      await expect(
+        scope === 'file'
+          ? runProjectFileQA({ ...options, fileId })
+          : runProjectSegmentQA({ ...options, segmentId: 'a' }),
+      ).rejects.toThrow(`Invalid import options for file ${fileId}: invalid JSON.`);
+      expect(resolveTermMatches).not.toHaveBeenCalled();
+      expect(write).not.toHaveBeenCalled();
+      expect(db.getSegment('a')!.qaIssues).toEqual(previous);
+    },
+  );
+
   it('checks tokens in document QA but skips disabled instant QA', async () => {
     add('a', '{name}{name}', '{name}');
     db.updateProjectQASettings(
@@ -113,6 +136,7 @@ describe('persisted QA lifecycle', () => {
     'discards %s results if a terminology mutation occurs during lookup',
     async (scope) => {
       add('a', 'Open', '开启');
+      const read = vi.spyOn(db, 'getSegmentsPage');
       const options = {
         ...inputs(),
         resolveTermMatches: async () => {
@@ -127,6 +151,8 @@ describe('persisted QA lifecycle', () => {
           : await runProjectSegmentQA({ ...options, segmentId: 'a' });
       expect(result?.stale).toBe(true);
       expect(db.getSegment('a')!.qaIssues).toBeUndefined();
+      // File QA reads once before evaluation, then rejects the revision before rereading.
+      expect(read).toHaveBeenCalledTimes(scope === 'file' ? 1 : 0);
     },
   );
 });

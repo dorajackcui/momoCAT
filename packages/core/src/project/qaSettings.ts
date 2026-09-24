@@ -172,9 +172,7 @@ export function isQASettings(value: unknown): value is ProjectQASettings {
   if (
     settings.disabledCheckIds !== undefined &&
     (!Array.isArray(settings.disabledCheckIds) ||
-      !Array.from(settings.disabledCheckIds).every((id) =>
-        QA_RULE_GROUPS.some((group) => group.checks.some((check) => check[0] === id)),
-      ))
+      !Array.from(settings.disabledCheckIds).every((id) => QA_OPTIONAL_CHECK_IDS.includes(id)))
   )
     return false;
   if (settings.options === undefined) return true;

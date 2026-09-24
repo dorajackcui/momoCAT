@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Segment, TBMatch } from '../models';
-import { normalizeQASettings, isQASettings, type SegmentQaRuleId } from '../project';
+import {
+  normalizeQASettings,
+  isQASettings,
+  QA_OPTIONAL_CHECK_IDS,
+  QA_RULE_GROUPS,
+  type SegmentQaRuleId,
+} from '../project';
 import { evaluateDocumentQa as evaluate, type DocumentQaOptions } from './documentQa';
 const evaluateDocumentQa = (rows: Segment[], options: DocumentQaOptions = {}) =>
   evaluate(rows, { tagPolicy: 'none', ...options });
@@ -37,6 +43,23 @@ const term = (source: string, target: string, tbName = 'Main TB'): TBMatch => ({
 });
 
 describe('document QA', () => {
+  it('reports finding and affected-row counts without legacy severity totals', () => {
+    const report = evaluateDocumentQa(
+      [row('1', '1 https://source.test', '2 https://target.test'), row('2', 'Clean', 'Clean')],
+      { settings: settings('number', 'url') },
+    );
+    expect(report).toMatchObject({ checkedSegments: 2, issueCount: 2, affectedSegments: 1 });
+    expect(report.issues).toHaveLength(2);
+    expect(report).not.toHaveProperty('errorCount');
+    expect(report).not.toHaveProperty('warningCount');
+    expect(evaluateDocumentQa([])).toEqual({
+      fileId: 0,
+      checkedSegments: 0,
+      issueCount: 0,
+      affectedSegments: 0,
+      issues: [],
+    });
+  });
   it('normalizes only whole matching wrappers, retaining internal punctuation and case', () => {
     expect(normalizeQaComparison(' 【 ‘Open’ 】 ')).toBe('Open');
     expect(normalizeQaComparison('“Open” and “Save”')).toBe('“Open” and “Save”');
@@ -264,5 +287,14 @@ describe('document QA', () => {
     expect(isQASettings(settings('number'))).toBe(true);
     expect(isQASettings({ ...settings('number'), options: { substringMinCjk: -1 } })).toBe(false);
     expect(isQASettings({ ...settings('number'), disabledCheckIds: ['unknown'] })).toBe(false);
+  });
+  it('accepts only independently optional checks in new settings, while normalizing legacy data', () => {
+    for (const id of QA_RULE_GROUPS.flatMap((group) => group.checks.map((check) => check[0]))) {
+      const config = { ...settings('tag-integrity'), disabledCheckIds: [id] };
+      const optional = QA_OPTIONAL_CHECK_IDS.includes(id);
+      expect(isQASettings(config), id).toBe(optional);
+      expect(normalizeQASettings(config).disabledCheckIds, id).toEqual(optional ? [id] : []);
+    }
+    expect(isQASettings({ ...settings('number'), disabledCheckIds: new Array(1) })).toBe(false);
   });
 });

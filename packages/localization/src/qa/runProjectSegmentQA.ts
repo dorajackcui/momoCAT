@@ -2,6 +2,7 @@ import type { Segment, TBMatch } from '@cat/core/models';
 import { normalizeQASettings } from '@cat/core/project';
 import { evaluateSegmentQa } from '@cat/core/qa';
 import type { ProjectRepository, SegmentRepository } from '../ports';
+import { resolveStoredFileTagPolicy } from '../tagPolicy';
 
 /** Check a saved row and persist into the same result source as document QA. */
 export async function runProjectSegmentQA(input: {
@@ -20,6 +21,7 @@ export async function runProjectSegmentQA(input: {
   if (!file || !project) throw new Error('Project file not found');
   const settings = normalizeQASettings(project.qaSettings);
   if (!settings.instantQaOnConfirm) return null;
+  const tagPolicy = resolveStoredFileTagPolicy(file);
   const termMatches = settings.enabledRuleIds.includes('terminology-consistency')
     ? await input.resolveTermMatches(project.id, segment)
     : [];
@@ -27,7 +29,7 @@ export async function runProjectSegmentQA(input: {
     settings,
     termMatches,
     targetLocale: project.tgtLang,
-    tagPolicy: file.importOptionsJson ? JSON.parse(file.importOptionsJson).tagPolicy : undefined,
+    tagPolicy,
   });
   // Existing results remain valid until a content/configuration/resource mutation clears them.
   // Preserve document evidence generically, without maintaining a second rule-id registry.

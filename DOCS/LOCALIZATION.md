@@ -155,7 +155,9 @@ One project may contain both file modes. The legacy project `tagMode` is accepte
 
 Comparisons preserve original token content and occurrences, including Unicode angle tags, printf placeholders, and protected newline escapes. Actual line breaks belong to the line-break check. Invalid source nesting is not used as a structural baseline. Protected-token checks omit pure order differences; Plain tag order remains optional.
 
-Findings use `info`. The public `TagValidator` retains legacy display severities as a compatibility adapter, but business workflows do not import it. The former `blocking` field and predicate have been removed. Report `errorCount`/`warningCount` remain zero-valued compatibility fields.
+Findings use `info`. The public `TagValidator` retains legacy display severities as a compatibility adapter, but business workflows do not import it. The former `blocking` field and predicate have been removed. `FileQaReport` reports required `issueCount` (findings) and `affectedSegments` (distinct rows with findings); the obsolete `errorCount`/`warningCount` fields have been removed from both Desktop and CLI reports.
+
+New settings accept only independently optional checks in `disabledCheckIds`; normalization still drops obsolete IDs when reading legacy settings. All persisted-file QA entrypoints use the same import-policy parser. Missing options/policy retain the legacy Protect default; malformed JSON, non-object options, or an unsupported policy fail with the file ID and a clear reason, without replacing saved findings or silently switching modes.
 
 ### QA entrypoints
 
@@ -175,7 +177,7 @@ Panel、行内提示、文件问题数统一读取各行 `qaIssues` / `qaIssuesJ
 - [`runProjectFileQA`](../packages/localization/src/qa/runProjectFileQA.ts) 原子替换整文件行结果；即时检查写入同一来源。内容未变时，已有文档证据与新单行结果按问题身份合并，无手写规则 ID 保留清单，因此文内学习术语也会保留。
 - 任何目标内容变化都清除该文件所有 QA 结果，包含跨行依赖；单纯状态变更保留结果。编辑、AI、TM/TB 应用、重复传播共用此规则。编辑器在本地修改时立即清除，数据库在保存时同步清除。
 - QA 设置变化清除该项目结果；术语新增、修改、清空、删除、挂载或取消挂载清除受影响项目结果。编辑器接收配置/术语失效事件，统一清除行内和 Panel 结果。不会自动启动整文件检查。
-- 异步 QA 在持久化前使用 immediate 事务核对输入及数据库变动版本，包含其他连接的术语修改；期间有写入时保守返回 `stale`，不写旧结果。编辑器还校验本地修改，防止尚未保存的编辑被旧结果覆盖。
+- 异步 QA 在持久化前使用 immediate 事务核对数据库变动版本，包含其他连接的术语修改；期间有写入时先返回 `stale`，不再全量读取行，也不写旧结果。整文件 QA 的原始内容及设置快照在事务外生成；版本未变时仍在事务内复核输入，保留未提供版本的宿主的内容检查。编辑器还校验本地修改，防止尚未保存的编辑被旧结果覆盖。
 - 修改后的 QA 筛选行集合保持稳定，用户可以继续修订；旧 findings 消失，Panel 提示需要重查。退出筛选清空全部筛选，不恢复原条件。
 
 无消费者的 tag 插入/删除/空排序自动修复已移除，编辑器不再生成或携带 `autoFixSuggestions`。公开类型、`TagValidator.suggestions` 空数组和 deprecated `generateAutoFix()`（返回 `null`）只作为兼容边界。编辑器“插入源文 tag”是用户发起的文本编辑，与旧自动修复无关。

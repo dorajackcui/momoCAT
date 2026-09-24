@@ -48,11 +48,9 @@ export interface FileQaReport {
   /** Input changed during evaluation; findings were not persisted. */
   stale?: boolean;
   checkedSegments: number;
-  errorCount: number;
-  warningCount: number;
   issues: FileQaIssueRecord[];
-  issueCount?: number;
-  affectedSegments?: number;
+  issueCount: number;
+  affectedSegments: number;
 }
 
 export {

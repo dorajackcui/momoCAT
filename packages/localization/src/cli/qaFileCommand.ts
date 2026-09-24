@@ -7,6 +7,7 @@ import { TBService } from '../services/TBService';
 import { parseExternalSpreadsheet } from '../modules/FileModule';
 import { createTransientSegment } from '../transientSegment';
 import { runQA } from '../qa/runQA';
+import { resolveStoredFileTagPolicy } from '../tagPolicy';
 
 export interface QAFileCommandConfig {
   dbPath: string;
@@ -34,7 +35,7 @@ export async function runQAFileCommand(config: QAFileCommandConfig) {
       const file = db.getFile(config.fileId);
       if (!file || file.projectId !== project.id)
         throw new Error('File does not belong to this project.');
-      if (file.importOptionsJson) tagPolicy = JSON.parse(file.importOptionsJson).tagPolicy;
+      tagPolicy = resolveStoredFileTagPolicy(file);
       for (let offset = 0; ; offset += 1000) {
         const page = db.getSegmentsPage(file.id, offset, 1000);
         segments.push(...page);
