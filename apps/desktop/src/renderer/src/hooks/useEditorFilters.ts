@@ -48,8 +48,7 @@ export const FILTER_MATCH_MODE_OPTIONS: Array<{ value: EditorMatchMode; label: s
 ];
 
 export const FILTER_QUALITY_OPTIONS: Array<{ value: EditorQualityFilter; label: string }> = [
-  { value: 'qa_error', label: 'QA error' },
-  { value: 'qa_warning', label: 'QA warning' },
+  { value: 'qa_issue', label: 'QA problems' },
   { value: 'save_error', label: 'Save error' },
 ];
 
@@ -75,7 +74,9 @@ export interface UseEditorFiltersParams {
   setActiveSegmentId: (segmentId: string) => void;
 }
 
-const STATUS_VALUES = new Set(FILTER_STATUS_OPTIONS.map((item) => item.value).filter(value => value !== 'all'));
+const STATUS_VALUES = new Set(
+  FILTER_STATUS_OPTIONS.map((item) => item.value).filter((value) => value !== 'all'),
+);
 const MATCH_MODE_VALUES = new Set(FILTER_MATCH_MODE_OPTIONS.map((item) => item.value));
 const QUALITY_VALUES = new Set(FILTER_QUALITY_OPTIONS.map((item) => item.value));
 const SORT_BY_VALUES = new Set<EditorSortBy>(['default', 'source_length', 'target_length']);
@@ -199,6 +200,12 @@ export function useEditorFilters({
   activeSegmentId,
   setActiveSegmentId,
 }: UseEditorFiltersParams) {
+  const [qaSelection, setQASelection] = useState<{
+    fileId: number;
+    ids: string[];
+    label: string;
+  } | null>(null);
+  const qaFilter = qaSelection?.fileId === fileId ? qaSelection : null;
   const [filterState, setFilterState] = useState<EditorFilterCriteria>(
     createDefaultEditorFilterCriteria,
   );
@@ -248,18 +255,33 @@ export function useEditorFilters({
     segmentSaveErrors,
   ]);
 
+  const qaSearchableSegments = useMemo(() => {
+    if (!qaFilter) return searchableSegments;
+    const byId = new Map(searchableSegments.map((item) => [item.segment.segmentId, item]));
+    return qaFilter.ids.flatMap((id) => {
+      const item = byId.get(id);
+      return item ? [item] : [];
+    });
+  }, [qaFilter, searchableSegments]);
   const filteredSegments = useMemo(
     () =>
       filterSnapshotCache.resolve({
-        scopeKey: fileId,
-        segments: searchableSegments,
+        scopeKey: qaFilter ? `${fileId}:${JSON.stringify(qaFilter.ids)}` : fileId,
+        segments: qaSearchableSegments,
         criteria: effectiveCriteria,
         refreshToken: segmentChangeHint?.orderChanged ? segmentChangeHint.revision : undefined,
       }),
-    [effectiveCriteria, fileId, filterSnapshotCache, searchableSegments, segmentChangeHint],
+    [
+      effectiveCriteria,
+      fileId,
+      filterSnapshotCache,
+      qaSearchableSegments,
+      qaFilter,
+      segmentChangeHint,
+    ],
   );
 
-  const activeFilterCount = countActiveFilterFields(filterState);
+  const activeFilterCount = countActiveFilterFields(filterState) + Number(Boolean(qaFilter));
   const hasActiveFilter = activeFilterCount > 0 || filterState.sortBy !== 'default';
   const activeFilteredIndex = useMemo(
     () =>
@@ -273,12 +295,20 @@ export function useEditorFilters({
   );
 
   const clearFilters = useCallback(() => {
+    setQASelection(null);
     const defaults = createDefaultEditorFilterCriteria();
     setFilterState(defaults);
     setDebouncedSourceQuery(defaults.sourceQuery);
     setDebouncedTargetQuery(defaults.targetQuery);
     closeMenus();
   }, [closeMenus]);
+  const applyQAFilter = useCallback(
+    (ids: string[], label: string) => {
+      clearFilters();
+      setQASelection({ fileId, ids: [...new Set(ids)], label });
+    },
+    [clearFilters, fileId],
+  );
 
   const setSourceQueryInput = useCallback((value: string) => {
     setFilterState((prev) => ({ ...prev, sourceQuery: value }));
@@ -334,6 +364,8 @@ export function useEditorFilters({
 
   useEffect(() => {
     filterStateHydratedRef.current = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- QA selection belongs to the file being left.
+    setQASelection(null);
 
     const loadedState = loadPersistedFilterState({
       fileId,
@@ -399,21 +431,21 @@ export function useEditorFilters({
     ) {
       return filteredSegments.map(({ segment }) => segment.segmentId);
     }
-    return filterSearchableSegments(
-      buildSearchableEditorSegments(segments, segmentSaveErrors),
-      filterState,
-    ).map(({ segment }) => segment.segmentId);
+    return filterSearchableSegments(qaSearchableSegments, filterState).map(
+      ({ segment }) => segment.segmentId,
+    );
   }, [
     activeFilterCount,
     debouncedSourceQuery,
     debouncedTargetQuery,
     filteredSegments,
     filterState,
-    segments,
-    segmentSaveErrors,
+    qaSearchableSegments,
   ]);
 
   return {
+    qaFilter,
+    applyQAFilter,
     getFilteredSegmentIds,
     sourceQueryInput: filterState.sourceQuery,
     targetQueryInput: filterState.targetQuery,

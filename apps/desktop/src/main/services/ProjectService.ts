@@ -14,6 +14,7 @@ import { TBService } from './TBService';
 import { SegmentsUpdatedPayload, SpreadsheetPreviewData } from './ports';
 import { AIProviderTransport } from './providers/AIProviderTransport';
 import { ProjectFileModule } from './modules/ProjectFileModule';
+import { createQAFileRunner } from './qa/createQAFileRunner';
 import type { FileOperationProgressEmitter } from './modules/ProjectReferenceFileOperations';
 import {
   createInspectFileRunner,
@@ -31,6 +32,7 @@ import { SqliteTransactionManager } from './adapters/SqliteTransactionManager';
 import { createSourceTerminologyPrecheckRunner } from './sourceTerminologyPrecheck/createSourceTerminologyPrecheckRunner';
 import { ProxySettingsManager } from './proxy/ProxySettingsManager';
 import type {
+  AppProgressEvent,
   FileInspectResult,
   FileReferenceExportResult,
   FileSourceTerminologyPrecheckResult,
@@ -57,27 +59,18 @@ import type {
   AITestConnectionResult,
   TestAIConnectionInput,
 } from './modules/ai/AIProviderCatalogService';
-import type { ProjectServiceDependencies } from './ProjectServiceDependencies';
-
-interface ImportProgress {
-  current: number;
-  total: number;
-  message?: string;
-}
+import type { ImportProgress, ProjectServiceDependencies } from './ProjectServiceDependencies';
 
 export class ProjectService {
+  public onQAInvalidated(callback: (projectId: number) => void) {
+    return this.projectModule.onQAInvalidated(callback);
+  }
   private readonly segmentService: SegmentService;
   private readonly projectModule: ProjectFileModule;
   private readonly tmModule: TMModule;
   private readonly tbModule: TBModule;
   private readonly aiModule: AIModule;
-  private progressCallbacks: ((data: {
-    type: string;
-    current: number;
-    total: number;
-    message?: string;
-    scope?: string;
-  }) => void)[] = [];
+  private progressCallbacks: ((data: AppProgressEvent) => void)[] = [];
 
   constructor(
     db: CATDatabase,
@@ -99,12 +92,7 @@ export class ProjectService {
     const aiRuntimeConfigProvider = deps.aiRuntimeConfigProvider;
     const aiTransport = deps.aiTransport ?? new AIProviderTransport();
 
-    const emitProgress = (payload: {
-      type: string;
-      current: number;
-      total: number;
-      message?: string;
-    }) => {
+    const emitProgress = (payload: AppProgressEvent) => {
       this.emitProgress(payload.type, payload.current, payload.total, payload.message);
     };
     const emitFileOperationProgress: FileOperationProgressEmitter = (
@@ -129,6 +117,10 @@ export class ProjectService {
         deps.sourceTerminologyPrecheckRunner ??
           createSourceTerminologyPrecheckRunner(db, dbPath, aiRuntimeConfigProvider, aiTransport),
         emitFileOperationProgress,
+        undefined,
+        tx,
+        dbPath && dbPath !== ':memory:' ? createQAFileRunner(dbPath) : undefined,
+        () => db.getQARevision(),
       );
     this.tmModule =
       deps.tmModule ??
@@ -290,15 +282,7 @@ export class ProjectService {
     return () => this.segmentService.off('working-tm-updated', callback);
   }
 
-  public onProgress(
-    callback: (data: {
-      type: string;
-      current: number;
-      total: number;
-      message?: string;
-      scope?: string;
-    }) => void,
-  ) {
+  public onProgress(callback: (data: AppProgressEvent) => void) {
     this.progressCallbacks.push(callback);
     return () => {
       this.progressCallbacks = this.progressCallbacks.filter((c) => c !== callback);
@@ -483,17 +467,18 @@ export class ProjectService {
     return this.tmModule.batchMatchFileWithTM(fileId, tmId);
   }
 
-  public async exportFile(
-    fileId: number,
-    outputPath: string,
-    options?: ImportOptions,
-    forceExport: boolean = false,
-  ) {
-    return this.projectModule.exportFile(fileId, outputPath, options, forceExport);
+  public async exportFile(fileId: number, outputPath: string, options?: ImportOptions) {
+    return this.projectModule.exportFile(fileId, outputPath, options);
   }
 
   public async runFileQA(fileId: number): Promise<FileQaReport> {
     return this.projectModule.runFileQA(fileId, (projectId, segment) =>
+      this.tbModule.findTermMatches(projectId, segment),
+    );
+  }
+
+  public checkSegmentQA(segmentId: string) {
+    return this.projectModule.checkSegmentQA(segmentId, (projectId, segment) =>
       this.tbModule.findTermMatches(projectId, segment),
     );
   }

@@ -16,6 +16,7 @@ export default defineConfig({
         external: ['better-sqlite3'],
         input: {
           index: resolve('src/main/index.ts'),
+          qaWorker: resolve('src/main/qaWorker.ts'),
           tmImportWorker: resolve('src/main/tmImportWorker.ts'),
           tmSyncWorker: resolve('src/main/tmSyncWorker.ts'),
           workingTMExportWorker: resolve('src/main/workingTMExportWorker.ts'),

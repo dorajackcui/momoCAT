@@ -64,8 +64,7 @@ function buildSearchableEditorSegment(
   const sourceText = normalizeEditorText(segment.sourceTokens, segment.sourceTokens);
   const targetText = normalizeEditorText(segment.targetTokens, segment.sourceTokens);
   const qaIssues = segment.qaIssues || [];
-  const hasQaError = qaIssues.some((issue) => issue.severity === 'error');
-  const hasQaWarning = qaIssues.some((issue) => issue.severity === 'warning');
+
   const hasSaveError = Boolean(segmentSaveErrors[segment.segmentId]);
 
   return {
@@ -73,8 +72,8 @@ function buildSearchableEditorSegment(
     originalIndex: index,
     sourceText,
     targetText,
-    hasQaError,
-    hasQaWarning,
+
+    hasQaIssue: qaIssues.length > 0,
     hasSaveError,
     repeatedSourceRole,
   };

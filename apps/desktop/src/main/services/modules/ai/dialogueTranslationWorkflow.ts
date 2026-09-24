@@ -1,6 +1,5 @@
 import type { Project } from '@cat/core/project';
 import { normalizeSegmentStatus } from '@cat/core/models';
-import { TagValidator } from '@cat/core/qa';
 import { serializeTokensToEditorText, type TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { CancellationToken } from '@cat/localization';
@@ -29,7 +28,6 @@ export interface DialogueFileTranslationParams {
   tagPolicy: TagPolicy;
   targetScope: AIBatchTargetScope;
   transport: AITransport;
-  tagValidator: TagValidator;
   textTranslator: AITextTranslator;
   segmentService: SegmentService;
   segmentPagingIterator: SegmentPagingIterator;
@@ -92,7 +90,6 @@ export async function runDialogueFileTranslation(
         unit,
         previousGroup,
         transport: params.transport,
-        tagValidator: params.tagValidator,
         tagPolicy: params.tagPolicy,
         resolveTranslationPromptReferences: (projectId, segment) =>
           params.resolveTranslationPromptReferences(projectId, segment),
@@ -272,7 +269,9 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function isCancellationRequested(params: Pick<DialogueFileTranslationParams, 'cancellationToken'>): boolean {
+function isCancellationRequested(
+  params: Pick<DialogueFileTranslationParams, 'cancellationToken'>,
+): boolean {
   return params.cancellationToken?.isCancellationRequested() === true;
 }
 

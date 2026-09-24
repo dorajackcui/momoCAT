@@ -14,6 +14,11 @@ function createReport(overrides?: Partial<FileQaReport>): FileQaReport {
 }
 
 describe('buildFileQaFeedback', () => {
+  it('does not report success for an empty stale result', () => {
+    const feedback = buildFileQaFeedback('demo.xlsx', createReport({ stale: true }));
+    expect(feedback.level).toBe('info');
+    expect(feedback.message).toContain('Recheck needed');
+  });
   it('returns success message when no QA issues found', () => {
     const feedback = buildFileQaFeedback('demo.xlsx', createReport({ checkedSegments: 128 }));
     expect(feedback.level).toBe('success');
@@ -47,11 +52,9 @@ describe('buildFileQaFeedback', () => {
 
     expect(feedback.level).toBe('info');
     expect(feedback.message).toContain('QA finished for "demo.xlsx".');
-    expect(feedback.message).toContain('Errors: 1, Warnings: 1');
-    expect(feedback.message).toContain('Row 3 [error] tag-integrity: Missing closing tag');
-    expect(feedback.message).toContain(
-      'Row 7 [warning] terminology-consistency: Use preferred term',
-    );
+    expect(feedback.message).toContain('2 findings in 2 rows');
+    expect(feedback.message).toContain('Row 3 tag-integrity: Missing closing tag');
+    expect(feedback.message).toContain('Row 7 terminology-consistency: Use preferred term');
   });
 
   it('appends remaining-count suffix when issue list exceeds preview limit', () => {
@@ -72,6 +75,6 @@ describe('buildFileQaFeedback', () => {
 
     expect(feedback.level).toBe('info');
     expect(feedback.message).toContain('...and 2 more.');
-    expect(feedback.message).not.toContain('Row 7 [error] tag-integrity: Issue 7');
+    expect(feedback.message).not.toContain('Row 7 tag-integrity: Issue 7');
   });
 });

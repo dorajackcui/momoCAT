@@ -13,6 +13,12 @@ import type { TBModule } from './modules/TBModule';
 import type { TMModule } from './modules/TMModule';
 import type { AIRuntimeConfigProvider, AITransport, SpreadsheetGateway } from './ports';
 
+export interface ImportProgress {
+  current: number;
+  total: number;
+  message?: string;
+}
+
 export interface ProjectServiceDependencies {
   filter?: SpreadsheetGateway;
   tmService?: TMService;

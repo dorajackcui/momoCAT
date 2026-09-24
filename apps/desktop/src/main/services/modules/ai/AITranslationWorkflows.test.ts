@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Segment } from '@cat/core/models';
 import type { Project } from '@cat/core/project';
-import { TagValidator } from '@cat/core/qa';
 import { runStandardFileTranslation } from './fileTranslationWorkflow';
 import { runDialogueFileTranslation } from './dialogueTranslationWorkflow';
 import { runLocalizationFileTranslation } from './localizationFileTranslationWorkflow';
@@ -520,7 +519,6 @@ describe('AI translation workflows', () => {
       runtimeConfig: { reasoningEffort: 'medium' },
       targetScope: 'overwrite-non-confirmed',
       transport: transport as never,
-      tagValidator: new TagValidator(),
       textTranslator: textTranslator as never,
       segmentService: segmentService as never,
       segmentPagingIterator: segmentPagingIterator as never,

@@ -1,7 +1,6 @@
 import { writeFile } from 'fs/promises';
 import { basename, extname, join, parse } from 'path';
 import type { Segment } from '@cat/core/models';
-import { TagValidator } from '@cat/core/qa';
 import type { TagPolicy } from '@cat/core/tag';
 import type { CATDatabase } from '@cat/db';
 import { MTModule } from './modules/MTModule';
@@ -20,11 +19,7 @@ import type { MTBatchCurrentUnitInput } from './modules/MTModule';
 import type { AIRuntimeConfigProvider, AITransport } from './ports';
 import { unitKey } from './requestModes/shared/unitIdentity';
 import { buildWindowPartialReadOnlyContextRows } from './requestModes/shared/windowPartialContextBuilder';
-import type {
-  FileParseRowArtifact,
-  InspectArtifact,
-  InspectUnitArtifact,
-} from './artifacts';
+import type { FileParseRowArtifact, InspectArtifact, InspectUnitArtifact } from './artifacts';
 import {
   buildErrorUnit,
   buildUnitXlsxFields,
@@ -37,10 +32,7 @@ import {
   stageError,
   truncateForCell,
 } from './LocalizationInspectorArtifacts';
-import {
-  parseExternalSpreadsheet,
-  writeInspectSpreadsheet,
-} from './modules/FileModule';
+import { parseExternalSpreadsheet, writeInspectSpreadsheet } from './modules/FileModule';
 import { createTransientSegment } from './transientSegment';
 import { resolveTagPolicy } from './tagPolicy';
 import { normalizeTargetForBaseline, resolveTargetBaseline } from './targetBaseline';
@@ -89,9 +81,7 @@ export interface LocalizationInspectorOptions extends LocalizationEngineOptions 
   mtModule?: Pick<MTModule, 'composePrompt' | 'composeBatchPrompt'>;
 }
 
-type ProjectRecord = NonNullable<
-  ReturnType<SqliteProjectRepository['getProject']>
->;
+type ProjectRecord = NonNullable<ReturnType<SqliteProjectRepository['getProject']>>;
 
 export class LocalizationInspector {
   private readonly projectRepo: SqliteProjectRepository;
@@ -110,10 +100,7 @@ export class LocalizationInspector {
     const tmService = new TMService(this.projectRepo, tmRepo);
     const tbService = new TBService(this.projectRepo, tbRepo);
     const aiTransport = options.aiTransport ?? new AIProviderTransport();
-    const providerCatalogService = new AIProviderCatalogService(
-      settingsRepo,
-      aiTransport,
-    );
+    const providerCatalogService = new AIProviderCatalogService(settingsRepo, aiTransport);
     const aiRuntimeConfigProvider =
       options.aiRuntimeConfigProvider ?? new DefaultAIRuntimeConfigProvider();
 
@@ -135,7 +122,6 @@ export class LocalizationInspector {
         providerCatalogService,
         aiRuntimeConfigProvider,
         aiTransport,
-        tagValidator: new TagValidator(),
       });
   }
 
@@ -147,18 +133,14 @@ export class LocalizationInspector {
 
     const mode = this.resolveMode(input.options?.mode);
     if (mode === 'dialogue') {
-      throw new Error(
-        'Dialogue mode is not supported for external localization inspection.',
-      );
+      throw new Error('Dialogue mode is not supported for external localization inspection.');
     }
 
     const unitLimit = validatePositiveInteger(input.unitLimit, 'unitLimit');
     const maxCellChars =
-      validatePositiveInteger(input.maxCellChars, 'maxCellChars') ??
-      DEFAULT_MAX_CELL_CHARS;
+      validatePositiveInteger(input.maxCellChars, 'maxCellChars') ?? DEFAULT_MAX_CELL_CHARS;
     const parsed = await parseExternalSpreadsheet(input);
-    const jsonOutputPath =
-      input.jsonOutputPath ?? inferJsonOutputPath(input.outputPath);
+    const jsonOutputPath = input.jsonOutputPath ?? inferJsonOutputPath(input.outputPath);
     const targetBaseline = resolveTargetBaseline({
       targetBaseline: input.options?.targetBaseline,
       targetScope: input.options?.targetScope ?? this.options.defaultTargetScope,
@@ -172,8 +154,7 @@ export class LocalizationInspector {
         targetBaseline,
       }),
     }));
-    const limitedRows =
-      unitLimit === undefined ? baselineRows : baselineRows.slice(0, unitLimit);
+    const limitedRows = unitLimit === undefined ? baselineRows : baselineRows.slice(0, unitLimit);
 
     const rowsWithSegments = limitedRows.map((row, index) => {
       const segment = createTransientSegment(
@@ -212,8 +193,7 @@ export class LocalizationInspector {
             input.onProgress,
           );
 
-    const firstReadyPrompt =
-      units.find((unit) => unit.status === 'ready')?.mt.systemPrompt ?? '';
+    const firstReadyPrompt = units.find((unit) => unit.status === 'ready')?.mt.systemPrompt ?? '';
     const truncatedSystemPrompt = truncateForCell(
       firstReadyPrompt,
       maxCellChars,
@@ -242,11 +222,7 @@ export class LocalizationInspector {
     };
 
     await writeInspectSpreadsheet(parsed, artifact, input.outputPath);
-    await writeFile(
-      jsonOutputPath,
-      `${JSON.stringify(artifact, null, 2)}\n`,
-      'utf8',
-    );
+    await writeFile(jsonOutputPath, `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
 
     return {
       artifact,
@@ -277,23 +253,19 @@ export class LocalizationInspector {
     tagPolicy: TagPolicy,
     onProgress?: (current: number, total: number) => void,
   ): Promise<InspectUnitArtifact[]> {
-    const { units, readyRowByUnitId, emitProgress } =
-      await this.inspectRowReferencesForRows(project, rows, onProgress);
+    const { units, readyRowByUnitId, emitProgress } = await this.inspectRowReferencesForRows(
+      project,
+      rows,
+      onProgress,
+    );
     const inputDocumentId = basename(inputPath);
 
-    for (
-      let batchStart = 0;
-      batchStart < rows.length;
-      batchStart += INSPECT_BATCH_SIZE
-    ) {
+    for (let batchStart = 0; batchStart < rows.length; batchStart += INSPECT_BATCH_SIZE) {
       const batchRows = rows.slice(batchStart, batchStart + INSPECT_BATCH_SIZE);
       const readyRows = batchRows
-        .map((rowWithSegment) =>
-          readyRowByUnitId.get(rowWithSegment.row.unitId),
-        )
+        .map((rowWithSegment) => readyRowByUnitId.get(rowWithSegment.row.unitId))
         .filter(
-          (item): item is InspectReadyRow =>
-            item !== undefined && item.unit.status === 'ready',
+          (item): item is InspectReadyRow => item !== undefined && item.unit.status === 'ready',
         );
 
       if (readyRows.length === 0) {
@@ -301,17 +273,15 @@ export class LocalizationInspector {
       }
 
       try {
-        const current: MTBatchCurrentUnitInput[] = readyRows.map(
-          ({ row, segment, unit }) => ({
-            responseId: row.unitId,
-            documentId: inputDocumentId,
-            unitId: row.unitId,
-            segment,
-            tm: unit.tm,
-            tb: unit.tb,
-            context: row.context,
-          }),
-        );
+        const current: MTBatchCurrentUnitInput[] = readyRows.map(({ row, segment, unit }) => ({
+          responseId: row.unitId,
+          documentId: inputDocumentId,
+          unitId: row.unitId,
+          segment,
+          tm: unit.tm,
+          tb: unit.tb,
+          context: row.context,
+        }));
         const mt = await this.mtModule.composeBatchPrompt({
           taskId: `inspect-window-${Math.floor(batchStart / INSPECT_BATCH_SIZE) + 1}`,
           project,
@@ -364,25 +334,21 @@ export class LocalizationInspector {
     tagPolicy: TagPolicy,
     onProgress?: (current: number, total: number) => void,
   ): Promise<InspectUnitArtifact[]> {
-    const { units, readyRowByUnitId, emitProgress } =
-      await this.inspectRowReferencesForRows(project, rows, onProgress);
+    const { units, readyRowByUnitId, emitProgress } = await this.inspectRowReferencesForRows(
+      project,
+      rows,
+      onProgress,
+    );
     const inputDocumentId = basename(inputPath);
     const jobUnits = inspectRowsToJobUnits(contextRows, inputDocumentId);
     const jobUnitsByUnitId = new Map(jobUnits.map((unit) => [unit.unitId, unit]));
 
-    for (
-      let batchStart = 0;
-      batchStart < rows.length;
-      batchStart += INSPECT_BATCH_SIZE
-    ) {
+    for (let batchStart = 0; batchStart < rows.length; batchStart += INSPECT_BATCH_SIZE) {
       const batchRows = rows.slice(batchStart, batchStart + INSPECT_BATCH_SIZE);
       const readyRows = batchRows
-        .map((rowWithSegment) =>
-          readyRowByUnitId.get(rowWithSegment.row.unitId),
-        )
+        .map((rowWithSegment) => readyRowByUnitId.get(rowWithSegment.row.unitId))
         .filter(
-          (item): item is InspectReadyRow =>
-            item !== undefined && item.unit.status === 'ready',
+          (item): item is InspectReadyRow => item !== undefined && item.unit.status === 'ready',
         );
 
       if (readyRows.length === 0) {
@@ -390,17 +356,15 @@ export class LocalizationInspector {
       }
 
       try {
-        const current: MTBatchCurrentUnitInput[] = readyRows.map(
-          ({ row, segment, unit }) => ({
-            responseId: row.unitId,
-            documentId: inputDocumentId,
-            unitId: row.unitId,
-            segment,
-            tm: unit.tm,
-            tb: unit.tb,
-            context: row.context,
-          }),
-        );
+        const current: MTBatchCurrentUnitInput[] = readyRows.map(({ row, segment, unit }) => ({
+          responseId: row.unitId,
+          documentId: inputDocumentId,
+          unitId: row.unitId,
+          segment,
+          tm: unit.tm,
+          tb: unit.tb,
+          context: row.context,
+        }));
         const scanWindowUnits = batchRows.flatMap(({ row }) => {
           const unit = jobUnitsByUnitId.get(row.unitId);
           return unit ? [unit] : [];
@@ -516,10 +480,9 @@ export class LocalizationInspector {
       tbResult.status === 'fulfilled'
         ? tbResult.value
         : emptyTBArtifact(row.unitId, segment.segmentId);
-    const referenceErrors = [
-      stageError('tm', tmResult),
-      stageError('tb', tbResult),
-    ].filter((error): error is string => Boolean(error));
+    const referenceErrors = [stageError('tm', tmResult), stageError('tb', tbResult)].filter(
+      (error): error is string => Boolean(error),
+    );
 
     if (referenceErrors.length > 0) {
       return buildErrorUnit({

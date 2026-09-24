@@ -1,6 +1,8 @@
+import { invalidateProjectQA } from './qaInvalidation';
 import Database from 'better-sqlite3';
 import {
   DEFAULT_PROJECT_QA_SETTINGS,
+  normalizeQASettings,
   Project,
   ProjectQASettings,
   ProjectType,
@@ -60,23 +62,17 @@ export class ProjectRepo {
     LEFT JOIN segments s ON s.fileId = f.id
   `;
 
-  private toProject(row: (Project & { qaSettingsJson?: string | null }) | undefined): Project | undefined {
+  private toProject(
+    row: (Project & { qaSettingsJson?: string | null }) | undefined,
+  ): Project | undefined {
     if (!row) return undefined;
     const { qaSettingsJson, ...rest } = row;
     let qaSettings: ProjectQASettings | null = null;
     try {
-      const parsed = qaSettingsJson ? (JSON.parse(qaSettingsJson) as Partial<ProjectQASettings>) : null;
-      qaSettings = parsed
-        ? {
-            enabledRuleIds: Array.isArray(parsed.enabledRuleIds)
-              ? (parsed.enabledRuleIds as ProjectQASettings['enabledRuleIds'])
-              : DEFAULT_PROJECT_QA_SETTINGS.enabledRuleIds,
-            instantQaOnConfirm:
-              typeof parsed.instantQaOnConfirm === 'boolean'
-                ? parsed.instantQaOnConfirm
-                : Boolean(parsed.instantQaOnConfirm),
-          }
-        : DEFAULT_PROJECT_QA_SETTINGS;
+      const parsed = qaSettingsJson
+        ? (JSON.parse(qaSettingsJson) as Partial<ProjectQASettings>)
+        : null;
+      qaSettings = normalizeQASettings(parsed);
     } catch {
       qaSettings = DEFAULT_PROJECT_QA_SETTINGS;
     }
@@ -111,23 +107,23 @@ export class ProjectRepo {
   }
 
   public listProjects(): Project[] {
-    const rows = this.db
-      .prepare('SELECT * FROM projects ORDER BY updatedAt DESC')
-      .all() as Array<Project & { qaSettingsJson?: string | null }>;
+    const rows = this.db.prepare('SELECT * FROM projects ORDER BY updatedAt DESC').all() as Array<
+      Project & { qaSettingsJson?: string | null }
+    >;
     return rows.map((row) => this.toProject(row) as Project);
   }
 
   public getProject(id: number): Project | undefined {
-    const row = this.db
-      .prepare('SELECT * FROM projects WHERE id = ?')
-      .get(id) as (Project & { qaSettingsJson?: string | null }) | undefined;
+    const row = this.db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as
+      | (Project & { qaSettingsJson?: string | null })
+      | undefined;
     return this.toProject(row);
   }
 
   public updateProjectPrompt(projectId: number, aiPrompt: string | null) {
     this.db
       .prepare(
-        "UPDATE projects SET aiPrompt = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?"
+        "UPDATE projects SET aiPrompt = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?",
       )
       .run(aiPrompt, projectId);
   }
@@ -139,17 +135,20 @@ export class ProjectRepo {
   ) {
     this.db
       .prepare(
-        "UPDATE projects SET aiPrompt = ?, aiModel = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?"
+        "UPDATE projects SET aiPrompt = ?, aiModel = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?",
       )
       .run(aiPrompt, normalizeProjectAIModel(aiModel), projectId);
   }
 
   public updateProjectQASettings(projectId: number, qaSettings: ProjectQASettings) {
-    this.db
-      .prepare(
-        "UPDATE projects SET qaSettingsJson = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?",
-      )
-      .run(JSON.stringify(qaSettings), projectId);
+    this.db.transaction(() => {
+      invalidateProjectQA(this.db, projectId);
+      this.db
+        .prepare(
+          "UPDATE projects SET qaSettingsJson = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?",
+        )
+        .run(JSON.stringify(normalizeQASettings(qaSettings)), projectId);
+    })();
   }
 
   public deleteProject(id: number) {
@@ -244,7 +243,9 @@ export class ProjectRepo {
   }
 
   public countFilesByProject(projectId: number): number {
-    const row = this.db.prepare('SELECT COUNT(*) as count FROM files WHERE projectId = ?').get(projectId) as {
+    const row = this.db
+      .prepare('SELECT COUNT(*) as count FROM files WHERE projectId = ?')
+      .get(projectId) as {
       count: number;
     };
     return row.count;
@@ -299,7 +300,9 @@ export class ProjectRepo {
     }
     const normalizedName = normalizeProjectFileName(existing.name, name);
 
-    const result = this.db.prepare('UPDATE files SET name = ? WHERE id = ?').run(normalizedName, id);
+    const result = this.db
+      .prepare('UPDATE files SET name = ? WHERE id = ?')
+      .run(normalizedName, id);
     if (result.changes === 0) {
       throw new Error('File not found.');
     }
@@ -312,18 +315,20 @@ export class ProjectRepo {
 
   public updateFileStats(fileId: number) {
     const stats = this.db
-      .prepare(`
+      .prepare(
+        `
       SELECT
         COUNT(*) as total,
         COALESCE(SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END), 0) as confirmed
       FROM segments
       WHERE fileId = ?
-    `)
+    `,
+      )
       .get(fileId) as { total: number; confirmed: number };
 
     this.db
       .prepare(
-        "UPDATE files SET totalSegments = ?, confirmedSegments = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?"
+        "UPDATE files SET totalSegments = ?, confirmedSegments = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?",
       )
       .run(stats.total, stats.confirmed, fileId);
   }

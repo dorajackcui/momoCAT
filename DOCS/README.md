@@ -25,6 +25,7 @@ Follow the startup and completion rules in [AGENTS.md](../AGENTS.md). After the 
 | Desktop IPC and typed bridge          | [Desktop boundary changes](DESKTOP.md#changing-a-desktop-boundary)                                                    |
 | Project file import/export/inspect    | [Desktop files and background jobs](DESKTOP.md#files-and-background-jobs)                                             |
 | AI/provider and file translation      | [`modules/ai`](../apps/desktop/src/main/services/modules/ai), [`packages/localization`](../packages/localization/src) |
+| QA checks and QAtools comparison      | [QA entrypoints](LOCALIZATION.md#qa-entrypoints), [QAtools comparison](LOCALIZATION.md#qatools-comparison)            |
 | TM/TB matching and resource lifecycle | [`LOCALIZATION.md`](LOCALIZATION.md) and its entrypoint table                                                         |
 | SQLite/schema/repositories            | [`DATA_MODEL.md`](DATA_MODEL.md) and [`packages/db/src`](../packages/db/src)                                          |
 | CLI parsing and operation             | [`CLI.md`](CLI.md), [`apps/cli/src`](../apps/cli/src)                                                                 |

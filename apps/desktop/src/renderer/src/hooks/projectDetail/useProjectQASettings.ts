@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import {
   DEFAULT_PROJECT_QA_SETTINGS,
+  normalizeQASettings,
   type Project,
   type ProjectQASettings,
 } from '@cat/core/project';
@@ -14,7 +15,13 @@ interface Params {
 }
 
 function settingsKey(settings: ProjectQASettings) {
-  return JSON.stringify([settings.instantQaOnConfirm, [...settings.enabledRuleIds].sort()]);
+  const normalized = normalizeQASettings(settings);
+  return JSON.stringify([
+    normalized.instantQaOnConfirm,
+    [...normalized.enabledRuleIds].sort(),
+    [...normalized.disabledCheckIds!].sort(),
+    normalized.options,
+  ]);
 }
 
 export function useProjectQASettings({ project, setProject, runMutation }: Params) {

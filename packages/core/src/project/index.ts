@@ -1,11 +1,11 @@
-import type { QaSeverity } from "../models";
+import type { QaIssue } from '../models';
 export {
   DEFAULT_PROJECT_AI_MODEL,
   isProjectAIModel,
   normalizeProjectAIModel,
   type ProjectAIModel,
-} from "./aiModelRegistry";
-import type { ProjectAIModel } from "./aiModelRegistry";
+} from './aiModelRegistry';
+import type { ProjectAIModel } from './aiModelRegistry';
 
 export interface ProjectFile {
   id: number;
@@ -18,20 +18,10 @@ export interface ProjectFile {
   updatedAt: string;
 }
 
-export type ProjectType = "translation" | "review" | "custom";
+export type ProjectType = 'translation' | 'review' | 'custom';
 
-export type SegmentQaRuleId = "tag-integrity" | "terminology-consistency";
-
-export interface SegmentQaRuleOption {
-  id: SegmentQaRuleId;
-  label: string;
-  description: string;
-}
-
-export interface ProjectQASettings {
-  enabledRuleIds: SegmentQaRuleId[];
-  instantQaOnConfirm: boolean;
-}
+import type { ProjectQASettings } from './qaSettings';
+export * from './qaSettings';
 
 export interface Project {
   id: number;
@@ -48,39 +38,22 @@ export interface Project {
   updatedAt: string;
 }
 
-export interface FileQaIssueRecord {
+export interface FileQaIssueRecord extends QaIssue {
   segmentId: string;
   row: number;
-  ruleId: string;
-  severity: QaSeverity;
-  message: string;
 }
 
 export interface FileQaReport {
   fileId: number;
+  /** Input changed during evaluation; findings were not persisted. */
+  stale?: boolean;
   checkedSegments: number;
   errorCount: number;
   warningCount: number;
   issues: FileQaIssueRecord[];
+  issueCount?: number;
+  affectedSegments?: number;
 }
-
-export const SEGMENT_QA_RULE_OPTIONS: SegmentQaRuleOption[] = [
-  {
-    id: "tag-integrity",
-    label: "Tag Integrity",
-    description: "Check missing/extra/out-of-order tags.",
-  },
-  {
-    id: "terminology-consistency",
-    label: "Terminology Consistency",
-    description: "Check TB preferred terms in target text.",
-  },
-];
-
-export const DEFAULT_PROJECT_QA_SETTINGS: ProjectQASettings = {
-  enabledRuleIds: ["tag-integrity", "terminology-consistency"],
-  instantQaOnConfirm: true,
-};
 
 export {
   buildAIDialoguePromptBundle,
@@ -89,23 +62,20 @@ export {
   buildAITextPromptBundle,
   buildAIUserPrompt,
   normalizeProjectType,
-} from "./aiPromptTemplates";
-export {
-  buildAIWindowModePromptBundle,
-  parseAIWindowModeResponse,
-} from "./windowModePrompt";
+} from './aiPromptTemplates';
+export { buildAIWindowModePromptBundle, parseAIWindowModeResponse } from './windowModePrompt';
 export {
   DEFAULT_SOURCE_TERMINOLOGY_SELECTION_PROMPT,
   buildSourceTerminologyPromptBundle,
   parseSourceTerminologyResponse,
-} from "./sourceTerminologyPrompt";
+} from './sourceTerminologyPrompt';
 export type {
   ParsedSourceTerminologySegment,
   SourceTerminologyPromptBuildParams,
   SourceTerminologyPromptBundle,
   SourceTerminologyPromptHistoricalTerm,
   SourceTerminologyPromptUnit,
-} from "./sourceTerminologyPrompt";
+} from './sourceTerminologyPrompt';
 export type {
   DialoguePromptBundle,
   DialoguePromptBundleBuildParams,
@@ -120,7 +90,7 @@ export type {
   TextPromptBundleBuildParams,
   TextPromptSections,
   UserPromptBuildParams,
-} from "./aiPromptTypes";
+} from './aiPromptTypes';
 export type {
   WindowModeCurrentSegment,
   WindowModeNextContextRow,
@@ -129,4 +99,4 @@ export type {
   WindowModePromptBundle,
   WindowModePromptBundleBuildParams,
   WindowModePromptSections,
-} from "./windowModePromptTypes";
+} from './windowModePromptTypes';

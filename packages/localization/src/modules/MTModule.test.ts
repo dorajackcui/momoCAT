@@ -1,11 +1,11 @@
 import type { Segment, TBMatch } from '@cat/core/models';
 import { serializeTokensToDisplayText } from '@cat/core/text';
+import { parseEditorTextToTokens } from '@cat/core/tag';
 import { CATDatabase } from '../../../db/src';
 import { describe, expect, it, vi } from 'vitest';
 import { SqliteSettingsRepository } from '../adapters/sqlite/SqliteSettingsRepository';
 import { AIProviderCatalogService } from '../providers/AIProviderCatalogService';
 import type { AIRuntimeConfigProvider, AITransport } from '../ports';
-import type { TagValidator } from '@cat/core/qa';
 import type { TMMatch } from '../internalServices';
 import type { TBArtifact, TMArtifact } from '../artifacts';
 import { createMemoryTranslationAuditSink } from '../audit/TranslationAudit';
@@ -108,7 +108,7 @@ describe('MTModule', () => {
     }
   });
 
-  it('composes prompts with current translation repair context', async () => {
+  it('composes prompts with user-requested refinement context', async () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('MT Repair Prompt', 'en', 'fr');
@@ -131,15 +131,12 @@ describe('MTModule', () => {
         tb: createTBArtifact(segment),
         currentTranslationPayload: 'Broken translation',
         refinementInstruction: 'Repair only the placeholder mismatch.',
-        validationFeedback: 'Missing marker: {1}',
       });
 
       expect(artifact.userPrompt).toContain('Current Translation:');
       expect(artifact.userPrompt).toContain('Broken translation');
       expect(artifact.userPrompt).toContain('Refinement Instruction:');
       expect(artifact.userPrompt).toContain('Repair only the placeholder mismatch.');
-      expect(artifact.userPrompt).toContain('Validation feedback from previous attempt:');
-      expect(artifact.userPrompt).toContain('Missing marker: {1}');
     } finally {
       db.close();
     }
@@ -293,8 +290,9 @@ describe('MTModule', () => {
 
       expect(result.prompt.sourcePayload).toBe('{1>Hello<2}');
       expect(serializeTokensToDisplayText(result.targetTokens)).toBe(`${opening}Bonjour❮/g❯`);
-      expect(result.targetTokens.filter(token => token.type === 'tag').map(token => token.content))
-        .toEqual([opening, '❮/g❯']);
+      expect(
+        result.targetTokens.filter((token) => token.type === 'tag').map((token) => token.content),
+      ).toEqual([opening, '❮/g❯']);
       expect(transport.createResponse).toHaveBeenCalledTimes(1);
       expect(transport.createResponse.mock.calls[0]?.[0].userPrompt).toContain('{1>Hello<2}');
     } finally {
@@ -302,7 +300,7 @@ describe('MTModule', () => {
     }
   });
 
-  it('protects literal newline escape sequences as markers in MT prompts and retries when one is dropped', async () => {
+  it('uses newline markers in prompts without retrying dropped markers', async () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('MT Newline Markers', 'en', 'fr');
@@ -342,11 +340,8 @@ describe('MTModule', () => {
 
       expect(result.prompt.sourcePayload).toBe('Hello{1}world{2}again');
       expect(result.prompt.userPrompt).toContain('Hello{1}world{2}again');
-      expect(serializeTokensToDisplayText(result.targetTokens)).toBe('Bonjour\\nmonde\\nencore');
-      expect(transport.createResponse).toHaveBeenCalledTimes(2);
-      const secondRequest = transport.createResponse.mock.calls[1]?.[0];
-      expect(secondRequest.userPrompt).toContain('Previous translation was invalid.');
-      expect(result.prompt.userPrompt).toBe(secondRequest.userPrompt);
+      expect(serializeTokensToDisplayText(result.targetTokens)).toBe('Bonjour\\nmonde');
+      expect(transport.createResponse).toHaveBeenCalledTimes(1);
     } finally {
       db.close();
     }
@@ -400,8 +395,7 @@ describe('MTModule', () => {
         { tagPolicy: 'none' },
       );
       const transport = createTransport('<b>Enregistrer</b> {1>nom<2}');
-      const tagValidator = createFailingTagValidator();
-      const module = createModule(db, transport, 'medium', tagValidator);
+      const module = createModule(db, transport, 'medium');
       const config = await module.resolveConfig(project);
 
       const result = await module.translate({
@@ -423,9 +417,10 @@ describe('MTModule', () => {
       expect(result.targetTokens).toEqual([
         { type: 'text', content: '<b>Enregistrer</b> {1>nom<2}' },
       ]);
-      expect(serializeTokensToDisplayText(result.targetTokens)).toBe('<b>Enregistrer</b> {1>nom<2}');
+      expect(serializeTokensToDisplayText(result.targetTokens)).toBe(
+        '<b>Enregistrer</b> {1>nom<2}',
+      );
       expect(transport.createResponse).toHaveBeenCalledTimes(1);
-      expect(tagValidator.validate).not.toHaveBeenCalled();
     } finally {
       db.close();
     }
@@ -587,9 +582,7 @@ describe('MTModule', () => {
         mode: 'window-partial',
         taskId: 'window-task-1',
         currentIds: ['r1'],
-        responseIdMap: [
-          { responseId: 'r1', documentId: 'doc.xlsx', unitId: 'unit-2' },
-        ],
+        responseIdMap: [{ responseId: 'r1', documentId: 'doc.xlsx', unitId: 'unit-2' }],
         previousContextCount: 0,
         nextContextCount: 0,
         scanWindowCount: 3,
@@ -600,7 +593,9 @@ describe('MTModule', () => {
       expect(artifact.userPrompt).toContain(
         'Read-only context rows. Do not produce output or return ids for these rows.',
       );
-      expect(artifact.userPrompt).toContain('Rows requiring target text. Return exactly these ids.');
+      expect(artifact.userPrompt).toContain(
+        'Rows requiring target text. Return exactly these ids.',
+      );
       expect(artifact.userPrompt).toContain('<target text>');
       expect(artifact.userPrompt).not.toContain('id: Open');
       expect(transport.createResponse).not.toHaveBeenCalled();
@@ -740,8 +735,7 @@ describe('MTModule', () => {
           translations: [{ id: 'row-2', text: 'Enregistrer sans marqueur' }],
         }),
       );
-      const tagValidator = createFailingTagValidator();
-      const module = createModule(db, transport, 'medium', tagValidator);
+      const module = createModule(db, transport, 'medium');
       const config = await module.resolveConfig(project);
 
       const result = await module.translateBatch({
@@ -773,13 +767,12 @@ describe('MTModule', () => {
         'Enregistrer sans marqueur',
       );
       expect(transport.createResponse).toHaveBeenCalledTimes(1);
-      expect(tagValidator.validate).not.toHaveBeenCalled();
     } finally {
       db.close();
     }
   });
 
-  it('does not retry Window Mode tag validation for custom projects', async () => {
+  it('does not retry Window Mode tag validation for Plain custom files', async () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('MT Batch Custom No Tag Retry', 'en', 'fr', 'custom');
@@ -792,12 +785,12 @@ describe('MTModule', () => {
           translations: [{ id: 'row-2', text: 'Enregistrer sans marqueur' }],
         }),
       );
-      const tagValidator = createFailingTagValidator();
-      const module = createModule(db, transport, 'medium', tagValidator);
+      const module = createModule(db, transport, 'medium');
       const config = await module.resolveConfig(project);
 
       const result = await module.translateBatch({
         taskId: 'window-task-1',
+        tagPolicy: 'none',
         project,
         current: [
           {
@@ -825,321 +818,48 @@ describe('MTModule', () => {
         'Enregistrer sans marqueur',
       );
       expect(transport.createResponse).toHaveBeenCalledTimes(1);
-      expect(tagValidator.validate).not.toHaveBeenCalled();
     } finally {
       db.close();
     }
   });
 
-  it('repairs only the invalid Window Mode unit with a single-segment prompt', async () => {
-    const db = new CATDatabase(':memory:');
-    try {
-      const projectId = db.createProject('MT Batch Retry', 'en', 'fr');
-      seedConfiguredAIProvider(db, projectId);
-      const project = db.getProject(projectId);
-      if (!project) throw new Error('Project not created');
-      const row2 = createTransientSegment({ id: 'row-2', source: 'Save {1}' }, 1);
-      const row3 = createTransientSegment({ id: 'row-3', source: 'Close' }, 2);
-      const transport = createTransport();
-      transport.createResponse
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
+  it.each([
+    ['missing', 'Save {1}', 'Enregistrer'],
+    ['count', 'Save {name}{name}', 'Enregistrer {1}'],
+    ['structure', '<b><i>Save</i></b>', '{1>{2>Enregistrer<4}<3}'],
+  ])(
+    'returns Window output with tag %s findings without repair requests',
+    async (_kind, source, output) => {
+      const db = new CATDatabase(':memory:');
+      try {
+        const projectId = db.createProject('Batch QA separation', 'en', 'fr');
+        seedConfiguredAIProvider(db, projectId);
+        const project = db.getProject(projectId)!;
+        const first = createTransientSegment({ id: 'first', source }, 0);
+        const second = createTransientSegment({ id: 'second', source: 'Close' }, 1);
+        const transport = createTransport(
+          JSON.stringify({
             translations: [
-              { id: 'r1', text: 'Enregistrer' },
+              { id: 'r1', text: output },
               { id: 'r2', text: 'Fermer' },
             ],
           }),
-          status: 200,
-          endpoint: '/mock',
-        })
-        .mockResolvedValueOnce({
-          content: 'Enregistrer {1}',
-          status: 200,
-          endpoint: '/mock',
-        });
-      const module = createModule(db, transport);
-      const config = await module.resolveConfig(project, {
-        model: 'test-model',
-        reasoningEffort: 'medium',
-      });
-      const auditSink = createMemoryTranslationAuditSink();
-
-      const result = await module.translateBatch({
-        taskId: 'window-task-1',
-        project,
-        audit: { jobId: 'job-1', sink: auditSink },
-        current: [
-          {
-            responseId: 'r1',
-            documentId: 'doc.xlsx',
-            unitId: 'unit-2',
-            segment: row2,
-            tm: createTMArtifact(row2),
-            tb: createTBArtifact(row2),
-          },
-          {
-            responseId: 'r2',
-            documentId: 'doc.xlsx',
-            unitId: 'unit-3',
-            segment: row3,
-            tm: createTMArtifact(row3),
-            tb: createTBArtifact(row3),
-          },
-        ],
-        previousContext: [],
-        nextContext: [],
-        apiKey: config.apiKey,
-        baseUrl: config.provider.baseUrl,
-        model: config.model,
-        reasoningEffort: config.reasoningEffort,
-        provider: config.provider,
-        srcLang: 'en',
-        tgtLang: 'fr',
-      });
-
-      expect(transport.createResponse).toHaveBeenCalledTimes(2);
-      const firstRequest = transport.createResponse.mock.calls[0]?.[0];
-      const secondRequest = transport.createResponse.mock.calls[1]?.[0];
-      expect(firstRequest.userPrompt).toContain('Current segments');
-      expect(firstRequest.userPrompt).toContain('id: r1');
-      expect(firstRequest.userPrompt).toContain('id: r2');
-      expect(secondRequest.userPrompt).not.toContain('Current segments');
-      expect(secondRequest.userPrompt).toContain('Current Translation:');
-      expect(secondRequest.userPrompt).toContain('Enregistrer');
-      expect(secondRequest.userPrompt).toContain('Refinement Instruction:');
-      expect(secondRequest.userPrompt).toContain('Validation feedback');
-      expect(secondRequest.userPrompt).not.toContain('r2');
-      expect(secondRequest.userPrompt).not.toContain('Fermer');
-      expect(result.results.map((unit) => unit.unitId)).toEqual(['unit-2', 'unit-3']);
-      expect(serializeTokensToDisplayText(result.results[0].targetTokens)).toBe(
-        'Enregistrer {1}',
-      );
-      expect(serializeTokensToDisplayText(result.results[1].targetTokens)).toBe('Fermer');
-      expect(result.results[0]).toHaveProperty('prompt.userPrompt', secondRequest.userPrompt);
-      expect(result.results[1]).not.toHaveProperty('prompt');
-      expect(result.prompt.userPrompt).toBe(firstRequest.userPrompt);
-      expect(auditSink.events.map((event) => event.event)).toEqual([
-        'mt_batch_request',
-        'mt_batch_response',
-        'mt_tag_invalid',
-        'mt_repair_request',
-        'mt_repair_success',
-      ]);
-      expect(auditSink.events[0]).toMatchObject({
-        event: 'mt_batch_request',
-        job: 'job-1',
-        task: 'window-task-1',
-        mode: 'window',
-        units: [
-          { doc: 'doc.xlsx', unit: 'unit-2', rid: 'r1' },
-          { doc: 'doc.xlsx', unit: 'unit-3', rid: 'r2' },
-        ],
-      });
-      expect(auditSink.events[2]).toMatchObject({
-        event: 'mt_tag_invalid',
-        job: 'job-1',
-        task: 'window-task-1',
-        unit: 'unit-2',
-        rid: 'r1',
-        messages: expect.arrayContaining(['Missing tags: {1}']),
-        targetChars: 'Enregistrer'.length,
-      });
-      expect(auditSink.events[3]).toMatchObject({
-        event: 'mt_repair_request',
-        reason: 'tag_invalid',
-      });
-      expect(auditSink.events[4]).toMatchObject({
-        event: 'mt_repair_success',
-        unit: 'unit-2',
-        rid: 'r1',
-        targetChars: 'Enregistrer {1}'.length,
-      });
-    } finally {
-      db.close();
-    }
-  });
-
-  it('keeps audit sink failures from breaking successful batch repair', async () => {
-    const db = new CATDatabase(':memory:');
-    try {
-      const projectId = db.createProject('MT Batch Audit Failure', 'en', 'fr');
-      seedConfiguredAIProvider(db, projectId);
-      const project = db.getProject(projectId);
-      if (!project) throw new Error('Project not created');
-      const row2 = createTransientSegment({ id: 'row-2', source: 'Save {1}' }, 1);
-      const transport = createTransport();
-      transport.createResponse
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            translations: [{ id: 'r1', text: 'Enregistrer' }],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        })
-        .mockResolvedValueOnce({
-          content: 'Enregistrer {1}',
-          status: 200,
-          endpoint: '/mock',
-        });
-      const module = createModule(db, transport);
-      const config = await module.resolveConfig(project, {
-        model: 'test-model',
-        reasoningEffort: 'medium',
-      });
-      const auditSink = {
-        record: vi.fn(() => {
-          throw new Error('audit failed');
-        }),
-      };
-
-      const result = await module.translateBatch({
-        taskId: 'window-task-1',
-        project,
-        audit: { jobId: 'job-1', sink: auditSink },
-        current: [
-          {
-            responseId: 'r1',
-            documentId: 'doc.xlsx',
-            unitId: 'unit-2',
-            segment: row2,
-            tm: createTMArtifact(row2),
-            tb: createTBArtifact(row2),
-          },
-        ],
-        previousContext: [],
-        nextContext: [],
-        apiKey: config.apiKey,
-        baseUrl: config.provider.baseUrl,
-        model: config.model,
-        reasoningEffort: config.reasoningEffort,
-        provider: config.provider,
-        srcLang: 'en',
-        tgtLang: 'fr',
-      });
-
-      expect(serializeTokensToDisplayText(result.results[0].targetTokens)).toBe(
-        'Enregistrer {1}',
-      );
-      expect(transport.createResponse).toHaveBeenCalledTimes(2);
-    } finally {
-      db.close();
-    }
-  });
-
-  it('carries Window Mode unit context into a single-segment repair prompt', async () => {
-    const db = new CATDatabase(':memory:');
-    try {
-      const projectId = db.createProject('MT Batch Repair Context', 'en', 'fr');
-      seedConfiguredAIProvider(db, projectId);
-      const project = db.getProject(projectId);
-      if (!project) throw new Error('Project not created');
-      const row2 = createTransientSegment({ id: 'row-2', source: 'Save {1}' }, 1);
-      const transport = createTransport();
-      transport.createResponse
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            translations: [{ id: 'r1', text: 'Enregistrer' }],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        })
-        .mockResolvedValueOnce({
-          content: 'Enregistrer {1}',
-          status: 200,
-          endpoint: '/mock',
-        });
-      const module = createModule(db, transport);
-      const config = await module.resolveConfig(project);
-
-      const result = await module.translateBatch({
-        taskId: 'window-task-1',
-        project,
-        current: [
-          {
-            responseId: 'r1',
-            documentId: 'doc.xlsx',
-            unitId: 'unit-2',
-            segment: row2,
-            tm: createTMArtifact(row2),
-            tb: createTBArtifact(row2),
-            context: 'Toolbar button label',
-          },
-        ],
-        previousContext: [],
-        nextContext: [],
-        apiKey: config.apiKey,
-        baseUrl: config.provider.baseUrl,
-        model: config.model,
-        reasoningEffort: config.reasoningEffort,
-        provider: config.provider,
-        srcLang: 'en',
-        tgtLang: 'fr',
-      });
-
-      expect(transport.createResponse).toHaveBeenCalledTimes(2);
-      const firstRequest = transport.createResponse.mock.calls[0]?.[0];
-      const repairRequest = transport.createResponse.mock.calls[1]?.[0];
-      expect(firstRequest.userPrompt).toContain('Toolbar button label');
-      expect(repairRequest.userPrompt).toContain('Context: Toolbar button label');
-      expect(result.results[0]).toHaveProperty('prompt.userPrompt', repairRequest.userPrompt);
-    } finally {
-      db.close();
-    }
-  });
-
-  it('rejects when single-segment repair cannot fix an invalid Window Mode unit', async () => {
-    const db = new CATDatabase(':memory:');
-    try {
-      const projectId = db.createProject('MT Batch Repair Failure', 'en', 'fr');
-      seedConfiguredAIProvider(db, projectId);
-      const project = db.getProject(projectId);
-      if (!project) throw new Error('Project not created');
-      const row2 = createTransientSegment({ id: 'row-2', source: 'Save {1}' }, 1);
-      const row3 = createTransientSegment({ id: 'row-3', source: 'Close' }, 2);
-      const transport = createTransport();
-      transport.createResponse
-        .mockResolvedValueOnce({
-          content: JSON.stringify({
-            translations: [
-              { id: 'r1', text: 'Enregistrer' },
-              { id: 'r2', text: 'Fermer' },
-            ],
-          }),
-          status: 200,
-          endpoint: '/mock',
-        })
-        .mockResolvedValue({
-          content: 'Enregistrer',
-          status: 200,
-          endpoint: '/mock',
-        });
-      const module = createModule(db, transport);
-      const config = await module.resolveConfig(project);
-      const auditSink = createMemoryTranslationAuditSink();
-
-      await expect(
-        module.translateBatch({
-          taskId: 'window-task-1',
+        );
+        const module = createModule(db, transport);
+        const config = await module.resolveConfig(project);
+        const audit = createMemoryTranslationAuditSink();
+        const result = await module.translateBatch({
+          taskId: 'batch',
           project,
-          audit: { jobId: 'job-1', sink: auditSink },
-          current: [
-            {
-              responseId: 'r1',
-              documentId: 'doc.xlsx',
-              unitId: 'unit-2',
-              segment: row2,
-              tm: createTMArtifact(row2),
-              tb: createTBArtifact(row2),
-            },
-            {
-              responseId: 'r2',
-              documentId: 'doc.xlsx',
-              unitId: 'unit-3',
-              segment: row3,
-              tm: createTMArtifact(row3),
-              tb: createTBArtifact(row3),
-            },
-          ],
+          audit: { jobId: 'job', sink: audit },
+          current: [first, second].map((segment, i) => ({
+            responseId: 'r' + (i + 1),
+            documentId: 'doc',
+            unitId: segment.segmentId,
+            segment,
+            tm: createTMArtifact(segment),
+            tb: createTBArtifact(segment),
+          })),
           previousContext: [],
           nextContext: [],
           apiKey: config.apiKey,
@@ -1149,31 +869,67 @@ describe('MTModule', () => {
           provider: config.provider,
           srcLang: 'en',
           tgtLang: 'fr',
-        }),
-      ).rejects.toThrow(/Tag validation failed after 3 attempts/);
-
-      expect(transport.createResponse).toHaveBeenCalledTimes(4);
-      const repairRequests = transport.createResponse.mock.calls.slice(1).map((call) => call[0]);
-      expect(repairRequests).toHaveLength(3);
-      for (const request of repairRequests) {
-        expect(request.userPrompt).toContain('Current Translation:');
-        expect(request.userPrompt).toContain('Enregistrer');
-        expect(request.userPrompt).not.toContain('r2');
-        expect(request.userPrompt).not.toContain('Fermer');
+        });
+        expect(transport.createResponse).toHaveBeenCalledOnce();
+        expect(result.results[0].targetTokens).toEqual(
+          parseEditorTextToTokens(output, first.sourceTokens),
+        );
+        expect(serializeTokensToDisplayText(result.results[1].targetTokens)).toBe('Fermer');
+        expect(audit.events.map((event) => event.event)).toEqual([
+          'mt_batch_request',
+          'mt_batch_response',
+        ]);
+      } finally {
+        db.close();
       }
-      expect(auditSink.events.map((event) => event.event)).toEqual([
-        'mt_batch_request',
-        'mt_batch_response',
-        'mt_tag_invalid',
-        'mt_repair_request',
-        'mt_repair_failed',
-      ]);
-      expect(auditSink.events[4]).toMatchObject({
-        event: 'mt_repair_failed',
-        unit: 'unit-2',
-        rid: 'r1',
-        message: expect.stringMatching(/Tag validation failed after 3 attempts/),
+    },
+  );
+
+  it('ignores an audit sink failure without retrying the provider', async () => {
+    const db = new CATDatabase(':memory:');
+    try {
+      const projectId = db.createProject('Audit', 'en', 'fr');
+      seedConfiguredAIProvider(db, projectId);
+      const project = db.getProject(projectId)!;
+      const segment = createTransientSegment({ id: 'row', source: 'Save {1}' }, 0);
+      const transport = createTransport(
+        JSON.stringify({ translations: [{ id: 'r1', text: 'Enregistrer' }] }),
+      );
+      const module = createModule(db, transport);
+      const config = await module.resolveConfig(project);
+      const result = await module.translateBatch({
+        taskId: 'batch',
+        project,
+        audit: {
+          jobId: 'job',
+          sink: {
+            record: () => {
+              throw new Error('audit failed');
+            },
+          },
+        },
+        current: [
+          {
+            responseId: 'r1',
+            documentId: 'doc',
+            unitId: 'row',
+            segment,
+            tm: createTMArtifact(segment),
+            tb: createTBArtifact(segment),
+          },
+        ],
+        previousContext: [],
+        nextContext: [],
+        apiKey: config.apiKey,
+        baseUrl: config.provider.baseUrl,
+        model: config.model,
+        reasoningEffort: config.reasoningEffort,
+        provider: config.provider,
+        srcLang: 'en',
+        tgtLang: 'fr',
       });
+      expect(transport.createResponse).toHaveBeenCalledOnce();
+      expect(serializeTokensToDisplayText(result.results[0].targetTokens)).toBe('Enregistrer');
     } finally {
       db.close();
     }
@@ -1296,7 +1052,6 @@ function createModule(
   db: CATDatabase,
   transport: AITransport,
   reasoningEffort: 'low' | 'medium' | 'high' = 'medium',
-  tagValidator?: TagValidator,
 ): MTModule {
   const runtimeConfigProvider: AIRuntimeConfigProvider = {
     getModelConfig: vi.fn().mockResolvedValue({ reasoningEffort }),
@@ -1309,18 +1064,7 @@ function createModule(
     ),
     aiRuntimeConfigProvider: runtimeConfigProvider,
     aiTransport: transport,
-    tagValidator,
   });
-}
-
-function createFailingTagValidator(): TagValidator {
-  return {
-    validate: vi.fn(() => ({
-      issues: [{ ruleId: 'tag-missing', severity: 'error' as const, message: 'Should not run' }],
-      suggestions: [],
-    })),
-    generateAutoFix: vi.fn(() => null),
-  };
 }
 
 function seedConfiguredAIProvider(db: CATDatabase, projectId: number): void {

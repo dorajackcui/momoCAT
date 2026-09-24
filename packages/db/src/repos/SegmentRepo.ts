@@ -1,12 +1,7 @@
 import Database from "better-sqlite3";
 import { normalizeSegmentStatus } from "@cat/core/models";
-import { SEGMENT_STATUS_SQL } from './segmentStatus';
-import type {
-  QaIssue,
-  Segment,
-  SegmentStatus,
-  Token,
-} from "@cat/core/models";
+import { SEGMENT_STATUS_SQL } from "./segmentStatus";
+import type { QaIssue, Segment, SegmentStatus, Token } from "@cat/core/models";
 
 interface SegmentRow {
   segmentId: string;
@@ -23,6 +18,10 @@ interface SegmentRow {
 }
 
 export class SegmentRepo {
+  public getQARevision(): string {
+    const local = this.db.prepare("SELECT total_changes() AS value").get() as { value: number };
+    return `${local.value}:${this.db.pragma("data_version", { simple: true })}`;
+  }
   constructor(
     private readonly db: Database.Database,
     private readonly updateFileStats: (fileId: number) => void,
@@ -38,6 +37,13 @@ export class SegmentRepo {
     `);
 
     const transaction = this.db.transaction((segmentRows: Segment[]) => {
+      for (const fileId of new Set(segmentRows.map((segment) => segment.fileId))) {
+        this.db
+          .prepare(
+            "UPDATE segments SET qaIssuesJson = NULL WHERE fileId = ? AND qaIssuesJson IS NOT NULL",
+          )
+          .run(fileId);
+      }
       for (const segment of segmentRows) {
         insert.run(
           segment.segmentId,
@@ -50,9 +56,7 @@ export class SegmentRepo {
           segment.matchKey,
           segment.srcHash,
           JSON.stringify(segment.meta),
-          segment.qaIssues && segment.qaIssues.length > 0
-            ? JSON.stringify(segment.qaIssues)
-            : null,
+          segment.qaIssues && segment.qaIssues.length > 0 ? JSON.stringify(segment.qaIssues) : null,
         );
       }
     });
@@ -64,11 +68,7 @@ export class SegmentRepo {
     }
   }
 
-  public getProjectSegmentsByHash(
-    projectId: number,
-    srcHash: string,
-    fileId?: number,
-  ): Segment[] {
+  public getProjectSegmentsByHash(projectId: number, srcHash: string, fileId?: number): Segment[] {
     let rows: SegmentRow[];
     if (fileId === undefined) {
       rows = this.db
@@ -99,11 +99,7 @@ export class SegmentRepo {
     return rows.map((row) => this.mapRowToSegment(row));
   }
 
-  public getSegmentsPage(
-    fileId: number,
-    offset: number,
-    limit: number,
-  ): Segment[] {
+  public getSegmentsPage(fileId: number, offset: number, limit: number): Segment[] {
     const rows = this.db
       .prepare(
         `
@@ -119,27 +115,35 @@ export class SegmentRepo {
   }
 
   public getSegment(segmentId: string): Segment | undefined {
-    const row = this.db
-      .prepare("SELECT * FROM segments WHERE segmentId = ?")
-      .get(segmentId) as SegmentRow | undefined;
+    const row = this.db.prepare("SELECT * FROM segments WHERE segmentId = ?").get(segmentId) as
+      | SegmentRow
+      | undefined;
     if (!row) {
       return undefined;
     }
     return this.mapRowToSegment(row);
   }
 
-  public updateSegmentTarget(
-    segmentId: string,
-    targetTokens: Token[],
-    status: SegmentStatus,
-  ) {
+  public updateSegmentTarget(segmentId: string, targetTokens: Token[], status: SegmentStatus) {
     const normalizedStatus = normalizeSegmentStatus(status, targetTokens);
 
-    this.db
-      .prepare(
-        "UPDATE segments SET targetTokensJson = ?, status = ?, qaIssuesJson = NULL, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE segmentId = ?",
-      )
-      .run(JSON.stringify(targetTokens), normalizedStatus, segmentId);
+    const targetJson = JSON.stringify(targetTokens);
+    this.db.transaction(() => {
+      // Text edits invalidate every document dependency; status-only writes preserve QA.
+      this.db
+        .prepare(
+          `UPDATE segments SET qaIssuesJson = NULL
+        WHERE qaIssuesJson IS NOT NULL AND fileId = (
+          SELECT fileId FROM segments WHERE segmentId = ? AND targetTokensJson <> ?
+        )`,
+        )
+        .run(segmentId, targetJson);
+      this.db
+        .prepare(
+          "UPDATE segments SET targetTokensJson = ?, status = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE segmentId = ?",
+        )
+        .run(targetJson, normalizedStatus, segmentId);
+    })();
   }
 
   public updateSegmentQaIssues(segmentId: string, qaIssues: QaIssue[]) {
@@ -147,12 +151,10 @@ export class SegmentRepo {
       .prepare(
         "UPDATE segments SET qaIssuesJson = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE segmentId = ?",
       )
-      .run(qaIssues.length > 0 ? JSON.stringify(qaIssues) : null, segmentId);
+      .run(JSON.stringify(qaIssues), segmentId);
   }
 
-  public getProjectStats(
-    projectId: number,
-  ): Array<{ status: string; count: number }> {
+  public getProjectStats(projectId: number): Array<{ status: string; count: number }> {
     return this.db
       .prepare(
         `
@@ -167,8 +169,9 @@ export class SegmentRepo {
       .all(projectId) as Array<{ status: string; count: number }>;
   }
 
-  public runInTransaction<T>(fn: () => T): T {
-    return this.db.transaction(fn)();
+  public runInTransaction<T>(fn: () => T, mode: "deferred" | "immediate" = "deferred"): T {
+    const transaction = this.db.transaction(fn);
+    return mode === "immediate" ? transaction.immediate() : transaction();
   }
 
   private mapRowToSegment(row: SegmentRow): Segment {
@@ -202,9 +205,7 @@ export class SegmentRepo {
         const message = (issue as QaIssue).message;
         return (
           typeof ruleId === "string" &&
-          (severity === "error" ||
-            severity === "warning" ||
-            severity === "info") &&
+          (severity === "error" || severity === "warning" || severity === "info") &&
           typeof message === "string"
         );
       });

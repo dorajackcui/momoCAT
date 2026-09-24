@@ -56,16 +56,14 @@ describe('first repeat and status filters', () => {
     expect(result.current.getFilteredSegmentIds()).toEqual(['empty-first', 'draft-first']);
     expect(result.current.activeFilterCount).toBe(2);
 
-    act(() => result.current.toggleQualityFilter('qa_error'));
-    expect(result.current.getFilteredSegmentIds()).toEqual(['empty-first']);
-    act(() => result.current.toggleQualityFilter('qa_warning'));
+    act(() => result.current.toggleQualityFilter('qa_issue'));
     expect(result.current.getFilteredSegmentIds()).toEqual(['empty-first', 'draft-first']);
     expect(result.current.activeFilterCount).toBe(3);
 
     act(() => result.current.toggleStatusFilter('empty'));
     expect(result.current.getFilteredSegmentIds()).toEqual(['draft-first']);
     act(() => result.current.toggleStatusFilter('all'));
-    expect(result.current.qualityFilters).toEqual(['qa_error', 'qa_warning']);
+    expect(result.current.qualityFilters).toEqual(['qa_issue']);
     expect(result.current.firstRepeatOnly).toBe(true);
     act(() => result.current.toggleQualityFilter('save_error'));
     expect(result.current.getFilteredSegmentIds()).toEqual([
@@ -82,8 +80,8 @@ describe('first repeat and status filters', () => {
     const { result } = setup();
     act(() => result.current.toggleStatusFilter('draft'));
     act(() => result.current.toggleStatusFilter('draft'));
-    act(() => result.current.toggleQualityFilter('qa_error'));
-    act(() => result.current.toggleQualityFilter('qa_error'));
+    act(() => result.current.toggleQualityFilter('qa_issue'));
+    act(() => result.current.toggleQualityFilter('qa_issue'));
     expect(result.current.statusFilters).toEqual([]);
     expect(result.current.qualityFilters).toEqual([]);
     expect(result.current.getFilteredSegmentIds()).toBeNull();

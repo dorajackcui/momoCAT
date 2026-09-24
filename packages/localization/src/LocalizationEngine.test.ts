@@ -839,12 +839,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
 
       const secondPrompt = transport.createResponse.mock.calls[1]?.[0].userPrompt;
       expect(secondPrompt).toEqual(expect.any(String));
-      expectRuntimeTMPromptReference(
-        secondPrompt as string,
-        'r1',
-        'Install {1}',
-        'Installer {1}',
-      );
+      expectRuntimeTMPromptReference(secondPrompt as string, 'r1', 'Install {1}', 'Installer {1}');
       expectPersistentTMsEmpty(db);
     } finally {
       db.close();
@@ -987,12 +982,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
       expect(firstPrompt as string).not.toMatch(/^id: runtime-partial\.xlsx#row-3$/m);
       expect(firstPrompt as string).not.toMatch(/^id: runtime-partial\.xlsx#row-5$/m);
       expect(secondPrompt as string).toContain('Return target text for ids: r1');
-      expectRuntimeTMPromptReference(
-        secondPrompt as string,
-        'r1',
-        'Launch game',
-        'Lancer le jeu',
-      );
+      expectRuntimeTMPromptReference(secondPrompt as string, 'r1', 'Launch game', 'Lancer le jeu');
       expectPersistentTMsEmpty(db);
     } finally {
       db.close();
@@ -1399,7 +1389,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
 });
 
 describe('LocalizationEngine.translateProjectSegments', () => {
-  it('threads audit events through batch repair and Runtime TM commit', async () => {
+  it('persists tag-incomplete provider output without QA repair or task retries', async () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Project Segment Audit', 'en', 'fr');
@@ -1433,16 +1423,13 @@ describe('LocalizationEngine.translateProjectSegments', () => {
       expect(result.results[0]).toEqual(
         expect.objectContaining({
           id: 'row-20',
-          target: 'Enregistrer {1}',
+          target: 'Enregistrer',
           status: 'translated',
         }),
       );
       expect(auditSink.events.map((event) => event.event)).toEqual([
         'mt_batch_request',
         'mt_batch_response',
-        'mt_tag_invalid',
-        'mt_repair_request',
-        'mt_repair_success',
         'unit_persisted',
         'runtime_tm_commit',
       ]);
@@ -1451,11 +1438,7 @@ describe('LocalizationEngine.translateProjectSegments', () => {
         job: 'audit-job',
         units: [{ doc: 'doc-1', unit: 'row-20', rid: 'r1', row: 20 }],
       });
-      expect(auditSink.events[3]).toMatchObject({
-        event: 'mt_repair_request',
-        unit: 'row-20',
-        rid: 'r1',
-      });
+      expect(transport.createResponse).toHaveBeenCalledOnce();
     } finally {
       db.close();
     }
@@ -1510,16 +1493,16 @@ describe('LocalizationEngine.translateProjectSegments', () => {
         ['seg-5', 'translated', 'Sauvegarder la progression'],
         ['seg-6', 'translated', 'Installer le paquet'],
       ]);
-      expect(onResult.mock.calls.map((call) => [call[0].id, call[0].status, call[0].target])).toEqual(
-        [
-          ['seg-1', 'translated', 'Installer le paquet'],
-          ['seg-2', 'skipped', 'Lancer le jeu'],
-          ['seg-3', 'translated', 'Ouvrir les options'],
-          ['seg-4', 'skipped', 'Quitter le jeu'],
-          ['seg-5', 'translated', 'Sauvegarder la progression'],
-          ['seg-6', 'translated', 'Installer le paquet'],
-        ],
-      );
+      expect(
+        onResult.mock.calls.map((call) => [call[0].id, call[0].status, call[0].target]),
+      ).toEqual([
+        ['seg-1', 'translated', 'Installer le paquet'],
+        ['seg-2', 'skipped', 'Lancer le jeu'],
+        ['seg-3', 'translated', 'Ouvrir les options'],
+        ['seg-4', 'skipped', 'Quitter le jeu'],
+        ['seg-5', 'translated', 'Sauvegarder la progression'],
+        ['seg-6', 'translated', 'Installer le paquet'],
+      ]);
       expect(transport.createResponse).toHaveBeenCalledTimes(2);
       const firstPrompt = transport.createResponse.mock.calls[0]?.[0].userPrompt;
       const secondPrompt = transport.createResponse.mock.calls[1]?.[0].userPrompt;
@@ -1734,9 +1717,7 @@ describe('LocalizationEngine task executor', () => {
           batch: expect.objectContaining({
             mode: 'window',
             currentIds: ['r1'],
-            responseIdMap: [
-              { responseId: 'r1', documentId: 'doc-1', unitId: 'unit-1' },
-            ],
+            responseIdMap: [{ responseId: 'r1', documentId: 'doc-1', unitId: 'unit-1' }],
           }),
           model: expect.any(String),
           provider: expect.objectContaining({

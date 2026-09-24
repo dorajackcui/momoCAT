@@ -112,12 +112,12 @@ describe('exportEditorFile', () => {
     );
   });
 
-  it('supports forced export after QA blocks the first export attempt', async () => {
+  it('reports export execution failures without a retry or override', async () => {
     const api = {
       saveFileDialog: vi.fn(async () => 'translated.csv'),
       exportFile: vi
         .fn()
-        .mockRejectedValueOnce(new Error('Export blocked by QA errors: 2 issues'))
+        .mockRejectedValueOnce(new Error('Disk unavailable'))
         .mockResolvedValueOnce(undefined),
     };
     const feedback = createFeedback();
@@ -132,7 +132,8 @@ describe('exportEditorFile', () => {
     });
 
     expect(api.exportFile).toHaveBeenNthCalledWith(1, 7, 'translated.csv');
-    expect(api.exportFile).toHaveBeenNthCalledWith(2, 7, 'translated.csv', undefined, true);
-    expect(feedback.success).toHaveBeenCalledWith('Export successful (forced despite QA errors)');
+    expect(api.exportFile).toHaveBeenCalledOnce();
+    expect(feedback.confirm).not.toHaveBeenCalled();
+    expect(feedback.error).toHaveBeenCalledWith('Export failed: Disk unavailable');
   });
 });

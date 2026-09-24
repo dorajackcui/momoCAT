@@ -27,7 +27,7 @@ describe('useEditorRowDisplayModel.buildEditorRowDisplayModel', () => {
       });
 
       expect(model.statusIndicatorClass).toBe('border-status-confirmed bg-status-confirmed');
-      expect(model.statusTitle).toBe(`Status: confirmed (QA ${severity})`);
+      expect(model.statusTitle).toBe('Status: confirmed (QA problems)');
     },
   );
 

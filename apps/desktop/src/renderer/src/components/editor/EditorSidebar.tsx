@@ -4,11 +4,13 @@ import type { TBMatch, Token } from '@cat/core/models';
 import type { TMMatch } from '../../../../shared/ipc';
 import { TMPanel } from '../TMPanel';
 import { ConcordancePanel } from '../ConcordancePanel';
+import { QAPanel, type QAPanelProps } from './QAPanel';
 
 interface EditorSidebarProps {
+  qa: QAPanelProps;
   sidebarWidth: number;
-  activeTab: 'tm' | 'concordance';
-  setActiveTab: (tab: 'tm' | 'concordance') => void;
+  activeTab: 'tm' | 'concordance' | 'qa';
+  setActiveTab: (tab: 'tm' | 'concordance' | 'qa') => void;
   onStartResize: (event: React.MouseEvent<HTMLButtonElement>) => void;
   activeSegmentId: string | null;
   activeSourceTokens: Token[];
@@ -25,6 +27,7 @@ interface EditorSidebarProps {
 }
 
 const EditorSidebarComponent: React.FC<EditorSidebarProps> = ({
+  qa,
   sidebarWidth,
   activeTab,
   setActiveTab,
@@ -45,8 +48,8 @@ const EditorSidebarComponent: React.FC<EditorSidebarProps> = ({
   return (
     <Tabs
       value={activeTab}
-      onValueChange={(value) => setActiveTab(value as 'tm' | 'concordance')}
-      className="border-l border-border-subtle bg-surface-panel flex-col hidden lg:flex relative"
+      onValueChange={(value) => setActiveTab(value as 'tm' | 'concordance' | 'qa')}
+      className="border-l border-border-subtle bg-surface-panel flex flex-col shrink-0 relative"
       style={{ width: `${sidebarWidth}px` }}
     >
       <button
@@ -64,6 +67,7 @@ const EditorSidebarComponent: React.FC<EditorSidebarProps> = ({
         items={[
           { value: 'tm', label: 'CAT' },
           { value: 'concordance', label: 'Concordance', title: 'Concordance (Ctrl/Cmd+K)' },
+          { value: 'qa', label: 'QA' },
         ]}
       />
 
@@ -80,6 +84,8 @@ const EditorSidebarComponent: React.FC<EditorSidebarProps> = ({
             onApply={onApplyMatch}
             onApplyTerm={onApplyTerm}
           />
+        ) : activeTab === 'qa' ? (
+          <QAPanel {...qa} />
         ) : (
           <ConcordancePanel
             projectId={projectId}

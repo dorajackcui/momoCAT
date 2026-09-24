@@ -471,13 +471,9 @@ export interface DesktopApi extends AssetRenameApi, AISettingsApi {
   ) => Promise<ProjectFileRecord>;
 
   getSegments: (fileId: number, offset: number, limit: number) => Promise<Segment[]>;
-  exportFile: (
-    fileId: number,
-    outputPath: string,
-    options?: ImportOptions,
-    forceExport?: boolean,
-  ) => Promise<void>;
+  exportFile: (fileId: number, outputPath: string, options?: ImportOptions) => Promise<void>;
   runFileQA: (fileId: number) => Promise<FileQaReport>;
+  checkSegmentQA: (segmentId: string) => Promise<{ segment: Segment; stale: boolean } | null>;
   inspectFile: (fileId: number, outputPath: string) => Promise<FileInspectResult>;
   exportReferencesForMt: (fileId: number, outputPath: string) => Promise<FileReferenceExportResult>;
   precheckSourceTerminology: (
@@ -552,6 +548,7 @@ export interface DesktopApi extends AssetRenameApi, AISettingsApi {
   readClipboard: () => Promise<ClipboardContent>;
 
   onSegmentsUpdated: (callback: (data: SegmentsUpdatedEvent) => void) => () => void;
+  onQAInvalidated: (callback: (projectId: number) => void) => () => void;
   onSegmentsUpdatedBatch: (callback: (batch: SegmentsUpdatedBatchEvent) => void) => () => void;
   onProgress: (callback: (data: AppProgressEvent) => void) => () => void;
   onJobProgress: (callback: (progress: JobProgressEvent) => void) => () => void;

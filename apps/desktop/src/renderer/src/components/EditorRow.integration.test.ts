@@ -218,17 +218,17 @@ describe('EditorRow keyboard shortcut decisions', () => {
 describe('EditorRow status display decisions', () => {
   it('uses the same hollow circle for empty and draft and a filled green circle for confirmed', () => {
     expect(getEditorRowStatusIndicatorClass('empty')).toBe('border-status-empty bg-transparent');
-    expect(getEditorRowStatusIndicatorClass('draft')).toBe(getEditorRowStatusIndicatorClass('empty'));
-    expect(getEditorRowStatusIndicatorClass('confirmed')).toBe('border-status-confirmed bg-status-confirmed');
+    expect(getEditorRowStatusIndicatorClass('draft')).toBe(
+      getEditorRowStatusIndicatorClass('empty'),
+    );
+    expect(getEditorRowStatusIndicatorClass('confirmed')).toBe(
+      'border-status-confirmed bg-status-confirmed',
+    );
   });
 
   it('includes qa suffix in status title when needed', () => {
-    expect(getEditorRowStatusTitle('draft', false, false)).toBe('Status: draft');
-    expect(getEditorRowStatusTitle('draft', false, true)).toBe(
-      'Status: draft (QA warning)',
-    );
-    expect(getEditorRowStatusTitle('draft', true, false)).toBe(
-      'Status: draft (QA error)',
-    );
+    expect(getEditorRowStatusTitle('draft', false)).toBe('Status: draft');
+    expect(getEditorRowStatusTitle('draft', true)).toBe('Status: draft (QA problems)');
+    expect(getEditorRowStatusTitle('draft', true)).toBe('Status: draft (QA problems)');
   });
 });

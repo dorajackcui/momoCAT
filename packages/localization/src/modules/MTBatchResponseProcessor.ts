@@ -1,19 +1,14 @@
-import type { ProjectType } from '@cat/core/project';
 import { parseAIWindowModeResponse } from '@cat/core/project';
-import type { TagValidator } from '@cat/core/qa';
 import { parseEditorTextToTokens } from '@cat/core/tag';
 import type { TagPolicy } from '@cat/core/tag';
-import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { PromptArtifact } from '../artifacts';
 import {
   errorMessage,
-  summarizeAuditText,
   type TranslationAuditContext,
   type TranslationAuditEvent,
 } from '../audit/TranslationAudit';
 import type { AITransport } from '../ports';
 import type {
-  MTBatchCurrentUnitInput,
   MTBatchTranslateResult,
   MTBatchUnitResult,
   TranslatePreparedBatchPromptInput,
@@ -22,30 +17,17 @@ import type {
 interface MTBatchResponseProcessorInput {
   input: TranslatePreparedBatchPromptInput;
   prompt: PromptArtifact;
-  projectType: ProjectType;
   tagPolicy: TagPolicy;
   aiTransport: AITransport;
-  tagValidator: TagValidator;
-  recordAudit: (
-    context: TranslationAuditContext | undefined,
-    event: TranslationAuditEvent,
-  ) => void;
-  repairInvalidResult: (
-    unit: MTBatchCurrentUnitInput,
-    parsedResult: MTBatchUnitResult,
-    validationFeedback: string,
-  ) => Promise<MTBatchUnitResult>;
+  recordAudit: (context: TranslationAuditContext | undefined, event: TranslationAuditEvent) => void;
 }
 
 export async function processMTBatchResponse({
   input,
   prompt,
-  projectType,
   tagPolicy,
   aiTransport,
-  tagValidator,
   recordAudit,
-  repairInvalidResult,
 }: MTBatchResponseProcessorInput): Promise<MTBatchTranslateResult> {
   const currentByResponseId = new Map(input.current.map((unit) => [unit.responseId, unit]));
   const audit = input.audit;
@@ -115,97 +97,7 @@ export async function processMTBatchResponse({
     throw error;
   }
 
-  if (projectType === 'custom' || tagPolicy === 'none') return { results, prompt };
-
-  const invalidResults = results.flatMap((result) => {
-    const unit = currentByResponseId.get(result.responseId);
-    if (!unit) return [];
-    const errors = tagValidator
-      .validate(unit.segment.sourceTokens, result.targetTokens)
-      .issues.filter((issue) => issue.severity === 'error');
-
-    return errors.length === 0
-      ? []
-      : [
-          {
-            unit,
-            parsedResult: result,
-            validationMessages: errors.map((issue) => issue.message),
-          },
-        ];
-  });
-
-  if (invalidResults.length === 0) return { results, prompt };
-
-  const repairedByResponseId = new Map<string, MTBatchUnitResult>();
-  for (const invalidResult of invalidResults) {
-    const validationFeedback = [
-      'Previous Window Mode batch result was invalid.',
-      ...invalidResult.validationMessages.map((message) => `- ${message}`),
-      'Retry by preserving marker content and sequence exactly.',
-    ].join('\n');
-    const invalidTarget = serializeTokensToDisplayText(invalidResult.parsedResult.targetTokens);
-    const invalidSummary = summarizeAuditText(invalidTarget)!;
-    if (audit) {
-      recordAudit(audit, {
-        event: 'mt_tag_invalid',
-        job: audit.jobId,
-        task: input.taskId,
-        unit: invalidResult.unit.unitId,
-        rid: invalidResult.parsedResult.responseId,
-        messages: invalidResult.validationMessages,
-        targetHash: invalidSummary.targetHash,
-        targetChars: invalidSummary.targetChars,
-      });
-      recordAudit(audit, {
-        event: 'mt_repair_request',
-        job: audit.jobId,
-        task: input.taskId,
-        unit: invalidResult.unit.unitId,
-        rid: invalidResult.parsedResult.responseId,
-        reason: 'tag_invalid',
-      });
-    }
-
-    try {
-      const repaired = await repairInvalidResult(
-        invalidResult.unit,
-        invalidResult.parsedResult,
-        validationFeedback,
-      );
-      const repairedTarget = serializeTokensToDisplayText(repaired.targetTokens);
-      const repairedSummary = summarizeAuditText(repairedTarget)!;
-      if (audit) {
-        recordAudit(audit, {
-          event: 'mt_repair_success',
-          job: audit.jobId,
-          task: input.taskId,
-          unit: invalidResult.unit.unitId,
-          rid: invalidResult.parsedResult.responseId,
-          targetHash: repairedSummary.targetHash,
-          targetChars: repairedSummary.targetChars,
-        });
-      }
-      repairedByResponseId.set(invalidResult.parsedResult.responseId, repaired);
-    } catch (error) {
-      if (audit) {
-        recordAudit(audit, {
-          event: 'mt_repair_failed',
-          job: audit.jobId,
-          task: input.taskId,
-          unit: invalidResult.unit.unitId,
-          rid: invalidResult.parsedResult.responseId,
-          message: errorMessage(error),
-        });
-      }
-      throw error;
-    }
-  }
-
-  return {
-    results: results.map((result) => repairedByResponseId.get(result.responseId) ?? result),
-    prompt,
-  };
+  return { results, prompt };
 }
 
 function parseBatchResponse(content: string, expectedIds: string[]) {

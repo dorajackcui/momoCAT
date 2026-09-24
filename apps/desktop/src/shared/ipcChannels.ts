@@ -35,6 +35,7 @@ export const IPC_CHANNELS = {
     cancelSourceTerminologyPrecheck: 'file-cancel-source-terminology-precheck',
   },
   segment: {
+    checkQA: 'segment-check-qa',
     update: 'segment-update',
     updateSelected: 'segment-update-selected',
   },
@@ -106,6 +107,7 @@ export const IPC_CHANNELS = {
     getStatus: 'job-get-status',
   },
   events: {
+    qaInvalidated: 'qa-invalidated',
     segmentsUpdated: 'segments-updated',
     segmentsUpdatedBatch: 'segments-updated-batch',
     appProgress: 'app-progress',

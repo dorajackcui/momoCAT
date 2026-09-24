@@ -1,77 +1,42 @@
 import type { ProjectType } from '@cat/core/project';
 import type { ProjectAIController } from '../../hooks/projectDetail/useProjectAI';
-import type { ProjectQAController } from '../../hooks/projectDetail/useProjectQASettings';
-import { Button, Icon, Tabs, TabsList, TabsPanel } from '../ui';
+import { Button, Icon } from '../ui';
 import { ProjectAIPane } from './ProjectAIPane';
-import { ProjectQAPane } from './ProjectQAPane';
-
-export type ProjectSettingsSection = 'ai' | 'qa';
 
 interface Props {
   ai: ProjectAIController;
-  qa: ProjectQAController;
   projectType: ProjectType;
-  section: ProjectSettingsSection;
-  onSectionChange: (section: ProjectSettingsSection) => void;
 }
 
-export function ProjectSettingsPane({ ai, qa, projectType, section, onSectionChange }: Props) {
-  const supportsQA = projectType === 'translation';
-  const activeSection = supportsQA ? section : 'ai';
-  const isAI = activeSection === 'ai';
-  const dirty = isAI ? ai.hasUnsavedPromptChanges : qa.hasChanges;
-  const saving = isAI ? ai.savingPrompt : qa.saving;
-  const save = isAI ? ai.savePrompt : qa.save;
-  const discard = isAI ? ai.discardChanges : qa.discard;
-
+export function ProjectSettingsPane({ ai, projectType }: Props) {
   return (
-    <Tabs
-      value={activeSection}
-      onValueChange={(value) => onSectionChange(value as ProjectSettingsSection)}
+    <form
       className="w-full max-w-3xl"
+      aria-label="AI settings"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!ai.savingPrompt) void ai.savePrompt();
+      }}
     >
-      <div className="mb-6">
-        <TabsList
-          label="Project settings sections"
-          variant="neutral"
-          items={[
-            { value: 'ai', label: 'AI' },
-            ...(supportsQA ? [{ value: 'qa', label: 'QA' }] : []),
-          ]}
-        />
+      <fieldset disabled={ai.savingPrompt}>
+        <ProjectAIPane ai={ai} projectType={projectType} />
+      </fieldset>
+      <div className="sticky bottom-0 mt-6 flex min-h-16 items-center justify-end gap-2 border-t border-border-subtle bg-canvas py-3">
+        {ai.hasUnsavedPromptChanges || ai.savingPrompt ? (
+          <>
+            <Button onClick={ai.discardChanges} disabled={ai.savingPrompt}>
+              Discard
+            </Button>
+            <Button type="submit" variant="primary" loading={ai.savingPrompt}>
+              Save
+            </Button>
+          </>
+        ) : (
+          <span role="status" className="inline-flex items-center gap-1.5 text-xs text-text-muted">
+            <Icon name="check" /> Saved
+          </span>
+        )}
       </div>
-      <TabsPanel value={activeSection}>
-        <form
-          aria-label={isAI ? 'AI settings' : 'QA settings'}
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!saving) void save();
-          }}
-        >
-          <fieldset disabled={saving} className="min-w-0">
-            {isAI ? <ProjectAIPane ai={ai} projectType={projectType} /> : <ProjectQAPane qa={qa} />}
-          </fieldset>
-          <div className="sticky bottom-0 mt-6 flex min-h-16 items-center justify-end gap-2 border-t border-border-subtle bg-canvas py-3">
-            {dirty || saving ? (
-              <>
-                <Button onClick={discard} disabled={saving}>
-                  Discard
-                </Button>
-                <Button type="submit" variant="primary" loading={saving}>
-                  Save
-                </Button>
-              </>
-            ) : (
-              <span
-                role="status"
-                className="inline-flex items-center gap-1.5 text-xs text-text-muted"
-              >
-                <Icon name="check" /> Saved
-              </span>
-            )}
-          </div>
-        </form>
-      </TabsPanel>
-    </Tabs>
+    </form>
   );
 }

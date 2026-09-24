@@ -3,7 +3,7 @@ import type { Segment } from '@cat/core/models';
 export type EditorStatusFilter = Segment['status'];
 export type EditorMatchMode = 'contains' | 'exact' | 'regex';
 export type EditorTargetSearchScope = 'target' | 'context';
-export type EditorQualityFilter = 'qa_error' | 'qa_warning' | 'save_error';
+export type EditorQualityFilter = 'qa_issue' | 'save_error';
 export type EditorSortBy = 'default' | 'source_length' | 'target_length';
 export type EditorSortDirection = 'asc' | 'desc';
 export type RepeatedSourceRole = 'first' | 'later';
@@ -13,8 +13,8 @@ export interface SearchableEditorSegment {
   sourceText: string;
   targetText: string;
   originalIndex: number;
-  hasQaError: boolean;
-  hasQaWarning: boolean;
+
+  hasQaIssue: boolean;
   hasSaveError: boolean;
   repeatedSourceRole?: RepeatedSourceRole;
 }
@@ -80,8 +80,8 @@ const qualityFilterPredicates: Record<
   EditorQualityFilter,
   (item: SearchableEditorSegment) => boolean
 > = {
-  qa_error: (item) => item.hasQaError,
-  qa_warning: (item) => item.hasQaWarning,
+  qa_issue: (item) => item.hasQaIssue,
+
   save_error: (item) => item.hasSaveError,
 };
 
@@ -98,7 +98,9 @@ export function countActiveFilterFields(criteria: EditorFilterCriteria): number 
 
 export function toggleFilterSelection<T extends string>(selected: T[], value: T | 'all'): T[] {
   if (value === 'all') return [];
-  return selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value];
+  return selected.includes(value)
+    ? selected.filter((item) => item !== value)
+    : [...selected, value];
 }
 
 export function filterSearchableSegments(

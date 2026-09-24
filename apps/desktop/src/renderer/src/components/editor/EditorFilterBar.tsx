@@ -62,8 +62,8 @@ interface EditorFilterBarProps {
   handleMatchModeChange: (value: 'contains' | 'exact' | 'regex') => void;
   statusFilters: EditorStatusFilter[];
   toggleStatusFilter: (value: EditorStatusFilter | 'all') => void;
-  qualityFilters: Array<'qa_error' | 'qa_warning' | 'save_error'>;
-  toggleQualityFilter: (value: 'all' | 'qa_error' | 'qa_warning' | 'save_error') => void;
+  qualityFilters: Array<'qa_issue' | 'save_error'>;
+  toggleQualityFilter: (value: 'all' | 'qa_issue' | 'save_error') => void;
   clearFilters: () => void;
   hasActiveFilter: boolean;
 }

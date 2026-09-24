@@ -8,10 +8,8 @@ import { useProjectDetailData } from '../hooks/projectDetail/useProjectDetailDat
 import { useProjectFileImport } from '../hooks/projectDetail/useProjectFileImport';
 import { useProjectAI } from '../hooks/projectDetail/useProjectAI';
 import { useProjectQASettings } from '../hooks/projectDetail/useProjectQASettings';
-import {
-  ProjectSettingsPane,
-  type ProjectSettingsSection,
-} from './project-detail/ProjectSettingsPane';
+import { ProjectSettingsPane } from './project-detail/ProjectSettingsPane';
+import { ProjectQASettingsPane } from './project-detail/ProjectQASettingsPane';
 import { ProjectDetailDialogs } from './project-detail/ProjectDetailDialogs';
 import { ProjectDetailHeader, type ProjectDetailTab } from './project-detail/ProjectDetailHeader';
 import { ProjectFilesPane } from './project-detail/ProjectFilesPane';
@@ -43,7 +41,6 @@ export function ProjectDetail({
   const [commitScope, setCommitScope] = useState<TMCommitScope>('confirmed-only');
   const [matchModalFile, setMatchModalFile] = useState<ProjectFileRecord | null>(null);
   const [matchTmId, setMatchTmId] = useState('');
-  const [settingsSection, setSettingsSection] = useState<ProjectSettingsSection>('ai');
 
   const {
     project,
@@ -244,27 +241,7 @@ export function ProjectDetail({
       feedbackService.success('Export successful');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      if (!errorMessage.includes('Export blocked by QA errors')) {
-        feedbackService.error(`Export failed: ${errorMessage}`);
-        return;
-      }
-
-      const forceExport = await feedbackService.confirm(
-        `${errorMessage}\n\nDo you want to force export despite these errors?`,
-      );
-
-      if (!forceExport) return;
-
-      try {
-        await runMutation(async () => {
-          await apiClient.exportFile(fileId, outputPath, undefined, true);
-        });
-        feedbackService.success('Export successful (forced despite QA errors)');
-      } catch (forceError) {
-        feedbackService.error(
-          `Export failed: ${forceError instanceof Error ? forceError.message : String(forceError)}`,
-        );
-      }
+      feedbackService.error(`Export failed: ${errorMessage}`);
     }
   };
 
@@ -366,18 +343,13 @@ export function ProjectDetail({
             ai={ai}
             projectType={project.projectType || 'translation'}
             onOpenAISettings={() => {
-              setSettingsSection('ai');
               setActiveTab('settings');
             }}
           />
+        ) : activeTab === 'qa' ? (
+          <ProjectQASettingsPane qa={qa} />
         ) : activeTab === 'settings' ? (
-          <ProjectSettingsPane
-            ai={ai}
-            qa={qa}
-            projectType={project.projectType || 'translation'}
-            section={settingsSection}
-            onSectionChange={setSettingsSection}
-          />
+          <ProjectSettingsPane ai={ai} projectType={project.projectType || 'translation'} />
         ) : activeTab === 'tm' ? (
           <ProjectTMPane
             mountedTMs={mountedTMs}

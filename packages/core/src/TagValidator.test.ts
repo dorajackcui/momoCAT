@@ -16,20 +16,21 @@ describe("TagValidator", () => {
       const target = parseEditorTextToTokens("{1>Bonjour<2}", source);
 
       expect(validator.validate(source, target).issues).toEqual([]);
-      expect(validator.validate(source, parseDisplayTextToTokens("Bonjour")).issues)
-        .toEqual([expect.objectContaining({ ruleId: "tag-missing" })]);
-      expect(validator.validate(source, parseDisplayTextToTokens("<b>Bonjour</b>")).issues)
-        .toEqual([
+      expect(validator.validate(source, parseDisplayTextToTokens("Bonjour")).issues).toEqual([
+        expect.objectContaining({ ruleId: "tag-missing" }),
+        expect.objectContaining({ ruleId: "tag-structure" }),
+      ]);
+      expect(validator.validate(source, parseDisplayTextToTokens("<b>Bonjour</b>")).issues).toEqual(
+        [
           expect.objectContaining({ ruleId: "tag-missing" }),
           expect.objectContaining({ ruleId: "tag-extra" }),
-        ]);
+        ],
+      );
     });
 
     test("should accept source and target tokens and return ValidationResult", () => {
       const sourceTokens: Token[] = [{ type: "text", content: "Hello world" }];
-      const targetTokens: Token[] = [
-        { type: "text", content: "Bonjour monde" },
-      ];
+      const targetTokens: Token[] = [{ type: "text", content: "Bonjour monde" }];
 
       const result = validator.validate(sourceTokens, targetTokens);
 
@@ -42,9 +43,7 @@ describe("TagValidator", () => {
 
     test("should return empty arrays when no tags are present", () => {
       const sourceTokens: Token[] = [{ type: "text", content: "Hello world" }];
-      const targetTokens: Token[] = [
-        { type: "text", content: "Bonjour monde" },
-      ];
+      const targetTokens: Token[] = [{ type: "text", content: "Bonjour monde" }];
 
       const result = validator.validate(sourceTokens, targetTokens);
 
@@ -85,11 +84,7 @@ describe("TagValidator", () => {
       ];
       const targetTokens: Token[] = [{ type: "text", content: "Bonjour" }];
 
-      const suggestion = validator.generateAutoFix(
-        issue,
-        sourceTokens,
-        targetTokens,
-      );
+      const suggestion = validator.generateAutoFix(issue, sourceTokens, targetTokens);
 
       expect(suggestion).toBeDefined();
     });
@@ -103,11 +98,7 @@ describe("TagValidator", () => {
       const sourceTokens: Token[] = [{ type: "text", content: "Hello" }];
       const targetTokens: Token[] = [{ type: "text", content: "Bonjour" }];
 
-      const suggestion = validator.generateAutoFix(
-        issue,
-        sourceTokens,
-        targetTokens,
-      );
+      const suggestion = validator.generateAutoFix(issue, sourceTokens, targetTokens);
 
       expect(suggestion).toBeNull();
     });
@@ -129,63 +120,12 @@ describe("TagValidator", () => {
       expect(result.issues[0]).toHaveProperty("message");
     });
 
-    test("should have suggestions array with AutoFixSuggestion objects", () => {
-      const sourceTokens: Token[] = [
-        { type: "tag", content: "<bold>" },
-        { type: "text", content: "Hello" },
-      ];
-      const targetTokens: Token[] = [{ type: "text", content: "Bonjour" }];
-
-      const result = validator.validate(sourceTokens, targetTokens);
-
-      expect(result.suggestions.length).toBeGreaterThan(0);
-      expect(result.suggestions[0]).toHaveProperty("type");
-      expect(result.suggestions[0]).toHaveProperty("description");
-      expect(result.suggestions[0]).toHaveProperty("apply");
-      expect(typeof result.suggestions[0].apply).toBe("function");
-    });
-  });
-
-  describe("AutoFixSuggestion interface", () => {
-    test("should have type property with valid values", () => {
-      const sourceTokens: Token[] = [
-        { type: "tag", content: "<bold>" },
-        { type: "text", content: "Hello" },
-      ];
-      const targetTokens: Token[] = [{ type: "text", content: "Bonjour" }];
-
-      const result = validator.validate(sourceTokens, targetTokens);
-
-      expect(result.suggestions[0].type).toMatch(/^(insert|delete|reorder)$/);
-    });
-
-    test("should have description property as string", () => {
-      const sourceTokens: Token[] = [
-        { type: "tag", content: "<bold>" },
-        { type: "text", content: "Hello" },
-      ];
-      const targetTokens: Token[] = [{ type: "text", content: "Bonjour" }];
-
-      const result = validator.validate(sourceTokens, targetTokens);
-
-      expect(typeof result.suggestions[0].description).toBe("string");
-      expect(result.suggestions[0].description.length).toBeGreaterThan(0);
-    });
-
-    test("should have apply function that returns Token array", () => {
-      const sourceTokens: Token[] = [
-        { type: "tag", content: "<bold>" },
-        { type: "text", content: "Hello" },
-      ];
-      const targetTokens: Token[] = [{ type: "text", content: "Bonjour" }];
-
-      const result = validator.validate(sourceTokens, targetTokens);
-      const fixedTokens = result.suggestions[0].apply(targetTokens);
-
-      expect(Array.isArray(fixedTokens)).toBe(true);
-      expect(
-        fixedTokens.every((token) => "type" in token && "content" in token),
-      ).toBe(true);
+    test("keeps the legacy result shape without generating unsafe tag repairs", () => {
+      const source: Token[] = [{ type: "tag", content: "<b>" }];
+      const result = validator.validate(source, []);
+      expect(result.issues.some((issue) => issue.ruleId === "tag-missing")).toBe(true);
+      expect(result.suggestions).toEqual([]);
+      expect(validator.generateAutoFix(result.issues[0], source, [])).toBeNull();
     });
   });
 });

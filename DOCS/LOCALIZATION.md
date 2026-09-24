@@ -36,7 +36,7 @@ Three text forms must remain distinct:
 | Editor text          | Editable representation whose markers can map back to source tag tokens.             |
 | Protected MT payload | Numbered markers such as paired `{1>…<2}` and standalone `{3}` sent through prompts. |
 
-The MT module boundary (`MTModule` and its batch-response collaborator) is the only localization layer that interprets provider output as editor-marker text. It parses the response back to tokens and validates tag integrity before request-mode strategies produce display-text `UnitResult.target` values.
+The MT module boundary (`MTModule` and its batch-response collaborator) is the only localization layer that interprets provider output as editor-marker text. It parses the response back to tokens before request-mode strategies produce display-text `UnitResult.target` values. QA does not accept, reject, or repair provider output.
 
 A consumer persisting a `UnitResult.target` into a token store must use `parseDisplayTextToTokens()` (or preserve returned tokens if the API grows that field). Running `parseEditorTextToTokens()` a second time can reinterpret literal placeholder-like text and corrupt tag identity.
 
@@ -45,7 +45,7 @@ File tag policy is resolved at import/planning time:
 - `default`: marker-like text may become CAT tag tokens.
 - `none`: marker-like text remains ordinary text.
 
-Desktop imports persist this policy in file import options and reuse it for edit, AI, QA, TM commit, and export. Changing the policy for an already-tokenized file requires re-import rather than silently reparsing stored content.
+Desktop imports persist this policy in file import options and reuse it for token parsing and QA. Changing the policy for an already-tokenized file requires re-import rather than silently reparsing stored content.
 
 Under `default`, angle tags recognize `❮` and `❰` as alternatives to `<`, and `❯` and `❱` as alternatives to `>`, including mixed delimiters. Token content, identity, and display/export text retain the original characters; editor/MT markers use the ASCII forms `{1>`, `<2}`, and `{3}`. Empty or incomplete angle tags remain text, and `none` disables this recognition. Files imported with plain-text or truncated tags require re-import after recognition changes.
 
@@ -77,7 +77,6 @@ For a selected segment scope, rows form a contiguous context sequence in origina
 batch instruction
 read-only context rows
 requested rows with per-row references
-validation feedback (repair only)
 strict response format
 ```
 
@@ -97,7 +96,7 @@ Only the `translations` field is allowed. Every requested id must appear exactly
 
 Two recovery layers have different jobs:
 
-- The MT module response processor parses and validates the batch contract. Malformed JSON and missing/extra/duplicate ids fail the request; invalid tags in an otherwise valid batch receive per-unit repair feedback through `MTModule`.
+- The MT module response processor parses and validates the batch contract. Malformed JSON and missing/extra/duplicate ids fail the request. Tag differences are QA findings and do not cause rejection, repair requests, or retries.
 - `TranslationJobRunner` owns task attempts and retries, including batch parsing failures that escape the MT boundary, and resumable execution.
 
 Do not turn progress events or diagnostic artifacts into retry/resume truth.
@@ -134,6 +133,106 @@ Mounted TBs are queried for source terms, and selected terms become structured p
 Default/CJK matching uses strict normalized term matching. The English overlay supports conservative regular singular/plural, possessive, hyphen/space, and uppercase dotted-acronym equivalents. It does not use general stemming or fuzzy edit distance.
 
 Read-only partial-window context rows do not receive TB blocks.
+
+## Quality assurance
+
+[`evaluateDocumentQa`](../packages/core/src/qa/documentQa.ts) owns pure document checks. [`runQA`](../packages/localization/src/qa/runQA.ts) resolves mounted terminology and invokes the same engine for Desktop and CLI. Repeated sources share terminology lookups. Desktop runs whole-file loading, checks, and persistence in a worker; editor filters never limit check scope. CLI reports findings without changing the project's saved QA results.
+
+The eleven categories are empty targets, terminology, same source/different targets, same target/different sources, substring consistency, tags/placeholders, line breaks, numbers, URLs, Chinese in target, and target text. [QA settings](../packages/core/src/project/qaSettings.ts) owns defaults and options. Reverse consistency, substring checks, Chinese detection, and ordinary tag order default off. Basic optional checks follow their category switch; only tag order and target-text subchecks have independent switches. Protected-token checks always run within QA, independently of those switches; findings are advisory.
+
+Terminology combines mounted TB matches and optional square/corner-bracket term pairs. Historical terms take precedence; conflicting marked pairs are reported without replacing the baseline. Findings group by term pair. Consistency normalizes whole surrounding quotes/brackets, retaining internal text. Substring checks use unique reference translations, configurable minimum letter counts, and locatable reference rows. Numbers and URLs compare occurrences without enforcing order. Target text checks punctuation, spaces, width mixing, and paired symbols.
+
+### Shared tag rules
+
+[`tagRules.ts`](../packages/core/src/qa/tagRules.ts) owns missing, extra, occurrence-count, closing/nesting, and order comparisons. These rules only produce findings; no QA finding blocks an operation or triggers an AI request.
+
+| File import mode                    | QA behavior                                                                                                                                                                                    |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Protect CAT markers** (`default`) | [`checkProtectedTokens`](../packages/core/src/qa/protectedTokens.ts) compares tokenizer-generated tag tokens. These checks always run when QA runs and ignore optional tag types/ignore lists. |
+| **Plain marker-like text** (`none`) | Configurable **Standard tags** scans angle/color/brace/literal-newline text and optional tag order.                                                                                            |
+
+One project may contain both file modes. The legacy project `tagMode` is accepted at the input boundary and removed by normalization. Literal text is never promoted to a protected token just because it resembles `{1}`. Editor markers are display representations of tokens.
+
+Comparisons preserve original token content and occurrences, including Unicode angle tags, printf placeholders, and protected newline escapes. Actual line breaks belong to the line-break check. Invalid source nesting is not used as a structural baseline. Protected-token checks omit pure order differences; Plain tag order remains optional.
+
+Findings use `info`. The public `TagValidator` retains legacy display severities as a compatibility adapter, but business workflows do not import it. The former `blocking` field and predicate have been removed. Report `errorCount`/`warningCount` remain zero-valued compatibility fields.
+
+### QA entrypoints
+
+| Entry                                                      | Behavior                                                                                                                                                                                                    |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop QA / CLI `qa`                                      | Run whole-file checks including cross-row consistency and learned terminology. Desktop persists results; CLI only reports them.                                                                             |
+| Editor Instant QA                                          | After successful single/selected confirmation, optionally run single-row QA through [`runProjectSegmentQA`](../packages/localization/src/qa/runProjectSegmentQA.ts). Results update feedback independently. |
+| Confirm, TM commit/application, repeat propagation, export | Do not consult QA. Existing findings never block, skip rows, or roll back these operations. Export has no QA override/force branch.                                                                         |
+| AI Translate / Refine / Window / Dialogue                  | Parse provider output without tag QA acceptance or repair. QA never causes another provider request or a failed translation batch.                                                                          |
+
+CLI QA returns success when checking completes, including when findings exist. The former `--fail-on-issues` option is removed. CLI translation still reports execution failures through `summary.failed` and preserves partial output. It does not run whole-file QA before writing output. Inspect prepares matches and prompts only. [CLI](CLI.md) owns command syntax.
+
+### QA result lifecycle and legacy consumers
+
+Panel、行内提示、文件问题数统一读取各行 `qaIssues` / `qaIssuesJson`。Panel 不再另存一份 `report.issues`。数据库 `NULL` 表示没有当前结果，`[]` 表示这次检查没有发现问题；即时检查仅覆盖当前行，不能作为整文件已检查的证明。
+
+- [`runProjectFileQA`](../packages/localization/src/qa/runProjectFileQA.ts) 原子替换整文件行结果；即时检查写入同一来源。内容未变时，已有文档证据与新单行结果按问题身份合并，无手写规则 ID 保留清单，因此文内学习术语也会保留。
+- 任何目标内容变化都清除该文件所有 QA 结果，包含跨行依赖；单纯状态变更保留结果。编辑、AI、TM/TB 应用、重复传播共用此规则。编辑器在本地修改时立即清除，数据库在保存时同步清除。
+- QA 设置变化清除该项目结果；术语新增、修改、清空、删除、挂载或取消挂载清除受影响项目结果。编辑器接收配置/术语失效事件，统一清除行内和 Panel 结果。不会自动启动整文件检查。
+- 异步 QA 在持久化前使用 immediate 事务核对输入及数据库变动版本，包含其他连接的术语修改；期间有写入时保守返回 `stale`，不写旧结果。编辑器还校验本地修改，防止尚未保存的编辑被旧结果覆盖。
+- 修改后的 QA 筛选行集合保持稳定，用户可以继续修订；旧 findings 消失，Panel 提示需要重查。退出筛选清空全部筛选，不恢复原条件。
+
+无消费者的 tag 插入/删除/空排序自动修复已移除，编辑器不再生成或携带 `autoFixSuggestions`。公开类型、`TagValidator.suggestions` 空数组和 deprecated `generateAutoFix()`（返回 `null`）只作为兼容边界。编辑器“插入源文 tag”是用户发起的文本编辑，与旧自动修复无关。
+
+QA 筛选只有 `qa_issue`；旧 `qa_error` / `qa_warning` 在存储读取边界迁移，搜索缓存与过滤算法不再计算旧严重度分支。公开 `validateSegmentTags` / `validateSegmentTerminology` 和旧 severity 字段仍保留兼容；保存错误是独立写入反馈。
+
+### Confirm and instant QA
+
+Confirmation owns saving, status changes, Working TM updates, and repeat propagation. It has no dependency on QA results. Editor composition starts optional Instant QA after the save succeeds and does not await it; selection actions and navigation finish independently. A check failure shows an independent QA message, never a save error or a rollback. Late results are discarded after content, resource, or file changes.
+
+When Instant QA is enabled, the check includes fixed token checks and enabled single-row checks (empty targets, line breaks, numbers, URLs, Chinese, target text, Plain tags, and mounted TB terminology). It does not learn marked terminology or recalculate cross-row consistency. When disabled, the follow-up returns without checking or writing results, including token findings. Manual whole-file QA remains available.
+
+### AI response handling
+
+Single-row Translate/Refine makes one provider request per invocation and parses the returned marker text. Window/Window-partial parses the strict JSON/ID contract and returns all rows; there is no tag repair request. Dialogue retains response-contract retries, including malformed JSON/IDs, but does not inspect QA findings. Transport, parsing, and persistence failures remain execution failures, and the job runner retains its task retry/resume policy.
+
+Tag repair prompts, injected QA validators, and tag repair audit events have no business consumers and are removed. Prompt instructions to preserve markers and the tokenizer's source-token mapping remain part of translation representation.
+
+### QAtools comparison
+
+对照基准为 [QAtools 0.1.8 / 5ed8410](https://github.com/dorajackcui/QAtools/tree/5ed84103f3936473cf519b9c23f7acb154d10808) 的“一键质量检查”，以该版本实际代码与运行结果为准。**11 个检查大类均已具备，但检查结果并不严格等价。** 下表及差异样例用于判断覆盖范围；“覆盖样例一致”不代表所有边界等价，也不要求两边报告措辞、条数或分组结构相同。
+
+| 检查项                | 当前能力与对照结果                                                                                                                         |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 空译文                | 内容规则一致；QAtools 固定执行，momoCAT 可开关、默认开。                                                                                   |
+| 术语                  | 支持 `【】`、`[]`，兼容 `［］`；按出现顺序配对；挂载 TB 与 marker 学习术语一起检查。边界差异见下表。                                       |
+| 同 source 不同 target | 空译文算一个译文变体；去除整串外层引号/括号，保留内部文本及大小写。覆盖样例一致。                                                          |
+| 同 target 不同 source | 忽略空 target，默认关闭。覆盖样例一致。                                                                                                    |
+| 子串译文一致性        | 使用唯一非空参考译文、边界和最短字母数；排除已检查术语及纯 printf 占位符参考译文，可定位参考行。默认关闭。                                 |
+| Tag / Placeholder     | Plain 文件支持 angle/color/brace/literal newline、数量、闭合/嵌套及可选顺序；Protect 文件使用固定 token 检查。高级过滤配置不等价，见下文。 |
+| 换行数量              | CRLF 按一个换行；真实换行与字面 `\n` 分开。覆盖样例一致。                                                                                  |
+| 数字一致性            | 比较重复出现次数；支持千分位分隔、千分号、编码字符排除及破折号归一化。覆盖样例一致。                                                       |
+| URL 一致性            | 支持单引号、中文包围符、尾标点与起始单词边界。覆盖样例一致。                                                                               |
+| Target 中文           | 覆盖样例一致；QAtools 默认开，momoCAT 默认关。                                                                                             |
+| Target 文本规范       | 包括混合重复标点、连续/首尾空格、同类全半角标点混用及括号引号配对。覆盖样例一致。                                                          |
+
+**Marker 与挂载 TB 的组合：** 两者可以同时启用。TB 优先，marker 配对用于学习当前文件中的新术语；学习完成后回扫全文件，包括学习行之前和之后的未标记行。学到的术语只用于本次检查，不写入 TB。这与 QAtools 的基本流程一致，但冲突处理和匹配边界存在以下六种已知差异：
+
+| 情况                                                                                     | QAtools 实际结果                                               | momoCAT 当前结果                                             |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------ |
+| TB 有 `Open → 打开`；同一行 `[Open] [Save] → [开启] [存档]`，随后 `Save file → 保存文件` | 保留 TB 的 Open 标准，仍学习 `Save → 存档`，因此后行也报问题。 | 标记行发生冲突，整行新增映射不作为后续基准，后行不报此问题。 |
+| 没有词库时 `Open → [打开]`，只有 target 带 marker                                        | 报标记数量不一致。                                             | 不单独报告 target 多余 marker。                              |
+| 学到 `Save → 保存` 与 `Save file → 存档`，随后 `Save file → 存档`                        | 优先最长非重叠术语，不要求短词 Save 的译法。                   | 文内学到的长短术语都检查，报告缺少“保存”。                   |
+| 学到 `city → 城市`，后行 `cities → 城镇`                                                 | 识别复数，报告译法问题。                                       | 文内学到的词没有英文复数扩展，此处不命中。                   |
+| 学到 `city → city`，后行 `city → cities`                                                 | 允许 target 复数，不报。                                       | target 要求原词命中，报译法问题。                            |
+| 学到 `Open file → 打开文件`，后行 source 为字面 `Open\nfile`                             | 将字面转义空白归一化，能命中并检查译法。                       | 不将字面转义换成空格，该词未命中。                           |
+
+前两项与上游 README 的部分描述不同，应以固定版本的实际行为为准。上述差异是当前行为记录，不代表已经对齐。
+
+其他配置和匹配差异：
+
+- 挂载 TB 复用 CAT 的语言匹配和项目 TB 优先级；QAtools 使用自己的忽略大小写、ASCII 边界和复数匹配器。因此同为术语检查，不代表各语言、边界和重叠情况下都得到相同结果。
+- QAtools angle tag 的 JSON `patterns` 是正则**纳入**过滤；momoCAT 是完整 tag 字符串的**忽略**清单，二者不能直接互换。
+- QAtools 术语引擎支持正则排除配置；当前项目 QA settings 没有对应的自定义正则项。
+- 对照时应统一 Chinese、空译文、tag 顺序与类型、术语 marker 和子串阈值；普通文本兼容样例使用 Plain 导入（`tagPolicy: none`）及 Standard tags 配置。Protect 文件使用 tokenizer 的固定完整性检查。
+
+相关行为测试：[`内容兼容样例`](../packages/core/src/qa/documentQa.compatibility.test.ts)、[`marker + 挂载 TB / CLI 集成`](../packages/localization/src/cli/qaFileCommand.test.ts)、[`多选确认`](../apps/desktop/src/renderer/src/hooks/editor/useSelectedSegmentActions.test.ts)、[`AI 批次修复`](../packages/localization/src/modules/MTModule.test.ts)。
 
 ## Source terminology precheck
 

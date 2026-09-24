@@ -48,11 +48,9 @@ export function getEditorRowStatusIndicatorClass(segmentStatus: Segment['status'
 
 export function getEditorRowStatusTitle(
   segmentStatus: Segment['status'],
-  hasError: boolean,
-  hasWarning: boolean,
+  hasQaIssues: boolean,
 ): string {
-  if (hasError) return `Status: ${segmentStatus} (QA error)`;
-  if (hasWarning) return `Status: ${segmentStatus} (QA warning)`;
+  if (hasQaIssues) return `Status: ${segmentStatus} (QA problems)`;
   return `Status: ${segmentStatus}`;
 }
 
@@ -86,10 +84,8 @@ export function buildEditorRowDisplayModel({
   highlightMode,
   showNonPrintingSymbols,
 }: UseEditorRowDisplayModelParams): EditorRowDisplayModel {
-  const hasError = qaIssues.some((issue) => issue.severity === 'error');
-  const hasWarning = qaIssues.some((issue) => issue.severity === 'warning');
   const statusIndicatorClass = getEditorRowStatusIndicatorClass(segmentStatus);
-  const statusTitle = getEditorRowStatusTitle(segmentStatus, hasError, hasWarning);
+  const statusTitle = getEditorRowStatusTitle(segmentStatus, qaIssues.length > 0);
 
   const sourceDisplayText = showNonPrintingSymbols
     ? visualizeNonPrintingSymbols(sourceEditorText)

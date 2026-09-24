@@ -1,4 +1,3 @@
-import { TagValidator } from '@cat/core/qa';
 import {
   DefaultAIRuntimeConfigProvider,
   SourceTerminologyPromptSettingsService,
@@ -56,8 +55,7 @@ export class AIModule {
     translationAuditFlush?: () => Promise<void> | void,
   ) {
     this.projectRepo = projectRepo;
-    const tagValidator = new TagValidator();
-    const textTranslator = new AITextTranslator(transport, tagValidator);
+    const textTranslator = new AITextTranslator(transport);
     const segmentPagingIterator = new SegmentPagingIterator(
       segmentRepo,
       AIModule.SEGMENT_PAGE_SIZE,

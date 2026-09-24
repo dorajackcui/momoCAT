@@ -1,11 +1,4 @@
-import {
-  QaIssue,
-  Segment,
-  SegmentStatus,
-  TBEntry,
-  TMEntry,
-  Token,
-} from '@cat/core/models';
+import { QaIssue, Segment, SegmentStatus, TBEntry, TMEntry, Token } from '@cat/core/models';
 import { Project, ProjectAIModel, ProjectQASettings, ProjectType } from '@cat/core/project';
 import type {
   MountedTBRecord as DbMountedTBRecord,
@@ -101,11 +94,7 @@ export interface SegmentRepository {
   getProjectIdByFileId(fileId: number): number | undefined;
   getProjectTypeByFileId(fileId: number): ProjectType | undefined;
   getProjectSegmentsByHash(projectId: number, srcHash: string, fileId?: number): Segment[];
-  updateSegmentTarget(
-    segmentId: string,
-    targetTokens: Token[],
-    status: SegmentStatus,
-  ): void;
+  updateSegmentTarget(segmentId: string, targetTokens: Token[], status: SegmentStatus): void;
   updateSegmentQaIssues(segmentId: string, qaIssues: QaIssue[]): void;
 }
 
@@ -213,7 +202,7 @@ export interface AIRuntimeConfigProvider {
 }
 
 export interface TransactionManager {
-  runInTransaction<T>(fn: () => T): T;
+  runInTransaction<T>(fn: () => T, mode?: 'deferred' | 'immediate'): T;
 }
 
 export interface SpreadsheetGateway {

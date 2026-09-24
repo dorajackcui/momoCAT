@@ -91,7 +91,7 @@ Repeat leadership and Working TM rules are owned by [Localization](LOCALIZATION.
 2. A localization command opens `CATDatabase`, resolves the project/provider, and reads the external workbook.
 3. File adapters create document-qualified units and resolve the target baseline.
 4. A request-mode strategy plans ordered tasks.
-5. `LocalizationEngine` delegates composition to its assembly, obtains TM/TB context, and asks the MT module boundary for validated target tokens.
+5. `LocalizationEngine` delegates composition to its assembly, obtains TM/TB context, and asks the MT module boundary for parsed target tokens.
 6. The job writes per-unit checkpoint/event state, throttled snapshots, and final workbook output.
 
 Resume truth is the checkpoint, not diagnostic artifacts or progress events.

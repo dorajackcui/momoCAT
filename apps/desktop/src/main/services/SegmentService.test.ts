@@ -126,6 +126,18 @@ class InMemorySegmentRepository implements SegmentRepository {
 }
 
 describe('SegmentService segment update events', () => {
+  it('confirms, commits to TM and propagates despite missing markers', async () => {
+    const rows = [buildSegment('marker', 42, 0, 'marker'), buildSegment('repeat', 42, 1, 'marker')];
+    for (const row of rows) row.sourceTokens = [{ type: 'tag', content: '{name}' }];
+    const repo = new InMemorySegmentRepository(rows);
+    const tm = { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService;
+    const service = new SegmentService(repo, tm, { runInTransaction: (fn) => fn() });
+    const target: Token[] = [{ type: 'text', content: 'No marker' }];
+    await service.updateSegment('marker', target, 'confirmed');
+    expect(repo.getSegment('marker')!.status).toBe('confirmed');
+    expect(repo.getSegment('repeat')!.status).toBe('confirmed');
+    expect(tm.upsertFromConfirmedSegment).toHaveBeenCalledOnce();
+  });
   it('normalizes saved status and emitted status together for single and atomic edits', async () => {
     const repo = new InMemorySegmentRepository([buildSegment('seg-1', 42, 0, 'hash-1')]);
     const service = new SegmentService(repo, {} as TMService, { runInTransaction: (fn) => fn() });

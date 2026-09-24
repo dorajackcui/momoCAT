@@ -82,11 +82,7 @@ class FailingSegmentRepository implements SegmentRepository {
     return this.delegate.getProjectSegmentsByHash(projectId, srcHash, fileId);
   }
 
-  updateSegmentTarget(
-    segmentId: string,
-    targetTokens: Token[],
-    status: Segment['status'],
-  ): void {
+  updateSegmentTarget(segmentId: string, targetTokens: Token[], status: Segment['status']): void {
     if (this.shouldFail(segmentId, status)) {
       throw new Error('Forced segment update failure');
     }
@@ -405,7 +401,7 @@ describe('TMModule.commitFileToTM', () => {
     expect(tmRepo.upsertTMEntryBySrcHash).not.toHaveBeenCalled();
   });
 
-  it('persists eligible confirmations and emits their segment updates after commit', async () => {
+  it('persists eligible confirmations and emits their segment updates after commit despite QA findings', async () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Confirmed Working Commit', 'en', 'zh');
@@ -415,7 +411,18 @@ describe('TMModule.commitFileToTM', () => {
           createSegment('seg-translated', 'hash-translated', 'draft', 'translated target'),
           createSegment('seg-confirmed', 'hash-confirmed', 'confirmed', 'confirmed target'),
           createSegment('seg-empty', 'hash-empty', 'empty'),
-        ].map((segment, index) => ({ ...segment, fileId, orderIndex: index })),
+        ].map((segment, index) => ({
+          ...segment,
+          fileId,
+          orderIndex: index,
+          sourceTokens: [
+            { type: 'text' as const, content: 'Hello' },
+            { type: 'tag' as const, content: '{name}' },
+          ],
+          qaIssues: [
+            { ruleId: 'tag-missing', severity: 'info' as const, message: 'Missing marker' },
+          ],
+        })),
       );
 
       const workingTM = db.getProjectMountedTMs(projectId).find((tm) => tm.type === 'working');
@@ -758,7 +765,7 @@ describe('TMModule.batchMatchFileWithTM', () => {
     );
   });
 
-  it('keeps propagation and events but does not commit TM matches to Working TM', async () => {
+  it('keeps propagation and events but does not commit TM matches to Working TM despite QA findings', async () => {
     db = new CATDatabase(':memory:');
     const projectId = db.createProject('Batch Match', 'en', 'zh');
     const fileId = db.createFile(projectId, 'batch.xlsx');
@@ -768,7 +775,16 @@ describe('TMModule.batchMatchFileWithTM', () => {
       createSegment('seg-1', srcHash, 'empty'),
       createSegment('seg-2', srcHash, 'empty'),
       createSegment('seg-3', 'hash-miss', 'empty'),
-    ].map((segment, index) => ({ ...segment, fileId, orderIndex: index }));
+    ].map((segment, index) => ({
+      ...segment,
+      fileId,
+      orderIndex: index,
+      sourceTokens: [
+        { type: 'text' as const, content: 'Hello' },
+        { type: 'tag' as const, content: '{name}' },
+      ],
+      qaIssues: [{ ruleId: 'tag-missing', severity: 'info' as const, message: 'Missing marker' }],
+    }));
 
     db.bulkInsertSegments(segments);
 

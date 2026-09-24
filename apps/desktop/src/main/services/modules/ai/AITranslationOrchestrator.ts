@@ -29,7 +29,6 @@ import {
   runSegmentTranslation,
   runTestTranslation,
 } from './segmentTranslationWorkflow';
-import { TagValidator } from '@cat/core/qa';
 
 export interface AITranslateFileOptions extends DesktopAITranslateFileOptions {
   model?: string;
@@ -40,8 +39,6 @@ export interface AITranslateFileOptions extends DesktopAITranslateFileOptions {
 export class AITranslationOrchestrator {
   private static readonly TRANSLATION_INTERVAL_MS = 40;
   private static readonly STANDARD_FILE_TRANSLATION_CONCURRENCY = 4;
-
-  private readonly tagValidator = new TagValidator();
   private readonly segmentWorkflow = createSegmentOperationLock();
 
   constructor(
@@ -96,7 +93,6 @@ export class AITranslationOrchestrator {
         tagPolicy,
         targetScope,
         transport: this.transport,
-        tagValidator: this.tagValidator,
         textTranslator: this.textTranslator,
         segmentService: this.segmentService,
         segmentPagingIterator: this.segmentPagingIterator,
@@ -212,9 +208,7 @@ export class AITranslationOrchestrator {
   }
 }
 
-function resolveTargetBaseline(
-  options: AITranslateFileOptions | undefined,
-): AIBatchTargetBaseline {
+function resolveTargetBaseline(options: AITranslateFileOptions | undefined): AIBatchTargetBaseline {
   if (options?.targetBaseline) {
     return options.targetBaseline;
   }

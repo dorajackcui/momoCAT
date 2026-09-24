@@ -70,7 +70,11 @@ describe('applyConfirmedSegmentUpdate', () => {
     for (const id of ['A', 'B', 'C', 'unrelated']) {
       handlers.queuedRemoteUpdates.set(id, createEvent(id));
     }
-    const event: SegmentsUpdatedEvent = { ...createEvent('A'), status: 'confirmed', propagatedIds: ['B', 'C'] };
+    const event: SegmentsUpdatedEvent = {
+      ...createEvent('A'),
+      status: 'confirmed',
+      propagatedIds: ['B', 'C'],
+    };
     applyConfirmedSegmentUpdate(event, handlers);
     expect(handlers.applySegmentsUpdatedEvent).toHaveBeenCalledWith(event);
     expect([...handlers.queuedRemoteUpdates.keys()]).toEqual(['unrelated']);
@@ -318,17 +322,9 @@ describe('applyBatchSegmentUpdatesToStore', () => {
     const qaIssues = [
       { ruleId: 'term-check', severity: 'warning' as const, message: 'Check this term.' },
     ];
-    const autoFixSuggestions = [
-      {
-        type: 'insert' as const,
-        description: 'Insert the preferred term.',
-        apply: (tokens: Token[]) => tokens,
-      },
-    ];
     const repeated = {
       ...createSegment('seg-2'),
       qaIssues,
-      autoFixSuggestions,
     };
     const store = createEditorSegmentStore([source, repeated]);
     const confirmEvent: SegmentsUpdatedEvent = {
@@ -354,7 +350,6 @@ describe('applyBatchSegmentUpdatesToStore', () => {
       status: 'confirmed',
     });
     expect(store.getSegment(repeated.segmentId)?.qaIssues).toBeUndefined();
-    expect(store.getSegment(repeated.segmentId)?.autoFixSuggestions).toBeUndefined();
   });
 });
 

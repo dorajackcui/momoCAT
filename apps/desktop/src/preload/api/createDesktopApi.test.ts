@@ -74,6 +74,7 @@ describe('createDesktopApi smoke', () => {
     await api.readClipboard();
     await api.renameFile(17, 'renamed.xlsx');
     await api.runFileQA(1);
+    await api.checkSegmentQA('seg-1');
     await api.inspectFile(1, 'inspect.xlsx');
     await api.exportReferencesForMt(1, 'references.xlsx');
     await api.precheckSourceTerminology(1, 'source-terms.xlsx');
@@ -136,6 +137,7 @@ describe('createDesktopApi smoke', () => {
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.clipboard.read);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.rename, 17, 'renamed.xlsx');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.runQA, 1);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.segment.checkQA, 'seg-1');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.inspect, 1, 'inspect.xlsx');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.file.exportReferences, 1, 'references.xlsx');
     expect(invoke).toHaveBeenCalledWith(

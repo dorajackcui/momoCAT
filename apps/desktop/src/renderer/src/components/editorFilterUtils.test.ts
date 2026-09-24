@@ -51,8 +51,7 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
       sourceText: 'Login successful',
       targetText: '',
       originalIndex: 0,
-      hasQaError: false,
-      hasQaWarning: false,
+      hasQaIssue: false,
       hasSaveError: false,
       repeatedSourceRole: 'first',
     },
@@ -61,8 +60,7 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
       sourceText: 'Order submitted',
       targetText: '订单已提交',
       originalIndex: 1,
-      hasQaError: true,
-      hasQaWarning: false,
+      hasQaIssue: true,
       hasSaveError: false,
       repeatedSourceRole: 'later',
     },
@@ -71,8 +69,7 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
       sourceText: 'Order cancelled',
       targetText: '订单已取消',
       originalIndex: 2,
-      hasQaError: false,
-      hasQaWarning: true,
+      hasQaIssue: true,
       hasSaveError: true,
     },
   ];
@@ -125,20 +122,19 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
     expect(filtered).toHaveLength(0);
   });
 
-  it('filters QA warnings', () => {
+  it('filters all QA findings', () => {
     const filtered = filterSearchableSegments(segments, {
       sourceQuery: '',
       targetQuery: '',
       targetSearchScope: 'target',
       statuses: [],
       matchMode: 'contains',
-      qualityFilters: ['qa_warning'],
+      qualityFilters: ['qa_issue'],
       firstRepeatOnly: false,
       sortBy: 'default',
       sortDirection: 'asc',
     });
-    expect(filtered).toHaveLength(1);
-    expect(filtered[0].segment.segmentId).toBe('s3');
+    expect(filtered.map((item) => item.segment.segmentId)).toEqual(['s2', 's3']);
   });
 
   it('filters to the first occurrence of each repeated source', () => {
@@ -151,22 +147,17 @@ describe('editorFilterUtils.filterSearchableSegments', () => {
   });
 
   it('filters to every segment that has not been confirmed', () => {
-    const candidates = (['empty', 'draft', 'confirmed'] as const).map(
-      (status, index) => ({
-        ...segments[0],
-        segment: makeSegment(`status-${status}`, status),
-        originalIndex: index,
-      }),
-    );
+    const candidates = (['empty', 'draft', 'confirmed'] as const).map((status, index) => ({
+      ...segments[0],
+      segment: makeSegment(`status-${status}`, status),
+      originalIndex: index,
+    }));
     const filtered = filterSearchableSegments(candidates, {
       ...createDefaultEditorFilterCriteria(),
       statuses: ['empty', 'draft'],
     });
 
-    expect(filtered.map((item) => item.segment.status)).toEqual([
-      'empty',
-      'draft',
-    ]);
+    expect(filtered.map((item) => item.segment.status)).toEqual(['empty', 'draft']);
   });
 
   it('uses the target query against context when that scope is selected', () => {
@@ -242,7 +233,6 @@ describe('editorFilterUtils helpers', () => {
     });
     expect(countActiveFilterFields(defaults)).toBe(0);
   });
-
 });
 
 describe('editorFilterUtils.sortSearchableSegments', () => {
@@ -252,8 +242,7 @@ describe('editorFilterUtils.sortSearchableSegments', () => {
       sourceText: 'a',
       targetText: '1111',
       originalIndex: 0,
-      hasQaError: false,
-      hasQaWarning: false,
+      hasQaIssue: false,
       hasSaveError: false,
     },
     {
@@ -261,8 +250,7 @@ describe('editorFilterUtils.sortSearchableSegments', () => {
       sourceText: 'abcd',
       targetText: '11',
       originalIndex: 1,
-      hasQaError: false,
-      hasQaWarning: false,
+      hasQaIssue: false,
       hasSaveError: false,
     },
     {
@@ -270,8 +258,7 @@ describe('editorFilterUtils.sortSearchableSegments', () => {
       sourceText: 'ab',
       targetText: '1',
       originalIndex: 2,
-      hasQaError: false,
-      hasQaWarning: false,
+      hasQaIssue: false,
       hasSaveError: false,
     },
   ];

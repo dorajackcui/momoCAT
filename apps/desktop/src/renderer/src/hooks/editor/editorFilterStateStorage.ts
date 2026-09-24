@@ -11,7 +11,9 @@ import {
 
 const FILTER_STATE_STORAGE_KEY_PREFIX = 'editor-filter-state:v1:file:';
 
-export type PersistedFilterShape = EditorFilterCriteria;
+export type PersistedFilterShape = Omit<EditorFilterCriteria, 'qualityFilters'> & {
+  qualityFilters: Array<EditorQualityFilter | 'qa_error' | 'qa_warning'>;
+};
 
 interface FilterStateGuards {
   statusValues: Set<EditorStatusFilter>;
@@ -74,9 +76,15 @@ export function sanitizePersistedEditorFilterState(params: {
     ? (parsed.matchMode as EditorMatchMode)
     : defaults.matchMode;
   const qualityFilters = Array.isArray(parsed.qualityFilters)
-    ? parsed.qualityFilters.filter((value): value is EditorQualityFilter =>
-        guards.qualityValues.has(value as EditorQualityFilter),
-      )
+    ? [
+        ...new Set(
+          parsed.qualityFilters
+            .map((value) => (value === 'qa_error' || value === 'qa_warning' ? 'qa_issue' : value))
+            .filter((value): value is EditorQualityFilter =>
+              guards.qualityValues.has(value as EditorQualityFilter),
+            ),
+        ),
+      ]
     : defaults.qualityFilters;
   if (parsed.quickPreset === 'issues' && qualityFilters.length === 0) {
     qualityFilters.push(...guards.qualityValues);

@@ -1,8 +1,8 @@
-export type TokenType = "text" | "tag" | "locked" | "ws";
+export type TokenType = 'text' | 'tag' | 'locked' | 'ws';
 
-export type TagType = "paired-start" | "paired-end" | "standalone";
+export type TagType = 'paired-start' | 'paired-end' | 'standalone';
 
-export type ValidationState = "valid" | "error" | "warning";
+export type ValidationState = 'valid' | 'error' | 'warning';
 
 export interface Token {
   type: TokenType;
@@ -25,24 +25,32 @@ export interface TagMetadata {
   validationState?: ValidationState;
 }
 
-export type SegmentStatus = "empty" | "draft" | "confirmed";
+export type SegmentStatus = 'empty' | 'draft' | 'confirmed';
 
 /** Confirmation is explicit; all other statuses follow the target content. */
-export function normalizeSegmentStatus(status: unknown, targetTokens: readonly Token[]): SegmentStatus {
-  if (status === "confirmed") return "confirmed";
-  return targetTokens.some(token => token.content.trim().length > 0) ? "draft" : "empty";
+export function normalizeSegmentStatus(
+  status: unknown,
+  targetTokens: readonly Token[],
+): SegmentStatus {
+  if (status === 'confirmed') return 'confirmed';
+  return targetTokens.some((token) => token.content.trim().length > 0) ? 'draft' : 'empty';
 }
 
-export type QaSeverity = "error" | "warning" | "info";
+export type QaSeverity = 'error' | 'warning' | 'info';
 
 export interface QaIssue {
   ruleId: string;
+  /** Legacy transport compatibility only; QA presentation does not rank findings. */
   severity: QaSeverity;
   message: string;
+  groupId?: string;
+  groupLabel?: string;
+  origins?: string[];
+  references?: Array<{ segmentId: string; row: number }>;
 }
 
 export interface AutoFixSuggestion {
-  type: "insert" | "delete" | "reorder";
+  type: 'insert' | 'delete' | 'reorder';
   description: string;
   apply: (targetTokens: Token[]) => Token[];
 }
@@ -69,6 +77,7 @@ export interface Segment {
     updatedAt: string;
   };
   qaIssues?: QaIssue[];
+  /** @deprecated Compatibility only. QA does not generate automatic tag repairs. */
   autoFixSuggestions?: AutoFixSuggestion[];
 }
 

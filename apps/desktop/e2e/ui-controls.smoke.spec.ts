@@ -138,9 +138,7 @@ test.describe('Shared UI controls smoke', () => {
       }
       await expect(rows.locator('[data-segment-status="empty"]')).toHaveCount(1);
       await expect(rows.locator('[data-segment-status="draft"]')).toHaveCount(1);
-      await qa.getByRole('button', { name: 'QA error', exact: true }).click();
-      await expect(rows).toHaveCount(1);
-      await qa.getByRole('button', { name: 'QA warning', exact: true }).click();
+      await qa.getByRole('button', { name: 'QA problems', exact: true }).click();
       await expect(rows).toHaveCount(2);
       await qa.getByRole('button', { name: 'All', exact: true }).click();
       await expect(rows).toHaveCount(2);
@@ -468,8 +466,8 @@ test.describe('Shared UI controls smoke', () => {
       const filtersButton = page.getByRole('button', { name: 'Open filters' });
       await filtersButton.click();
       const filters = page.getByRole('dialog', { name: 'Filters' });
-      await filters.getByRole('button', { name: 'QA error', exact: true }).click();
-      await expect(filters.getByRole('button', { name: 'QA error', exact: true })).toHaveAttribute(
+      await filters.getByRole('button', { name: 'QA problems', exact: true }).click();
+      await expect(filters.getByRole('button', { name: 'QA problems', exact: true })).toHaveAttribute(
         'aria-pressed',
         'true',
       );

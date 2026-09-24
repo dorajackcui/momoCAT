@@ -64,12 +64,12 @@ describe("Tag Integrity QA", () => {
     const issues = validateSegmentTags(segment);
 
     expect(issues[0]).toMatchObject({
-      ruleId: "tag-missing",
+      ruleId: "tag-count",
       severity: "error",
     });
   });
 
-  it("keeps ordinary duplicate tag content membership-scoped for missing checks", () => {
+  it("checks every occurrence of ordinary duplicate tag content", () => {
     const sourceTokens = [
       { type: "text", content: "A" },
       { type: "tag", content: "<b>" },
@@ -93,9 +93,9 @@ describe("Tag Integrity QA", () => {
 
     expect(issues).toEqual([
       {
-        ruleId: "tag-order",
-        severity: "warning",
-        message: "Tags are present but in a different order or count than source.",
+        ruleId: "tag-count",
+        severity: "error",
+        message: "<b>: source 2, target 1",
       },
     ]);
   });

@@ -7,7 +7,6 @@ import {
   type PromptTMReference,
 } from '@cat/core/project';
 import type { Token } from '@cat/core/models';
-import { TagValidator } from '@cat/core/qa';
 import { parseEditorTextToTokens, type TagPolicy } from '@cat/core/tag';
 import type { AITransport, ReasoningEffort } from '../../ports';
 import { logAIPromptDebug } from './promptDebug';
@@ -64,7 +63,6 @@ interface TranslateTextParams {
   tmReferences?: PromptTMReference[];
   concordanceReferences?: PromptConcordanceReference[];
   tbReferences?: PromptTBReference[];
-  validationFeedback?: string;
   debug?: TranslateDebugMeta;
   promptDebugFlow?: 'segment' | 'refine' | 'test';
   promptDebugAttempt?: number;
@@ -72,69 +70,35 @@ interface TranslateTextParams {
 }
 
 export class AITextTranslator {
-  constructor(
-    private readonly transport: AITransport,
-    private readonly tagValidator: TagValidator,
-  ) {}
+  constructor(private readonly transport: AITransport) {}
 
   public async translateSegment(params: TranslateSegmentParams): Promise<Token[]> {
-    const maxAttempts = 3;
-    let validationFeedback: string | undefined;
     const tagPolicy = params.tagPolicy ?? 'default';
     const normalizedType = normalizeProjectType(params.projectType);
+    const translatedText = await this.translateText({
+      apiKey: params.apiKey,
+      baseUrl: params.baseUrl,
+      model: params.model,
+      projectPrompt: params.projectPrompt,
+      projectType: normalizedType,
+      reasoningEffort: params.reasoningEffort,
+      srcLang: params.srcLang,
+      tgtLang: params.tgtLang,
+      sourceText: params.sourceText,
+      sourceTagPreservedText: params.sourceTagPreservedText,
+      context: params.context,
+      currentTranslationPayload: params.currentTranslationPayload,
+      refinementInstruction: params.refinementInstruction,
+      tmReference: params.tmReference,
+      tmReferences: params.tmReferences,
+      concordanceReferences: params.concordanceReferences,
+      tbReferences: params.tbReferences,
+      promptDebugFlow: params.refinementInstruction ? 'refine' : 'segment',
+      promptDebugSegmentId: params.segmentId,
+      promptDebugAttempt: 1,
+    });
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const translatedText = await this.translateText({
-        apiKey: params.apiKey,
-        baseUrl: params.baseUrl,
-        model: params.model,
-        projectPrompt: params.projectPrompt,
-        projectType: normalizedType,
-        reasoningEffort: params.reasoningEffort,
-        srcLang: params.srcLang,
-        tgtLang: params.tgtLang,
-        sourceText: params.sourceText,
-        sourceTagPreservedText: params.sourceTagPreservedText,
-        context: params.context,
-        currentTranslationPayload: params.currentTranslationPayload,
-        refinementInstruction: params.refinementInstruction,
-        tmReference: params.tmReference,
-        tmReferences: params.tmReferences,
-        concordanceReferences: params.concordanceReferences,
-        tbReferences: params.tbReferences,
-        validationFeedback,
-        promptDebugFlow: params.refinementInstruction ? 'refine' : 'segment',
-        promptDebugSegmentId: params.segmentId,
-        promptDebugAttempt: attempt,
-      });
-
-      const targetTokens = parseEditorTextToTokens(translatedText, params.sourceTokens, {
-        tagPolicy,
-      });
-      if (normalizedType === 'custom' || tagPolicy === 'none') {
-        return targetTokens;
-      }
-      const validationResult = this.tagValidator.validate(params.sourceTokens, targetTokens);
-      const errors = validationResult.issues.filter((issue) => issue.severity === 'error');
-
-      if (errors.length === 0) {
-        return targetTokens;
-      }
-
-      if (attempt === maxAttempts) {
-        throw new Error(
-          `Tag validation failed after ${maxAttempts} attempts: ${errors.map((e) => e.message).join('; ')}`,
-        );
-      }
-
-      validationFeedback = [
-        'Previous translation was invalid.',
-        ...errors.map((e) => `- ${e.message}`),
-        'Retry by preserving marker content and sequence exactly.',
-      ].join('\n');
-    }
-
-    throw new Error('Unexpected translation retry failure');
+    return parseEditorTextToTokens(translatedText, params.sourceTokens, { tagPolicy });
   }
 
   public async translateText(params: TranslateTextParams): Promise<string> {
@@ -152,7 +116,6 @@ export class AITextTranslator {
       tmReferences: params.tmReferences,
       concordanceReferences: params.concordanceReferences,
       tbReferences: params.tbReferences,
-      validationFeedback: params.validationFeedback,
     });
 
     if (params.debug) {

@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 
 export interface ConcordanceShortcutController {
-  activeTab: 'tm' | 'concordance';
-  setActiveTab: (tab: 'tm' | 'concordance') => void;
+  activeTab: 'tm' | 'concordance' | 'qa';
+  setActiveTab: (tab: 'tm' | 'concordance' | 'qa') => void;
   concordanceFocusSignal: number;
   concordanceSearchSignal: number;
   concordanceQuery: string;
 }
 
 export function useConcordanceShortcut(): ConcordanceShortcutController {
-  const [activeTab, setActiveTab] = useState<'tm' | 'concordance'>('tm');
+  const [activeTab, setActiveTab] = useState<'tm' | 'concordance' | 'qa'>('tm');
   const [concordanceFocusSignal, setConcordanceFocusSignal] = useState(0);
   const [concordanceSearchSignal, setConcordanceSearchSignal] = useState(0);
   const [concordanceQuery, setConcordanceQuery] = useState('');

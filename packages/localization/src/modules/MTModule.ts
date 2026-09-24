@@ -6,9 +6,7 @@ import {
   normalizeProjectAIModel,
   type Project,
 } from '@cat/core/project';
-import { TagValidator } from '@cat/core/qa';
 import { parseEditorTextToTokens } from '@cat/core/tag';
-import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { AIProviderCatalogService } from '../providers/AIProviderCatalogService';
 import type { AIRuntimeConfigProvider, AITransport, ReasoningEffort } from '../ports';
 import type { PromptArtifact } from '../artifacts';
@@ -23,9 +21,7 @@ import { buildBatchPromptParams, buildPromptParams } from './MTModulePromptParam
 import type {
   ComposeBatchPromptInput,
   ComposePromptInput,
-  MTBatchCurrentUnitInput,
   MTBatchTranslateResult,
-  MTBatchUnitResult,
   MTModuleDependencies,
   MTTranslateResult,
   PreparedBatchPromptInput,
@@ -63,13 +59,11 @@ export class MTModule {
   >;
   private readonly aiRuntimeConfigProvider: AIRuntimeConfigProvider;
   private readonly aiTransport: AITransport;
-  private readonly tagValidator: TagValidator;
 
   constructor(options: MTModuleDependencies) {
     this.providerCatalogService = options.providerCatalogService;
     this.aiRuntimeConfigProvider = options.aiRuntimeConfigProvider;
     this.aiTransport = options.aiTransport;
-    this.tagValidator = options.tagValidator ?? new TagValidator();
   }
 
   private recordAudit(
@@ -175,7 +169,6 @@ export class MTModule {
       context: promptParams.context,
       currentTranslationPayload: promptParams.currentTranslationPayload,
       refinementInstruction: promptParams.refinementInstruction,
-      validationFeedback: promptParams.validationFeedback,
       ...promptParams.references,
     });
 
@@ -217,7 +210,6 @@ export class MTModule {
       previousContext: input.previousContext,
       nextContext: input.nextContext,
       readOnlyContextRows: input.readOnlyContextRows,
-      validationFeedback: promptParams.validationFeedback,
     });
     const sourcePayload = promptParams.currentSegments
       .map((segment) => `${segment.id}: ${segment.sourcePayload}`)
@@ -272,117 +264,34 @@ export class MTModule {
 
   async translate(input: TranslatePreparedPromptInput): Promise<MTTranslateResult> {
     const prompt = this.composePreparedPrompt(input);
-    const promptParams = buildPromptParams(input);
     const tagPolicy = resolveTagPolicy(input.tagPolicy);
-    const maxAttempts = 3;
-    let validationFeedback: string | undefined;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const attemptPrompt =
-        attempt === 1
-          ? prompt
-          : this.composePreparedPrompt({
-              ...input,
-              validationFeedback,
-            });
-      const response = await this.aiTransport.createResponse({
-        apiKey: input.apiKey,
-        baseUrl: input.baseUrl,
-        model: input.model,
-        reasoningEffort: input.reasoningEffort ?? 'medium',
-        systemPrompt: attemptPrompt.systemPrompt,
-        userPrompt: attemptPrompt.userPrompt,
-      });
-      const trimmed = response.content.trim();
-      if (!trimmed) {
-        throw new Error('AI provider response was empty');
-      }
-
-      const targetTokens = parseEditorTextToTokens(trimmed, input.segment.sourceTokens, {
-        tagPolicy,
-      });
-      if (promptParams.projectType === 'custom' || tagPolicy === 'none') {
-        return { targetTokens, prompt: attemptPrompt };
-      }
-
-      const validationResult = this.tagValidator.validate(input.segment.sourceTokens, targetTokens);
-      const errors = validationResult.issues.filter((issue) => issue.severity === 'error');
-
-      if (errors.length === 0) {
-        return { targetTokens, prompt: attemptPrompt };
-      }
-
-      if (attempt === maxAttempts) {
-        throw new Error(
-          `Tag validation failed after ${maxAttempts} attempts: ${errors.map((e) => e.message).join('; ')}`,
-        );
-      }
-
-      validationFeedback = [
-        'Previous translation was invalid.',
-        ...errors.map((e) => `- ${e.message}`),
-        'Retry by preserving marker content and sequence exactly.',
-      ].join('\n');
-    }
-
-    throw new Error('Unexpected translation retry failure');
+    const response = await this.aiTransport.createResponse({
+      apiKey: input.apiKey,
+      baseUrl: input.baseUrl,
+      model: input.model,
+      reasoningEffort: input.reasoningEffort ?? 'medium',
+      systemPrompt: prompt.systemPrompt,
+      userPrompt: prompt.userPrompt,
+    });
+    const trimmed = response.content.trim();
+    if (!trimmed) throw new Error('AI provider response was empty');
+    return {
+      targetTokens: parseEditorTextToTokens(trimmed, input.segment.sourceTokens, { tagPolicy }),
+      prompt,
+    };
   }
 
   async translateBatch(input: TranslatePreparedBatchPromptInput): Promise<MTBatchTranslateResult> {
     const prompt = this.composePreparedBatchPrompt(input);
-    const promptParams = buildBatchPromptParams(input);
     const tagPolicy = resolveTagPolicy(input.tagPolicy);
 
     return processMTBatchResponse({
       input,
       prompt,
-      projectType: promptParams.projectType,
       tagPolicy,
       aiTransport: this.aiTransport,
-      tagValidator: this.tagValidator,
       recordAudit: (context, event) => this.recordAudit(context, event),
-      repairInvalidResult: (unit, parsedResult, validationFeedback) =>
-        this.repairInvalidBatchResult(input, unit, parsedResult, validationFeedback),
     });
-  }
-
-  private async repairInvalidBatchResult(
-    input: TranslatePreparedBatchPromptInput,
-    unit: MTBatchCurrentUnitInput,
-    parsedResult: MTBatchUnitResult,
-    validationFeedback: string,
-  ): Promise<MTBatchUnitResult> {
-    const repaired = await this.translate({
-      project: input.project,
-      unitId: unit.unitId,
-      segment: unit.segment,
-      tm: unit.tm,
-      tb: unit.tb,
-      tagPolicy: input.tagPolicy,
-      mtOptions: input.mtOptions,
-      providerOverride: input.providerOverride,
-      projectPromptOverride: input.projectPromptOverride,
-      apiKey: input.apiKey,
-      baseUrl: input.baseUrl,
-      model: input.model,
-      reasoningEffort: input.reasoningEffort,
-      provider: input.provider,
-      srcLang: input.srcLang,
-      tgtLang: input.tgtLang,
-      context: unit.context,
-      validationFeedback,
-      currentTranslationPayload: serializeTokensToDisplayText(parsedResult.targetTokens),
-      refinementInstruction:
-        'Repair this translation only. Preserve the existing translation where possible, but fix the validation issues below.',
-    });
-
-    return {
-      documentId: unit.documentId,
-      unitId: unit.unitId,
-      responseId: parsedResult.responseId,
-      targetTokens: repaired.targetTokens,
-      prompt: repaired.prompt,
-    };
   }
 
   private async resolveReasoningEffort(
@@ -396,5 +305,4 @@ export class MTModule {
     const runtimeConfig = await this.aiRuntimeConfigProvider.getModelConfig(model);
     return runtimeConfig.reasoningEffort;
   }
-
 }

@@ -9,13 +9,12 @@ import {
   summarizeAuditText,
 } from './TranslationAudit';
 
-const repairRequestEvent = {
-  event: 'mt_repair_request' as const,
+const batchResponseEvent = {
+  event: 'mt_batch_response' as const,
   job: 'job-1',
   task: 'task-1',
-  unit: 'row-20',
-  rid: 'r4',
-  reason: 'tag_invalid' as const,
+  latencyMs: 1,
+  returnedIds: ['r4'],
 };
 
 describe('TranslationAudit', () => {
@@ -27,24 +26,23 @@ describe('TranslationAudit', () => {
   });
 
   it('allows recording to the noop sink', () => {
-    expect(() => noopTranslationAuditSink.record(repairRequestEvent)).not.toThrow();
+    expect(() => noopTranslationAuditSink.record(batchResponseEvent)).not.toThrow();
   });
 
   it('stores memory sink events in order', () => {
     const sink = createMemoryTranslationAuditSink();
     const secondEvent = {
-      event: 'mt_repair_failed' as const,
+      event: 'mt_batch_error' as const,
       job: 'job-1',
       task: 'task-1',
-      unit: 'row-20',
-      rid: 'r4',
+      latencyMs: 1,
       message: 'still invalid',
     };
 
-    sink.record(repairRequestEvent);
+    sink.record(batchResponseEvent);
     sink.record(secondEvent);
 
-    expect(sink.events).toEqual([repairRequestEvent, secondEvent]);
+    expect(sink.events).toEqual([batchResponseEvent, secondEvent]);
   });
 
   it('writes JSONL records after flush waits for queued writes', async () => {
@@ -54,14 +52,14 @@ describe('TranslationAudit', () => {
       now: () => new Date('2026-06-17T00:00:00.000Z'),
     });
 
-    sink.record(repairRequestEvent);
+    sink.record(batchResponseEvent);
     await sink.flush();
 
     const lines = (await readFile(join(dir, 'nested', 'audit.jsonl'), 'utf8')).trim().split('\n');
     expect(lines).toHaveLength(1);
     expect(JSON.parse(lines[0])).toEqual({
       at: '2026-06-17T00:00:00.000Z',
-      ...repairRequestEvent,
+      ...batchResponseEvent,
     });
   });
 
@@ -72,13 +70,13 @@ describe('TranslationAudit', () => {
       now: () => new Date('2026-06-17T00:00:00.000Z'),
     });
 
-    sink.record({ ...repairRequestEvent, targetText: 'do not write me' } as never);
+    sink.record({ ...batchResponseEvent, targetText: 'do not write me' } as never);
     await sink.flush();
 
     const line = (await readFile(join(dir, 'audit.jsonl'), 'utf8')).trim();
     expect(JSON.parse(line)).toEqual({
       at: '2026-06-17T00:00:00.000Z',
-      ...repairRequestEvent,
+      ...batchResponseEvent,
     });
   });
 
@@ -124,13 +122,13 @@ describe('TranslationAudit', () => {
     const onError = vi.fn();
     const sink = new JsonlTranslationAuditSink(join(dir, 'blocked', 'audit.jsonl'), { onError });
 
-    sink.record(repairRequestEvent);
-    sink.record(repairRequestEvent);
+    sink.record(batchResponseEvent);
+    sink.record(batchResponseEvent);
     await sink.flush();
 
     expect(onError).toHaveBeenCalledTimes(1);
 
-    sink.record(repairRequestEvent);
+    sink.record(batchResponseEvent);
     await sink.flush();
 
     expect(onError).toHaveBeenCalledTimes(1);

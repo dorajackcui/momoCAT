@@ -185,12 +185,15 @@ export function registerProjectHandlers({ ipcMain, projectService }: MainHandler
     return projectService.updateSegment(segmentId, targetTokens, status, clientRequestId);
   });
 
+  registerHandle({ ipcMain, projectService }, IPC_CHANNELS.segment.checkQA, (_event, ...args) => {
+    return projectService.checkSegmentQA(readArgument(args[0], 'segmentId', isNonEmptyString));
+  });
+
   registerHandle({ ipcMain, projectService }, IPC_CHANNELS.file.export, (_event, ...args) => {
     const fileId = readArgument(args[0], 'fileId', isId);
     const outputPath = readArgument(args[1], 'outputPath', isNonEmptyString);
     const options = readOptionalArgument(args[2], 'options', isImportOptions);
-    const forceExport = readOptionalArgument(args[3], 'forceExport', isBoolean);
-    return projectService.exportFile(fileId, outputPath, options, forceExport ?? false);
+    return projectService.exportFile(fileId, outputPath, options);
   });
 
   registerHandle({ ipcMain, projectService }, IPC_CHANNELS.file.runQA, (_event, ...args) => {

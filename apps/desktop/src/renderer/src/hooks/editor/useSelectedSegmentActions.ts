@@ -5,8 +5,6 @@ import type { SelectedSegmentUpdate, SegmentsUpdatedEvent } from '../../../../sh
 import { apiClient } from '../../services/apiClient';
 import { feedbackService } from '../../services/feedbackService';
 import { parseTargetEditorText } from './editorTokenPolicy';
-import { checkSegmentConfirmation, type ConfirmationQaSettings } from './segmentConfirmationQa';
-import type { SetSegmentsWithChangeHint } from './editorSegmentState';
 
 export type SelectedSegmentAction = 'clear' | 'copy-source' | 'confirm';
 
@@ -15,10 +13,9 @@ interface Params {
   getSegment: (id: string) => Segment | undefined;
   flushPending: () => Promise<void>;
   applyUpdates: (events: SegmentsUpdatedEvent[]) => void;
-  setSegments: SetSegmentsWithChangeHint;
+  onConfirmed: (segmentIds: string[]) => void;
   clearSaveError: (id: string) => void;
   tagPolicy: TagPolicy;
-  qaSettings: ConfirmationQaSettings;
 }
 
 export function useSelectedSegmentActions({
@@ -26,10 +23,9 @@ export function useSelectedSegmentActions({
   getSegment,
   flushPending,
   applyUpdates,
-  setSegments,
+  onConfirmed,
   clearSaveError,
   tagPolicy,
-  qaSettings,
 }: Params) {
   const [isRunning, setIsRunning] = useState(false);
   const running = useRef(false);
@@ -52,20 +48,11 @@ export function useSelectedSegmentActions({
         await flushPending();
         if (scopeVersion !== scope.current) return;
         const updates: SelectedSegmentUpdate[] = [];
-        const qaUpdates = new Map<string, Partial<Segment>>();
-        let blockedCount = 0;
         for (const id of ids) {
           const segment = getSegment(id);
           if (!segment || segment.fileId !== fileId)
             throw new Error('Selected segment is unavailable');
           if (action === 'confirm') {
-            const { blocked, ...qa } = await checkSegmentConfirmation(segment, qaSettings);
-            if (scopeVersion !== scope.current) return;
-            qaUpdates.set(id, qa);
-            if (blocked) {
-              blockedCount += 1;
-              continue;
-            }
             updates.push({
               segmentId: id,
               targetTokens: segment.targetTokens,
@@ -87,27 +74,16 @@ export function useSelectedSegmentActions({
             });
           }
         }
-        if (qaUpdates.size) {
-          setSegments(
-            (prev) =>
-              prev.map((segment) => {
-                const qa = qaUpdates.get(segment.segmentId);
-                return qa ? { ...segment, ...qa } : segment;
-              }),
-            { orderChanged: false, changedSegmentIds: [...qaUpdates.keys()] },
-          );
-        }
         if (updates.length) {
           const events = await apiClient.updateSelectedSegments(fileId, updates);
           if (scopeVersion !== scope.current) return;
           applyUpdates(events);
           for (const update of updates) clearSaveError(update.segmentId);
+          if (action === 'confirm') onConfirmed(updates.map((update) => update.segmentId));
         }
         const label =
           action === 'confirm' ? 'Confirmed' : action === 'clear' ? 'Cleared' : 'Copied source to';
-        const message = `${label} ${updates.length} segments.${blockedCount ? ` ${blockedCount} blocked by QA.` : ''}`;
-        if (blockedCount) feedbackService.info(message);
-        else feedbackService.success(message);
+        feedbackService.success(`${label} ${updates.length} segments.`);
       } catch (error) {
         if (scopeVersion !== scope.current) return;
         feedbackService.error(
@@ -120,16 +96,7 @@ export function useSelectedSegmentActions({
         }
       }
     },
-    [
-      applyUpdates,
-      clearSaveError,
-      fileId,
-      flushPending,
-      getSegment,
-      qaSettings,
-      setSegments,
-      tagPolicy,
-    ],
+    [applyUpdates, clearSaveError, fileId, flushPending, getSegment, onConfirmed, tagPolicy],
   );
   return { runSelectedSegmentAction: run, isSelectedSegmentActionRunning: isRunning };
 }

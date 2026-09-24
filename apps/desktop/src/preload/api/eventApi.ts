@@ -5,6 +5,7 @@ import type { DesktopApiSlice, IpcRendererLike } from './types';
 
 type EventApiKeys =
   | 'onSegmentsUpdated'
+  | 'onQAInvalidated'
   | 'onSegmentsUpdatedBatch'
   | 'onProgress'
   | 'onJobProgress'
@@ -14,6 +15,12 @@ type EventApiKeys =
 
 export function createEventApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<EventApiKeys> {
   return {
+    onQAInvalidated: (callback) => {
+      const listener = (_event: IpcRendererEvent, ...args: unknown[]) =>
+        callback(args[0] as number);
+      ipcRenderer.on(IPC_CHANNELS.events.qaInvalidated, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.events.qaInvalidated, listener);
+    },
     onSegmentsUpdated: (callback) => {
       const listener = (_event: IpcRendererEvent, ...args: unknown[]) => {
         const [data] = args as [Parameters<typeof callback>[0]];

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { FileQaReport } from '@cat/core/project';
 import { apiClient } from '../../services/apiClient';
 import { feedbackService } from '../../services/feedbackService';
 import type { ProjectAITranslateSubmit } from '../../components/project-detail/ProjectAITranslateModal';
@@ -11,9 +12,10 @@ interface UseEditorBatchActionsParams {
   fileName: string | null;
   supportsBatchActions: boolean;
   getFilteredSegmentIds: () => string[] | null;
-  reloadEditorData: () => Promise<void>;
   flushPendingSegmentUpdates: () => Promise<void>;
   aiFileJobTracker: AIFileJobTracker;
+  onQAComplete?: (report: FileQaReport) => void;
+  onQAStart?: () => void;
 }
 
 export interface EditorBatchActionsController {
@@ -83,25 +85,7 @@ export async function exportEditorFile({
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    if (!errorMessage.includes('Export blocked by QA errors')) {
-      feedback.error(`Export failed: ${errorMessage}`);
-      return;
-    }
-
-    const forceExport = await feedback.confirm(
-      `${errorMessage}\n\nDo you want to force export despite these errors?`,
-    );
-
-    if (!forceExport) return;
-
-    try {
-      await api.exportFile(fileId, outputPath, undefined, true);
-      feedback.success('Export successful (forced despite QA errors)');
-    } catch (forceError) {
-      feedback.error(
-        `Export failed: ${forceError instanceof Error ? forceError.message : String(forceError)}`,
-      );
-    }
+    feedback.error(`Export failed: ${errorMessage}`);
   }
 }
 
@@ -129,14 +113,17 @@ export function useEditorBatchActions({
   fileName,
   supportsBatchActions,
   getFilteredSegmentIds,
-  reloadEditorData,
   flushPendingSegmentUpdates,
   aiFileJobTracker,
+  onQAComplete,
+  onQAStart,
 }: UseEditorBatchActionsParams): EditorBatchActionsController {
   const [isBatchAIModalOpen, setIsBatchAIModalOpen] = useState(false);
   const [batchAISegmentIds, setBatchAISegmentIds] = useState<string[] | null>(null);
   const [trackedBatchAIJobId, setTrackedBatchAIJobId] = useState<string | null>(null);
   const [isBatchQARunning, setIsBatchQARunning] = useState(false);
+  const qaRun = useRef(0);
+  const qaBusy = useRef(false);
   const activeBatchAIJob = useAIFileJobForFile(aiFileJobTracker, fileId);
   const trackedBatchAIJob = useAIJob(aiFileJobTracker, trackedBatchAIJobId);
   const isBatchAITranslating = activeBatchAIJob?.status === 'running';
@@ -147,6 +134,11 @@ export function useEditorBatchActions({
     setBatchAISegmentIds(null);
     setTrackedBatchAIJobId(null);
     setIsBatchQARunning(false);
+    qaBusy.current = false;
+    qaRun.current += 1;
+    return () => {
+      qaRun.current += 1;
+    };
   }, [fileId]);
 
   useEffect(() => {
@@ -226,7 +218,9 @@ export function useEditorBatchActions({
   }, [activeBatchAIJob]);
 
   const handleBatchQA = useCallback(async () => {
-    if (!fileName) return;
+    if (!fileName || qaBusy.current) return;
+    qaBusy.current = true;
+    const run = ++qaRun.current;
 
     setIsBatchQARunning(true);
     try {
@@ -234,10 +228,13 @@ export function useEditorBatchActions({
         actionLabel: 'QA',
         flushPendingSegmentUpdates,
       });
-      if (!saved) return;
+      if (!saved || run !== qaRun.current) return;
 
+      onQAStart?.();
       const report = await apiClient.runFileQA(fileId);
-      await reloadEditorData();
+      if (run !== qaRun.current) return;
+      onQAComplete?.(report);
+      if (onQAComplete) return;
       const feedback = buildFileQaFeedback(fileName, report);
       if (feedback.level === 'success') {
         feedbackService.success(feedback.message);
@@ -245,11 +242,17 @@ export function useEditorBatchActions({
         feedbackService.info(feedback.message);
       }
     } catch (error) {
-      feedbackService.error(`Run QA failed: ${error instanceof Error ? error.message : String(error)}`);
+      if (run !== qaRun.current) return;
+      feedbackService.error(
+        `Run QA failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
-      setIsBatchQARunning(false);
+      if (run === qaRun.current) {
+        qaBusy.current = false;
+        setIsBatchQARunning(false);
+      }
     }
-  }, [fileId, fileName, flushPendingSegmentUpdates, reloadEditorData]);
+  }, [fileId, fileName, flushPendingSegmentUpdates, onQAStart, onQAComplete]);
 
   const openBatchAIModal = useCallback(() => {
     const segmentIds = getFilteredSegmentIds();

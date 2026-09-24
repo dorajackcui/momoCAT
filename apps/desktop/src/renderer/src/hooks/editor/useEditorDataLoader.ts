@@ -2,8 +2,6 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import { normalizeSegmentStatus } from '@cat/core/models';
-import type { SegmentQaRuleId } from '@cat/core/project';
-import { DEFAULT_PROJECT_QA_SETTINGS } from '@cat/core/project';
 import type { TagPolicy } from '@cat/core/tag';
 import type { SegmentsUpdatedEvent } from '../../../../shared/ipc';
 import { resolveFileTagPolicy } from '../../../../shared/fileTagPolicy';
@@ -89,8 +87,7 @@ function applyDirectSegmentUpdate(params: {
     ...params.segment,
     targetTokens,
     status: nextStatus,
-    qaIssues: nextStatus === 'confirmed' ? params.segment.qaIssues : undefined,
-    autoFixSuggestions: nextStatus === 'confirmed' ? params.segment.autoFixSuggestions : undefined,
+    qaIssues: params.segment.qaIssues,
   };
 }
 
@@ -109,9 +106,7 @@ function applyPropagatedSegmentUpdate(params: {
     ...params.segment,
     targetTokens,
     status: nextStatus,
-    // Propagation replaces the target; QA from the previous translation is stale.
-    qaIssues: undefined,
-    autoFixSuggestions: undefined,
+    qaIssues: params.segment.qaIssues,
   };
 }
 
@@ -125,9 +120,7 @@ interface UseEditorDataLoaderParams {
   onSegmentsChanged: (changes: readonly EditorSegmentChange[]) => void;
   setSegments: SetSegmentsWithChangeHint;
   setProjectId: Dispatch<SetStateAction<number | null>>;
-  setProjectTgtLang: Dispatch<SetStateAction<string | null>>;
-  setEnabledQaRuleIds: Dispatch<SetStateAction<SegmentQaRuleId[]>>;
-  setInstantQaOnConfirm: Dispatch<SetStateAction<boolean>>;
+
   setFileTagPolicy: Dispatch<SetStateAction<TagPolicy>>;
   setSegmentSaveErrors: Dispatch<SetStateAction<Record<string, string>>>;
   setAiTranslatingSegmentIds: Dispatch<SetStateAction<Record<string, boolean>>>;
@@ -283,9 +276,7 @@ export function useEditorDataLoader({
   onSegmentsChanged,
   setSegments,
   setProjectId,
-  setProjectTgtLang,
-  setEnabledQaRuleIds,
-  setInstantQaOnConfirm,
+
   setFileTagPolicy,
   setSegmentSaveErrors,
   setAiTranslatingSegmentIds,
@@ -301,6 +292,22 @@ export function useEditorDataLoader({
   applySelectedUpdates: (data: SegmentsUpdatedEvent[]) => void;
 } {
   const queuedRemoteUpdatesRef = useRef<Map<string, SegmentsUpdatedEvent>>(new Map());
+  const loadedProjectId = useRef<number | null>(null);
+  useEffect(() => {
+    loadedProjectId.current = null;
+    const invalidate = (projectId: number | null) => {
+      if (projectId !== null && projectId !== loadedProjectId.current) return;
+      onSegmentsChanged(segmentStore.invalidateQA());
+    };
+    const offQA = apiClient.onQAInvalidated?.(invalidate);
+    const offTB = apiClient.onReferenceDataChanged?.((event) => {
+      if (event.kind === 'tb') invalidate(event.projectId);
+    });
+    return () => {
+      offQA?.();
+      offTB?.();
+    };
+  }, [activeFileId, segmentStore, onSegmentsChanged]);
 
   const applySegmentsUpdatedEvent = useCallback(
     (data: SegmentsUpdatedEvent) => {
@@ -364,9 +371,7 @@ export function useEditorDataLoader({
     if (activeFileId === null) {
       setSegments([], { orderChanged: true });
       setProjectId(null);
-      setProjectTgtLang(null);
-      setEnabledQaRuleIds(DEFAULT_PROJECT_QA_SETTINGS.enabledRuleIds);
-      setInstantQaOnConfirm(DEFAULT_PROJECT_QA_SETTINGS.instantQaOnConfirm);
+
       setFileTagPolicy('default');
       setSegmentSaveErrors({});
       setAiTranslatingSegmentIds({});
@@ -381,20 +386,9 @@ export function useEditorDataLoader({
       setFileTagPolicy(file ? resolveFileTagPolicy(file) : 'default');
       if (file) {
         setProjectId(file.projectId);
-        const project = await apiClient.getProject(file.projectId);
-        setProjectTgtLang(project?.tgtLang ?? null);
-        const qaSettings = project?.qaSettings || DEFAULT_PROJECT_QA_SETTINGS;
-        setEnabledQaRuleIds(
-          qaSettings.enabledRuleIds || DEFAULT_PROJECT_QA_SETTINGS.enabledRuleIds,
-        );
-        setInstantQaOnConfirm(
-          typeof qaSettings.instantQaOnConfirm === 'boolean'
-            ? qaSettings.instantQaOnConfirm
-            : DEFAULT_PROJECT_QA_SETTINGS.instantQaOnConfirm,
-        );
+        loadedProjectId.current = file.projectId;
       } else {
         setProjectId(null);
-        setProjectTgtLang(null);
       }
 
       const segmentsArray: Segment[] = [];
@@ -423,7 +417,6 @@ export function useEditorDataLoader({
           sourceTokens,
           targetTokens,
           status: normalizeStatus(segment.status, targetTokens),
-          autoFixSuggestions: undefined,
         };
       });
       setSegments(normalized, { orderChanged: true });
@@ -447,12 +440,12 @@ export function useEditorDataLoader({
     normalizeTokens,
     setActiveSegmentId,
     setAiTranslatingSegmentIds,
-    setEnabledQaRuleIds,
+
     setFileTagPolicy,
-    setInstantQaOnConfirm,
+
     setLoading,
     setProjectId,
-    setProjectTgtLang,
+
     setSegmentSaveErrors,
     setSegments,
   ]);

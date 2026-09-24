@@ -3,13 +3,13 @@ import { copyFile, mkdir, rename, rm, unlink, writeFile } from 'fs/promises';
 import { type Segment, type TBMatch } from '@cat/core/models';
 import { normalizeProjectFileName } from '@cat/db';
 import {
-  DEFAULT_PROJECT_QA_SETTINGS,
   type FileQaReport,
   type ProjectAIModel,
   type ProjectQASettings,
   type ProjectType,
 } from '@cat/core/project';
-import { evaluateSegmentQa, validateSegmentTags } from '@cat/core/qa';
+import { runProjectFileQA, runProjectSegmentQA, type RunQAInput } from '@cat/localization';
+import type { TransactionManager } from '../ports';
 import {
   ImportOptions,
   ProjectRepository,
@@ -39,6 +39,13 @@ import {
 import { internalProjectFilePath } from './projectFileStorage';
 
 export class ProjectFileModule {
+  private readonly qaInvalidationListeners = new Set<(projectId: number) => void>();
+  public onQAInvalidated(callback: (projectId: number) => void) {
+    this.qaInvalidationListeners.add(callback);
+    return () => {
+      this.qaInvalidationListeners.delete(callback);
+    };
+  }
   private static readonly SEGMENT_PAGE_SIZE = 2000;
   private readonly referenceOperations: ProjectReferenceFileOperations;
 
@@ -51,6 +58,10 @@ export class ProjectFileModule {
     referenceExportRunner?: ReferenceExportRunner,
     sourceTerminologyPrecheckRunner?: SourceTerminologyPrecheckRunner,
     emitFileOperationProgress?: FileOperationProgressEmitter,
+    private readonly qaEvaluator?: RunQAInput['evaluate'],
+    private readonly qaTransaction?: TransactionManager,
+    private readonly qaFileRunner?: (fileId: number) => Promise<FileQaReport>,
+    private readonly qaRevision?: () => string,
   ) {
     this.referenceOperations = new ProjectReferenceFileOperations({
       projectRepo,
@@ -118,6 +129,7 @@ export class ProjectFileModule {
 
   public updateProjectQASettings(projectId: number, qaSettings: ProjectQASettings) {
     this.projectRepo.updateProjectQASettings(projectId, qaSettings);
+    for (const callback of this.qaInvalidationListeners) callback(projectId);
   }
 
   public listProjectSavedPrompts(projectId: number) {
@@ -384,12 +396,7 @@ export class ProjectFileModule {
     return this.filter.getPreview(filePath);
   }
 
-  public async exportFile(
-    fileId: number,
-    outputPath: string,
-    options?: ImportOptions,
-    forceExport: boolean = false,
-  ) {
+  public async exportFile(fileId: number, outputPath: string, options?: ImportOptions) {
     const file = this.projectRepo.getFile(fileId);
     if (!file) throw new Error('File not found');
 
@@ -403,31 +410,6 @@ export class ProjectFileModule {
     }
 
     const segments = this.getAllSegments(fileId);
-    const errors: { row: number; message: string }[] = [];
-
-    for (const seg of segments) {
-      const issues = validateSegmentTags(seg);
-      const criticalErrors = issues.filter((i) => i.severity === 'error');
-      if (criticalErrors.length > 0) {
-        errors.push({
-          row: seg.meta.rowRef || 0,
-          message: criticalErrors.map((e) => e.message).join('; '),
-        });
-      }
-    }
-
-    if (errors.length > 0 && !forceExport) {
-      const errorMsg = errors
-        .slice(0, 5)
-        .map((e) => `Row ${e.row}: ${e.message}`)
-        .join('\n');
-      const error = new Error(
-        `Export blocked by QA errors:\n${errorMsg}${errors.length > 5 ? `\n...and ${errors.length - 5} more.` : ''}`,
-      );
-      Object.assign(error, { qaErrors: errors });
-      throw error;
-    }
-
     const storedPath = internalProjectFilePath(this.projectsDir, file);
     await this.filter.export(storedPath, segments, finalOptions, outputPath);
   }
@@ -464,67 +446,33 @@ export class ProjectFileModule {
     fileId: number,
     resolveTermMatches: (projectId: number, segment: Segment) => Promise<TBMatch[]>,
   ): Promise<FileQaReport> {
-    const file = this.projectRepo.getFile(fileId);
-    if (!file) {
-      throw new Error('File not found');
-    }
-
-    const project = this.projectRepo.getProject(file.projectId);
-    if (!project) {
-      throw new Error('Project not found');
-    }
-
-    const qaSettings = project.qaSettings || DEFAULT_PROJECT_QA_SETTINGS;
-    const enabledRuleIds = qaSettings.enabledRuleIds || [];
-    const issues: FileQaReport['issues'] = [];
-    let checkedSegments = 0;
-    let errorCount = 0;
-    let warningCount = 0;
-    let offset = 0;
-    const pageSize = 1000;
-    let hasMore = true;
-
-    while (hasMore) {
-      const page = this.segmentRepo.getSegmentsPage(fileId, offset, pageSize);
-      if (page.length === 0) break;
-      offset += page.length;
-      hasMore = page.length === pageSize;
-
-      for (const segment of page) {
-        checkedSegments += 1;
-        const termMatches = enabledRuleIds.includes('terminology-consistency')
-          ? await resolveTermMatches(project.id, segment)
-          : [];
-        const segmentIssues = evaluateSegmentQa(segment, {
-          enabledRuleIds,
-          termMatches,
-          targetLocale: project.tgtLang,
-        });
-        this.segmentRepo.updateSegmentQaIssues(segment.segmentId, segmentIssues);
-
-        for (const issue of segmentIssues) {
-          if (issue.severity === 'error') errorCount += 1;
-          if (issue.severity === 'warning') warningCount += 1;
-          issues.push({
-            segmentId: segment.segmentId,
-            row: segment.meta.rowRef || segment.orderIndex + 1,
-            ruleId: issue.ruleId,
-            severity: issue.severity,
-            message: issue.message,
-          });
-        }
-      }
-    }
-
-    return {
+    if (this.qaFileRunner) return this.qaFileRunner(fileId);
+    return runProjectFileQA({
       fileId,
-      checkedSegments,
-      errorCount,
-      warningCount,
-      issues,
-    };
+      projectRepo: this.projectRepo,
+      segmentRepo: this.segmentRepo,
+      resolveTermMatches,
+      evaluate: this.qaEvaluator,
+      getRevision: this.qaRevision,
+      transaction: (work) =>
+        this.qaTransaction ? this.qaTransaction.runInTransaction(work, 'immediate') : work(),
+    });
   }
 
+  public checkSegmentQA(
+    segmentId: string,
+    resolveTermMatches: (projectId: number, segment: Segment) => Promise<TBMatch[]>,
+  ) {
+    if (!this.qaRevision || !this.qaTransaction) throw new Error('QA persistence is unavailable');
+    return runProjectSegmentQA({
+      segmentId,
+      projectRepo: this.projectRepo,
+      segmentRepo: this.segmentRepo,
+      resolveTermMatches,
+      getRevision: this.qaRevision,
+      transaction: (work) => this.qaTransaction!.runInTransaction(work, 'immediate'),
+    });
+  }
   private getAllSegments(fileId: number): Segment[] {
     const segments: Segment[] = [];
     let offset = 0;

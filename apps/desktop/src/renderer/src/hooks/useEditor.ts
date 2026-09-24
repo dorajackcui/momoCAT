@@ -1,8 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from 'react';
-import { DEFAULT_PROJECT_QA_SETTINGS, type SegmentQaRuleId } from '@cat/core/project';
+import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react';
 import type { Segment, Token } from '@cat/core/models';
 import { normalizeSegmentStatus } from '@cat/core/models';
-import { TagValidator } from '@cat/core/qa';
 import type { TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { AISegmentTranslateResult } from '../../../shared/ipc';
@@ -32,13 +30,14 @@ import {
   type EditorSegmentStore,
 } from './editor/editorSegmentStore';
 import { useEditorDataLoader } from './editor/useEditorDataLoader';
-import { useSegmentQaWorkflow } from './editor/useSegmentQaWorkflow';
+import { useSegmentConfirmation } from './editor/useSegmentConfirmation';
+import { refreshInstantQA } from './editor/refreshInstantQA';
 import { useSelectedSegmentActions } from './editor/useSelectedSegmentActions';
 import { apiClient } from '../services/apiClient';
 
 interface UseEditorProps {
   activeFileId: number | null;
-  activeTab?: 'tm' | 'concordance';
+  activeTab?: 'tm' | 'concordance' | 'qa';
 }
 
 export { createSegmentPersistor };
@@ -54,9 +53,7 @@ export function applyAISegmentTranslateResultToStore(
       ...translatedSegment,
       targetTokens: result.targetTokens,
       status: normalizeSegmentStatus(result.status, result.targetTokens),
-      qaIssues: result.status === 'confirmed' ? translatedSegment.qaIssues : undefined,
-      autoFixSuggestions:
-        result.status === 'confirmed' ? translatedSegment.autoFixSuggestions : undefined,
+      qaIssues: translatedSegment.qaIssues,
     });
   }
 
@@ -68,8 +65,7 @@ export function applyAISegmentTranslateResultToStore(
       ...propagatedSegment,
       targetTokens: result.targetTokens,
       status: normalizeSegmentStatus('draft', result.targetTokens),
-      qaIssues: undefined,
-      autoFixSuggestions: undefined,
+      qaIssues: propagatedSegment.qaIssues,
     });
   }
 
@@ -89,21 +85,13 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
   const [segmentStats, setSegmentStats] = useState<SegmentStats>(() => buildSegmentStats([]));
   const segmentStatsRef = useRef(segmentStats);
   const [projectId, setProjectId] = useState<number | null>(null);
-  const [projectTgtLang, setProjectTgtLang] = useState<string | null>(null);
-  const [enabledQaRuleIds, setEnabledQaRuleIds] = useState<SegmentQaRuleId[]>(
-    DEFAULT_PROJECT_QA_SETTINGS.enabledRuleIds,
-  );
   const [fileTagPolicy, setFileTagPolicy] = useState<TagPolicy>('default');
-  const [instantQaOnConfirm, setInstantQaOnConfirm] = useState<boolean>(
-    DEFAULT_PROJECT_QA_SETTINGS.instantQaOnConfirm,
-  );
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
   const [segmentSaveErrors, setSegmentSaveErrors] = useState<Record<string, string>>({});
   const [aiTranslatingSegmentIds, setAiTranslatingSegmentIds] = useState<Record<string, boolean>>(
     {},
   );
   const [loading, setLoading] = useState(false);
-  const tagValidator = useMemo(() => new TagValidator(), []);
 
   // Keep latest values readable from stable callbacks so per-row handlers
   // (and therefore EditorRow memo bailouts) survive segment updates.
@@ -165,10 +153,10 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
   );
   const updateSegmentState = useCallback(
     (segmentId: string, updater: (segment: Segment) => Segment): Segment | undefined => {
-      const change = segmentStore.updateSegment(segmentId, updater);
-      if (!change) return undefined;
-      publishSegmentChanges([change]);
-      return change.next;
+      const previous = segmentStore.getSegment(segmentId);
+      if (!previous) return undefined;
+      publishSegmentChanges(segmentStore.applyUpdates(new Map([[segmentId, updater(previous)]])));
+      return segmentStore.getSegment(segmentId);
     },
     [publishSegmentChanges, segmentStore],
   );
@@ -242,9 +230,6 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     onSegmentsChanged: publishSegmentChanges,
     setSegments,
     setProjectId,
-    setProjectTgtLang,
-    setEnabledQaRuleIds,
-    setInstantQaOnConfirm,
     setFileTagPolicy,
     setSegmentSaveErrors,
     setAiTranslatingSegmentIds,
@@ -268,18 +253,27 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     segments,
   });
 
-  const { confirmSegment: confirmSegmentWithQa } = useSegmentQaWorkflow({
+  const refreshConfirmedQA = useCallback(
+    (ids: string[]) => {
+      void refreshInstantQA(ids, segmentStore, publishSegmentChanges);
+    },
+    [segmentStore, publishSegmentChanges],
+  );
+  const handleConfirmed = useCallback(
+    (event: Parameters<typeof applyConfirmation>[0]) => {
+      applyConfirmation(event);
+      refreshConfirmedQA([event.segmentId]);
+    },
+    [applyConfirmation, refreshConfirmedQA],
+  );
+
+  const { confirmSegment: persistConfirmation } = useSegmentConfirmation({
     segments,
-    projectId,
-    targetLocale: projectTgtLang,
-    enabledQaRuleIds,
-    instantQaOnConfirm,
     setSegments,
     setActiveSegmentId,
     setSegmentSaveError,
     clearSegmentSaveError,
-    tagValidator,
-    onConfirmed: applyConfirmation,
+    onConfirmed: handleConfirmed,
   });
 
   const selectedActions = useSelectedSegmentActions({
@@ -287,16 +281,9 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     getSegment: getSegmentById,
     flushPending: flushAllSegmentUpdates,
     applyUpdates: applySelectedUpdates,
-    setSegments,
+    onConfirmed: refreshConfirmedQA,
     clearSaveError: clearSegmentSaveError,
     tagPolicy: fileTagPolicy,
-    qaSettings: {
-      projectId,
-      targetLocale: projectTgtLang,
-      enabledQaRuleIds,
-      instantQaOnConfirm,
-      tagValidator,
-    },
   });
 
   useEffect(
@@ -329,8 +316,6 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
             ...segment,
             targetTokens: tokens,
             status: nextStatus,
-            qaIssues: undefined,
-            autoFixSuggestions: undefined,
           };
         });
       } catch (error) {
@@ -364,9 +349,9 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
       } catch {
         return;
       }
-      await confirmSegmentWithQa(segmentId);
+      await persistConfirmation(segmentId);
     },
-    [confirmSegmentWithQa, flushAllSegmentUpdates],
+    [persistConfirmation, flushAllSegmentUpdates],
   );
 
   const handleApplyMatch = useCallback(
@@ -377,8 +362,6 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
         ...segment,
         targetTokens: tokens,
         status: normalizeSegmentStatus('draft', tokens),
-        qaIssues: undefined,
-        autoFixSuggestions: undefined,
       }));
     },
     [activeSegmentId, applyOptimisticSegmentUpdate],
@@ -396,8 +379,6 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
           ...segment,
           targetTokens: nextTokens,
           status: nextStatus,
-          qaIssues: undefined,
-          autoFixSuggestions: undefined,
         };
       });
     },
@@ -518,6 +499,7 @@ export function useEditor({ activeFileId, activeTab = 'tm' }: UseEditorProps) {
     ...selectedActions,
     segmentStore,
     segmentChangeHint,
+    publishSegmentChanges,
     segmentIndexById: segmentStore.getIndexById(),
     segmentStats,
     fileTagPolicy,

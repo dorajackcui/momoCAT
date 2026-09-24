@@ -1,9 +1,5 @@
 import type { Segment, SegmentStatus, Token } from '@cat/core/models';
-import {
-  SEGMENT_QA_RULE_OPTIONS,
-  type ProjectQASettings,
-  type ProjectType,
-} from '@cat/core/project';
+import { isQASettings, type ProjectQASettings, type ProjectType } from '@cat/core/project';
 import type { TagPolicy } from '@cat/core/tag';
 import type { ImportOptions, PastedSourceFileInput, SelectedSegmentUpdate } from '../../shared/ipc';
 import {
@@ -104,13 +100,7 @@ export function isProjectType(value: unknown): value is ProjectType {
 }
 
 export function isProjectQASettings(value: unknown): value is ProjectQASettings {
-  return (
-    isRecord(value) &&
-    isBoolean(value.instantQaOnConfirm) &&
-    isArrayOf(value.enabledRuleIds, (id): id is ProjectQASettings['enabledRuleIds'][number] =>
-      SEGMENT_QA_RULE_OPTIONS.some((rule) => rule.id === id),
-    )
-  );
+  return isQASettings(value);
 }
 
 function isTagPolicy(value: unknown): value is TagPolicy {

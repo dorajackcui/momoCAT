@@ -1,4 +1,7 @@
 export { runBounded } from './RequestScheduler';
+export { runQA, type RunQAInput } from './qa/runQA';
+export { runProjectFileQA } from './qa/runProjectFileQA';
+export { runQAFileCommand, QA_CHECK_NAMES, type QAFileCommandConfig } from './cli/qaFileCommand';
 export type { RunBoundedOptions, ScheduledResult } from './RequestScheduler';
 export { LocalizationEngine } from './LocalizationEngine';
 export type { LocalizationEngineConstructorOptions } from './LocalizationEngine';
@@ -210,3 +213,4 @@ export type {
   InspectProjectsResult,
   InspectProviderSummary,
 } from './cli/inspectProjectsCommand';
+export { runProjectSegmentQA } from './qa/runProjectSegmentQA';

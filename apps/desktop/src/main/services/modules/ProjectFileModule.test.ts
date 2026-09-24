@@ -1035,7 +1035,8 @@ describe('ProjectFileModule.runFileQA', () => {
     const report = await module.runFileQA(1, vi.fn().mockResolvedValue([]));
 
     expect(report.checkedSegments).toBe(2);
-    expect(report.errorCount).toBe(1);
+    expect(report.issueCount).toBe(1);
+    expect(report.affectedSegments).toBe(1);
     expect(report.warningCount).toBe(0);
     expect(report.issues).toHaveLength(1);
     expect(report.issues[0].segmentId).toBe('seg-has-error');
@@ -1047,11 +1048,11 @@ describe('ProjectFileModule.runFileQA', () => {
       expect.arrayContaining([
         expect.objectContaining({
           ruleId: 'tag-missing',
-          severity: 'error',
+          severity: 'info',
         }),
       ]),
     );
-    expect(segmentRepo.updateSegmentQaIssues).toHaveBeenNthCalledWith(2, 'seg-clean', []);
+    expect(segmentRepo.updateSegmentQaIssues).toHaveBeenCalledWith('seg-clean', []);
   });
 
   it('passes project target locale into terminology QA during file QA runs', async () => {
@@ -1117,6 +1118,6 @@ describe('ProjectFileModule.runFileQA', () => {
     expect(report.checkedSegments).toBe(1);
     expect(report.warningCount).toBe(0);
     expect(report.issues).toEqual([]);
-    expect(segmentRepo.updateSegmentQaIssues).toHaveBeenCalledWith('seg-tr-locale', []);
+    expect(segmentRepo.updateSegmentQaIssues).toHaveBeenCalledWith(expect.any(String), []);
   });
 });

@@ -3,6 +3,8 @@ import type { Project, ProjectFile } from '@cat/core/project';
 import { ProjectAITranslateModal } from './project-detail/ProjectAITranslateModal';
 import { useEditor } from '../hooks/useEditor';
 import { useEditorFilters } from '../hooks/useEditorFilters';
+import { useEditorQA } from '../hooks/editor/useEditorQA';
+import { Button } from './ui';
 import { apiClient } from '../services/apiClient';
 import { EditorHeader } from './editor/EditorHeader';
 import { EditorFilterBar } from './editor/EditorFilterBar';
@@ -102,7 +104,7 @@ export const Editor: React.FC<EditorProps> = ({
     handleApplyMatch,
     handleApplyTerm,
     projectId,
-    reloadEditorData,
+    publishSegmentChanges,
     segmentChangeHint,
     segmentIndexById,
     segmentStats,
@@ -113,6 +115,8 @@ export const Editor: React.FC<EditorProps> = ({
 
   const {
     sourceQueryInput,
+    qaFilter,
+    applyQAFilter,
     targetQueryInput,
     targetSearchScope,
     matchMode,
@@ -175,12 +179,14 @@ export const Editor: React.FC<EditorProps> = ({
     }
   }, [filteredSegments, initialActiveSegmentId, loading, segments.length, setActiveSegmentId]);
   const supportsBatchActions = project?.projectType === 'translation';
+  const qa = useEditorQA(fileId, segmentStore, segmentChangeHint, publishSegmentChanges);
   const batchActions = useEditorBatchActions({
+    onQAComplete: qa.acceptReport,
+    onQAStart: qa.startRun,
     fileId,
     fileName: file?.name || null,
     supportsBatchActions,
     getFilteredSegmentIds,
-    reloadEditorData,
     flushPendingSegmentUpdates,
     aiFileJobTracker,
   });
@@ -224,8 +230,9 @@ export const Editor: React.FC<EditorProps> = ({
   );
 
   const handleRunBatchQA = useCallback(() => {
+    setActiveTab('qa');
     void handleBatchQA();
-  }, [handleBatchQA]);
+  }, [handleBatchQA, setActiveTab]);
 
   const handleConfirmBatchAITranslate = useCallback(
     (options: Parameters<typeof handleBatchAITranslate>[0]) => {
@@ -287,7 +294,6 @@ export const Editor: React.FC<EditorProps> = ({
   const selectionActionsDisabled =
     isSelectedSegmentActionRunning ||
     batchActions.isBatchAITranslating ||
-    batchActions.isBatchQARunning ||
     Object.values(aiTranslatingSegmentIds).some(Boolean);
   const handleSelectionAction = useCallback(
     (action: SelectedSegmentAction) => {
@@ -491,6 +497,16 @@ export const Editor: React.FC<EditorProps> = ({
               hasActiveFilter={hasActiveFilter}
             />
 
+            {qaFilter && (
+              <div className="flex items-center justify-between gap-2 border-b border-border-subtle px-4 py-2 text-sm">
+                <span className="min-w-0 break-words">
+                  QA filter: {qaFilter.label} · {filteredSegments.length} rows
+                </span>
+                <Button size="sm" onClick={clearFilters}>
+                  Exit QA filter
+                </Button>
+              </div>
+            )}
             <EditorListPane
               selectedSegmentIds={selectedIds}
               onSelectSegment={handleSelectSegment}
@@ -524,6 +540,14 @@ export const Editor: React.FC<EditorProps> = ({
         </div>
 
         <EditorSidebar
+          qa={{
+            ...qa,
+            getSegment: segmentStore.getSegment,
+            running: batchActions.isBatchQARunning,
+            onRun: handleRunBatchQA,
+            onFilter: applyQAFilter,
+            onLocate: setActiveSegmentId,
+          }}
           sidebarWidth={sidebarWidth}
           activeTab={activeTab}
           setActiveTab={setActiveTab}

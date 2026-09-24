@@ -346,6 +346,11 @@ primaryInstanceReady?.then(async () => {
   app.on('before-quit', unsubscribeWorkingTMReferenceDataChanges);
 
   registerProjectHandlers({ ipcMain, projectService });
+  const unsubscribeQAInvalidation = projectService.onQAInvalidated((projectId) => {
+    for (const window of BrowserWindow.getAllWindows())
+      window.webContents.send(IPC_CHANNELS.events.qaInvalidated, projectId);
+  });
+  app.on('before-quit', unsubscribeQAInvalidation);
   registerTMHandlers({
     ipcMain,
     projectService,

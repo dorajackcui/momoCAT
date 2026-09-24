@@ -1,4 +1,3 @@
-import { TagValidator } from '@cat/core/qa';
 import type { CATDatabase } from '@cat/db';
 import { SqliteProjectRepository } from '../adapters/sqlite/SqliteProjectRepository';
 import { SqliteSettingsRepository } from '../adapters/sqlite/SqliteSettingsRepository';
@@ -51,7 +50,6 @@ export function createLocalizationEngineAssembly(
     aiRuntimeConfigProvider:
       options.aiRuntimeConfigProvider ?? new DefaultAIRuntimeConfigProvider(),
     aiTransport,
-    tagValidator: new TagValidator(),
   });
   const strategyModules = { tmModule, tbModule, mtModule };
 

@@ -49,18 +49,18 @@ Important project fields:
 - `aiModel` stores the selected provider id, not a secret. An unset provider uses the empty-string default; nullable API inputs are normalized on write so a project prompt can be saved before a provider is configured.
 - `aiPrompt` is the legacy/default project prompt surface.
 - `aiTemperature` remains for compatibility but is not the runtime tuning source of truth.
-- `qaSettingsJson` stores the project QA rule configuration.
+- `qaSettingsJson` stores enabled category IDs, disabled optional check IDs, instant-on-confirm, and tag/term/substring options (including standard tag types; legacy tagMode is accepted then removed during normalization). Missing fields receive shared defaults without enabling extra categories in existing saved configurations. The contract lives in [QA settings](../packages/core/src/project/qaSettings.ts); this remains schema v15 JSON.
 
 Important file/segment fields:
 
-- `files.importOptionsJson` persists column selection and file-level tag policy used by edit, translation, QA, TM commit, and export.
+- `files.importOptionsJson` persists column selection and file-level tag policy used by token parsing and QA.
 - Renaming an imported file preserves its extension, identity, segments, statistics, import options, and `updatedAt`. When the internal project copy exists it is renamed with the metadata; if it is already missing, the metadata rename succeeds with an explicit degraded result so the desktop can warn that path-based operations remain unavailable.
 - `segments.sourceTokensJson` and `targetTokensJson` are authoritative token payloads.
 - Segment workflow status is `empty`, `draft`, or `confirmed`. Unconfirmed targets with non-whitespace content (including tags) are `draft`; the rest are `empty`. Explicit confirmation is retained until an edit replaces it. AI translation and review produce unconfirmed targets and do not encode their origin in workflow status.
 - This status change is repository-only compatibility on the existing v15 `TEXT` column: reads map legacy `new`, `translated`, and `reviewed` values by target content, while every insert/update writes a canonical state. Opening a database does not rewrite segment data or timestamps. Project/file aggregates use the same normalization for legacy rows, including readonly connections; file progress exposes `emptySegments` for the remaining empty bucket.
 - `tagsSignature`, `matchKey`, and `srcHash` support tag-aware TM/repeat matching.
 - `segments.metaJson` stores row/context metadata.
-- `segments.qaIssuesJson` stores current QA issues.
+- `segments.qaIssuesJson` stores the last persisted QA findings, including optional group identity/label, terminology origins, and reference rows. NULL means no current result; an empty JSON array means the check found no issues. Findings are advisory; old persisted blocking metadata has no consumer and no effect on operations. Consumers display all findings as QA problems; legacy severity fields remain readable. Both full and instant checks write here. Content/configuration/terminology invalidation is owned by [QA result lifecycle](LOCALIZATION.md#qa-result-lifecycle-and-legacy-consumers).
 - `files.totalSegments` and `confirmedSegments` are maintained statistics; segment state remains the behavioral source.
 
 Repeat groups and their first occurrence are derived from `fileId`, `srcHash`, and `orderIndex`.

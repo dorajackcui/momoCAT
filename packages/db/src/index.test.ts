@@ -27,23 +27,13 @@ describe("CATDatabase", () => {
   });
 
   it("should persist review project type", () => {
-    const projectId = db.createProject(
-      "Review Project",
-      "en-US",
-      "zh-CN",
-      "review",
-    );
+    const projectId = db.createProject("Review Project", "en-US", "zh-CN", "review");
     const project = db.getProject(projectId);
     expect(project?.projectType).toBe("review");
   });
 
   it("should persist custom project type", () => {
-    const projectId = db.createProject(
-      "Custom Project",
-      "en-US",
-      "zh-CN",
-      "custom",
-    );
+    const projectId = db.createProject("Custom Project", "en-US", "zh-CN", "custom");
     const project = db.getProject(projectId);
     expect(project?.projectType).toBe("custom");
   });
@@ -332,11 +322,7 @@ describe("CATDatabase", () => {
     expect(file?.confirmedSegments).toBe(0);
 
     // Confirm one segment
-    db.updateSegmentTarget(
-      "s1",
-      [{ type: "text", content: "甲" }],
-      "confirmed",
-    );
+    db.updateSegmentTarget("s1", [{ type: "text", content: "甲" }], "confirmed");
 
     file = db.getFile(fileId);
     expect(file?.confirmedSegments).toBe(1);
@@ -345,18 +331,10 @@ describe("CATDatabase", () => {
 
     // File reads derive confirmation stats from segments, so repeated updates
     // cannot double-count and moving back to draft is reflected immediately.
-    db.updateSegmentTarget(
-      "s1",
-      [{ type: "text", content: "updated" }],
-      "confirmed",
-    );
+    db.updateSegmentTarget("s1", [{ type: "text", content: "updated" }], "confirmed");
     expect(db.getFile(fileId)?.confirmedSegments).toBe(1);
 
-    db.updateSegmentTarget(
-      "s1",
-      [{ type: "text", content: "draft" }],
-      "draft",
-    );
+    db.updateSegmentTarget("s1", [{ type: "text", content: "draft" }], "draft");
     file = db.getFile(fileId);
     expect(file?.confirmedSegments).toBe(0);
     expect(file?.segmentStatusStats.totalSegments).toBe(2);
@@ -663,11 +641,7 @@ describe("CATDatabase", () => {
     expect(segment?.qaIssues).toHaveLength(1);
     expect(segment?.qaIssues?.[0].ruleId).toBe("tag-missing");
 
-    db.updateSegmentTarget(
-      "qa-1",
-      [{ type: "text", content: "点击 <1>" }],
-      "draft",
-    );
+    db.updateSegmentTarget("qa-1", [{ type: "text", content: "点击 <1>" }], "draft");
 
     segment = db.getSegment("qa-1");
     expect(segment?.qaIssues).toBeUndefined();
@@ -713,7 +687,7 @@ describe("CATDatabase", () => {
       meta: { context: legacyMeta.context, repeatPropagation: { mode: "detached" } },
     });
 
-    expect(db.getSegment("repeat-state-1")?.qaIssues).toBeUndefined();
+    expect(db.getSegment("repeat-state-1")?.qaIssues).toHaveLength(1);
   });
 
   it("should normalize invalid segment status values when reading", () => {
@@ -748,14 +722,12 @@ describe("CATDatabase", () => {
     ] as any);
 
     const segments = db.getSegmentsPage(fileId, 0, 10);
-    expect(
-      segments.find((segment) => segment.segmentId === "invalid-empty-target")
-        ?.status,
-    ).toBe("empty");
-    expect(
-      segments.find((segment) => segment.segmentId === "invalid-has-target")
-        ?.status,
-    ).toBe("draft");
+    expect(segments.find((segment) => segment.segmentId === "invalid-empty-target")?.status).toBe(
+      "empty",
+    );
+    expect(segments.find((segment) => segment.segmentId === "invalid-has-target")?.status).toBe(
+      "draft",
+    );
   });
 
   describe("Multi-TM Architecture (v5)", () => {
@@ -770,23 +742,13 @@ describe("CATDatabase", () => {
     });
 
     it("should not auto-create Working TM for review projects", () => {
-      const projectId = db.createProject(
-        "Review Auto TM Project",
-        "en",
-        "zh",
-        "review",
-      );
+      const projectId = db.createProject("Review Auto TM Project", "en", "zh", "review");
       const mounted = db.getProjectMountedTMs(projectId);
       expect(mounted).toHaveLength(0);
     });
 
     it("should not auto-create Working TM for custom projects", () => {
-      const projectId = db.createProject(
-        "Custom Auto TM Project",
-        "en",
-        "zh",
-        "custom",
-      );
+      const projectId = db.createProject("Custom Auto TM Project", "en", "zh", "custom");
       const mounted = db.getProjectMountedTMs(projectId);
       expect(mounted).toHaveLength(0);
     });
@@ -917,7 +879,9 @@ describe("CATDatabase", () => {
 
       expect(results.length).toBeLessThanOrEqual(10);
       expect(topFiveHashes).toContain("wind-lotus-pillar");
-      expect(topFiveHashes.filter((srcHash) => srcHash.startsWith("template-crowd-"))).toHaveLength(2);
+      expect(topFiveHashes.filter((srcHash) => srcHash.startsWith("template-crowd-"))).toHaveLength(
+        2,
+      );
     });
 
     it("should recall shorter CJK TM source contained in longer active source", () => {
@@ -955,12 +919,10 @@ describe("CATDatabase", () => {
       );
       expect(partyResults.map((row) => row.srcHash)).toContain("animal-party-hash");
 
-      const pillarResults = db.searchTMRecallCandidates(
-        projectId,
-        "风荷立柱设计图",
-        [mainTmId],
-        { scope: "source", limit: 50 },
-      );
+      const pillarResults = db.searchTMRecallCandidates(projectId, "风荷立柱设计图", [mainTmId], {
+        scope: "source",
+        limit: 50,
+      });
       expect(pillarResults.map((row) => row.srcHash)).toContain("pillar-drawing-hash");
     });
 
@@ -1015,7 +977,12 @@ describe("CATDatabase", () => {
           targetTokens: [{ type: "text", content: `fresh king noise ${index}` }],
           usageCount: 1,
         } as any);
-        db.insertTMFts(mainTmId, sourceText, `fresh king noise ${index}`, `fresh-king-noise-${index}`);
+        db.insertTMFts(
+          mainTmId,
+          sourceText,
+          `fresh king noise ${index}`,
+          `fresh-king-noise-${index}`,
+        );
       }
 
       db.upsertTMEntry({
@@ -1042,7 +1009,12 @@ describe("CATDatabase", () => {
 
     it("should keep exact contained 3-character CJK source when broad concordance FTS is crowded", () => {
       const projectId = db.createProject("Active Concordance Exact Short Source", "zh", "fr");
-      const mainTmId = db.createTM("Main Active Concordance Exact Short Source", "zh", "fr", "main");
+      const mainTmId = db.createTM(
+        "Main Active Concordance Exact Short Source",
+        "zh",
+        "fr",
+        "main",
+      );
       db.mountTMToProject(projectId, mainTmId, 10, "read");
 
       for (let index = 0; index < 80; index += 1) {
@@ -1087,15 +1059,19 @@ describe("CATDatabase", () => {
 
       try {
         const projectId = db.createProject("English Concordance Phrase Exact", "en-US", "fr-FR");
-        const mainTmId = db.createTM("English Concordance Phrase Exact TM", "en-US", "fr-FR", "main");
+        const mainTmId = db.createTM(
+          "English Concordance Phrase Exact TM",
+          "en-US",
+          "fr-FR",
+          "main",
+        );
         db.mountTMToProject(projectId, mainTmId, 10, "read");
 
         const longSource =
           "Gravity is abnormal in the Heartbeat Zone. After Nikki enters, she will become weightless and float in the air, wrapped in a bubble. Moving while floating consumes Drifting Power. If Drifting Power runs out, the bubble will automatically pop. When Drifting Power is full, movement speed increases for a certain time, and moving during this period will not consume Drifting Power. Four different Music Bubbles float within the Heartbeat Zone: Heartstring Bubbles increase Drifting Power and Heartstrings; Speed Bubbles allow Nikki dash forward quickly for a short distance and grant a small amount of Drifting Power and Heartstrings; Fish Bubbles spit out many Heartstring Bubbles, which can be collected to gain extra Heartstrings; Spike Bubbles stop Nikki in place for a short time and reduce Drifting Power. Heartstrings can also be obtained by playing with the Bom-Bom Bubble Machine in the Rest Zone or sitting in viewing chairs to enjoy the meteors.";
 
         for (let index = 0; index < 80; index += 1) {
-          const sourceText =
-            `Gravity bubble moving floating Drifting Power Heartstrings Nikki speed lights shadow crowd ${index}`;
+          const sourceText = `Gravity bubble moving floating Drifting Power Heartstrings Nikki speed lights shadow crowd ${index}`;
           db.upsertTMEntry({
             id: `english-concordance-noise-${index}`,
             tmId: mainTmId,
@@ -1153,10 +1129,11 @@ describe("CATDatabase", () => {
         const mainTmId = db.createTM("English Concordance Phrase FTS TM", "en-US", "fr-FR", "main");
         db.mountTMToProject(projectId, mainTmId, 10, "read");
 
-        const preamble = Array.from({ length: 40 }, (_, index) => `signal${index} vector${index}`)
-          .join(" ");
-        const longSource =
-          `${preamble}. Gravity is abnormal in the Heartbeat Zone. After Nikki enters, she will become weightless and float in the air, wrapped in a bubble. Moving while floating consumes Drifting Power. If Drifting Power runs out, the bubble will automatically pop. When Drifting Power is full, movement speed increases for a certain time, and moving during this period will not consume Drifting Power. Four different Music Bubbles float within the Heartbeat Zone: Heartstring Bubbles increase Drifting Power and Heartstrings; Speed Bubbles allow Nikki dash forward quickly for a short distance and grant a small amount of Drifting Power and Heartstrings; Fish Bubbles spit out many Heartstring Bubbles, which can be collected to gain extra Heartstrings; Spike Bubbles stop Nikki in place for a short time and reduce Drifting Power. Heartstrings can also be obtained by playing with the Bom-Bom Bubble Machine in the Rest Zone or sitting in viewing chairs to enjoy the meteors. The stage lights can also be controlled to reveal dazzling changes of light and shadow.`;
+        const preamble = Array.from(
+          { length: 40 },
+          (_, index) => `signal${index} vector${index}`,
+        ).join(" ");
+        const longSource = `${preamble}. Gravity is abnormal in the Heartbeat Zone. After Nikki enters, she will become weightless and float in the air, wrapped in a bubble. Moving while floating consumes Drifting Power. If Drifting Power runs out, the bubble will automatically pop. When Drifting Power is full, movement speed increases for a certain time, and moving during this period will not consume Drifting Power. Four different Music Bubbles float within the Heartbeat Zone: Heartstring Bubbles increase Drifting Power and Heartstrings; Speed Bubbles allow Nikki dash forward quickly for a short distance and grant a small amount of Drifting Power and Heartstrings; Fish Bubbles spit out many Heartstring Bubbles, which can be collected to gain extra Heartstrings; Spike Bubbles stop Nikki in place for a short time and reduce Drifting Power. Heartstrings can also be obtained by playing with the Bom-Bom Bubble Machine in the Rest Zone or sitting in viewing chairs to enjoy the meteors. The stage lights can also be controlled to reveal dazzling changes of light and shadow.`;
 
         for (const phrase of [
           "Heartbeat Zone",
@@ -1254,12 +1231,11 @@ describe("CATDatabase", () => {
       } as any);
       db.insertTMFts(mainTmId, "风荷立柱", "cross tag fake", "cross-tag-fake");
 
-      const results = db.searchTMConcordanceRecallCandidates(
-        projectId,
-        "风荷 立柱",
-        [mainTmId],
-        { scope: "source", limit: 50, rawLimit: 200 },
-      );
+      const results = db.searchTMConcordanceRecallCandidates(projectId, "风荷 立柱", [mainTmId], {
+        scope: "source",
+        limit: 50,
+        rawLimit: 200,
+      });
 
       expect(results.map((row) => row.srcHash)).not.toContain("cross-tag-fake");
     });
@@ -1328,16 +1304,16 @@ describe("CATDatabase", () => {
         usageCount: 1,
       } as any);
 
-      const results = db.searchTMRecallCandidates(
-        projectId,
-        "风荷立柱设计图",
-        [mainTmId],
-        { scope: "source", limit: 50 },
-      );
+      const results = db.searchTMRecallCandidates(projectId, "风荷立柱设计图", [mainTmId], {
+        scope: "source",
+        limit: 50,
+      });
       const hashes = results.map((row) => row.srcHash);
 
       expect(hashes).toContain("active-wind-lotus-pillar");
-      expect(hashes.filter((srcHash) => srcHash.startsWith("active-template-crowd-"))).toHaveLength(2);
+      expect(hashes.filter((srcHash) => srcHash.startsWith("active-template-crowd-"))).toHaveLength(
+        2,
+      );
     });
 
     it("should count contained CJK recall buckets against the longest overlapping bucket", () => {
@@ -1363,12 +1339,10 @@ describe("CATDatabase", () => {
         } as any);
       });
 
-      const results = db.searchTMRecallCandidates(
-        projectId,
-        "能力套装限时上架中",
-        [mainTmId],
-        { scope: "source", limit: 50 },
-      );
+      const results = db.searchTMRecallCandidates(projectId, "能力套装限时上架中", [mainTmId], {
+        scope: "source",
+        limit: 50,
+      });
       const familyHashes = results
         .map((row) => row.srcHash)
         .filter((srcHash) => srcHash.startsWith("contained-"));
@@ -1506,7 +1480,12 @@ describe("CATDatabase", () => {
         matchKey: "cjk-substring",
         tagsSignature: "",
         sourceTokens: [{ type: "text", content: "甲组是怎么成为临时项目的负责人的？" }],
-        targetTokens: [{ type: "text", content: "Comment l'equipe A est-elle devenue responsable du projet temporaire ?" }],
+        targetTokens: [
+          {
+            type: "text",
+            content: "Comment l'equipe A est-elle devenue responsable du projet temporaire ?",
+          },
+        ],
         usageCount: 1,
       } as any);
 
@@ -1527,7 +1506,12 @@ describe("CATDatabase", () => {
         matchKey: "cjk-near",
         tagsSignature: "",
         sourceTokens: [{ type: "text", content: "甲组是怎么成为临时项目的负责人的？" }],
-        targetTokens: [{ type: "text", content: "Comment l'equipe A est-elle devenue responsable du projet temporaire ?" }],
+        targetTokens: [
+          {
+            type: "text",
+            content: "Comment l'equipe A est-elle devenue responsable du projet temporaire ?",
+          },
+        ],
         usageCount: 1,
       } as any);
 
@@ -1568,12 +1552,10 @@ describe("CATDatabase", () => {
         usageCount: 1,
       } as any);
 
-      const cloudwoodResults = db.searchTMRecallCandidates(
-        projectId,
-        "织云木种子",
-        [mainTmId],
-        { scope: "source", limit: 50 },
-      );
+      const cloudwoodResults = db.searchTMRecallCandidates(projectId, "织云木种子", [mainTmId], {
+        scope: "source",
+        limit: 50,
+      });
       expect(cloudwoodResults.map((row) => row.srcHash)).toEqual(
         expect.arrayContaining(["soft-pink-cloudwood", "green-cloudwood"]),
       );
@@ -1600,12 +1582,10 @@ describe("CATDatabase", () => {
         usageCount: 1,
       } as any);
 
-      const dreamResults = db.searchTMRecallCandidates(
-        projectId,
-        "晴日裱花·困梦",
-        [mainTmId],
-        { scope: "source", limit: 50 },
-      );
+      const dreamResults = db.searchTMRecallCandidates(projectId, "晴日裱花·困梦", [mainTmId], {
+        scope: "source",
+        limit: 50,
+      });
       expect(dreamResults.map((row) => row.srcHash)).toEqual(
         expect.arrayContaining(["sunny-icing", "remote-dream"]),
       );
@@ -1640,12 +1620,10 @@ describe("CATDatabase", () => {
         usageCount: 1,
       } as any);
 
-      const results = db.searchTMRecallCandidates(
-        projectId,
-        "晴日裱花琉璃霜雪困梦",
-        [mainTmId],
-        { scope: "source", limit: 50 },
-      );
+      const results = db.searchTMRecallCandidates(projectId, "晴日裱花琉璃霜雪困梦", [mainTmId], {
+        scope: "source",
+        limit: 50,
+      });
       expect(results.map((row) => row.srcHash)).toContain("late-fragment");
     });
   });
@@ -1874,9 +1852,7 @@ describe("CATDatabase", () => {
         },
       );
 
-      expect(results.map((row) => row.srcTerm)).toEqual(
-        expect.arrayContaining(["设置页面", "AI"]),
-      );
+      expect(results.map((row) => row.srcTerm)).toEqual(expect.arrayContaining(["设置页面", "AI"]));
     });
 
     it("should recall 3-character Chinese terms from long source text", () => {
@@ -1999,14 +1975,10 @@ describe("CATDatabase", () => {
         tgtTerm: "podium",
       });
 
-      const results = db.searchProjectTermEntries(
-        projectId,
-        "请前往领奖台领取奖章。",
-        {
-          srcLang: "zh-CN",
-          limit: 10,
-        },
-      );
+      const results = db.searchProjectTermEntries(projectId, "请前往领奖台领取奖章。", {
+        srcLang: "zh-CN",
+        limit: 10,
+      });
 
       expect(results.map((row) => row.srcTerm)).toContain("领奖台");
       expect(results.map((row) => row.srcTerm)).not.toContain("奖");
@@ -2125,10 +2097,14 @@ describe("CATDatabase", () => {
         tgtTerm: "soleil de minuit",
       });
 
-      const results = db.searchProjectTermEntries(projectId, "Change Details celebrating midnight ceremonies.", {
-        srcLang: "zh-CN",
-        limit: 10,
-      });
+      const results = db.searchProjectTermEntries(
+        projectId,
+        "Change Details celebrating midnight ceremonies.",
+        {
+          srcLang: "zh-CN",
+          limit: 10,
+        },
+      );
 
       expect(results.map((row) => row.srcTerm)).not.toContain("midnight sun");
     });
@@ -2221,10 +2197,14 @@ describe("CATDatabase", () => {
         });
       }
 
-      const results = db.searchProjectTermEntries(projectId, "甲乙、丙丁、戊己、庚辛、壬癸、子丑、寅卯、辰巳", {
-        srcLang: "zh-CN",
-        limit: 3,
-      });
+      const results = db.searchProjectTermEntries(
+        projectId,
+        "甲乙、丙丁、戊己、庚辛、壬癸、子丑、寅卯、辰巳",
+        {
+          srcLang: "zh-CN",
+          limit: 3,
+        },
+      );
 
       expect(results).toHaveLength(3);
       expect(results.every((row) => row.srcTerm.length === 2)).toBe(true);
@@ -2291,10 +2271,14 @@ describe("CATDatabase", () => {
         tgtTerm: "soleil de minuit",
       });
 
-      const results = db.searchProjectTermEntries(projectId, "Change Details celebrating midnight ceremonies.", {
-        srcLang: "fr-FR",
-        limit: 10,
-      });
+      const results = db.searchProjectTermEntries(
+        projectId,
+        "Change Details celebrating midnight ceremonies.",
+        {
+          srcLang: "fr-FR",
+          limit: 10,
+        },
+      );
 
       expect(results.map((row) => row.srcTerm)).toContain("Midnight Sun");
     });

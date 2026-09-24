@@ -1,3 +1,4 @@
+import { invalidateProjectQA, invalidateTermBaseQA } from './qaInvalidation';
 import Database from 'better-sqlite3';
 import type { TBEntry } from '@cat/core/models';
 import {
@@ -52,9 +53,7 @@ export class TBRepo {
   private stmtDeleteTbFtsByRowid?: Database.Statement;
 
   private deleteTbFtsForEntry(tbEntryId: string): void {
-    this.stmtGetTbEntryFtsRowid ??= this.db.prepare(
-      'SELECT ftsRowid FROM tb_entries WHERE id = ?',
-    );
+    this.stmtGetTbEntryFtsRowid ??= this.db.prepare('SELECT ftsRowid FROM tb_entries WHERE id = ?');
     const row = this.stmtGetTbEntryFtsRowid.get(tbEntryId) as
       | { ftsRowid: number | null }
       | undefined;
@@ -91,10 +90,12 @@ export class TBRepo {
   public createTermBase(name: string, srcLang: string, tgtLang: string): string {
     const id = randomUUID();
     this.db
-      .prepare(`
+      .prepare(
+        `
       INSERT INTO term_bases (id, name, srcLang, tgtLang)
       VALUES (?, ?, ?, ?)
-    `)
+    `,
+      )
       .run(id, name, srcLang, tgtLang);
     this.bumpTBDataVersion();
     return id;
@@ -105,6 +106,7 @@ export class TBRepo {
     if (!trimmedName) {
       throw new Error('Term base name cannot be empty.');
     }
+    invalidateTermBaseQA(this.db, id);
     const result = this.db
       .prepare('UPDATE term_bases SET name = ? WHERE id = ?')
       .run(trimmedName, id);
@@ -115,31 +117,39 @@ export class TBRepo {
   }
 
   public deleteTermBase(id: string) {
+    invalidateTermBaseQA(this.db, id);
     this.stmtDeleteTbFtsByTbId.run(id);
     this.db.prepare('DELETE FROM term_bases WHERE id = ?').run(id);
     this.bumpTBDataVersion();
   }
 
   public clearTermBaseEntries(tbId: string) {
+    invalidateTermBaseQA(this.db, tbId);
     this.stmtDeleteTbFtsByTbId.run(tbId);
     this.db.prepare('DELETE FROM tb_entries WHERE tbId = ?').run(tbId);
     this.db
-      .prepare(`
+      .prepare(
+        `
       UPDATE term_bases
       SET updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       WHERE id = ?
-    `)
+    `,
+      )
       .run(tbId);
     this.bumpTBDataVersion();
   }
 
   public getTermBase(tbId: string): TBRecord | undefined {
-    return this.db.prepare('SELECT * FROM term_bases WHERE id = ?').get(tbId) as TBRecord | undefined;
+    return this.db.prepare('SELECT * FROM term_bases WHERE id = ?').get(tbId) as
+      | TBRecord
+      | undefined;
   }
 
   public getTermBaseStats(tbId: string) {
     const row = this.db
-      .prepare('SELECT COUNT(*) as count, MAX(updatedAt) as maxUpdatedAt FROM tb_entries WHERE tbId = ?')
+      .prepare(
+        'SELECT COUNT(*) as count, MAX(updatedAt) as maxUpdatedAt FROM tb_entries WHERE tbId = ?',
+      )
       .get(tbId) as {
       count: number;
       maxUpdatedAt: string | null;
@@ -151,52 +161,65 @@ export class TBRepo {
   }
 
   public mountTermBaseToProject(projectId: number, tbId: string, priority: number = 10) {
+    invalidateProjectQA(this.db, projectId);
     this.db
-      .prepare(`
+      .prepare(
+        `
       INSERT INTO project_term_bases (projectId, tbId, priority, isEnabled)
       VALUES (?, ?, ?, 1)
       ON CONFLICT(projectId, tbId) DO UPDATE SET
         priority = excluded.priority,
         isEnabled = 1
-    `)
+    `,
+      )
       .run(projectId, tbId, priority);
     this.bumpTBDataVersion();
   }
 
   public unmountTermBaseFromProject(projectId: number, tbId: string) {
-    this.db.prepare('DELETE FROM project_term_bases WHERE projectId = ? AND tbId = ?').run(projectId, tbId);
+    invalidateProjectQA(this.db, projectId);
+    this.db
+      .prepare('DELETE FROM project_term_bases WHERE projectId = ? AND tbId = ?')
+      .run(projectId, tbId);
     this.bumpTBDataVersion();
   }
 
   public getProjectMountedTermBases(projectId: number): MountedTBRecord[] {
     return this.db
-      .prepare(`
+      .prepare(
+        `
       SELECT term_bases.*, project_term_bases.priority, project_term_bases.isEnabled
       FROM project_term_bases
       JOIN term_bases ON project_term_bases.tbId = term_bases.id
       WHERE project_term_bases.projectId = ? AND project_term_bases.isEnabled = 1
       ORDER BY project_term_bases.priority ASC, term_bases.updatedAt DESC
-    `)
+    `,
+      )
       .all(projectId) as MountedTBRecord[];
   }
 
   public listTBEntries(tbId: string, limit: number = 500, offset: number = 0): TBEntry[] {
     const rows = this.db
-      .prepare(`
+      .prepare(
+        `
       SELECT *
       FROM tb_entries
       WHERE tbId = ?
       ORDER BY srcTerm COLLATE NOCASE ASC
       LIMIT ? OFFSET ?
-    `)
+    `,
+      )
       .all(tbId, limit, offset) as TBEntryDbRow[];
 
     return rows.map((row) => ({ ...row })) as TBEntry[];
   }
 
-  public listProjectTermEntries(projectId: number): Array<TBEntry & { tbName: string; priority: number }> {
+  public listProjectTermEntries(
+    projectId: number,
+  ): Array<TBEntry & { tbName: string; priority: number }> {
     const rows = this.db
-      .prepare(`
+      .prepare(
+        `
       SELECT tb_entries.*, term_bases.name as tbName, project_term_bases.priority
       FROM project_term_bases
       JOIN term_bases ON project_term_bases.tbId = term_bases.id
@@ -204,7 +227,8 @@ export class TBRepo {
       WHERE project_term_bases.projectId = ? AND project_term_bases.isEnabled = 1
       ORDER BY project_term_bases.priority ASC, length(tb_entries.srcTerm) DESC
       LIMIT ${PROJECT_TERM_ENTRY_LIMIT}
-    `)
+    `,
+      )
       .all(projectId) as ProjectTermEntryRecord[];
 
     return rows.map((row) => ({ ...row }));
@@ -280,10 +304,11 @@ export class TBRepo {
       params.tgtTerm.trim(),
       srcNorm,
       params.note ?? null,
-      params.usageCount ?? 0
+      params.usageCount ?? 0,
     ) as { id: string } | undefined;
 
     if (row?.id) {
+      invalidateTermBaseQA(this.db, params.tbId);
       this.stmtTouchTermBase.run(params.tbId);
       this.replaceTbFts(params.tbId, row.id, srcNorm);
       this.bumpTBDataVersion();
@@ -320,13 +345,14 @@ export class TBRepo {
       params.tgtTerm.trim(),
       srcNorm,
       params.note ?? null,
-      params.usageCount ?? 0
+      params.usageCount ?? 0,
     ) as { id: string } | undefined;
 
     if (!row?.id) {
       throw new Error('Failed to upsert TB entry');
     }
 
+    invalidateTermBaseQA(this.db, params.tbId);
     this.stmtTouchTermBase.run(params.tbId);
     this.replaceTbFts(params.tbId, row.id, srcNorm);
     this.bumpTBDataVersion();
@@ -338,12 +364,14 @@ export class TBRepo {
     // Deliberately does not bump the TB data version: usage counts only refine
     // ranking, and bumping here would rebuild recognizer indexes on every use.
     this.db
-      .prepare(`
+      .prepare(
+        `
       UPDATE tb_entries
       SET usageCount = usageCount + 1,
           updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       WHERE id = ?
-    `)
+    `,
+      )
       .run(tbEntryId);
   }
 
@@ -372,7 +400,8 @@ export class TBRepo {
       .join(' OR ');
 
     const rows = this.db
-      .prepare(`
+      .prepare(
+        `
       SELECT tb_entries.*, term_bases.name as tbName, project_term_bases.priority
       FROM tb_fts
       JOIN tb_entries ON tb_fts.tbEntryId = tb_entries.id
@@ -384,7 +413,8 @@ export class TBRepo {
         AND tb_fts MATCH ?
       ORDER BY project_term_bases.priority ASC, length(tb_entries.srcTerm) DESC, tb_entries.usageCount DESC
       LIMIT ${limit}
-    `)
+    `,
+      )
       .all(projectId, ...mountedTbIds, ftsQuery) as ProjectTermEntryRecord[];
 
     return rows.map((row) => ({ ...row }));
@@ -423,7 +453,8 @@ export class TBRepo {
     const ftsQuery = `"${this.escapeFtsFragment(fragment)}"`;
 
     const rows = this.db
-      .prepare(`
+      .prepare(
+        `
       SELECT tb_entries.*, term_bases.name as tbName, project_term_bases.priority
       FROM tb_fts
       JOIN tb_entries ON tb_fts.tbEntryId = tb_entries.id
@@ -435,7 +466,8 @@ export class TBRepo {
         AND tb_fts MATCH ?
       ORDER BY project_term_bases.priority ASC, length(tb_entries.srcTerm) ASC, tb_entries.usageCount DESC
       LIMIT ${limit}
-    `)
+    `,
+      )
       .all(projectId, ...mountedTbIds, ftsQuery) as ProjectTermEntryRecord[];
 
     return rows.map((row) => ({ ...row }));
@@ -455,7 +487,8 @@ export class TBRepo {
       const tbPlaceholders = mountedTbIds.map(() => '?').join(',');
       const termPlaceholders = batch.map(() => '?').join(',');
       const batchRows = this.db
-        .prepare(`
+        .prepare(
+          `
         SELECT tb_entries.*, term_bases.name as tbName, project_term_bases.priority
         FROM project_term_bases
         JOIN term_bases ON project_term_bases.tbId = term_bases.id
@@ -465,7 +498,8 @@ export class TBRepo {
           AND tb_entries.tbId IN (${tbPlaceholders})
           AND tb_entries.srcNorm IN (${termPlaceholders})
         ORDER BY project_term_bases.priority ASC, length(tb_entries.srcTerm) DESC, tb_entries.usageCount DESC
-      `)
+      `,
+        )
         .all(projectId, ...mountedTbIds, ...batch) as ProjectTermEntryRecord[];
 
       rows.push(...batchRows.map((row) => ({ ...row })));
@@ -508,7 +542,10 @@ export class TBRepo {
 
     // For CJK: when exact overwhelms, leave room for FTS
     const ftsReserve =
-      options?.reserveFtsCandidates && limit > 1 && sortedExact.length >= limit && (sortedPhrase.length + sortedSingle.length) > 0
+      options?.reserveFtsCandidates &&
+      limit > 1 &&
+      sortedExact.length >= limit &&
+      sortedPhrase.length + sortedSingle.length > 0
         ? Math.min(limit - 1, Math.max(1, Math.floor(limit * 0.1)))
         : 0;
 

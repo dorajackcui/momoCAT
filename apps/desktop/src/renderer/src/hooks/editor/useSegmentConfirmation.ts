@@ -4,9 +4,8 @@ import type { Segment } from '@cat/core/models';
 import type { SegmentsUpdatedEvent } from '../../../../shared/ipc';
 import { apiClient } from '../../services/apiClient';
 import type { SetSegmentsWithChangeHint } from './editorSegmentState';
-import { checkSegmentConfirmation, type ConfirmationQaSettings } from './segmentConfirmationQa';
 
-interface UseSegmentQaWorkflowParams extends ConfirmationQaSettings {
+interface UseSegmentConfirmationParams {
   segments: Segment[];
   setSegments: SetSegmentsWithChangeHint;
   setActiveSegmentId: Dispatch<SetStateAction<string | null>>;
@@ -15,67 +14,31 @@ interface UseSegmentQaWorkflowParams extends ConfirmationQaSettings {
   onConfirmed: (data: SegmentsUpdatedEvent) => void;
 }
 
-export function useSegmentQaWorkflow({
+export function useSegmentConfirmation({
   segments,
-  projectId,
-  targetLocale,
-  enabledQaRuleIds,
-  instantQaOnConfirm,
   setSegments,
   setActiveSegmentId,
   setSegmentSaveError,
   clearSegmentSaveError,
-  tagValidator,
   onConfirmed,
-}: UseSegmentQaWorkflowParams): { confirmSegment: (segmentId: string) => Promise<void> } {
+}: UseSegmentConfirmationParams): { confirmSegment: (segmentId: string) => Promise<void> } {
   // Read frequently-changing inputs through a ref so confirmSegment keeps a
   // stable identity (it is forwarded to every EditorRow as onConfirm).
   const workflowInputsRef = useRef({
     segments,
-    projectId,
-    targetLocale,
-    enabledQaRuleIds,
-    instantQaOnConfirm,
-    tagValidator,
   });
   useLayoutEffect(() => {
     workflowInputsRef.current = {
       segments,
-      projectId,
-      targetLocale,
-      enabledQaRuleIds,
-      instantQaOnConfirm,
-      tagValidator,
     };
-  }, [segments, projectId, targetLocale, enabledQaRuleIds, instantQaOnConfirm, tagValidator]);
+  }, [segments]);
 
   const confirmSegment = useCallback(
     async (segmentId: string) => {
-      const {
-        segments,
-        projectId,
-        targetLocale,
-        enabledQaRuleIds,
-        instantQaOnConfirm,
-        tagValidator,
-      } = workflowInputsRef.current;
+      const { segments } = workflowInputsRef.current;
       const segment = segments.find((item) => item.segmentId === segmentId);
       if (!segment) return;
       const previousStatus = segment.status;
-
-      const { blocked, ...qa } = await checkSegmentConfirmation(segment, {
-        projectId,
-        targetLocale,
-        enabledQaRuleIds,
-        instantQaOnConfirm,
-        tagValidator,
-      });
-      setSegments(
-        (prev) => prev.map((item) => (item.segmentId === segmentId ? { ...item, ...qa } : item)),
-        { orderChanged: false, changedSegmentIds: [segmentId] },
-      );
-      if (blocked) return;
-
       setSegments(
         (prev) =>
           prev.map((item) =>

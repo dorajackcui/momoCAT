@@ -8,6 +8,8 @@ export interface EditorSegmentChange {
 
 export interface EditorSegmentStore {
   getSegments(): Segment[];
+  getQARevision(): number;
+  invalidateQA(): EditorSegmentChange[];
   getOrderIds(): readonly string[];
   getSegment(segmentId: string): Segment | undefined;
   getIndexById(): ReadonlyMap<string, number>;
@@ -31,6 +33,8 @@ export function createEditorSegmentStore(
   let orderIds: string[] = [];
   let segmentById = new Map<string, Segment>();
   let indexById = new Map<string, number>();
+  let qaSegmentIds = new Set<string>();
+  let qaRevision = 0;
   const listenersBySegmentId = new Map<string, Set<() => void>>();
 
   const notifySegment = (segmentId: string): void => {
@@ -40,11 +44,17 @@ export function createEditorSegmentStore(
   };
 
   const replaceAll = (segments: readonly Segment[]): void => {
+    qaRevision += 1;
     const previousById = segmentById;
     orderedSegments = [...segments];
     orderIds = orderedSegments.map((segment) => segment.segmentId);
     segmentById = new Map(orderedSegments.map((segment) => [segment.segmentId, segment]));
     indexById = new Map(orderIds.map((segmentId, index) => [segmentId, index]));
+    qaSegmentIds = new Set(
+      orderedSegments
+        .filter((segment) => segment.qaIssues !== undefined)
+        .map((segment) => segment.segmentId),
+    );
 
     for (const segmentId of listenersBySegmentId.keys()) {
       if (previousById.get(segmentId) !== segmentById.get(segmentId)) {
@@ -55,8 +65,27 @@ export function createEditorSegmentStore(
 
   const applyUpdates = (updates: ReadonlyMap<string, Segment>): EditorSegmentChange[] => {
     const changes: EditorSegmentChange[] = [];
+    const pending = new Map(updates);
+    const changedFiles = new Set<number>();
+    for (const [id, next] of pending) {
+      const previous = segmentById.get(id);
+      if (
+        previous &&
+        (JSON.stringify(previous.sourceTokens) !== JSON.stringify(next.sourceTokens) ||
+          JSON.stringify(previous.targetTokens) !== JSON.stringify(next.targetTokens))
+      )
+        changedFiles.add(previous.fileId);
+    }
+    if (changedFiles.size) {
+      qaRevision += 1;
+      for (const id of new Set([...qaSegmentIds, ...pending.keys()])) {
+        const next = pending.get(id) ?? segmentById.get(id);
+        if (next && changedFiles.has(next.fileId) && next.qaIssues !== undefined)
+          pending.set(id, { ...next, qaIssues: undefined });
+      }
+    }
 
-    for (const [segmentId, next] of updates) {
+    for (const [segmentId, next] of pending) {
       const previous = segmentById.get(segmentId);
       const index = indexById.get(segmentId);
       if (!previous || index === undefined || next.segmentId !== segmentId || previous === next) {
@@ -65,6 +94,9 @@ export function createEditorSegmentStore(
 
       orderedSegments[index] = next;
       segmentById.set(segmentId, next);
+      if (previous.qaIssues !== undefined && next.qaIssues === undefined) qaRevision += 1;
+      if (next.qaIssues !== undefined) qaSegmentIds.add(segmentId);
+      else qaSegmentIds.delete(segmentId);
       changes.push({ segmentId, previous, next });
     }
 
@@ -77,6 +109,15 @@ export function createEditorSegmentStore(
   replaceAll(initialSegments);
 
   return {
+    getQARevision: () => qaRevision,
+    invalidateQA: () => {
+      qaRevision += 1;
+      return applyUpdates(
+        new Map(
+          [...qaSegmentIds].map((id) => [id, { ...segmentById.get(id)!, qaIssues: undefined }]),
+        ),
+      );
+    },
     getSegments: () => orderedSegments,
     getOrderIds: () => orderIds,
     getSegment: (segmentId) => segmentById.get(segmentId),

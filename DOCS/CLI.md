@@ -76,13 +76,14 @@ momocat env
 momocat inspect projects
 momocat inspect localization
 momocat translate file
+momocat qa file
 ```
 
 Run any command with `--help` for the exact option set. Help text in [`apps/cli/src/commands`](../apps/cli/src/commands) is the syntax source of truth.
 
 ### Automation result contract
 
-Exit code `0` means the command completed successfully (including help). Exit code `1` means invalid arguments, a command failure, or a completed translation with failed units. A partially successful translation still prints its summary and preserves output/checkpoints for inspection and resume; automation must check the exit code as well as the summary.
+Exit code `0` means the command completed successfully (including help). Exit code `1` means invalid arguments, a command failure, a completed translation with failed units. A partially successful translation still prints its summary and preserves output/checkpoints for inspection and resume; automation must check the exit code as well as the summary.
 
 The dispatcher owns the error boundary for synchronous parsing and asynchronous execution. Errors go to stderr; structured command output remains on stdout. `--progress-stdout` adds event lines before the final translation summary, so consumers enabling it must read a stream rather than assume one JSON document.
 
@@ -144,6 +145,12 @@ Common controls:
 `--target-scope` is not a file-translation option. It belongs to the legacy single-unit API; file jobs use `--target-baseline`.
 
 Use `--tag-policy none` when strings such as `{1}`, `<name>`, or `%s` are business text rather than CAT-managed tags. The default policy recognizes marker-like content and protects it through MT.
+
+## Check a file
+
+`momocat qa file --project-id 7 --file-id 12 --json` checks a stored file. Use `--input input.xlsx` instead of `--file-id` for an external spreadsheet with standard Source/Target columns. Both routes use the project's saved [QA configuration](LOCALIZATION.md#quality-assurance) and mounted term bases, leaving the database and input unchanged.
+
+Repeat `--check <category-id>` to override enabled categories for this run; saved child checks and options still apply. `--tag-policy default|none` applies only to external files; stored files use their saved import policy. `--json` prints findings, row IDs, groups, and references. Normal output lists findings by row. QA findings do not change the successful exit code; only execution failures return failure. `momocat qa file --help` lists category IDs and options. Database resolution follows the same `--db`/`--db-path` rules as other commands.
 
 ## Outputs, resume, and privacy
 

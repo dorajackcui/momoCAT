@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { useState } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_PROJECT_QA_SETTINGS, type Project, type ProjectType } from '@cat/core/project';
 import { createAIFileJobTracker } from '../../hooks/aiFileJobs';
@@ -9,7 +9,8 @@ import { useProjectQASettings } from '../../hooks/projectDetail/useProjectQASett
 import { apiClient } from '../../services/apiClient';
 import { feedbackService } from '../../services/feedbackService';
 import { Button } from '../ui';
-import { ProjectSettingsPane, type ProjectSettingsSection } from './ProjectSettingsPane';
+import { ProjectSettingsPane } from './ProjectSettingsPane';
+import { ProjectQASettingsPane } from './ProjectQASettingsPane';
 
 vi.mock('../../services/apiClient', () => ({
   apiClient: {
@@ -40,7 +41,7 @@ const runMutation = async <T,>(fn: () => Promise<T>) => fn();
 
 function Harness({ projectType = 'translation' }: { projectType?: ProjectType }) {
   const [project, setProject] = useState<Project | null>({ ...initialProject, projectType });
-  const [section, setSection] = useState<ProjectSettingsSection>('ai');
+  const [section, setSection] = useState<'ai' | 'qa'>('ai');
   const [visible, setVisible] = useState(true);
   const [tracker] = useState(createAIFileJobTracker);
   const ai = useProjectAI({ project, setProject, loadData, runMutation, fileJobTracker: tracker });
@@ -52,27 +53,27 @@ function Harness({ projectType = 'translation' }: { projectType?: ProjectType })
       <Button onClick={() => setProject({ ...initialProject, id: 2, aiPrompt: 'Other project.' })}>
         Other project
       </Button>
-      {visible && (
-        <ProjectSettingsPane
-          ai={ai}
-          qa={qa}
-          projectType={projectType}
-          section={section}
-          onSectionChange={setSection}
-        />
-      )}
+      <Button role="tab" onClick={() => setSection('ai')}>
+        AI
+      </Button>
+      <Button role="tab" onClick={() => setSection('qa')}>
+        QA
+      </Button>
+      {visible &&
+        (section === 'qa' ? (
+          <ProjectQASettingsPane qa={qa} />
+        ) : (
+          <ProjectSettingsPane ai={ai} projectType={projectType} />
+        ))}
     </>
   );
 }
 
 function switchSection(name: 'AI' | 'QA') {
-  fireEvent.mouseDown(screen.getByRole('tab', { name, exact: true }), {
-    button: 0,
-    ctrlKey: false,
-  });
+  fireEvent.click(screen.getByRole('tab', { name, exact: true }));
 }
 const promptInput = () => screen.getByLabelText('Custom Prompt');
-const tagRule = () => screen.getByRole('checkbox', { name: /Tag Integrity/ });
+const tagRule = () => screen.getByRole('checkbox', { name: /Standard tags/ });
 const save = () => fireEvent.click(screen.getByRole('button', { name: 'Save', exact: true }));
 const discard = () => fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
 
@@ -100,6 +101,63 @@ beforeEach(() => {
 });
 
 describe('Project settings', () => {
+  it('edits options in a dialog, retaining its draft until the page is saved', async () => {
+    render(<Harness />);
+    switchSection('QA');
+    expect(
+      screen.queryByRole('checkbox', { name: 'Translation variants' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Check tag order' })).not.toBeInTheDocument();
+    const openOptions = () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Standard tags options' }));
+    const done = () => fireEvent.click(screen.getByRole('button', { name: 'Done', exact: true }));
+    openOptions();
+    const dialog = screen.getByRole('dialog', { name: 'Standard tags options' });
+    expect(
+      within(dialog).queryByRole('button', { name: 'Save', exact: true }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Missing tags' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Extra tags' })).not.toBeInTheDocument();
+    const tagOrder = screen.getByRole('checkbox', { name: 'Check tag order', exact: true });
+    fireEvent.click(tagOrder);
+    done();
+    expect(apiClient.updateProjectQASettings).not.toHaveBeenCalled();
+    fireEvent.click(tagRule());
+    openOptions();
+    expect(screen.getByRole('checkbox', { name: 'Check tag order' })).toBeChecked();
+    done();
+    fireEvent.click(tagRule());
+    openOptions();
+    expect(screen.getByRole('checkbox', { name: 'Check tag order' })).toBeChecked();
+    done();
+    save();
+    await screen.findByRole('status');
+    expect(apiClient.updateProjectQASettings).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ disabledCheckIds: [] }),
+    );
+  });
+
+  it('changes all major checks without resetting optional choices', () => {
+    render(<Harness />);
+    switchSection('QA');
+    fireEvent.click(screen.getByRole('button', { name: 'Standard tags options' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '{…} placeholders' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear', exact: true }));
+    expect(tagRule()).not.toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
+    expect(tagRule()).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Standard tags options' }));
+    expect(screen.getByRole('checkbox', { name: '{…} placeholders' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Check tag order' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: '{…} placeholders' })).not.toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Done', exact: true }));
+    discard();
+    fireEvent.click(screen.getByRole('button', { name: 'Standard tags options' }));
+    expect(screen.getByRole('checkbox', { name: '{…} placeholders' })).toBeChecked();
+  });
+
   it('retains both drafts across sections and Tasks, and saves only the active section', async () => {
     render(<Harness />);
     await screen.findByRole('option', { name: 'Provider one' });
@@ -112,7 +170,10 @@ describe('Project settings', () => {
     save();
     await screen.findByRole('status');
     expect(apiClient.updateProjectQASettings).toHaveBeenCalledWith(1, {
-      enabledRuleIds: ['terminology-consistency'],
+      ...DEFAULT_PROJECT_QA_SETTINGS,
+      enabledRuleIds: DEFAULT_PROJECT_QA_SETTINGS.enabledRuleIds.filter(
+        (id) => id !== 'tag-integrity',
+      ),
       instantQaOnConfirm: true,
     });
     expect(apiClient.updateProjectAISettings).not.toHaveBeenCalled();
@@ -207,7 +268,9 @@ describe('Project settings', () => {
       render(<Harness projectType={projectType} />);
       await screen.findByRole('option', { name: 'Provider one' });
       expect(screen.getByRole('tab', { name: 'AI', exact: true })).toBeInTheDocument();
-      expect(screen.queryByRole('tab', { name: 'QA', exact: true })).not.toBeInTheDocument();
+      expect(screen.queryByRole('form', { name: 'QA settings' })).not.toBeInTheDocument();
+      switchSection('QA');
+      expect(tagRule()).toBeChecked();
     },
   );
 });

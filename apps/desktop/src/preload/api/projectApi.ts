@@ -24,6 +24,7 @@ type ProjectApiKeys =
   | 'getSegments'
   | 'exportFile'
   | 'runFileQA'
+  | 'checkSegmentQA'
   | 'inspectFile'
   | 'exportReferencesForMt'
   | 'precheckSourceTerminology'
@@ -33,6 +34,10 @@ type ProjectApiKeys =
 
 export function createProjectApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<ProjectApiKeys> {
   return {
+    checkSegmentQA: (segmentId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.segment.checkQA, segmentId) as ReturnType<
+        DesktopApi['checkSegmentQA']
+      >,
     listProjects: () =>
       ipcRenderer.invoke(IPC_CHANNELS.project.list) as ReturnType<DesktopApi['listProjects']>,
     createProject: (name, srcLang, tgtLang, projectType) =>
@@ -121,13 +126,12 @@ export function createProjectApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<
       ipcRenderer.invoke(IPC_CHANNELS.file.getSegments, fileId, offset, limit) as ReturnType<
         DesktopApi['getSegments']
       >,
-    exportFile: (fileId, outputPath, options, forceExport) =>
+    exportFile: (fileId, outputPath, options) =>
       ipcRenderer.invoke(
         IPC_CHANNELS.file.export,
         fileId,
         outputPath,
         options as ImportOptions | undefined,
-        forceExport,
       ) as ReturnType<DesktopApi['exportFile']>,
     runFileQA: (fileId) =>
       ipcRenderer.invoke(IPC_CHANNELS.file.runQA, fileId) as ReturnType<DesktopApi['runFileQA']>,

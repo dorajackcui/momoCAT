@@ -36,8 +36,7 @@ it.each([64, 79.375])('positions %spx rows without overlap and scrolls', (rowHei
     originalIndex,
     sourceText: '',
     targetText: '',
-    hasQaError: false,
-    hasQaWarning: false,
+    hasQaIssue: false,
     hasSaveError: false,
   }));
   const noop = () => {};

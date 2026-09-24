@@ -4,7 +4,6 @@ import {
   type DialoguePromptPreviousGroup,
   type Project,
 } from '@cat/core/project';
-import { TagValidator } from '@cat/core/qa';
 import {
   parseEditorTextToTokens,
   serializeTokensToEditorText,
@@ -39,7 +38,6 @@ interface TranslateDialogueUnitParams {
   unit: DialogueTranslationUnit;
   previousGroup?: DialoguePromptPreviousGroup;
   transport: AITransport;
-  tagValidator: TagValidator;
   tagPolicy: TagPolicy;
   resolveTranslationPromptReferences: (
     projectId: number,
@@ -189,20 +187,6 @@ export async function translateDialogueUnit(
           const message = error instanceof Error ? error.message : String(error);
           issues.push(`Segment ${draft.segment.segmentId}: token parsing failed (${message}).`);
           continue;
-        }
-
-        if (params.tagPolicy !== 'none') {
-          const validationResult = params.tagValidator.validate(
-            draft.segment.sourceTokens,
-            targetTokens,
-          );
-          const errors = validationResult.issues.filter((issue) => issue.severity === 'error');
-          if (errors.length > 0) {
-            issues.push(
-              `Segment ${draft.segment.segmentId}: ${errors.map((errorItem) => errorItem.message).join('; ')}`,
-            );
-            continue;
-          }
         }
 
         updates.push({

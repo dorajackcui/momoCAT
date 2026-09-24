@@ -4,7 +4,6 @@ import type {
   WindowModeNextContextRow,
   WindowModePreviousContextRow,
 } from '@cat/core/project';
-import type { TagValidator } from '@cat/core/qa';
 import type { TagPolicy } from '@cat/core/tag';
 import type {
   AIProviderCatalogService,
@@ -19,7 +18,6 @@ export interface MTModuleDependencies {
   providerCatalogService: Pick<AIProviderCatalogService, 'listProviders' | 'resolveProviderConfig'>;
   aiRuntimeConfigProvider: AIRuntimeConfigProvider;
   aiTransport: AITransport;
-  tagValidator?: TagValidator;
 }
 
 export interface ComposePromptInput {
@@ -35,7 +33,6 @@ export interface ComposePromptInput {
   context?: string;
   currentTranslationPayload?: string;
   refinementInstruction?: string;
-  validationFeedback?: string;
 }
 
 export interface MTBatchCurrentUnitInput {
@@ -89,7 +86,6 @@ export interface PreparedPromptInput extends ComposePromptInput {
   srcLang: string;
   tgtLang: string;
   provider?: ResolvedAIProviderConfig['provider'];
-  validationFeedback?: string;
 }
 
 export interface PreparedBatchPromptInput extends ComposeBatchPromptInput {
@@ -99,7 +95,6 @@ export interface PreparedBatchPromptInput extends ComposeBatchPromptInput {
   srcLang: string;
   tgtLang: string;
   provider?: ResolvedAIProviderConfig['provider'];
-  validationFeedback?: string;
   audit?: TranslationAuditContext;
 }
 

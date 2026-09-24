@@ -4,6 +4,7 @@ import type { SVGProps } from 'react';
 // License and Feather attribution: renderer/public/licenses/LUCIDE.txt.
 const shapes = {
   check: <path d="M5 13l4 4L19 7" />,
+  'chevron-down': <path d="m6 9 6 6 6-6" />,
   'shield-alert': (
     <>
       <path d="M12 3 4 7v5c0 5 8 9 8 9s8-4 8-9V7l-8-4ZM12 8v5" />

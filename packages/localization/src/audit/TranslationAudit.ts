@@ -33,45 +33,6 @@ export interface TranslationAuditMtBatchErrorEvent {
   message: string;
 }
 
-export interface TranslationAuditMtTagInvalidEvent {
-  event: 'mt_tag_invalid';
-  job: string;
-  task: string;
-  unit: string;
-  rid: string;
-  messages: string[];
-  targetHash: string;
-  targetChars: number;
-}
-
-export interface TranslationAuditMtRepairRequestEvent {
-  event: 'mt_repair_request';
-  job: string;
-  task: string;
-  unit: string;
-  rid: string;
-  reason: 'tag_invalid';
-}
-
-export interface TranslationAuditMtRepairSuccessEvent {
-  event: 'mt_repair_success';
-  job: string;
-  task: string;
-  unit: string;
-  rid: string;
-  targetHash: string;
-  targetChars: number;
-}
-
-export interface TranslationAuditMtRepairFailedEvent {
-  event: 'mt_repair_failed';
-  job: string;
-  task: string;
-  unit: string;
-  rid: string;
-  message: string;
-}
-
 export interface TranslationAuditUnitPersistedEvent {
   event: 'unit_persisted';
   job: string;
@@ -95,10 +56,6 @@ export type TranslationAuditEvent =
   | TranslationAuditMtBatchRequestEvent
   | TranslationAuditMtBatchResponseEvent
   | TranslationAuditMtBatchErrorEvent
-  | TranslationAuditMtTagInvalidEvent
-  | TranslationAuditMtRepairRequestEvent
-  | TranslationAuditMtRepairSuccessEvent
-  | TranslationAuditMtRepairFailedEvent
   | TranslationAuditUnitPersistedEvent
   | TranslationAuditRuntimeTmCommitEvent;
 
@@ -204,49 +161,6 @@ function toJsonlRecord(at: string, event: TranslationAuditEvent): object {
         job: event.job,
         task: event.task,
         latencyMs: event.latencyMs,
-        message: event.message,
-      };
-    case 'mt_tag_invalid':
-      return {
-        at,
-        event: event.event,
-        job: event.job,
-        task: event.task,
-        unit: event.unit,
-        rid: event.rid,
-        messages: event.messages,
-        targetHash: event.targetHash,
-        targetChars: event.targetChars,
-      };
-    case 'mt_repair_request':
-      return {
-        at,
-        event: event.event,
-        job: event.job,
-        task: event.task,
-        unit: event.unit,
-        rid: event.rid,
-        reason: event.reason,
-      };
-    case 'mt_repair_success':
-      return {
-        at,
-        event: event.event,
-        job: event.job,
-        task: event.task,
-        unit: event.unit,
-        rid: event.rid,
-        targetHash: event.targetHash,
-        targetChars: event.targetChars,
-      };
-    case 'mt_repair_failed':
-      return {
-        at,
-        event: event.event,
-        job: event.job,
-        task: event.task,
-        unit: event.unit,
-        rid: event.rid,
         message: event.message,
       };
     case 'unit_persisted':

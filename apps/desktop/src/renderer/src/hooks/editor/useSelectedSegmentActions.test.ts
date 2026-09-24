@@ -2,14 +2,13 @@
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Segment } from '@cat/core/models';
-import { TagValidator } from '@cat/core/qa';
 import { parseDisplayTextToTokens } from '@cat/core/tag';
 import { useSelectedSegmentActions } from './useSelectedSegmentActions';
 import { apiClient } from '../../services/apiClient';
 import { feedbackService } from '../../services/feedbackService';
 
 vi.mock('../../services/apiClient', () => ({
-  apiClient: { updateSelectedSegments: vi.fn(), getTermMatches: vi.fn() },
+  apiClient: { updateSelectedSegments: vi.fn(), checkSegmentQA: vi.fn() },
 }));
 vi.mock('../../services/feedbackService', () => ({
   feedbackService: { info: vi.fn(), success: vi.fn(), error: vi.fn() },
@@ -23,7 +22,7 @@ beforeEach(() => {
 });
 
 function setup() {
-  let segments: Segment[] = ['a', 'b', 'c'].map((id, orderIndex) => ({
+  const segments: Segment[] = ['a', 'b', 'c'].map((id, orderIndex) => ({
     segmentId: id,
     fileId: 1,
     orderIndex,
@@ -38,7 +37,7 @@ function setup() {
   const applyUpdates = vi.fn();
   const clearSaveError = vi.fn();
   const hook = renderHook(
-    ({ fileId, tagPolicy, qa }: { fileId: number; tagPolicy: 'default' | 'none'; qa: boolean }) =>
+    ({ fileId, tagPolicy }: { fileId: number; tagPolicy: 'default' | 'none' }) =>
       useSelectedSegmentActions({
         fileId,
         getSegment: (id) => segments.find((s) => s.segmentId === id),
@@ -46,18 +45,9 @@ function setup() {
         applyUpdates,
         clearSaveError,
         tagPolicy,
-        setSegments: (update) => {
-          segments = typeof update === 'function' ? update(segments) : update;
-        },
-        qaSettings: {
-          projectId: null,
-          targetLocale: 'zh',
-          instantQaOnConfirm: qa,
-          enabledQaRuleIds: ['tag-integrity'],
-          tagValidator: new TagValidator(),
-        },
+        onConfirmed: vi.fn(),
       }),
-    { initialProps: { fileId: 1, tagPolicy: 'default', qa: true } },
+    { initialProps: { fileId: 1, tagPolicy: 'default' } },
   );
   return { ...hook, flush, applyUpdates, clearSaveError, getSegments: () => segments };
 }
@@ -103,33 +93,25 @@ describe('selected segment actions', () => {
   it('copies literal tag-like text under the none tag policy', async () => {
     const hook = setup();
     hook.getSegments()[0].sourceTokens = [{ type: 'text', content: 'Hello <b>{1}</b>' }];
-    hook.rerender({ fileId: 1, tagPolicy: 'none', qa: true });
+    hook.rerender({ fileId: 1, tagPolicy: 'none' });
     await act(async () => hook.result.current.runSelectedSegmentAction('copy-source', ['a']));
     expect(vi.mocked(apiClient.updateSelectedSegments).mock.calls[0][1][0].targetTokens).toEqual(
       hook.getSegments()[0].sourceTokens,
     );
   });
 
-  it('confirms only QA-passing rows and retains QA feedback on the blocked rows', async () => {
+  it('confirms every selected row without requesting QA', async () => {
     const hook = setup();
     hook.getSegments()[1].targetTokens = [{ type: 'text', content: 'Missing tags' }];
+    hook.getSegments()[1].qaIssues = [
+      { ruleId: 'tag-missing', severity: 'error', message: 'Missing' },
+    ];
     await act(async () => hook.result.current.runSelectedSegmentAction('confirm', ['a', 'b']));
     expect(
       vi.mocked(apiClient.updateSelectedSegments).mock.calls[0][1].map((u) => u.segmentId),
-    ).toEqual(['a']);
-    expect(hook.getSegments()[1].status).toBe('draft');
-    expect(hook.getSegments()[1].qaIssues?.some((issue) => issue.severity === 'error')).toBe(true);
-    expect(feedbackService.info).toHaveBeenCalledWith('Confirmed 1 segments. 1 blocked by QA.');
-  });
-
-  it('honors disabled instant QA', async () => {
-    const hook = setup();
-    hook.getSegments()[0].targetTokens = [{ type: 'text', content: 'Missing tags' }];
-    hook.rerender({ fileId: 1, tagPolicy: 'default', qa: false });
-    await act(async () => hook.result.current.runSelectedSegmentAction('confirm', ['a']));
-    expect(vi.mocked(apiClient.updateSelectedSegments).mock.calls[0][1][0].status).toBe(
-      'confirmed',
-    );
+    ).toEqual(['a', 'b']);
+    expect(apiClient.checkSegmentQA).not.toHaveBeenCalled();
+    expect(feedbackService.success).toHaveBeenCalledWith('Confirmed 2 segments.');
   });
 
   it('aborts when saving drafts fails and leaves targets intact when batch persistence fails', async () => {
@@ -159,7 +141,7 @@ describe('selected segment actions', () => {
     });
     await act(async () => hook.result.current.runSelectedSegmentAction('clear', ['b']));
     expect(apiClient.updateSelectedSegments).toHaveBeenCalledOnce();
-    hook.rerender({ fileId: 2, tagPolicy: 'default', qa: true });
+    hook.rerender({ fileId: 2, tagPolicy: 'default' });
     await act(async () => {
       finish([]);
       await pending;

@@ -14,7 +14,6 @@ export interface PromptParams {
   context: string;
   currentTranslationPayload?: string;
   refinementInstruction?: string;
-  validationFeedback?: string;
   references: {
     tmReference?: TMArtifact['selectedReferences']['tmReferences'][number];
     tmReferences?: TMArtifact['selectedReferences']['tmReferences'];
@@ -26,7 +25,6 @@ export interface PromptParams {
 export interface BatchPromptParams {
   projectPrompt: string;
   projectType: ProjectType;
-  validationFeedback?: string;
   currentSegments: Array<{
     id: string;
     sourcePayload: string;
@@ -37,9 +35,7 @@ export interface BatchPromptParams {
   }>;
 }
 
-export function buildPromptParams(
-  input: ComposePromptInput & { validationFeedback?: string },
-): PromptParams {
+export function buildPromptParams(input: ComposePromptInput): PromptParams {
   const sourceText = serializeTokensToDisplayText(input.segment.sourceTokens);
   const sourceTagPreservedText = serializeSourcePayload(
     input.segment.sourceTokens,
@@ -64,7 +60,6 @@ export function buildPromptParams(
     context,
     currentTranslationPayload: input.currentTranslationPayload,
     refinementInstruction: input.refinementInstruction,
-    validationFeedback: input.validationFeedback,
     references: {
       tmReference: tmReferences[0],
       tmReferences: tmReferences.length > 0 ? tmReferences : undefined,
@@ -74,9 +69,7 @@ export function buildPromptParams(
   };
 }
 
-export function buildBatchPromptParams(
-  input: ComposeBatchPromptInput & { validationFeedback?: string },
-): BatchPromptParams {
+export function buildBatchPromptParams(input: ComposeBatchPromptInput): BatchPromptParams {
   const currentSegments = input.current.map((unit) => {
     const sourcePayload = serializeSourcePayload(unit.segment.sourceTokens, input.tagPolicy);
     const context =
@@ -91,8 +84,7 @@ export function buildBatchPromptParams(
       sourcePayload,
       context,
       tmReferences: tmReferences.length > 0 ? tmReferences : undefined,
-      concordanceReferences:
-        concordanceReferences.length > 0 ? concordanceReferences : undefined,
+      concordanceReferences: concordanceReferences.length > 0 ? concordanceReferences : undefined,
       tbReferences: tbReferences.length > 0 ? tbReferences : undefined,
     };
   });
@@ -101,7 +93,6 @@ export function buildBatchPromptParams(
     projectPrompt:
       input.projectPromptOverride ?? input.mtOptions?.systemPrompt ?? input.project.aiPrompt ?? '',
     projectType: normalizeProjectType(input.project.projectType),
-    validationFeedback: input.validationFeedback,
     currentSegments,
   };
 }

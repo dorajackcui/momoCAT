@@ -47,17 +47,25 @@ function createSegment(params: {
 
 describe('useEditorFilters helpers', () => {
   it('offers only the three workflow statuses', () => {
-    expect(FILTER_STATUS_OPTIONS.map(option => option.value)).toEqual([
-      'all', 'empty', 'draft', 'confirmed',
+    expect(FILTER_STATUS_OPTIONS.map((option) => option.value)).toEqual([
+      'all',
+      'empty',
+      'draft',
+      'confirmed',
     ]);
   });
 
   it.each([
-    ['new', 'empty'], ['translated', 'draft'], ['reviewed', 'draft'],
-    ['empty', 'empty'], ['draft', 'draft'], ['confirmed', 'confirmed'],
+    ['new', 'empty'],
+    ['translated', 'draft'],
+    ['reviewed', 'draft'],
+    ['empty', 'empty'],
+    ['draft', 'draft'],
+    ['confirmed', 'confirmed'],
   ])('restores the %s status filter as %s', (stored, expected) => {
-    expect(sanitizePersistedEditorFilterState({ status: stored, sourceQuery: 'window' }))
-      .toMatchObject({ statuses: [expected], sourceQuery: 'window' });
+    expect(
+      sanitizePersistedEditorFilterState({ status: stored, sourceQuery: 'window' }),
+    ).toMatchObject({ statuses: [expected], sourceQuery: 'window' });
   });
 
   it('keeps filtered membership stable until the filter criteria changes', () => {
@@ -259,7 +267,7 @@ describe('useEditorFilters helpers', () => {
       targetSearchScope: 'context',
       statuses: ['draft'],
       matchMode: 'regex',
-      qualityFilters: ['qa_error'],
+      qualityFilters: ['qa_issue'],
       firstRepeatOnly: false,
       sortBy: 'target_length',
       sortDirection: 'desc',
@@ -267,8 +275,9 @@ describe('useEditorFilters helpers', () => {
   });
 
   it('restores the old first-repeat preset as an independent filter', () => {
-    expect(sanitizePersistedEditorFilterState({ quickPreset: 'first_repeat', status: 'draft' }))
-      .toMatchObject({ firstRepeatOnly: true, statuses: ['draft'] });
+    expect(
+      sanitizePersistedEditorFilterState({ quickPreset: 'first_repeat', status: 'draft' }),
+    ).toMatchObject({ firstRepeatOnly: true, statuses: ['draft'] });
   });
 
   it.each([
@@ -279,10 +288,14 @@ describe('useEditorFilters helpers', () => {
   });
 
   it('converts the legacy issues preset and sanitizes duplicate multi-select values', () => {
-    expect(sanitizePersistedEditorFilterState({ quickPreset: 'issues' }).qualityFilters)
-      .toEqual(['qa_error', 'qa_warning', 'save_error']);
-    expect(sanitizePersistedEditorFilterState({ statuses: ['draft', 'invalid', 'draft', 'empty'] }).statuses)
-      .toEqual(['draft', 'empty']);
+    expect(sanitizePersistedEditorFilterState({ quickPreset: 'issues' }).qualityFilters).toEqual([
+      'qa_issue',
+      'save_error',
+    ]);
+    expect(
+      sanitizePersistedEditorFilterState({ statuses: ['draft', 'invalid', 'draft', 'empty'] })
+        .statuses,
+    ).toEqual(['draft', 'empty']);
   });
 
   it('clears the retired untranslated quick preset from persisted state', () => {
@@ -319,8 +332,7 @@ describe('useEditorFilters helpers', () => {
     expect(searchable[1]).toMatchObject({
       sourceText: 'World',
       targetText: '世界',
-      hasQaError: true,
-      hasQaWarning: true,
+      hasQaIssue: true,
       hasSaveError: true,
     });
   });
@@ -459,8 +471,7 @@ describe('useEditorFilters helpers', () => {
         originalIndex: 0,
         sourceText: 'Alpha',
         targetText: '',
-        hasQaError: false,
-        hasQaWarning: false,
+        hasQaIssue: false,
         hasSaveError: false,
       },
       {
@@ -468,8 +479,7 @@ describe('useEditorFilters helpers', () => {
         originalIndex: 1,
         sourceText: 'Beta',
         targetText: '',
-        hasQaError: false,
-        hasQaWarning: false,
+        hasQaIssue: false,
         hasSaveError: false,
       },
     ];

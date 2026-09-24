@@ -5,6 +5,7 @@ import {
   runInspectLocalizationCommand,
   runInspectProjectsCommand,
   runTranslateFileCommand,
+  runQAFileCommand,
 } from '@cat/localization';
 import type {
   InspectLocalizationCommandConfig,
@@ -13,12 +14,14 @@ import type {
 import type { CommandIO } from './parse/args';
 
 export interface CliDependencies {
+  runQAFileCommand?: typeof runQAFileCommand;
   runInspectProjectsCommand: (config: InspectProjectsCommandConfig) => unknown;
   runInspectLocalizationCommand: (config: InspectLocalizationCommandConfig) => Promise<unknown>;
   runTranslateFileCommand: typeof runTranslateFileCommand;
 }
 
 export const defaultDependencies: CliDependencies = {
+  runQAFileCommand,
   runInspectProjectsCommand,
   runInspectLocalizationCommand,
   runTranslateFileCommand,
@@ -59,14 +62,17 @@ export async function runCli(
       );
     }
     if (domain === 'inspect' && action === 'localization') {
-      const { runInspectLocalizationCliCommand } = await import(
-        './commands/inspectLocalizationCommand'
-      );
+      const { runInspectLocalizationCliCommand } =
+        await import('./commands/inspectLocalizationCommand');
       return await runInspectLocalizationCliCommand(rest, deps, io);
     }
     if (domain === 'translate' && action === 'file') {
       const { runTranslateFileCliCommand } = await import('./commands/translateFileCommand');
       return await runTranslateFileCliCommand(rest, deps, io);
+    }
+    if (domain === 'qa' && action === 'file') {
+      const { runQAFileCliCommand } = await import('./commands/qaFileCommand');
+      return await runQAFileCliCommand(rest, deps, io);
     }
 
     const command = [domain, action].filter(Boolean).join(' ');
@@ -80,6 +86,7 @@ export async function runCli(
 
 function helpCommandFor(argv: string[]): string {
   const [domain, action] = argv;
+  if (domain === 'qa' && action === 'file') return 'momocat qa file --help';
   if (domain === 'inspect' && action === 'projects') {
     return 'momocat inspect projects --help';
   }
@@ -103,6 +110,7 @@ Commands:
   inspect projects       Inspect project readiness, resources, files, and provider status.
   inspect localization   Inspect TM/TB/MT prompt artifacts without provider requests.
   translate file         Translate an external spreadsheet with resumable sidecars.
+  qa file                Check a project file or external spreadsheet with project QA rules.
 
 Run a command with --help for command-specific options.
 `;

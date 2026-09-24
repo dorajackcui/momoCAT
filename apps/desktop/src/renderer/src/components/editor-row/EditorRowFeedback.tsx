@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { QaSeverity, Segment } from '@cat/core/models';
+import type { Segment } from '@cat/core/models';
 import { buildHighlightChunks, type EditorMatchMode } from '../editorFilterUtils';
 
 interface EditorRowFeedbackProps {
@@ -15,12 +15,11 @@ function FeedbackLine({
   label,
   children,
 }: {
-  severity: QaSeverity;
+  severity: 'error' | 'info';
   label: string;
   children: React.ReactNode;
 }) {
-  const tone =
-    severity === 'error' ? 'text-danger' : severity === 'warning' ? 'text-warning' : 'text-info';
+  const tone = severity === 'error' ? 'text-danger' : 'text-info';
   return (
     <div className="flex items-start gap-1.5 px-1 py-0.5 text-2xs text-text-muted">
       <span className={`inline-flex shrink-0 items-center gap-1 font-medium ${tone}`}>
@@ -32,11 +31,7 @@ function FeedbackLine({
           strokeWidth="1.8"
           aria-hidden="true"
         >
-          {severity === 'warning' ? (
-            <path strokeLinejoin="round" d="M12 3 22 21H2L12 3Z" />
-          ) : (
-            <circle cx="12" cy="12" r="9" />
-          )}
+          <circle cx="12" cy="12" r="9" />
           {severity === 'info' ? (
             <path strokeLinecap="round" d="M12 11v6m0-10v.1" />
           ) : (
@@ -131,7 +126,7 @@ export const EditorRowFeedback: React.FC<EditorRowFeedbackProps> = ({
       {qaIssues.length > 0 && (
         <div className="mt-1 space-y-1">
           {qaIssues.map((issue, idx) => (
-            <FeedbackLine key={idx} severity={issue.severity} label={issue.severity}>
+            <FeedbackLine key={idx} severity="info" label="QA">
               {issue.message}
             </FeedbackLine>
           ))}

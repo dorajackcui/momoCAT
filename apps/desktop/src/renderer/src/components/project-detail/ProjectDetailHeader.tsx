@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { Menu, MenuItem, TabsList, Button, Badge } from '../ui';
 import type { Project } from '@cat/core/project';
 
-export type ProjectDetailTab = 'files' | 'tm' | 'tb' | 'settings';
+export type ProjectDetailTab = 'files' | 'tm' | 'tb' | 'qa' | 'settings';
 
 interface ProjectDetailHeaderProps {
   project: Project | null;
@@ -45,6 +45,7 @@ export function ProjectDetailHeader({
             { value: 'files', label: 'Tasks' },
             { value: 'tm', label: 'Translation Memory' },
             { value: 'tb', label: 'Term Bases' },
+            { value: 'qa', label: 'QA' },
             { value: 'settings', label: 'Settings' },
           ]}
         />

@@ -48,7 +48,7 @@ const REFERENCE_EXPORT_COLUMNS = ['_tm_for_mt', '_tb_for_mt'] as const;
 const DEFAULT_CONTEXT_HEADER = 'context';
 
 export async function parseExternalSpreadsheet(
-  input: TranslateFileInput,
+  input: Pick<TranslateFileInput, 'inputPath' | 'columns'>,
 ): Promise<ParsedSpreadsheetFile> {
   const fileBytes = await readFile(input.inputPath);
   const workbook = readExternalWorkbook(input.inputPath, fileBytes);
