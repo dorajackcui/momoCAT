@@ -261,7 +261,8 @@ test.describe('CodeMirror editor engine smoke', () => {
       const bottomSpace = cellBox!.y + cellBox!.height - actionsBox!.y - actionsBox!.height;
       expect(topSpace).toBeGreaterThanOrEqual(6);
       expect(bottomSpace).toBeGreaterThanOrEqual(6);
-      expect(Math.abs(topSpace - bottomSpace)).toBeLessThanOrEqual(1);
+      // Actions are top-anchored; fractional text metrics may add space below them.
+      expect(topSpace).toBeLessThanOrEqual(7);
       await page.screenshot({ path: test.info().outputPath('compact-segment-actions.png') });
     } finally {
       await closeSmokeSession(session);

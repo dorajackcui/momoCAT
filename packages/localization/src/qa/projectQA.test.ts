@@ -90,7 +90,11 @@ describe('persisted QA lifecycle', () => {
     expect(await runProjectSegmentQA({ ...inputs(), segmentId: 'plain' })).toBeNull();
   });
 
-  it('retains document evidence on unchanged confirmation and invalidates all rows on editing', async () => {
+  it('retains findings and problem counts through edits until whole-file recheck', async () => {
+    db.updateProjectQASettings(
+      projectId,
+      normalizeQASettings({ enabledRuleIds: ['terminology-consistency'] }),
+    );
     add('a', '[Open]', '[打开]');
     const b = add('b', 'Open', '开启');
     await runProjectFileQA({ ...inputs(), fileId });
@@ -99,11 +103,13 @@ describe('persisted QA lifecycle', () => {
     await runProjectSegmentQA({ ...inputs(), segmentId: 'b' });
     db.updateSegmentTarget('b', b.targetTokens, 'confirmed');
     expect(db.getSegment('b')!.qaIssues).toEqual(original);
+    const savedFindings = db.getSegmentsPage(fileId, 0, 10).map((row) => row.qaIssues);
     db.updateSegmentTarget('a', parseDisplayTextToTokens('[开启]'), 'draft');
-    expect(db.getSegmentsPage(fileId, 0, 10).every((row) => row.qaIssues === undefined)).toBe(true);
-    expect(db.listFiles(projectId)[0].segmentStatusStats.qaProblemSegments).toBe(0);
+    expect(db.getSegmentsPage(fileId, 0, 10).map((row) => row.qaIssues)).toEqual(savedFindings);
+    expect(db.listFiles(projectId)[0].segmentStatusStats.qaProblemSegments).toBe(1);
     await runProjectFileQA({ ...inputs(), fileId });
-    expect(db.getSegmentsPage(fileId, 0, 10).every((row) => row.qaIssues !== undefined)).toBe(true);
+    expect(db.getSegmentsPage(fileId, 0, 10).map((row) => row.qaIssues)).toEqual([[], []]);
+    expect(db.listFiles(projectId)[0].segmentStatusStats.qaProblemSegments).toBe(0);
   });
 
   it.each(['settings', 'mount', 'term', 'unmount', 'delete'] as const)(

@@ -7,6 +7,7 @@ const APP_ROOT = join(__dirname, '..');
 test('renames TM/TB cards inline and keeps stale-save failures editable', async () => {
   test.setTimeout(90_000);
   const launchEnv = { ...process.env };
+  launchEnv.MOMOCAT_USER_DATA_DIR = test.info().outputPath('user-data');
   delete launchEnv.ELECTRON_RUN_AS_NODE;
 
   const stamp = Date.now();
@@ -37,8 +38,10 @@ test('renames TM/TB cards inline and keeps stale-save failures editable', async 
       { tmName: originalTmName, staleName: staleTmName, tbName: originalTbName },
     ));
 
-    await page.getByRole('button', { name: 'TM', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'TM Management' })).toBeVisible();
+    await page.getByRole('button', { name: 'Translation memory', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Translation memory', exact: true }),
+    ).toBeVisible();
     const tmHeading = page.getByRole('heading', { name: originalTmName, exact: true });
     await expect(tmHeading).toBeVisible();
     await tmHeading.hover();
@@ -72,8 +75,8 @@ test('renames TM/TB cards inline and keeps stale-save failures editable', async 
     await expect(input).toBeEnabled();
     await expect(input).toHaveValue(`${staleTmName}-missing`);
 
-    await page.getByRole('button', { name: 'TB', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'TB Management' })).toBeVisible();
+    await page.getByRole('button', { name: 'Term bases', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Term bases', exact: true })).toBeVisible();
     const tbHeading = page.getByRole('heading', { name: originalTbName, exact: true });
     await expect(tbHeading).toBeVisible();
     await tbHeading.hover();

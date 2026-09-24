@@ -1,5 +1,5 @@
 import type { ProjectQAController } from '../../hooks/projectDetail/useProjectQASettings';
-import { Button, Icon } from '../ui';
+import { ProjectSettingsFooter } from './ProjectPanelParts';
 import { ProjectQAPane } from './ProjectQAPane';
 
 export function ProjectQASettingsPane({ qa }: { qa: ProjectQAController }) {
@@ -15,22 +15,7 @@ export function ProjectQASettingsPane({ qa }: { qa: ProjectQAController }) {
       <fieldset disabled={qa.saving}>
         <ProjectQAPane qa={qa} />
       </fieldset>
-      <div className="sticky bottom-0 mt-6 flex min-h-16 items-center justify-end gap-2 border-t border-border-subtle bg-canvas py-3">
-        {qa.hasChanges || qa.saving ? (
-          <>
-            <Button onClick={qa.discard} disabled={qa.saving}>
-              Discard
-            </Button>
-            <Button type="submit" variant="primary" loading={qa.saving}>
-              Save
-            </Button>
-          </>
-        ) : (
-          <span role="status" className="inline-flex items-center gap-1.5 text-xs text-text-muted">
-            <Icon name="check" /> Saved
-          </span>
-        )}
-      </div>
+      <ProjectSettingsFooter dirty={qa.hasChanges} saving={qa.saving} onDiscard={qa.discard} />
     </form>
   );
 }

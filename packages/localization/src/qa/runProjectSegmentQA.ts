@@ -31,8 +31,8 @@ export async function runProjectSegmentQA(input: {
     targetLocale: project.tgtLang,
     tagPolicy,
   });
-  // Existing results remain valid until a content/configuration/resource mutation clears them.
-  // Preserve document evidence generically, without maintaining a second rule-id registry.
+  // Retain previous findings until whole-file recheck, including document evidence
+  // that a single-row check cannot replace. No second rule-id registry is needed.
   const qaIssues = [
     ...new Map(
       [...(segment.qaIssues ?? []), ...issues].map((issue) => [

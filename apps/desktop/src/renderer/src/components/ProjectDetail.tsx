@@ -311,7 +311,7 @@ export function ProjectDetail({
 
       <TabsPanel
         value={activeTab}
-        className="flex-1 min-h-0 overflow-auto p-6 custom-scrollbar"
+        className={`flex-1 min-h-0 overflow-auto p-6 custom-scrollbar ${activeTab === 'files' ? '' : 'bg-muted'}`}
         style={{ scrollbarGutter: 'stable' }}
       >
         {!project ? (

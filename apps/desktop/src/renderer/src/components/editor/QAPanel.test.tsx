@@ -105,6 +105,13 @@ describe('QA result list', () => {
     expect(screen.getByRole('button', { name: 'Row 8 [Empty target]' })).toBeInTheDocument();
   });
 
+  it('shows progress while rechecking stale findings', () => {
+    render(<QAPanel {...props([term])} running stale />);
+    expect(screen.getByText('Checking…')).toBeVisible();
+    expect(screen.queryByText('Changed · Recheck needed')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Row 8 开启' })).toBeVisible();
+  });
+
   it('keeps reference navigation and ungrouped diagnostic details', () => {
     const input = props([
       { ...term, ruleId: 'substring-consistency', references: [{ segmentId: 'b', row: 2 }] },

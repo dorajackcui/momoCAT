@@ -1,6 +1,6 @@
 import type { ProjectType } from '@cat/core/project';
 import { ProjectAIController } from '../../hooks/projectDetail/useProjectAI';
-import { Button, Card, Input, Notice, Select, Textarea } from '../ui';
+import { Button, Card, Icon, Input, Notice, Select, Textarea } from '../ui';
 import { ProjectPromptManagerModal } from './ProjectPromptManagerModal';
 
 interface ProjectAIPaneProps {
@@ -24,9 +24,9 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
 
   return (
     <div className="space-y-6">
-      <div className="mb-3">
-        <label htmlFor="project-ai-provider" className="block text-sm font-medium text-text mb-2">
-          AI Provider
+      <div className="workspace-config-section">
+        <label htmlFor="project-ai-provider" className="workspace-section-heading mb-3 block">
+          AI provider
         </label>
         {ai.providerWarning && (
           <Notice tone="warning" className="mb-2 text-xs">
@@ -35,7 +35,7 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
         )}
         <Select
           id="project-ai-provider"
-          aria-label="AI Provider"
+          aria-label="AI provider"
           value={ai.modelDraft}
           onChange={(event) => ai.setModelDraft(event.target.value as typeof ai.modelDraft)}
           className="w-full max-w-sm"
@@ -54,16 +54,19 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
           ))}
         </Select>
       </div>
-      <div className="mb-3">
-        <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
-          <label htmlFor="project-ai-custom-prompt" className="block text-sm font-medium text-text">
-            Custom Prompt
+      <div className="workspace-config-section">
+        <div className="workspace-section-heading mb-3 flex flex-wrap items-center justify-between gap-2">
+          <label
+            htmlFor="project-ai-custom-prompt"
+            className="block text-sm font-semibold text-text"
+          >
+            Custom prompt
           </label>
           <div className="flex items-center gap-2">
             <Select
               size="sm"
               id="project-ai-saved-prompt"
-              aria-label="Saved Prompts"
+              aria-label="Saved prompts"
               value={ai.savedPrompts.selectedPromptId ?? ''}
               onChange={(event) => {
                 const promptId = Number(event.target.value);
@@ -99,7 +102,7 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
                 : 'Optional. Add project-specific translation instructions (tone, terminology, style).'
           }
         />
-        <p className="mt-2 text-2xs text-text-muted">
+        <p className="mt-2 text-xs text-text-muted">
           {isReviewProject
             ? 'Saved custom prompt is appended to the default AI review rules.'
             : isCustomProject
@@ -107,37 +110,39 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
               : 'Saved custom prompt is appended to the default translation rules.'}
         </p>
       </div>
-      <details className="border-t border-border-subtle pt-4">
-        <summary className="cursor-pointer text-sm font-medium text-text-muted focus-visible:outline-brand">
+      <details className="workspace-config-section group">
+        <summary className="workspace-section-heading flex cursor-pointer list-none items-center justify-between gap-2 focus-visible:outline-brand [&::-webkit-details-marker]:hidden">
           Prompt preview
+          <Icon
+            name="chevron-down"
+            className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180"
+          />
         </summary>
         <div className="mt-3">
-          <label
-            htmlFor="project-ai-effective-prompt"
-            className="block text-sm font-medium text-text mb-2"
-          >
-            Prompt
-          </label>
           <Textarea
             size="xs"
-            appearance="subtle"
             id="project-ai-effective-prompt"
+            aria-label="Prompt preview"
             value={ai.effectiveSystemPromptPreview}
             readOnly
             rows={7}
             className="leading-5 whitespace-pre-wrap"
           />
-          <p className="mt-2 text-2xs text-text-muted">Saved system prompt used at runtime.</p>
+          <p className="mt-2 text-xs text-text-muted">Saved system prompt used at runtime.</p>
         </div>
       </details>
-      <details className="border-t border-border-subtle pt-4">
-        <summary className="cursor-pointer text-sm font-medium text-text-muted focus-visible:outline-brand">
+      <details className="workspace-config-section group">
+        <summary className="workspace-section-heading flex cursor-pointer list-none items-center justify-between gap-2 focus-visible:outline-brand [&::-webkit-details-marker]:hidden">
           Test prompt
+          <Icon
+            name="chevron-down"
+            className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180"
+          />
         </summary>
         <div className="mt-3">
           <p className="mb-3 text-xs text-text-muted">Uses saved AI settings.</p>
-          <label className="block text-xs font-bold text-text-faint uppercase tracking-wider mb-1">
-            {isReviewProject ? 'Test Text' : isCustomProject ? 'Test Input' : 'Test Source'}
+          <label className="block text-xs font-medium text-text-muted mb-1">
+            {isReviewProject ? 'Test text' : isCustomProject ? 'Test input' : 'Test source'}
           </label>
           <div className="flex gap-2">
             <Input
@@ -159,11 +164,11 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
               size="sm"
               variant="primary"
             >
-              Test Prompt
+              Test prompt
             </Button>
           </div>
-          <label className="block mt-2 text-xs font-bold text-text-faint uppercase tracking-wider mb-1">
-            Test Context (Optional)
+          <label className="block mt-2 text-xs font-medium text-text-muted mb-1">
+            Test context (optional)
           </label>
           <Input
             type="text"
@@ -179,12 +184,12 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
           />
           {ai.testResult && (
             <div className="mt-2">
-              <div className="text-caption font-bold text-text-faint uppercase tracking-wider mb-1">
+              <div className="text-xs font-medium text-text-muted mb-1">
                 {isReviewProject
-                  ? 'Reviewed Text'
+                  ? 'Reviewed text'
                   : isCustomProject
-                    ? 'Processed Text'
-                    : 'Translated Text'}
+                    ? 'Processed text'
+                    : 'Translated text'}
               </div>
               <Card variant="surface" className="text-xs text-text-muted px-3 py-2">
                 {ai.testResult}
@@ -193,9 +198,7 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
           )}
           {ai.testError && (
             <div className="mt-2">
-              <div className="text-caption font-bold text-danger/80 uppercase tracking-wider mb-1">
-                Error
-              </div>
+              <div className="text-xs font-medium text-danger mb-1">Error</div>
               <Notice tone="danger" className="text-xs">
                 {ai.testError}
               </Notice>
@@ -204,7 +207,7 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
           {ai.hasTestDetails && (
             <div className="mt-2">
               <Button onClick={() => ai.setShowTestDetails((prev) => !prev)} variant="link">
-                {ai.showTestDetails ? 'Hide Test Details' : 'Show Test Details'}
+                {ai.showTestDetails ? 'Hide test details' : 'Show test details'}
               </Button>
             </div>
           )}
@@ -212,9 +215,7 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
             <>
               {ai.testMeta && (
                 <div className="mt-2">
-                  <div className="text-caption font-bold text-text-faint uppercase tracking-wider mb-1">
-                    Transport
-                  </div>
+                  <div className="text-xs font-medium text-text-muted mb-1">Transport</div>
                   <Card variant="surface" className="text-caption text-text-muted px-3 py-2">
                     {ai.testMeta}
                   </Card>
@@ -222,9 +223,7 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
               )}
               {ai.testUserPrompt && (
                 <div className="mt-2">
-                  <div className="text-caption font-bold text-text-faint uppercase tracking-wider mb-1">
-                    User Prompt
-                  </div>
+                  <div className="text-xs font-medium text-text-muted mb-1">User prompt</div>
                   <Card
                     variant="surface"
                     className="text-caption text-text-muted px-3 py-2 whitespace-pre-wrap"
@@ -235,9 +234,7 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
               )}
               {ai.testSystemPrompt && (
                 <div className="mt-2">
-                  <div className="text-caption font-bold text-text-faint uppercase tracking-wider mb-1">
-                    System Prompt
-                  </div>
+                  <div className="text-xs font-medium text-text-muted mb-1">System prompt</div>
                   <Card
                     variant="surface"
                     className="text-caption text-text-muted px-3 py-2 whitespace-pre-wrap"
@@ -248,8 +245,8 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
               )}
               {ai.testRawResponse && (
                 <div className="mt-2">
-                  <div className="text-caption font-bold text-text-faint uppercase tracking-wider mb-1">
-                    Raw Provider Response
+                  <div className="text-xs font-medium text-text-muted mb-1">
+                    Raw provider response
                   </div>
                   <Card
                     variant="surface"

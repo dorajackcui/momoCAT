@@ -56,9 +56,9 @@ describe('TermExtractionPromptTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit Secondary' }));
     await waitFor(() => expect(editor).toHaveValue('Prefer named secondary concepts.'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Prompt' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New prompt' }));
 
-    expect(await screen.findByLabelText('Prompt Name')).toHaveValue('');
+    expect(await screen.findByLabelText('Prompt name')).toHaveValue('');
     expect(editor).toHaveValue('Prefer named secondary concepts.');
 
     fireEvent.click(screen.getByRole('button', { name: 'View Default' }));

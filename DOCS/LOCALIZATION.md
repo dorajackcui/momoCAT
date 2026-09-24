@@ -174,11 +174,11 @@ CLI QA returns success when checking completes, including when findings exist. T
 
 Panel、行内提示、文件问题数统一读取各行 `qaIssues` / `qaIssuesJson`。Panel 不再另存一份 `report.issues`。数据库 `NULL` 表示没有当前结果，`[]` 表示这次检查没有发现问题；即时检查仅覆盖当前行，不能作为整文件已检查的证明。
 
-- [`runProjectFileQA`](../packages/localization/src/qa/runProjectFileQA.ts) 原子替换整文件行结果；即时检查写入同一来源。内容未变时，已有文档证据与新单行结果按问题身份合并，无手写规则 ID 保留清单，因此文内学习术语也会保留。
-- 任何目标内容变化都清除该文件所有 QA 结果，包含跨行依赖；单纯状态变更保留结果。编辑、AI、TM/TB 应用、重复传播共用此规则。编辑器在本地修改时立即清除，数据库在保存时同步清除。
+- [`runProjectFileQA`](../packages/localization/src/qa/runProjectFileQA.ts) 原子替换整文件行结果；即时检查写入同一来源，将已有 findings 与新单行结果按问题身份合并，无手写规则 ID 保留清单。单行检查不能替换跨行证据；旧问题由手动整文件重查移除。
+- 目标内容和状态变更均保留上次 QA 结果与问题数，保存和重新打开文件也不清除。编辑、AI、TM/TB 应用、重复传播共用此规则；编辑本身不会触发 QA。Confirm 后仍可按项目开关执行即时检查。
 - QA 设置变化清除该项目结果；术语新增、修改、清空、删除、挂载或取消挂载清除受影响项目结果。编辑器接收配置/术语失效事件，统一清除行内和 Panel 结果。不会自动启动整文件检查。
 - 异步 QA 在持久化前使用 immediate 事务核对数据库变动版本，包含其他连接的术语修改；期间有写入时先返回 `stale`，不再全量读取行，也不写旧结果。整文件 QA 的原始内容及设置快照在事务外生成；版本未变时仍在事务内复核输入，保留未提供版本的宿主的内容检查。编辑器还校验本地修改，防止尚未保存的编辑被旧结果覆盖。
-- 修改后的 QA 筛选行集合保持稳定，用户可以继续修订；旧 findings 消失，Panel 提示需要重查。退出筛选清空全部筛选，不恢复原条件。
+- 修改后的 QA 筛选行集合和旧 findings 保持稳定，用户可以继续修订；当前会话中 Panel 提示需要重查。退出筛选清空全部筛选，不恢复原条件。
 
 无消费者的 tag 插入/删除/空排序自动修复已移除，编辑器不再生成或携带 `autoFixSuggestions`。公开类型、`TagValidator.suggestions` 空数组和 deprecated `generateAutoFix()`（返回 `null`）只作为兼容边界。编辑器“插入源文 tag”是用户发起的文本编辑，与旧自动修复无关。
 

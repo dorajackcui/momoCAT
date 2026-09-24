@@ -317,7 +317,7 @@ describe('applyBatchSegmentUpdatesToStore', () => {
     expect(secondListener).toHaveBeenCalledTimes(1);
   });
 
-  it('confirms propagated targets and clears QA from their previous translations', () => {
+  it('confirms propagated targets and retains QA until recheck', () => {
     const source = createSegment('seg-1');
     const qaIssues = [
       { ruleId: 'term-check', severity: 'warning' as const, message: 'Check this term.' },
@@ -349,7 +349,7 @@ describe('applyBatchSegmentUpdatesToStore', () => {
       targetTokens: confirmEvent.targetTokens,
       status: 'confirmed',
     });
-    expect(store.getSegment(repeated.segmentId)?.qaIssues).toBeUndefined();
+    expect(store.getSegment(repeated.segmentId)?.qaIssues).toEqual(repeated.qaIssues);
   });
 });
 

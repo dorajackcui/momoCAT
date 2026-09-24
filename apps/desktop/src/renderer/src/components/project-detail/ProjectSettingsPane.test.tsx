@@ -72,7 +72,7 @@ function Harness({ projectType = 'translation' }: { projectType?: ProjectType })
 function switchSection(name: 'AI' | 'QA') {
   fireEvent.click(screen.getByRole('tab', { name, exact: true }));
 }
-const promptInput = () => screen.getByLabelText('Custom Prompt');
+const promptInput = () => screen.getByLabelText('Custom prompt');
 const tagRule = () => screen.getByRole('checkbox', { name: /Standard tags/ });
 const save = () => fireEvent.click(screen.getByRole('button', { name: 'Save', exact: true }));
 const discard = () => fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
@@ -131,7 +131,9 @@ describe('Project settings', () => {
     expect(screen.getByRole('checkbox', { name: 'Check tag order' })).toBeChecked();
     done();
     save();
-    await screen.findByRole('status');
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Save', exact: true })).not.toBeInTheDocument(),
+    );
     expect(apiClient.updateProjectQASettings).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ disabledCheckIds: [] }),
@@ -168,7 +170,9 @@ describe('Project settings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Settings', exact: true }));
     expect(tagRule()).not.toBeChecked();
     save();
-    await screen.findByRole('status');
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Save', exact: true })).not.toBeInTheDocument(),
+    );
     expect(apiClient.updateProjectQASettings).toHaveBeenCalledWith(1, {
       ...DEFAULT_PROJECT_QA_SETTINGS,
       enabledRuleIds: DEFAULT_PROJECT_QA_SETTINGS.enabledRuleIds.filter(
@@ -180,7 +184,9 @@ describe('Project settings', () => {
     switchSection('AI');
     expect(promptInput()).toHaveValue('New instructions.');
     save();
-    await screen.findByRole('status');
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Save', exact: true })).not.toBeInTheDocument(),
+    );
     expect(apiClient.updateProjectAISettings).toHaveBeenCalledWith(
       1,
       'New instructions.',
@@ -192,18 +198,18 @@ describe('Project settings', () => {
     render(<Harness />);
     await screen.findByRole('option', { name: 'Provider two' });
     fireEvent.change(promptInput(), { target: { value: 'Unsaved.' } });
-    fireEvent.change(screen.getByLabelText('AI Provider'), { target: { value: 'provider:two' } });
+    fireEvent.change(screen.getByLabelText('AI provider'), { target: { value: 'provider:two' } });
     switchSection('QA');
     fireEvent.click(tagRule());
     switchSection('AI');
     discard();
     expect(promptInput()).toHaveValue('Saved instructions.');
-    expect(screen.getByLabelText('AI Provider')).toHaveValue('provider:one');
+    expect(screen.getByLabelText('AI provider')).toHaveValue('provider:one');
     switchSection('QA');
     expect(tagRule()).not.toBeChecked();
     discard();
     expect(tagRule()).toBeChecked();
-    expect(screen.getByRole('status')).toHaveTextContent('Saved');
+    expect(screen.queryByRole('button', { name: 'Save', exact: true })).not.toBeInTheDocument();
     expect(apiClient.updateProjectAISettings).not.toHaveBeenCalled();
     expect(apiClient.updateProjectQASettings).not.toHaveBeenCalled();
   });
@@ -223,11 +229,13 @@ describe('Project settings', () => {
       }
       save();
       await waitFor(() => expect(feedbackService.error).toHaveBeenCalled());
-      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
       if (section === 'AI') expect(promptInput()).toHaveValue('Retry me.');
       else expect(tagRule()).not.toBeChecked();
       save();
-      await screen.findByRole('status');
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: 'Save', exact: true })).not.toBeInTheDocument(),
+      );
       expect(update).toHaveBeenCalledTimes(2);
     },
   );
@@ -258,7 +266,7 @@ describe('Project settings', () => {
       if (section === 'QA') expect(tagRule()).toBeChecked();
       switchSection('AI');
       expect(promptInput()).toHaveValue('Other project.');
-      expect(screen.getByRole('status')).toHaveTextContent('Saved');
+      expect(screen.queryByRole('button', { name: 'Save', exact: true })).not.toBeInTheDocument();
     },
   );
 

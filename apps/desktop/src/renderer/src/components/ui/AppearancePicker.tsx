@@ -47,13 +47,21 @@ export function AppearancePicker({ label = 'Appearance' }: { label?: string }) {
   );
 }
 
-export function AppearanceControls() {
+export function AppearanceControls({ layout = 'compact' }: { layout?: 'compact' | 'settings' }) {
   const { typography, setTypography } = useTypography();
   const { theme, setTheme } = useTheme();
+  const labelClass =
+    layout === 'settings' ? 'text-sm font-medium text-text' : 'text-xs text-text-muted';
+  const groupClass =
+    layout === 'settings'
+      ? 'grid items-center gap-3 border-b border-border-subtle pb-4 last:border-b-0 last:pb-0 sm:grid-cols-[10rem_minmax(0,1fr)]'
+      : 'space-y-1.5';
   return (
-    <div className="space-y-3">
-      <div className="space-y-1.5">
-        <p className="text-xs text-text-muted">Color scheme</p>
+    <div className={layout === 'settings' ? 'space-y-6' : 'space-y-3'}>
+      <div className={layout === 'settings' ? 'workspace-config-section space-y-3' : 'space-y-1.5'}>
+        <p className={layout === 'settings' ? 'workspace-section-heading' : labelClass}>
+          Color scheme
+        </p>
         <ChoiceGroup
           label="Color scheme"
           value={theme}
@@ -69,40 +77,43 @@ export function AppearanceControls() {
           }))}
         />
       </div>
-      <div className="space-y-1.5">
-        <p className="text-xs text-text-muted">Chinese font</p>
-        <ChoiceGroup
-          label="Chinese font"
-          value={typography.cjk}
-          onValueChange={(cjk) => setTypography({ ...typography, cjk })}
-          options={CJK_FONTS.map((font) => ({ value: font.id, label: font.label }))}
-        />
-      </div>
-      <div className="space-y-1.5">
-        <p className="text-xs text-text-muted">Western font</p>
-        <ChoiceGroup
-          label="Western font"
-          value={typography.latin}
-          onValueChange={(latin) => setTypography({ ...typography, latin })}
-          options={LATIN_FONTS.map((font) => ({ value: font.id, label: font.label }))}
-        />
-      </div>
-      <div className="space-y-1.5">
-        <p className="text-xs text-text-muted">Font size</p>
-        <ChoiceGroup
-          label="Font size"
-          value={String(typography.fontSize)}
-          onValueChange={(size) =>
-            setTypography({
-              ...typography,
-              fontSize: Number(size) as TypographyPreference['fontSize'],
-            })
-          }
-          options={CONTENT_FONT_SIZES.map((size) => ({
-            value: String(size),
-            label: `${size} px`,
-          }))}
-        />
+      <div className={layout === 'settings' ? 'workspace-config-section space-y-4' : 'space-y-3'}>
+        {layout === 'settings' && <h3 className="workspace-section-heading">Fonts</h3>}
+        <div className={groupClass}>
+          <p className={labelClass}>Chinese font</p>
+          <ChoiceGroup
+            label="Chinese font"
+            value={typography.cjk}
+            onValueChange={(cjk) => setTypography({ ...typography, cjk })}
+            options={CJK_FONTS.map((font) => ({ value: font.id, label: font.label }))}
+          />
+        </div>
+        <div className={groupClass}>
+          <p className={labelClass}>Western font</p>
+          <ChoiceGroup
+            label="Western font"
+            value={typography.latin}
+            onValueChange={(latin) => setTypography({ ...typography, latin })}
+            options={LATIN_FONTS.map((font) => ({ value: font.id, label: font.label }))}
+          />
+        </div>
+        <div className={groupClass}>
+          <p className={labelClass}>Font size</p>
+          <ChoiceGroup
+            label="Font size"
+            value={String(typography.fontSize)}
+            onValueChange={(size) =>
+              setTypography({
+                ...typography,
+                fontSize: Number(size) as TypographyPreference['fontSize'],
+              })
+            }
+            options={CONTENT_FONT_SIZES.map((size) => ({
+              value: String(size),
+              label: `${size} px`,
+            }))}
+          />
+        </div>
       </div>
     </div>
   );

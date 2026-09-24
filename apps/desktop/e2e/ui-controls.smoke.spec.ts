@@ -487,7 +487,7 @@ test.describe('Shared UI controls smoke', () => {
       const taskTab = page.getByRole('tab', { name: 'Tasks', exact: true });
       await taskTab.focus();
       await page.keyboard.press('End');
-      await expect(page.getByRole('tab', { name: 'Settings', exact: true })).toHaveAttribute(
+      await expect(page.getByRole('tab', { name: 'QA', exact: true })).toHaveAttribute(
         'aria-selected',
         'true',
       );

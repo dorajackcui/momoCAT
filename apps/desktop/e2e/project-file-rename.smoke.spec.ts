@@ -11,6 +11,7 @@ test('renames an imported project file without changing its extension or content
   const tempDir = mkdtempSync(join(tmpdir(), 'momocat-file-rename-'));
   const exportPath = join(tempDir, 'renamed-export.csv');
   const launchEnv = { ...process.env };
+  launchEnv.MOMOCAT_USER_DATA_DIR = join(tempDir, 'user-data');
   delete launchEnv.ELECTRON_RUN_AS_NODE;
 
   const stamp = Date.now();
@@ -50,9 +51,7 @@ test('renames an imported project file without changing its extension or content
     projectId = seeded.projectId;
 
     await page.reload();
-    const projectCard = page.locator('.surface-card', { hasText: projectName }).first();
-    await expect(projectCard).toBeVisible();
-    await projectCard.getByRole('button', { name: 'Open' }).click();
+    await page.getByRole('button', { name: projectName, exact: true }).click();
 
     const originalHeading = page.getByRole('heading', { name: seeded.fileName, exact: true });
     await expect(originalHeading).toBeVisible();
@@ -88,10 +87,7 @@ test('renames an imported project file without changing its extension or content
     expect(existsSync(exportPath)).toBe(true);
 
     const missingInternalPath = join(
-      APP_ROOT,
-      '..',
-      '..',
-      '.cat_data',
+      launchEnv.MOMOCAT_USER_DATA_DIR,
       'projects',
       String(seeded.projectId),
       `${seeded.missingFileId}_${seeded.missingFileName}`,

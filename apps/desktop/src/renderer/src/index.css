@@ -122,7 +122,23 @@
     @apply flex h-full min-h-0 flex-col bg-canvas;
   }
   .workspace-settings-content {
-    @apply w-full max-w-5xl mx-auto flex-1 overflow-y-auto space-y-4 p-6;
+    @apply min-h-0 flex-1 overflow-y-auto bg-muted p-6;
+  }
+  .workspace-config-section {
+    @apply rounded-panel border border-border bg-surface p-4;
+  }
+  .workspace-settings-section {
+    @apply workspace-config-section flex flex-col gap-4;
+  }
+  .workspace-section-heading,
+  .workspace-settings-heading {
+    @apply text-sm font-semibold text-text;
+  }
+  .workspace-settings-label {
+    @apply mb-2 block text-sm font-medium text-text;
+  }
+  .workspace-settings-actions {
+    @apply flex flex-wrap items-center justify-end gap-2;
   }
   .workspace-project-header {
     @apply shrink-0 space-y-4 border-b border-border bg-canvas px-6 pb-3 pt-5;
@@ -134,7 +150,7 @@
     @apply border-t border-border-subtle;
   }
   .workspace-task-row {
-    @apply flex cursor-pointer flex-wrap items-center justify-between gap-3 border-b border-border-subtle py-4 transition-colors hover:bg-muted/40 last:border-b-0;
+    @apply flex cursor-pointer flex-wrap items-center justify-between gap-3 border-b border-border-subtle py-4 pr-3 transition-colors hover:bg-muted/40 last:border-b-0;
   }
   .workspace-task-row > :first-child {
     min-width: 180px;

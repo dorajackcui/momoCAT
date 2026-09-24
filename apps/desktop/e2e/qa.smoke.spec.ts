@@ -71,7 +71,7 @@ test('QA lists findings and filters CAT rows directly, retaining edits until rec
     ['Save file', '存档文件', ''],
   ]);
   try {
-    const { page } = session;
+    const { page, fileId } = session;
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -149,6 +149,13 @@ test('QA lists findings and filters CAT rows directly, retaining edits until rec
     ]);
     await terminology.getByRole('button', { name: 'Row 5 开启菜单', exact: true }).click();
     await expect(page.locator('.cm-content')).toHaveText('开启菜单');
+    const savedFindings = await page.evaluate(async (id) => {
+      const api = (window as any).api;
+      return {
+        issues: (await api.getSegments(id, 0, 10)).map((row: any) => row.qaIssues),
+        problems: (await api.getFile(id)).segmentStatusStats.qaProblemSegments,
+      };
+    }, fileId);
     const target = page.locator('.cm-content');
     await target.press(process.platform === 'darwin' ? 'Meta+a' : 'Control+a');
     await target.fill('打开菜单');
@@ -156,15 +163,38 @@ test('QA lists findings and filters CAT rows directly, retaining edits until rec
     await expect(page.getByText('Changed · Recheck needed', { exact: true })).toBeVisible();
     await expect(
       terminology.getByRole('button', { name: 'Row 5 打开菜单', exact: true }),
-    ).toHaveCount(0);
+    ).toBeVisible();
     await expect(page.locator('.editor-row')).toHaveCount(3);
     await page.getByRole('button', { name: 'Exit QA filter', exact: true }).click();
     await expect(page.locator('.editor-row')).toHaveCount(9);
     await expect(page.getByPlaceholder('Filter source text')).toHaveValue('');
+    await expect
+      .poll(() =>
+        page.evaluate(async (id) => {
+          const api = (window as any).api;
+          const rows = await api.getSegments(id, 0, 10);
+          return {
+            target: rows[3].targetTokens.map((token: any) => token.content).join(''),
+            issues: rows.map((row: any) => row.qaIssues),
+            problems: (await api.getFile(id)).segmentStatusStats.qaProblemSegments,
+          };
+        }, fileId),
+      )
+      .toEqual({ target: '打开菜单', ...savedFindings });
+    const file = await page.evaluate(async (id) => (window as any).api.getFile(id), fileId);
+    await page.getByRole('button', { name: 'Back to Project', exact: true }).click();
+    await page.getByText(file.name, { exact: true }).first().click();
+    await page.getByRole('tab', { name: 'QA', exact: true }).click();
+    await expect(
+      terminology.getByRole('button', { name: 'Row 5 打开菜单', exact: true }),
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Run QA', exact: true }).click();
     await expect(
       terminology.getByRole('button', { name: 'Open → 打开 · 2 rows', exact: true }),
     ).toBeVisible();
+    await expect(
+      terminology.getByRole('button', { name: 'Row 5 打开菜单', exact: true }),
+    ).toHaveCount(0);
     expect(errors).toEqual([]);
   } finally {
     await closeEditorSmokeSession(session);

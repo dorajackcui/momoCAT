@@ -34,8 +34,9 @@ describe('QA completion while the editor remains interactive', () => {
     expect(result.current.issues).toEqual([]);
   });
 
-  it('reads instant results from rows and clears document findings together on any content edit', () => {
+  it('goes stale on content edit but keeps document findings visible until recheck', () => {
     const store = createEditorSegmentStore([segment, { ...segment, segmentId: 'b' }]);
+    const options = { settings: normalizeQASettings({ enabledRuleIds: ['number'] }) };
     let revision = 0;
     const { result, rerender } = renderHook(() =>
       useEditorQA(
@@ -46,8 +47,9 @@ describe('QA completion while the editor remains interactive', () => {
       ),
     );
     act(() => result.current.startRun());
-    act(() => result.current.acceptReport(evaluateDocumentQa(store.getSegments())));
+    act(() => result.current.acceptReport(evaluateDocumentQa(store.getSegments(), options)));
     const issues = result.current.issues;
+    const otherRowIssues = store.getSegment('b')?.qaIssues;
     store.updateSegment('a', (row) => ({ ...row, status: 'confirmed' }));
     revision++;
     rerender();
@@ -60,15 +62,20 @@ describe('QA completion while the editor remains interactive', () => {
     revision++;
     rerender();
     expect(result.current.stale).toBe(true);
-    expect(result.current.issues).toEqual([]);
-    expect(store.getSegment('b')?.qaIssues).toBeUndefined();
+    expect(result.current.issues).toEqual(issues);
+    expect(store.getSegment('b')?.qaIssues).toEqual(otherRowIssues);
     store.updateSegment('a', (row) => ({
       ...row,
       qaIssues: [{ ruleId: 'instant', message: 'Instant result', severity: 'info' }],
     }));
     revision++;
     rerender();
-    expect(result.current.issues.map((issue) => issue.ruleId)).toEqual(['instant']);
+    expect(result.current.issues.map((issue) => issue.ruleId)).toEqual(['instant', 'number']);
+    act(() => result.current.startRun());
+    act(() => result.current.acceptReport(evaluateDocumentQa(store.getSegments(), options)));
+    expect(result.current.stale).toBe(false);
+    expect(store.getSegment('a')?.qaIssues).toEqual([]);
+    expect(result.current.issues.map((issue) => issue.segmentId)).toEqual(['b']);
   });
   it.each(['unchanged', 'edited', 'server-stale'] as const)('%s content', (mode) => {
     const store = createEditorSegmentStore([segment]);

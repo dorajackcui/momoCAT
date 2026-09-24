@@ -28,7 +28,7 @@ export function groupQaIssues(issues: FileQaIssueRecord[]) {
     const definition = qaGroupForRule(issue.ruleId);
     const id = definition?.id ?? issue.ruleId;
     const category: Category = categories.get(id) ?? {
-      label: definition?.label ?? issue.ruleId,
+      label: definition?.label ?? 'Other checks',
       issues: [],
       groups: new Map(),
     };
@@ -98,15 +98,14 @@ export function QAPanel({
             Run QA
           </Button>
         </div>
-        {(running || stale || !checked) && (
-          <p className="text-xs text-text-muted">
-            {running
-              ? 'Checking…'
-              : stale
-                ? 'Changed · Recheck needed'
-                : 'Not checked this session'}
-          </p>
-        )}
+        {(running || stale || !checked) &&
+          (stale && !running ? (
+            <p className="notice notice-warning">Changed · Recheck needed</p>
+          ) : (
+            <p className="text-xs text-text-muted">
+              {running ? 'Checking…' : 'Not checked this session'}
+            </p>
+          ))}
       </div>
       {issues.length > 500 ? (
         <QAVirtualList

@@ -1,6 +1,6 @@
 import type { ProjectType } from '@cat/core/project';
 import type { ProjectAIController } from '../../hooks/projectDetail/useProjectAI';
-import { Button, Icon } from '../ui';
+import { ProjectSettingsFooter } from './ProjectPanelParts';
 import { ProjectAIPane } from './ProjectAIPane';
 
 interface Props {
@@ -21,22 +21,11 @@ export function ProjectSettingsPane({ ai, projectType }: Props) {
       <fieldset disabled={ai.savingPrompt}>
         <ProjectAIPane ai={ai} projectType={projectType} />
       </fieldset>
-      <div className="sticky bottom-0 mt-6 flex min-h-16 items-center justify-end gap-2 border-t border-border-subtle bg-canvas py-3">
-        {ai.hasUnsavedPromptChanges || ai.savingPrompt ? (
-          <>
-            <Button onClick={ai.discardChanges} disabled={ai.savingPrompt}>
-              Discard
-            </Button>
-            <Button type="submit" variant="primary" loading={ai.savingPrompt}>
-              Save
-            </Button>
-          </>
-        ) : (
-          <span role="status" className="inline-flex items-center gap-1.5 text-xs text-text-muted">
-            <Icon name="check" /> Saved
-          </span>
-        )}
-      </div>
+      <ProjectSettingsFooter
+        dirty={ai.hasUnsavedPromptChanges}
+        saving={ai.savingPrompt}
+        onDiscard={ai.discardChanges}
+      />
     </form>
   );
 }

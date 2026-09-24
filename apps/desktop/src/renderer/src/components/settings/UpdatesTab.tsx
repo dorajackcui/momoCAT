@@ -4,14 +4,17 @@ import type { AppUpdatesController } from '../../hooks/useAppUpdates';
 
 export function UpdatesTab({ controller }: { controller: AppUpdatesController }) {
   return (
-    <section className="surface-card p-5 space-y-4" aria-label="Software updates">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h3 className="text-base font-semibold">MomoCAT</h3>
-          <p className="text-sm text-text-muted mt-1">Current version: v{version}</p>
-        </div>
+    <section className="workspace-settings-section" aria-label="Software updates">
+      <h3 className="workspace-settings-heading">momoCAT</h3>
+      <p className="text-xs text-text-muted">Current version: v{version}</p>
+      {controller.statusMessage && (
+        <p role="status" className="text-xs text-text-muted">
+          {controller.statusMessage}
+        </p>
+      )}
+      <div className="workspace-settings-actions">
         <Button
-          variant="secondary"
+          variant="primary"
           type="button"
           onClick={controller.checkForUpdates}
           disabled={controller.isBusy}
@@ -20,11 +23,6 @@ export function UpdatesTab({ controller }: { controller: AppUpdatesController })
           {controller.isBusy ? 'Updating…' : 'Check for updates'}
         </Button>
       </div>
-      {controller.statusMessage && (
-        <p role="status" className="text-sm text-text-muted">
-          {controller.statusMessage}
-        </p>
-      )}
     </section>
   );
 }

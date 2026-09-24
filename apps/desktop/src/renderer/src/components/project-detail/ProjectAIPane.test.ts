@@ -146,7 +146,7 @@ function findElementForController(
 function findTestPromptButton(controller: ProjectAIController): TestElement {
   return findElementForController(
     controller,
-    (element) => element.type === Button && element.props.children === 'Test Prompt',
+    (element) => element.type === Button && element.props.children === 'Test prompt',
   );
 }
 
@@ -188,7 +188,7 @@ describe('ProjectAIPane', () => {
     const controller = createController();
     const html = renderPane(controller);
 
-    expect(html).toContain('AI Provider');
+    expect(html).toContain('AI provider');
     expect(html).toContain('OpenAI / gpt-demo');
     expect(html).toContain('OpenAI / gpt-demo-mini');
   });

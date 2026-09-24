@@ -8,16 +8,16 @@ interface ProxySettingsTabProps {
 
 export function ProxySettingsTab({ controller, busy }: ProxySettingsTabProps) {
   return (
-    <section className="surface-card p-4 space-y-3">
-      <h3 className="text-sm font-bold text-text">Proxy Settings</h3>
-      <div className="space-y-2 text-sm text-text-muted">
+    <section className="workspace-settings-section">
+      <h3 className="workspace-settings-heading">Connection mode</h3>
+      <div className="space-y-3 text-sm text-text">
         <label className="flex items-center gap-2">
           <Radio
             name="proxy-mode"
             checked={controller.mode === 'off'}
             onChange={() => controller.setMode('off')}
           />
-          <span>No Proxy (Direct)</span>
+          <span>No proxy (direct)</span>
         </label>
         <label className="flex items-center gap-2">
           <Radio
@@ -25,7 +25,7 @@ export function ProxySettingsTab({ controller, busy }: ProxySettingsTabProps) {
             checked={controller.mode === 'system'}
             onChange={() => controller.setMode('system')}
           />
-          <span>Use System/Environment Proxy</span>
+          <span>Use system/environment proxy</span>
         </label>
         <label className="flex items-center gap-2">
           <Radio
@@ -33,13 +33,13 @@ export function ProxySettingsTab({ controller, busy }: ProxySettingsTabProps) {
             checked={controller.mode === 'custom'}
             onChange={() => controller.setMode('custom')}
           />
-          <span>Use Custom Proxy URL</span>
+          <span>Use custom proxy URL</span>
         </label>
       </div>
 
       {controller.mode === 'custom' && (
         <Input
-          aria-label="Custom Proxy URL"
+          aria-label="Custom proxy URL"
           type="text"
           value={controller.customProxyUrl}
           onChange={(event) => controller.setCustomProxyUrl(event.target.value)}
@@ -47,19 +47,20 @@ export function ProxySettingsTab({ controller, busy }: ProxySettingsTabProps) {
         />
       )}
 
-      <p className="text-2xs text-text-muted">
+      <p className="text-xs text-text-muted">
         Active proxy: {controller.effectiveProxyUrl || 'None (direct)'}
       </p>
 
-      <Button
-        variant="secondary"
-        onClick={() => void controller.saveProxySettings()}
-        disabled={busy}
-        className="w-full"
-      >
-        {controller.saving ? 'Saving Proxy...' : 'Save Proxy Settings'}
-      </Button>
       {controller.status && <div className="status-note">{controller.status}</div>}
+      <div className="workspace-settings-actions">
+        <Button
+          variant="primary"
+          onClick={() => void controller.saveProxySettings()}
+          disabled={busy}
+        >
+          {controller.saving ? 'Saving...' : 'Save'}
+        </Button>
+      </div>
     </section>
   );
 }

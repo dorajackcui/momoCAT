@@ -165,16 +165,12 @@ export function TermExtractionPromptTab() {
   };
 
   return (
-    <section className="space-y-4">
-      <div className="surface-card p-4 flex flex-wrap items-start justify-between gap-3">
+    <section className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-bold text-text">Term Extraction Prompts</h3>
+          <h3 className="text-sm font-semibold text-text">Extraction prompts</h3>
           <p className="mt-1 text-xs text-text-muted">
-            Save multiple selection policies and choose which one future extraction jobs use.
-          </p>
-          <p className="mt-1 text-2xs text-text-muted">
-            Source text, historical terms, injection protection, and strict JSON formatting remain
-            application-controlled.
+            Choose the prompt used for term extraction.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -184,43 +180,31 @@ export function TermExtractionPromptTab() {
             onClick={() => void handleCreate()}
             disabled={loading || saving || settings === null || creating}
           >
-            New Prompt
+            New prompt
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(220px,0.75fr)_minmax(0,1.5fr)]">
-        <div className="surface-card p-3 space-y-2">
-          <div className="px-1 text-2xs font-bold uppercase tracking-wider text-text-faint">
-            Prompt Library
-          </div>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(200px,0.65fr)_minmax(0,1.5fr)]">
+        <div className="min-w-0 space-y-2">
+          <h4 className="workspace-section-heading mb-3">Prompt library</h4>
           {settings?.prompts.map((prompt) => {
             const active = prompt.id === settings.activePromptId;
             const selected = prompt.id === selectedPromptId;
             return (
               <div
                 key={prompt.id}
-                className={`surface-subtle p-3 space-y-2 ${
-                  selected ? 'ring-1 ring-brand' : ''
-                }`}
+                className={`workspace-settings-section ${selected ? 'ring-1 ring-focus/50' : ''}`}
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-sm font-semibold text-text">{prompt.name}</span>
-                    {active && (
-                      <span className="text-caption uppercase tracking-wider text-text-muted">
-                        In use
-                      </span>
-                    )}
-                    {prompt.isBuiltin && (
-                      <span className="text-caption uppercase tracking-wider text-text-faint">
-                        Built-in
-                      </span>
-                    )}
+                    <span className="break-words text-sm font-medium text-text">{prompt.name}</span>
+                    {active && <span className="text-xs text-text-muted">In use</span>}
+                    {prompt.isBuiltin && <span className="text-xs text-text-muted">Built-in</span>}
                   </div>
-                  <p className="mt-1 truncate text-2xs text-text-muted">{prompt.prompt}</p>
+                  <p className="mt-1 truncate text-xs text-text-muted">{prompt.prompt}</p>
                 </div>
-                <div className="flex flex-wrap justify-end gap-1">
+                <div className="workspace-settings-actions">
                   {!active && (
                     <Button
                       size="xs"
@@ -263,25 +247,20 @@ export function TermExtractionPromptTab() {
           {loading && <div className="px-1 text-xs text-text-muted">Loading prompts...</div>}
         </div>
 
-        <div className="surface-card p-4 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h4 className="text-sm font-bold text-text">
-              {creating ? 'New Prompt' : selectedPrompt?.name || 'Prompt Editor'}
+        <div className="workspace-settings-section min-w-0">
+          <div className="workspace-section-heading flex items-center justify-between gap-3">
+            <h4 className="text-sm font-semibold text-text">
+              {creating ? 'New prompt' : selectedPrompt?.name || 'Prompt editor'}
             </h4>
             {selectedPrompt?.isBuiltin && (
-              <span className="rounded-full bg-muted px-2 py-1 text-caption font-semibold text-text-muted">
-                Read only
-              </span>
+              <span className="shrink-0 text-xs text-text-muted">Read only</span>
             )}
           </div>
 
           {(creating || (selectedPrompt && !selectedPrompt.isBuiltin)) && (
             <div>
-              <label
-                htmlFor="term-extraction-prompt-name"
-                className="mb-1 block text-xs font-semibold text-text-muted"
-              >
-                Prompt Name
+              <label htmlFor="term-extraction-prompt-name" className="workspace-settings-label">
+                Prompt name
               </label>
               <Input
                 id="term-extraction-prompt-name"
@@ -294,11 +273,8 @@ export function TermExtractionPromptTab() {
           )}
 
           <div>
-            <label
-              htmlFor="term-extraction-selection-prompt"
-              className="mb-1 block text-xs font-semibold text-text-muted"
-            >
-              Selection Prompt
+            <label htmlFor="term-extraction-selection-prompt" className="workspace-settings-label">
+              Selection prompt
             </label>
             <Textarea
               size="sm"
@@ -314,13 +290,13 @@ export function TermExtractionPromptTab() {
             />
           </div>
 
-          <div className="flex items-center justify-between gap-3 text-2xs text-text-muted">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-text-muted">
             <span>{draft.length.toLocaleString()} characters</span>
             {settings && <span>Maximum {settings.maxChars.toLocaleString()}</span>}
           </div>
 
           {(creating || (selectedPrompt && !selectedPrompt.isBuiltin)) && (
-            <div className="flex flex-wrap justify-end gap-2">
+            <div className="workspace-settings-actions">
               <Button variant="secondary" type="button" onClick={cancelEditing} disabled={saving}>
                 Cancel
               </Button>
@@ -330,15 +306,14 @@ export function TermExtractionPromptTab() {
                 onClick={() => void handleSave()}
                 disabled={saving || !dirty || !valid}
               >
-                {saving ? 'Saving...' : creating ? 'Save and Use' : 'Save Changes'}
+                {saving ? 'Saving...' : creating ? 'Save and use' : 'Save changes'}
               </Button>
             </div>
           )}
 
           {selectedPrompt?.isBuiltin && (
-            <p className="text-2xs text-text-faint">
-              The built-in prompt cannot be overwritten. Choose New Prompt to use it as a starting
-              point for a custom version.
+            <p className="text-xs text-text-muted">
+              Create a new prompt to customize the built-in rules.
             </p>
           )}
         </div>

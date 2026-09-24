@@ -128,22 +128,12 @@ export class SegmentRepo {
     const normalizedStatus = normalizeSegmentStatus(status, targetTokens);
 
     const targetJson = JSON.stringify(targetTokens);
-    this.db.transaction(() => {
-      // Text edits invalidate every document dependency; status-only writes preserve QA.
-      this.db
-        .prepare(
-          `UPDATE segments SET qaIssuesJson = NULL
-        WHERE qaIssuesJson IS NOT NULL AND fileId = (
-          SELECT fileId FROM segments WHERE segmentId = ? AND targetTokensJson <> ?
-        )`,
-        )
-        .run(segmentId, targetJson);
-      this.db
-        .prepare(
-          "UPDATE segments SET targetTokensJson = ?, status = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE segmentId = ?",
-        )
-        .run(targetJson, normalizedStatus, segmentId);
-    })();
+    // Editing preserves the last QA findings until they are explicitly rechecked.
+    this.db
+      .prepare(
+        "UPDATE segments SET targetTokensJson = ?, status = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE segmentId = ?",
+      )
+      .run(targetJson, normalizedStatus, segmentId);
   }
 
   public updateSegmentQaIssues(segmentId: string, qaIssues: QaIssue[]) {

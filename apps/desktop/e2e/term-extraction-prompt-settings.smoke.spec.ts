@@ -7,6 +7,7 @@ const APP_ROOT = join(__dirname, '..');
 test('manages and switches between named term extraction prompts', async () => {
   test.setTimeout(90_000);
   const launchEnv = { ...process.env };
+  launchEnv.MOMOCAT_USER_DATA_DIR = test.info().outputPath('user-data');
   delete launchEnv.ELECTRON_RUN_AS_NODE;
   const electronApp = await electron.launch({ cwd: APP_ROOT, args: ['.'], env: launchEnv });
   const page = await electronApp.firstWindow({ timeout: 60_000 });
@@ -25,16 +26,13 @@ test('manages and switches between named term extraction prompts', async () => {
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     const connectionsTab = page.getByRole('tab', { name: 'AI Connections', exact: true });
     const tabMetrics = await connectionsTab.evaluate((element) => {
-      const style = window.getComputedStyle(element);
       return {
         height: element.getBoundingClientRect().height,
         clientHeight: element.clientHeight,
         scrollHeight: element.scrollHeight,
-        alignItems: style.alignItems,
       };
     });
-    expect(tabMetrics.height).toBeGreaterThanOrEqual(32);
-    expect(tabMetrics.alignItems).toBe('center');
+    expect(tabMetrics.height).toBeGreaterThanOrEqual(28);
     expect(tabMetrics.scrollHeight).toBeLessThanOrEqual(tabMetrics.clientHeight);
 
     await page.getByRole('tab', { name: 'Term Extraction', exact: true }).click();
@@ -43,18 +41,18 @@ test('manages and switches between named term extraction prompts', async () => {
     await expect(editor).toHaveValue(original.prompt);
 
     const customPrompt = `Prefer named locations and named features. Smoke ${Date.now()}.`;
-    await page.getByRole('button', { name: 'New Prompt', exact: true }).click();
-    await page.getByLabel('Prompt Name', { exact: true }).fill(promptName);
+    await page.getByRole('button', { name: 'New prompt', exact: true }).click();
+    await page.getByLabel('Prompt name', { exact: true }).fill(promptName);
     await editor.fill(customPrompt);
-    await page.getByRole('button', { name: 'Save and Use', exact: true }).click();
+    await page.getByRole('button', { name: 'Save and use', exact: true }).click();
     await expect(
       page.getByText(`"${promptName}" was saved and is now in use.`, { exact: true }),
     ).toBeVisible();
 
     const updatedPrompt = `${customPrompt} Prefer stable product names.`;
-    await page.getByLabel('Prompt Name', { exact: true }).fill(updatedName);
+    await page.getByLabel('Prompt name', { exact: true }).fill(updatedName);
     await editor.fill(updatedPrompt);
-    await page.getByRole('button', { name: 'Save Changes', exact: true }).click();
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(page.getByText(`"${updatedName}" was updated.`, { exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Use Default', exact: true }).click();

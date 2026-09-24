@@ -610,7 +610,7 @@ describe("CATDatabase", () => {
     });
   });
 
-  it("should persist qa issues and clear them after segment update", () => {
+  it("should retain persisted qa issues and problem counts after segment edits", () => {
     const projectId = db.createProject("QA Cache Project", "en", "zh");
     const fileId = db.createFile(projectId, "qa-cache.xlsx");
 
@@ -640,11 +640,16 @@ describe("CATDatabase", () => {
     let segment = db.getSegment("qa-1");
     expect(segment?.qaIssues).toHaveLength(1);
     expect(segment?.qaIssues?.[0].ruleId).toBe("tag-missing");
+    const originalIssues = segment?.qaIssues;
 
     db.updateSegmentTarget("qa-1", [{ type: "text", content: "点击 <1>" }], "draft");
 
     segment = db.getSegment("qa-1");
-    expect(segment?.qaIssues).toBeUndefined();
+    expect(segment?.qaIssues).toEqual(originalIssues);
+    expect(db.getFile(fileId)?.segmentStatusStats.qaProblemSegments).toBe(1);
+    db.updateSegmentQaIssues("qa-1", []);
+    expect(db.getSegment("qa-1")?.qaIssues).toEqual([]);
+    expect(db.getFile(fileId)?.segmentStatusStats.qaProblemSegments).toBe(0);
   });
 
   it("should preserve existing metadata when updating targets without repeat state writes", () => {

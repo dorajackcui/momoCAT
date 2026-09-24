@@ -78,11 +78,6 @@ export function createEditorSegmentStore(
     }
     if (changedFiles.size) {
       qaRevision += 1;
-      for (const id of new Set([...qaSegmentIds, ...pending.keys()])) {
-        const next = pending.get(id) ?? segmentById.get(id);
-        if (next && changedFiles.has(next.fileId) && next.qaIssues !== undefined)
-          pending.set(id, { ...next, qaIssues: undefined });
-      }
     }
 
     for (const [segmentId, next] of pending) {

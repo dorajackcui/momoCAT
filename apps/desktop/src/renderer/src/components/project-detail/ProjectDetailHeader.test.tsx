@@ -44,18 +44,18 @@ describe('ProjectDetailHeader', () => {
 
     expect(screen.getByText('Demo Project')).toBeInTheDocument();
     expect(screen.getByText('en → fr')).toBeInTheDocument();
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Translation Memory' }), {
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Translation memory' }), {
       button: 0,
       ctrlKey: false,
     });
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Term Bases' }), {
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Term bases' }), {
       button: 0,
       ctrlKey: false,
     });
 
     expect(props.onTabChange).toHaveBeenNthCalledWith(1, 'tm');
     expect(props.onTabChange).toHaveBeenNthCalledWith(2, 'tb');
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Settings' }), {
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'AI provider' }), {
       button: 0,
       ctrlKey: false,
     });

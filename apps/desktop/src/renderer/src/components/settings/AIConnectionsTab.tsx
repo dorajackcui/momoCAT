@@ -12,15 +12,15 @@ function formatModelCount(count: number): string {
 
 export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
   return (
-    <div className="space-y-4">
-      <section className="surface-card p-4 space-y-3">
-        <h3 className="text-sm font-bold text-text">AI Connections</h3>
+    <div className="space-y-6">
+      <section className="workspace-settings-section">
+        <h3 className="workspace-settings-heading">Connection details</h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="field-label">Connection Name</label>
+            <label className="workspace-settings-label">Connection name</label>
             <Input
-              aria-label="Connection Name"
+              aria-label="Connection name"
               type="text"
               value={controller.connectionNameInput}
               onChange={(event) => controller.updateConnectionName(event.target.value)}
@@ -29,9 +29,9 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
             />
           </div>
           <div>
-            <label className="field-label">API Base URL</label>
+            <label className="workspace-settings-label">API base URL</label>
             <Input
-              aria-label="API Base URL"
+              aria-label="API base URL"
               type="text"
               value={controller.connectionBaseUrlInput}
               onChange={(event) => controller.updateConnectionBaseUrl(event.target.value)}
@@ -42,9 +42,9 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
         </div>
 
         <div>
-          <label className="field-label">API Key</label>
+          <label className="workspace-settings-label">API key</label>
           <Input
-            aria-label="API Key"
+            aria-label="API key"
             type="password"
             value={controller.connectionApiKeyInput}
             onChange={(event) => controller.updateConnectionApiKey(event.target.value)}
@@ -53,22 +53,23 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
           />
         </div>
 
-        <Button
-          variant="secondary"
-          onClick={() => void controller.testConnection()}
-          disabled={busy || controller.savedConnectionReuseActive}
-          className="w-full"
-        >
-          {controller.testingProvider
-            ? 'Testing...'
-            : controller.savedConnectionReuseActive
-              ? 'Enter Key to Retest'
-              : 'Test Connection'}
-        </Button>
+        <div className="flex justify-end">
+          <Button
+            variant="secondary"
+            onClick={() => void controller.testConnection()}
+            disabled={busy || controller.savedConnectionReuseActive}
+          >
+            {controller.testingProvider
+              ? 'Testing...'
+              : controller.savedConnectionReuseActive
+                ? 'Enter key to retest'
+                : 'Test connection'}
+          </Button>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="field-label">Model</label>
+            <label className="workspace-settings-label">Model</label>
             <Select
               aria-label="Model"
               value={controller.selectedModel}
@@ -87,9 +88,9 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
             </Select>
           </div>
           <div>
-            <label className="field-label">Provider Name</label>
+            <label className="workspace-settings-label">Provider name</label>
             <Input
-              aria-label="Provider Name"
+              aria-label="Provider name"
               type="text"
               value={controller.providerNameInput}
               onChange={(event) => controller.updateProviderName(event.target.value)}
@@ -99,64 +100,66 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
           </div>
         </div>
 
-        <Button
-          variant="primary"
-          onClick={() => void controller.addProvider()}
-          disabled={busy || !controller.testedConnection || !controller.selectedModel}
-          className="w-full"
-        >
-          {controller.addingProvider ? 'Adding Provider...' : 'Add Provider'}
-        </Button>
+        <div className="workspace-settings-actions">
+          <Button
+            variant="primary"
+            onClick={() => void controller.addProvider()}
+            disabled={busy || !controller.testedConnection || !controller.selectedModel}
+          >
+            {controller.addingProvider ? 'Adding provider...' : 'Add provider'}
+          </Button>
+        </div>
       </section>
 
-      <section className="surface-card p-4 space-y-3">
-        <h3 className="text-sm font-bold text-text">Connections</h3>
+      <section className="space-y-4">
+        <h3 className="workspace-settings-heading">Saved connections</h3>
         <div className="space-y-2">
           {controller.connections.length === 0 ? (
-            <div className="surface-subtle px-3 py-4 text-sm text-text-muted">
-              No AI connections saved.
-            </div>
+            <div className="py-3 text-xs text-text-muted">No AI connections saved.</div>
           ) : (
             controller.connections.map((connectionItem) => {
               const isDeleting = controller.deletingConnectionId === connectionItem.id;
               return (
                 <div
                   key={connectionItem.id}
-                  className="surface-subtle px-3 py-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+                  className="workspace-config-section flex flex-wrap items-center justify-between gap-4"
                 >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-text">{connectionItem.name}</span>
-                      <span className="text-caption uppercase tracking-wider text-text-faint">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="break-words text-sm font-medium text-text">
+                        {connectionItem.name}
+                      </span>
+                      <span className="shrink-0 text-xs text-text-muted">
                         {formatModelCount(connectionItem.discoveredModels.length)}
                       </span>
                     </div>
-                    <div className="text-2xs text-text-muted break-all">
+                    <div className="mt-1 text-xs text-text-muted break-all">
                       {connectionItem.baseUrl}
                     </div>
-                    <div className="text-2xs text-text-faint">
-                      API Key:{' '}
+                    <div className="mt-1 text-xs text-text-muted">
+                      API key:{' '}
                       {connectionItem.apiKeyLast4
                         ? `****${connectionItem.apiKeyLast4}`
                         : 'Not configured'}
                     </div>
                   </div>
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                  <div className="ml-auto flex shrink-0 items-center gap-2">
                     <Button
                       variant="secondary"
                       onClick={() => controller.useConnection(connectionItem)}
                       disabled={busy || connectionItem.discoveredModels.length === 0}
-                      className="md:w-auto"
+                      size="sm"
                     >
-                      Use Connection
+                      Use connection
                     </Button>
                     <Button
-                      variant="secondary"
+                      variant="ghost"
+                      tone="danger"
                       onClick={() => void controller.deleteConnection(connectionItem.id)}
                       disabled={busy}
-                      className="md:w-auto"
+                      size="sm"
                     >
-                      {isDeleting ? 'Deleting...' : 'Delete Connection'}
+                      {isDeleting ? 'Deleting...' : 'Delete connection'}
                     </Button>
                   </div>
                 </div>
@@ -166,50 +169,48 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
         </div>
       </section>
 
-      <section className="surface-card p-4 space-y-3">
-        <h3 className="text-sm font-bold text-text">AI Providers</h3>
+      <section className="space-y-4">
+        <h3 className="workspace-settings-heading">Providers</h3>
         <div className="space-y-2">
           {controller.providers.length === 0 ? (
-            <div className="surface-subtle px-3 py-4 text-sm text-text-muted">
-              No AI providers configured.
-            </div>
+            <div className="py-3 text-xs text-text-muted">No AI providers configured.</div>
           ) : (
             controller.providers.map((provider) => {
               const isDeleting = controller.deletingProviderId === provider.id;
               return (
                 <div
                   key={provider.id}
-                  className="surface-subtle px-3 py-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+                  className="workspace-config-section flex flex-wrap items-center justify-between gap-4"
                 >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-text">{provider.name}</span>
-                      <span className="text-caption uppercase tracking-wider text-text-faint">
-                        {provider.kind}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="break-words text-sm font-medium text-text">
+                        {provider.name}
                       </span>
                     </div>
-                    <div className="text-2xs text-text-muted break-all">
+                    <div className="mt-1 text-xs text-text-muted break-all">
                       {provider.baseUrl} - {provider.model}
                     </div>
-                    <div className="text-2xs text-text-faint">
+                    <div className="mt-1 text-xs text-text-muted">
                       Connection: {provider.connectionName || 'Legacy'} - Key{' '}
                       {provider.apiKeyLast4 ? `****${provider.apiKeyLast4}` : 'not configured'}
                     </div>
                   </div>
-                  {provider.kind === 'configured' ? (
-                    <Button
-                      variant="secondary"
-                      onClick={() => void controller.deleteProvider(provider.id)}
-                      disabled={busy}
-                      className="md:w-auto"
-                    >
-                      {isDeleting ? 'Deleting...' : 'Delete Provider'}
-                    </Button>
-                  ) : (
-                    <span className="text-2xs font-medium uppercase tracking-wider text-text-faint">
-                      Read only
-                    </span>
-                  )}
+                  <div className="ml-auto flex shrink-0 items-center gap-2">
+                    {provider.kind === 'configured' ? (
+                      <Button
+                        variant="ghost"
+                        tone="danger"
+                        onClick={() => void controller.deleteProvider(provider.id)}
+                        disabled={busy}
+                        size="sm"
+                      >
+                        {isDeleting ? 'Deleting...' : 'Delete provider'}
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-text-muted">Read only</span>
+                    )}
+                  </div>
                 </div>
               );
             })

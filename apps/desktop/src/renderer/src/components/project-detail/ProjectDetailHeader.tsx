@@ -43,10 +43,10 @@ export function ProjectDetailHeader({
           label="Project sections"
           items={[
             { value: 'files', label: 'Tasks' },
-            { value: 'tm', label: 'Translation Memory' },
-            { value: 'tb', label: 'Term Bases' },
+            { value: 'settings', label: 'AI provider' },
+            { value: 'tm', label: 'Translation memory' },
+            { value: 'tb', label: 'Term bases' },
             { value: 'qa', label: 'QA' },
-            { value: 'settings', label: 'Settings' },
           ]}
         />
         {project && activeTab === 'files' ? (

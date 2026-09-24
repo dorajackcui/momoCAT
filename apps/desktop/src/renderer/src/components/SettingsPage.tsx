@@ -12,9 +12,9 @@ type SettingsTabId = 'connections' | 'term-extraction' | 'proxy' | 'updates' | '
 
 const SETTINGS_TABS: Array<{ id: SettingsTabId; label: string }> = [
   { id: 'connections', label: 'AI Connections' },
-  { id: 'appearance', label: 'Appearance' },
-  { id: 'term-extraction', label: 'Term Extraction' },
   { id: 'proxy', label: 'Proxy' },
+  { id: 'term-extraction', label: 'Term Extraction' },
+  { id: 'appearance', label: 'Appearance' },
   { id: 'updates', label: 'Updates' },
 ];
 
@@ -32,10 +32,10 @@ export function SettingsPage({ updates }: { updates: AppUpdatesController }) {
       className="workspace-settings-page"
     >
       <div className="workspace-page-header">
-        <h2 className="text-xl font-bold text-text">Settings</h2>
+        <h2 className="text-xl font-semibold text-text">Settings</h2>
       </div>
 
-      <div className="px-6 py-3 border-b border-border">
+      <div className="px-6 py-3 border-b border-border-subtle">
         <TabsList
           label="Settings sections"
           items={SETTINGS_TABS.map((tab) => ({ value: tab.id, label: tab.label }))}
@@ -47,18 +47,18 @@ export function SettingsPage({ updates }: { updates: AppUpdatesController }) {
         className="workspace-settings-content"
         style={{ scrollbarGutter: 'stable' }}
       >
-        {activeTab === 'connections' && <AIConnectionsTab controller={aiConnections} busy={busy} />}
-        {activeTab === 'term-extraction' && <TermExtractionPromptTab />}
-        {activeTab === 'proxy' && <ProxySettingsTab controller={proxySettings} busy={busy} />}
-        {activeTab === 'appearance' && (
-          <div className="max-w-md">
-            <AppearanceControls />
-          </div>
-        )}
-        {activeTab === 'connections' && aiConnections.status && (
-          <div className="status-note">{aiConnections.status}</div>
-        )}
-        {activeTab === 'updates' && <UpdatesTab controller={updates} />}
+        <div className="w-full max-w-3xl space-y-6">
+          {activeTab === 'connections' && (
+            <AIConnectionsTab controller={aiConnections} busy={busy} />
+          )}
+          {activeTab === 'term-extraction' && <TermExtractionPromptTab />}
+          {activeTab === 'proxy' && <ProxySettingsTab controller={proxySettings} busy={busy} />}
+          {activeTab === 'appearance' && <AppearanceControls layout="settings" />}
+          {activeTab === 'connections' && aiConnections.status && (
+            <div className="status-note">{aiConnections.status}</div>
+          )}
+          {activeTab === 'updates' && <UpdatesTab controller={updates} />}
+        </div>
       </TabsPanel>
     </Tabs>
   );

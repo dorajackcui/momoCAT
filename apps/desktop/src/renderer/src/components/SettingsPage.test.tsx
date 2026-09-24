@@ -80,8 +80,8 @@ vi.mock('../services/apiClient', () => ({
 }));
 
 async function waitForConnectionsTabReady() {
-  await screen.findByRole('heading', { name: 'AI Connections' });
-  await waitFor(() => expect(screen.getByText('Test Connection')).not.toBeDisabled());
+  await screen.findByRole('heading', { name: 'Connection details' });
+  await waitFor(() => expect(screen.getByText('Test connection')).not.toBeDisabled());
 }
 
 describe('SettingsPage', () => {
@@ -139,17 +139,17 @@ describe('SettingsPage', () => {
 
     await waitForConnectionsTabReady();
 
-    fireEvent.change(screen.getByLabelText('Connection Name'), {
+    fireEvent.change(screen.getByLabelText('Connection name'), {
       target: { value: 'OpenAI' },
     });
-    fireEvent.change(screen.getByLabelText('API Base URL'), {
+    fireEvent.change(screen.getByLabelText('API base URL'), {
       target: { value: 'https://api.openai.com/v1' },
     });
-    fireEvent.change(screen.getByLabelText('API Key'), {
+    fireEvent.change(screen.getByLabelText('API key'), {
       target: { value: 'sk-test-1234' },
     });
 
-    fireEvent.click(screen.getByText('Test Connection'));
+    fireEvent.click(screen.getByText('Test connection'));
 
     await waitFor(() =>
       expect(apiClientMock.testAIConnection).toHaveBeenCalledWith({
@@ -161,9 +161,9 @@ describe('SettingsPage', () => {
 
     expect(await screen.findByText('Connection tested: 2 models discovered.')).toBeInTheDocument();
     expect(screen.getByLabelText('Model')).toHaveValue('gpt-demo');
-    expect(screen.getByLabelText('Provider Name')).toHaveValue('OpenAI / gpt-demo');
+    expect(screen.getByLabelText('Provider name')).toHaveValue('OpenAI / gpt-demo');
 
-    fireEvent.click(screen.getByText('Add Provider'));
+    fireEvent.click(screen.getByText('Add provider'));
 
     await waitFor(() =>
       expect(apiClientMock.addAIProvider).toHaveBeenCalledWith({
@@ -181,29 +181,29 @@ describe('SettingsPage', () => {
 
     await waitForConnectionsTabReady();
 
-    fireEvent.change(screen.getByLabelText('Connection Name'), {
+    fireEvent.change(screen.getByLabelText('Connection name'), {
       target: { value: 'OpenAI' },
     });
-    fireEvent.change(screen.getByLabelText('API Base URL'), {
+    fireEvent.change(screen.getByLabelText('API base URL'), {
       target: { value: 'https://api.openai.com/v1' },
     });
-    fireEvent.change(screen.getByLabelText('API Key'), {
+    fireEvent.change(screen.getByLabelText('API key'), {
       target: { value: 'sk-test-1234' },
     });
 
-    fireEvent.click(screen.getByText('Test Connection'));
+    fireEvent.click(screen.getByText('Test connection'));
 
     expect(await screen.findByText('Connection tested: 2 models discovered.')).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText('Add Provider')).not.toBeDisabled());
+    await waitFor(() => expect(screen.getByText('Add provider')).not.toBeDisabled());
 
-    fireEvent.change(screen.getByLabelText('API Base URL'), {
+    fireEvent.change(screen.getByLabelText('API base URL'), {
       target: { value: 'https://example.com/v1' },
     });
 
     expect(screen.getByLabelText('Model')).toHaveValue('');
-    expect(screen.getByText('Add Provider')).toBeDisabled();
+    expect(screen.getByText('Add provider')).toBeDisabled();
 
-    fireEvent.click(screen.getByText('Add Provider'));
+    fireEvent.click(screen.getByText('Add provider'));
 
     expect(apiClientMock.addAIProvider).not.toHaveBeenCalled();
   });
@@ -217,9 +217,9 @@ describe('SettingsPage', () => {
       button: 0,
       ctrlKey: false,
     });
-    await waitFor(() => expect(screen.getByText('Save Proxy Settings')).not.toBeDisabled());
-    fireEvent.click(screen.getByLabelText('Use Custom Proxy URL'));
-    fireEvent.change(screen.getByLabelText('Custom Proxy URL'), {
+    await waitFor(() => expect(screen.getByText('Save')).not.toBeDisabled());
+    fireEvent.click(screen.getByLabelText('Use custom proxy URL'));
+    fireEvent.change(screen.getByLabelText('Custom proxy URL'), {
       target: { value: 'http://127.0.0.1:7890' },
     });
 
@@ -228,13 +228,13 @@ describe('SettingsPage', () => {
       ctrlKey: false,
     });
     await waitForConnectionsTabReady();
-    fireEvent.change(screen.getByLabelText('Connection Name'), {
+    fireEvent.change(screen.getByLabelText('Connection name'), {
       target: { value: 'OpenAI' },
     });
-    fireEvent.change(screen.getByLabelText('API Base URL'), {
+    fireEvent.change(screen.getByLabelText('API base URL'), {
       target: { value: 'https://api.openai.com/v1' },
     });
-    fireEvent.change(screen.getByLabelText('API Key'), {
+    fireEvent.change(screen.getByLabelText('API key'), {
       target: { value: 'sk-test-1234' },
     });
     apiClientMock.setProxySettings.mockResolvedValueOnce({
@@ -243,7 +243,7 @@ describe('SettingsPage', () => {
       effectiveProxyUrl: 'http://127.0.0.1:7890',
     });
 
-    fireEvent.click(screen.getByText('Test Connection'));
+    fireEvent.click(screen.getByText('Test connection'));
 
     await waitFor(() =>
       expect(apiClientMock.setProxySettings).toHaveBeenCalledWith({
@@ -278,9 +278,9 @@ describe('SettingsPage', () => {
       button: 0,
       ctrlKey: false,
     });
-    await waitFor(() => expect(screen.getByText('Save Proxy Settings')).not.toBeDisabled());
-    fireEvent.click(screen.getByLabelText('Use Custom Proxy URL'));
-    fireEvent.change(screen.getByLabelText('Custom Proxy URL'), {
+    await waitFor(() => expect(screen.getByText('Save')).not.toBeDisabled());
+    fireEvent.click(screen.getByLabelText('Use custom proxy URL'));
+    fireEvent.change(screen.getByLabelText('Custom proxy URL'), {
       target: { value: 'http://127.0.0.1:7001' },
     });
     apiClientMock.setProxySettings.mockResolvedValueOnce({
@@ -288,10 +288,10 @@ describe('SettingsPage', () => {
       customProxyUrl: 'http://127.0.0.1:7001',
       effectiveProxyUrl: 'http://127.0.0.1:7001',
     });
-    fireEvent.click(screen.getByText('Save Proxy Settings'));
+    fireEvent.click(screen.getByText('Save'));
     expect(await screen.findByText('Proxy applied: http://127.0.0.1:7001')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Custom Proxy URL'), {
+    fireEvent.change(screen.getByLabelText('Custom proxy URL'), {
       target: { value: 'http://127.0.0.1:7002' },
     });
     apiClientMock.setProxySettings.mockResolvedValueOnce({
@@ -304,25 +304,25 @@ describe('SettingsPage', () => {
       ctrlKey: false,
     });
     await waitForConnectionsTabReady();
-    fireEvent.change(screen.getByLabelText('Connection Name'), {
+    fireEvent.change(screen.getByLabelText('Connection name'), {
       target: { value: 'OpenAI' },
     });
-    fireEvent.change(screen.getByLabelText('API Base URL'), {
+    fireEvent.change(screen.getByLabelText('API base URL'), {
       target: { value: 'https://api.openai.com/v1' },
     });
-    fireEvent.change(screen.getByLabelText('API Key'), {
+    fireEvent.change(screen.getByLabelText('API key'), {
       target: { value: 'sk-test-1234' },
     });
-    fireEvent.click(screen.getByText('Test Connection'));
+    fireEvent.click(screen.getByText('Test connection'));
     await waitFor(() => expect(apiClientMock.testAIConnection).toHaveBeenCalled());
 
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Proxy' }), { button: 0, ctrlKey: false });
-    expect(screen.getByText('Save Proxy Settings')).toBeDisabled();
+    expect(screen.getByText('Save')).toBeDisabled();
     expect(screen.getByText('Active proxy: http://127.0.0.1:7002')).toBeInTheDocument();
     expect(screen.queryByText('Proxy applied: http://127.0.0.1:7001')).not.toBeInTheDocument();
 
     resolveConnectionTest(testResult);
-    await waitFor(() => expect(screen.getByText('Save Proxy Settings')).not.toBeDisabled());
+    await waitFor(() => expect(screen.getByText('Save')).not.toBeDisabled());
     expect(screen.queryByText('Connection tested: 2 models discovered.')).not.toBeInTheDocument();
 
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'AI Connections' }), {
@@ -348,23 +348,23 @@ describe('SettingsPage', () => {
 
     await waitForConnectionsTabReady();
 
-    fireEvent.change(screen.getByLabelText('Connection Name'), {
+    fireEvent.change(screen.getByLabelText('Connection name'), {
       target: { value: 'OpenAI' },
     });
-    fireEvent.change(screen.getByLabelText('API Base URL'), {
+    fireEvent.change(screen.getByLabelText('API base URL'), {
       target: { value: 'https://api.openai.com/v1' },
     });
-    fireEvent.change(screen.getByLabelText('API Key'), {
+    fireEvent.change(screen.getByLabelText('API key'), {
       target: { value: 'sk-test-1234' },
     });
 
-    fireEvent.click(screen.getByText('Test Connection'));
+    fireEvent.click(screen.getByText('Test connection'));
 
     expect(await screen.findByText('Connection tested: 2 models discovered.')).toBeInTheDocument();
     expect(screen.getByLabelText('Model')).toHaveValue('gpt-demo');
-    await waitFor(() => expect(screen.getByText('Add Provider')).not.toBeDisabled());
+    await waitFor(() => expect(screen.getByText('Add provider')).not.toBeDisabled());
 
-    fireEvent.click(screen.getByText('Add Provider'));
+    fireEvent.click(screen.getByText('Add provider'));
 
     await waitFor(() =>
       expect(apiClientMock.addAIProvider).toHaveBeenCalledWith({
@@ -385,7 +385,7 @@ describe('SettingsPage', () => {
     await screen.findByText('OpenAI / gpt-demo');
     expect(screen.getByText('Legacy Provider')).toBeInTheDocument();
     expect(screen.queryByText('Built-in')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Delete Provider')).toHaveLength(1);
+    expect(screen.getAllByText('Delete provider')).toHaveLength(1);
     expect(screen.getByText('Read only')).toBeInTheDocument();
   });
 
@@ -405,14 +405,14 @@ describe('SettingsPage', () => {
 
     await screen.findByText('https://api.openai.com/v1');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Use Connection' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use connection' }));
 
     expect(screen.getByLabelText('Model')).toHaveValue('gpt-demo-mini');
-    expect(screen.getByLabelText('Provider Name')).toHaveValue('OpenAI / gpt-demo-mini');
-    expect(screen.getByRole('button', { name: 'Enter Key to Retest' })).toBeDisabled();
+    expect(screen.getByLabelText('Provider name')).toHaveValue('OpenAI / gpt-demo-mini');
+    expect(screen.getByRole('button', { name: 'Enter key to retest' })).toBeDisabled();
     expect(apiClientMock.testAIConnection).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByText('Add Provider'));
+    fireEvent.click(screen.getByText('Add provider'));
 
     await waitFor(() =>
       expect(apiClientMock.addAIProvider).toHaveBeenCalledWith({
@@ -432,16 +432,16 @@ describe('SettingsPage', () => {
     );
 
     await screen.findByText('https://api.openai.com/v1');
-    expect(screen.getByText('API Key: ****1234')).toBeInTheDocument();
+    expect(screen.getByText('API key: ****1234')).toBeInTheDocument();
     expect(screen.getByText('2 models')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Delete Connection'));
+    fireEvent.click(screen.getByText('Delete connection'));
 
     await waitFor(() =>
       expect(apiClientMock.deleteAIConnection).toHaveBeenCalledWith('connection:openai'),
     );
 
-    fireEvent.click(screen.getByText('Delete Provider'));
+    fireEvent.click(screen.getByText('Delete provider'));
 
     await waitFor(() =>
       expect(apiClientMock.deleteAIProvider).toHaveBeenCalledWith('provider:gpt-demo'),
@@ -457,11 +457,11 @@ describe('SettingsPage', () => {
       button: 0,
       ctrlKey: false,
     });
-    await screen.findByText('Proxy Settings');
-    await waitFor(() => expect(screen.getByText('Save Proxy Settings')).not.toBeDisabled());
+    await screen.findByText('Connection mode');
+    await waitFor(() => expect(screen.getByText('Save')).not.toBeDisabled());
 
-    fireEvent.click(screen.getByLabelText('Use Custom Proxy URL'));
-    fireEvent.change(screen.getByLabelText('Custom Proxy URL'), {
+    fireEvent.click(screen.getByLabelText('Use custom proxy URL'));
+    fireEvent.change(screen.getByLabelText('Custom proxy URL'), {
       target: { value: 'http://127.0.0.1:7890' },
     });
     apiClientMock.setProxySettings.mockResolvedValueOnce({
@@ -470,7 +470,7 @@ describe('SettingsPage', () => {
       effectiveProxyUrl: 'http://127.0.0.1:7890',
     });
 
-    fireEvent.click(screen.getByText('Save Proxy Settings'));
+    fireEvent.click(screen.getByText('Save'));
 
     await waitFor(() =>
       expect(apiClientMock.setProxySettings).toHaveBeenCalledWith({
@@ -495,12 +495,12 @@ describe('SettingsPage', () => {
     expect(editor).toHaveValue('Default extraction rules.');
     expect(editor).toHaveAttribute('readonly');
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Prompt' }));
-    fireEvent.change(await screen.findByLabelText('Prompt Name'), {
+    fireEvent.click(screen.getByRole('button', { name: 'New prompt' }));
+    fireEvent.change(await screen.findByLabelText('Prompt name'), {
       target: { value: 'Named locations' },
     });
     fireEvent.change(editor, { target: { value: 'Prefer named locations.' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save and Use' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save and use' }));
 
     await waitFor(() =>
       expect(apiClientMock.setSourceTerminologyPromptSettings).toHaveBeenCalledWith({
