@@ -1,3 +1,4 @@
+export { StrictTermRecognizer, type StrictTermRecognizerMatch } from './strictTermRecognizer';
 export {
   EnglishTermRecognizer,
   buildEnglishTermRecognizer,

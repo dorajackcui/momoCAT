@@ -4,6 +4,7 @@ import type { FileQaIssueRecord } from '@cat/core/project';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { QAPanelProps, groupQaIssues } from './QAPanel';
 import { Button, Icon, IconButton } from '../ui';
+import { QAReferenceSummary } from './QAReferenceSummary';
 
 interface Props extends Pick<QAPanelProps, 'getSegment' | 'onFilter' | 'onLocate'> {
   categories: ReturnType<typeof groupQaIssues>;
@@ -14,6 +15,13 @@ interface Props extends Pick<QAPanelProps, 'getSegment' | 'onFilter' | 'onLocate
 type Entry =
   | { kind: 'category'; key: string; id: string; label: string; ids: string[] }
   | { kind: 'group'; key: string; label: string; filterLabel: string; ids: string[]; title: string }
+  | {
+      kind: 'references';
+      key: string;
+      references: NonNullable<FileQaIssueRecord['references']>;
+      filterLabel: string;
+      ids: string[];
+    }
   | {
       kind: 'row';
       key: string;
@@ -60,6 +68,14 @@ export function QAVirtualList({
               .join('\n'),
           });
         }
+        if (group.references.size)
+          result.push({
+            kind: 'references',
+            key: `${id}/${key}/references`,
+            references: [...group.references.values()],
+            filterLabel,
+            ids,
+          });
         for (const [segmentId, issues] of group.rows)
           result.push({
             kind: 'row',
@@ -140,6 +156,14 @@ export function QAVirtualList({
                     </span>
                   </Button>
                 </div>
+              ) : entry.kind === 'references' ? (
+                <QAReferenceSummary
+                  references={entry.references}
+                  ids={entry.ids}
+                  label={entry.filterLabel}
+                  onFilter={onFilter}
+                  onLocate={onLocate}
+                />
               ) : (
                 (() => {
                   const issue = entry.issues[0];
@@ -158,11 +182,6 @@ export function QAVirtualList({
                           ? '[Empty source]'
                           : '[Empty target]'
                       : [...new Set(entry.issues.map((row) => row.message))].join('; ');
-                  const references = new Map(
-                    entry.issues.flatMap((row) =>
-                      (row.references ?? []).map((ref) => [ref.segmentId, ref]),
-                    ),
-                  );
                   return (
                     <div className="pl-2 pr-2 text-xs text-text-muted">
                       <Button
@@ -178,22 +197,6 @@ export function QAVirtualList({
                         <span className="shrink-0 py-1 text-brand">Row {issue.row}</span>
                         <span className="min-w-0 truncate">{preview}</span>
                       </Button>
-                      {[...references.values()].map((reference) => (
-                        <Button
-                          key={reference.segmentId}
-                          variant="link"
-                          className="mr-2"
-                          onClick={() => {
-                            onFilter(
-                              [...new Set([...entry.ids, reference.segmentId])],
-                              entry.filterLabel,
-                            );
-                            onLocate(reference.segmentId);
-                          }}
-                        >
-                          Reference row {reference.row}
-                        </Button>
-                      ))}
                     </div>
                   );
                 })()

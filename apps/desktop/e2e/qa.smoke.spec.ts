@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { createEditorSmokeSession, closeEditorSmokeSession } from './support/editorSmokeSession';
 import { IPC_CHANNELS } from '../src/shared/ipcChannels';
+import type { DesktopApi } from '../src/shared/ipc';
 
 test('Confirm succeeds with QA findings and skips checks when instant QA is off', async () => {
   const session = await createEditorSmokeSession([
@@ -242,6 +243,68 @@ test('QA leaves editing, filters and navigation available without overwriting pe
     await closeEditorSmokeSession(session);
   }
 });
+
+for (const problemCount of [3, 501]) {
+  test(`QA summarizes repeated substring references with ${problemCount} findings`, async () => {
+    const session = await createEditorSmokeSession([
+      ...Array.from({ length: 40 }, () => ['Artwork', '作品', '']),
+      ...Array.from({ length: problemCount }, (_, index) => [
+        `Artwork in sentence ${index}`,
+        '其他译文',
+        '',
+      ]),
+    ]);
+    try {
+      const { page, fileId } = session;
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.evaluate(async (id) => {
+        const api = (window as unknown as { api: DesktopApi }).api;
+        const file = await api.getFile(id);
+        if (!file) throw new Error('Missing QA fixture');
+        await api.updateProjectQASettings(file.projectId, {
+          enabledRuleIds: ['substring-consistency'],
+          instantQaOnConfirm: false,
+        });
+      }, fileId);
+      await page.getByRole('button', { name: 'Run batch QA', exact: true }).click();
+      await expect(
+        page.getByRole('button', { name: 'Reference row 2', exact: true }),
+      ).toBeVisible();
+      await expect(page.getByRole('button', { name: /^Reference row / })).toHaveCount(1);
+      await expect(
+        page.getByRole('button', { name: 'Row 42 其他译文', exact: true }),
+      ).toBeVisible();
+      const group = page.getByRole('button', {
+        name: `Artwork → 作品 · ${problemCount} rows`,
+        exact: true,
+      });
+      await group.click();
+      await expect(page.locator('.editor-source-text').first()).toHaveText('Artwork in sentence 0');
+      await page.getByRole('button', { name: 'Reference row 2', exact: true }).click();
+      await expect(page.locator('.cm-content')).toHaveText('作品');
+      await page.getByRole('button', { name: 'View all 40 references', exact: true }).click();
+      await expect(
+        page.getByText(
+          'QA filter: Substring translation consistency › Artwork → 作品 › Reference rows · 40 rows',
+          {
+            exact: true,
+          },
+        ),
+      ).toBeVisible();
+      await expect(page.locator('.editor-source-text').first()).toHaveText('Artwork');
+      await expect(page.locator('.editor-source-text', { hasText: 'sentence' })).toHaveCount(0);
+      if (problemCount === 3)
+        await page.screenshot({
+          path: test.info().outputPath('qa-reference-summary.png'),
+          animations: 'disabled',
+        });
+      await group.click();
+      await expect(page.locator('.editor-source-text').first()).toHaveText('Artwork in sentence 0');
+    } finally {
+      await closeEditorSmokeSession(session);
+    }
+  });
+}
 
 test('large-file QA keeps the main and renderer event loops responsive', async () => {
   const rows = Array.from({ length: 3000 }, (_, index) => {

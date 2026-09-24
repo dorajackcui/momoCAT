@@ -4,6 +4,8 @@ import { qaGroupForRule, type FileQaIssueRecord } from '@cat/core/project';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import { Button, Icon, IconButton } from '../ui';
 import { QAVirtualList } from './QAVirtualList';
+import { QAReferenceSummary } from './QAReferenceSummary';
+import { QA_GROUP_ORDER } from '../qaSections';
 
 export interface QAPanelProps {
   issues: FileQaIssueRecord[];
@@ -21,6 +23,7 @@ export function groupQaIssues(issues: FileQaIssueRecord[]) {
     label: string;
     issues: FileQaIssueRecord[];
     rows: Map<string, FileQaIssueRecord[]>;
+    references: Map<string, NonNullable<FileQaIssueRecord['references']>[number]>;
   };
   type Category = { label: string; issues: FileQaIssueRecord[]; groups: Map<string, Group> };
   const categories = new Map<string, Category>();
@@ -41,15 +44,22 @@ export function groupQaIssues(issues: FileQaIssueRecord[]) {
         issue.ruleId,
       issues: [],
       rows: new Map(),
+      references: new Map(),
     };
     group.issues.push(issue);
     const row = group.rows.get(issue.segmentId) ?? [];
     row.push(issue);
     group.rows.set(issue.segmentId, row);
+    for (const reference of issue.references ?? [])
+      group.references.set(reference.segmentId, reference);
     category.groups.set(groupId, group);
     categories.set(id, category);
   }
-  return [...categories.entries()];
+  return [...categories.entries()].sort(
+    ([left], [right]) =>
+      (QA_GROUP_ORDER.get(left) ?? Number.MAX_SAFE_INTEGER) -
+      (QA_GROUP_ORDER.get(right) ?? Number.MAX_SAFE_INTEGER),
+  );
 }
 
 const rowIds = (issues: FileQaIssueRecord[]) => [
@@ -187,17 +197,16 @@ export function QAPanel({
                           </span>
                         </Button>
                       )}
+                      <QAReferenceSummary
+                        references={[...group.references.values()]}
+                        ids={ids}
+                        label={label}
+                        onFilter={onFilter}
+                        onLocate={onLocate}
+                      />
                       <ul className="space-y-1 pl-2">
                         {[...group.rows.entries()].map(([segmentId, rowIssues]) => {
                           const preview = rowPreview(rowIssues, getSegment(segmentId));
-                          const references = new Map(
-                            rowIssues.flatMap((issue) =>
-                              (issue.references ?? []).map((reference) => [
-                                reference.segmentId,
-                                reference,
-                              ]),
-                            ),
-                          );
                           return (
                             <li key={segmentId} className="text-xs text-text-muted">
                               <Button
@@ -215,19 +224,6 @@ export function QAPanel({
                                 </span>
                                 <span className="min-w-0 truncate">{preview}</span>
                               </Button>
-                              {[...references.values()].map((reference) => (
-                                <Button
-                                  key={reference.segmentId}
-                                  variant="link"
-                                  onClick={() => {
-                                    onFilter([...new Set([...ids, reference.segmentId])], label);
-                                    onLocate(reference.segmentId);
-                                  }}
-                                  className="mr-2"
-                                >
-                                  Reference row {reference.row}
-                                </Button>
-                              ))}
                             </li>
                           );
                         })}

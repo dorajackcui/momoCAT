@@ -6,6 +6,7 @@ import {
   serializeTokensToSearchText,
   serializeTokensToSearchTextWithBoundaries,
   suppressNestedTermMatches,
+  StrictTermRecognizer,
   type EnglishTermRecognizer,
   type EnglishTermRecognizerMatch,
   type EnglishTermVariantKind,
@@ -54,6 +55,10 @@ export class TBService {
   private projectRepo: ProjectRepository;
   private db: TBRepository;
   private readonly englishRecognizerCache = new Map<number, EnglishTBRecognizerCacheEntry>();
+  private readonly strictRecognizerCache = new Map<
+    number,
+    { key: string; recognizer: StrictTermRecognizer<ProjectTBEntry> }
+  >();
 
   constructor(projectRepo: ProjectRepository, db: TBRepository) {
     this.projectRepo = projectRepo;
@@ -80,6 +85,7 @@ export class TBService {
    */
   public invalidateCachedIndexes(): void {
     this.englishRecognizerCache.clear();
+    this.strictRecognizerCache.clear();
   }
 
   private findLegacyProfileMatches(
@@ -94,20 +100,21 @@ export class TBService {
       srcLang,
       limit: TBService.TB_CANDIDATE_LIMIT,
     }) as ProjectTBEntry[];
-    const entries =
+    const candidates =
       searchEntries.length > 0
-        ? searchEntries
-        : (this.db.listProjectTermEntries(projectId) as ProjectTBEntry[]);
-    if (entries.length === 0) return [];
+        ? searchEntries.map((entry) => ({
+            entry,
+            positions: findTermPositionsInTextForLocale(sourceText, entry.srcTerm, {
+              locale: srcLang,
+            }),
+          }))
+        : this.getStrictRecognizer(projectId, srcLang).scan(sourceText);
 
     const matches: TBMatch[] = [];
     const seenSrcNorm = new Set<string>();
 
-    for (const entry of entries) {
+    for (const { entry, positions } of candidates) {
       if (seenSrcNorm.has(entry.srcNorm)) continue;
-      const positions = findTermPositionsInTextForLocale(sourceText, entry.srcTerm, {
-        locale: srcLang,
-      });
       if (positions.length === 0) continue;
 
       matches.push({
@@ -123,6 +130,30 @@ export class TBService {
         return a.priority - b.priority;
       }),
     );
+  }
+
+  private getStrictRecognizer(
+    projectId: number,
+    srcLang: string,
+  ): StrictTermRecognizer<ProjectTBEntry> {
+    const key = JSON.stringify([srcLang, this.db.getTBDataVersion()]);
+    let cached = this.strictRecognizerCache.get(projectId);
+    if (cached?.key !== key) {
+      cached = {
+        key,
+        recognizer: new StrictTermRecognizer(
+          this.db.listProjectTermEntries(projectId) as ProjectTBEntry[],
+          (entry) => entry.srcTerm,
+          { locale: srcLang },
+        ),
+      };
+    }
+    this.strictRecognizerCache.delete(projectId);
+    this.strictRecognizerCache.set(projectId, cached);
+    // The repository bounds each snapshot to 20k entries; retain only two projects.
+    if (this.strictRecognizerCache.size > 2)
+      this.strictRecognizerCache.delete(this.strictRecognizerCache.keys().next().value!);
+    return cached.recognizer;
   }
 
   private findEnglishProfileMatches(
@@ -213,10 +244,7 @@ export class TBService {
       limit: TBService.TB_CANDIDATE_LIMIT,
     }) as EnglishRecognizerEntry[];
     const dbRecognizer = buildEnglishTermRecognizer(dbCandidates);
-    return this.toEnglishCandidates(
-      dbRecognizer.scan(sourceText, scanOptions),
-      'dbFallback',
-    );
+    return this.toEnglishCandidates(dbRecognizer.scan(sourceText, scanOptions), 'dbFallback');
   }
 
   private toEnglishCandidates(
@@ -260,11 +288,10 @@ export class TBService {
       existing.positions.push(...candidate.positions);
     }
 
-    const matches = Array.from(bySrcNorm.values())
-      .map((candidate) => ({
-        ...candidate.entry,
-        positions: this.uniquePositions(candidate.positions),
-      }));
+    const matches = Array.from(bySrcNorm.values()).map((candidate) => ({
+      ...candidate.entry,
+      positions: this.uniquePositions(candidate.positions),
+    }));
 
     return this.suppressNestedEnglishPositions(matches, bySrcNorm).sort((a, b) => {
       const candidateA = bySrcNorm.get(a.srcNorm);
@@ -299,9 +326,7 @@ export class TBService {
 
     for (const candidate of positionCandidates) {
       if (
-        occupiedRanges.some((range) =>
-          this.isStrictlyContainedPosition(candidate.position, range),
-        )
+        occupiedRanges.some((range) => this.isStrictlyContainedPosition(candidate.position, range))
       ) {
         continue;
       }

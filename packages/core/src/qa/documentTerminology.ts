@@ -1,6 +1,10 @@
 import type { QaIssue, Segment, TBMatch } from '../models';
 import type { ProjectQASettings } from '../project/qaSettings';
-import { findTermPositionsInText, serializeTokensToSearchText } from '../text';
+import {
+  findTermPositionsInText,
+  serializeTokensToSearchText,
+  StrictTermRecognizer,
+} from '../text';
 import { caseFold, normalizeQaComparison, qaKey, qaText, scanQaMarkers } from './text';
 
 interface Term {
@@ -107,6 +111,11 @@ export function checkDocumentTerminology(
     if (!conflict && scope === 'document') for (const [key, term] of staged) terms.set(key, term);
   }
   const learnedBySource = new Map<string, Term[]>();
+  const learnedRecognizer = new StrictTermRecognizer(
+    [...terms.values()].filter((term) => term.origins.has('Current file')),
+    (term) => term.source,
+    { locale: sourceLocale },
+  );
   const targetPresence = new Map<string, Map<string, boolean>>();
   for (const { segment, source, target } of marked) {
     const sourceText = serializeTokensToSearchText(segment.sourceTokens);
@@ -149,11 +158,7 @@ export function checkDocumentTerminology(
     }
     let learned = learnedBySource.get(sourceText);
     if (!learned) {
-      learned = [...terms.values()].filter(
-        (term) =>
-          term.origins.has('Current file') &&
-          findTermPositionsInText(sourceText, term.source, { locale: sourceLocale }).length > 0,
-      );
+      learned = learnedRecognizer.scan(sourceText).map((match) => match.entry);
       learnedBySource.set(sourceText, learned);
     }
     for (const term of learned)

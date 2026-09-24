@@ -134,4 +134,38 @@ describe('QA result list', () => {
       screen.getByRole('button', { name: 'Row 8 Missing: 12; Extra: 13' }),
     ).toBeInTheDocument();
   });
+
+  it('summarizes repeated references once per group and keeps every reference accessible', () => {
+    const references = Array.from({ length: 60 }, (_, index) => ({
+      segmentId: `reference-${index}`,
+      row: 784 + index,
+    }));
+    const issues = Array.from({ length: 20 }, (_, index) => ({
+      ...term,
+      ruleId: 'substring-consistency',
+      segmentId: `problem-${index}`,
+      row: 49 + index,
+      references,
+    }));
+    const input = props(issues);
+    render(<QAPanel {...input} />);
+    expect(screen.getAllByRole('button', { name: /^Reference row / })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /^Row / })).toHaveLength(20);
+    expect(screen.getByRole('button', { name: 'Open → 打开 · 20 rows' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Reference row 784' }));
+    expect(input.onFilter).toHaveBeenLastCalledWith(
+      [...issues.map((issue) => issue.segmentId), 'reference-0'],
+      'Substring translation consistency › Open → 打开',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'View all 60 references' }));
+    expect(input.onFilter).toHaveBeenLastCalledWith(
+      references.map((reference) => reference.segmentId),
+      'Substring translation consistency › Open → 打开 › Reference rows',
+    );
+    expect(input.onLocate).toHaveBeenLastCalledWith('reference-0');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Collapse Substring translation consistency' }),
+    );
+    expect(screen.queryByRole('button', { name: /^Reference row / })).not.toBeInTheDocument();
+  });
 });

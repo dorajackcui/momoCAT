@@ -132,6 +132,8 @@ Mounted TBs are queried for source terms, and selected terms become structured p
 
 Default/CJK matching uses strict normalized term matching. The English overlay supports conservative regular singular/plural, possessive, hyphen/space, and uppercase dotted-acronym equivalents. It does not use general stemming or fuzzy edit distance.
 
+When CJK repository recall is empty, `TBService` reuses a bounded mounted-term snapshot and a [strict multi-term index](../packages/core/src/text/strictTermRecognizer.ts). Aho–Corasick scanning finds candidates before the existing matcher validates language boundaries and raw-text positions. Nonempty repository recall, the fallback entry limit, mount priority, and nested-term suppression retain their existing semantics. Each service retains at most two CJK project indexes; source-language or TB-version changes rebuild them, and cross-connection invalidation clears them alongside the English indexes.
+
 Read-only partial-window context rows do not receive TB blocks.
 
 ## Quality assurance
@@ -141,6 +143,8 @@ Read-only partial-window context rows do not receive TB blocks.
 The eleven categories are empty targets, terminology, same source/different targets, same target/different sources, substring consistency, tags/placeholders, line breaks, numbers, URLs, Chinese in target, and target text. [QA settings](../packages/core/src/project/qaSettings.ts) owns defaults and options. Reverse consistency, substring checks, Chinese detection, and ordinary tag order default off. Basic optional checks follow their category switch; only tag order and target-text subchecks have independent switches. Protected-token checks always run within QA, independently of those switches; findings are advisory.
 
 Terminology combines mounted TB matches and optional square/corner-bracket term pairs. Historical terms take precedence; conflicting marked pairs are reported without replacing the baseline. Findings group by term pair. Consistency normalizes whole surrounding quotes/brackets, retaining internal text. Substring checks use unique reference translations, configurable minimum letter counts, and locatable reference rows. Numbers and URLs compare occurrences without enforcing order. Target text checks punctuation, spaces, width mixing, and paired symbols.
+
+Learned marker terms are indexed once after the document baseline is established, then scanned against each distinct source. Strict matching still determines term presence; learned-term ordering, overlapping terms, conflict handling, and target checks are unchanged.
 
 ### Shared tag rules
 

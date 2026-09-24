@@ -3,20 +3,8 @@ import { QA_RULE_GROUPS, normalizeQASettings, type SegmentQaRuleId } from '@cat/
 import type { ProjectQAController } from '../../hooks/projectDetail/useProjectQASettings';
 import { Button, Checkbox, Icon, IconButton, Modal, Switch } from '../ui';
 import { ProjectQAOptions, QA_OPTIONS_GROUPS } from './ProjectQAOptions';
+import { QA_SECTIONS } from '../qaSections';
 
-const sections: Array<{ label: string; ids: SegmentQaRuleId[] }> = [
-  {
-    label: 'Terminology & consistency',
-    ids: [
-      'terminology-consistency',
-      'substring-consistency',
-      'source-consistency',
-      'target-consistency',
-    ],
-  },
-  { label: 'Content integrity', ids: ['tag-integrity', 'line-break', 'number', 'url'] },
-  { label: 'Target text quality', ids: ['empty-target', 'chinese', 'target-text'] },
-];
 const groupLabel = (group: { id: SegmentQaRuleId; label: string }) =>
   group.id === 'tag-integrity'
     ? 'Standard tags'
@@ -49,7 +37,7 @@ export function ProjectQAPane({ qa }: { qa: ProjectQAController }) {
           Clear
         </Button>
       </div>
-      {sections.map((section) => (
+      {QA_SECTIONS.map((section) => (
         <section
           key={section.label}
           aria-label={section.label}
