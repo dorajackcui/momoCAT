@@ -15,10 +15,9 @@ export function evaluateSegmentQa(segment: Segment, options?: EvaluateSegmentQaO
     options?.settings ??
       (options?.enabledRuleIds ? { enabledRuleIds: options.enabledRuleIds } : undefined),
   );
-  // A single sentence cannot establish a document-level terminology baseline.
-  settings.options = { ...settings.options, termMarks: [] };
   return evaluateDocumentQa([segment], {
     settings,
+    terminologyScope: 'segment',
     targetLocale: options?.targetLocale,
     tagPolicy: options?.tagPolicy,
     termMatches: new Map([[segment.segmentId, options?.termMatches ?? []]]),

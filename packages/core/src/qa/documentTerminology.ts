@@ -38,6 +38,7 @@ export function checkDocumentTerminology(
   settings: ProjectQASettings,
   sourceLocale?: string,
   targetLocale?: string,
+  scope: 'document' | 'segment' = 'document',
 ): DocumentTerminology {
   const terms = new Map<string, Term>();
   const issues = new Map<string, QaIssue[]>();
@@ -103,7 +104,7 @@ export function checkDocumentTerminology(
           origins: previous?.origins ?? new Set(['Current file']),
         });
     });
-    if (!conflict) for (const [key, term] of staged) terms.set(key, term);
+    if (!conflict && scope === 'document') for (const [key, term] of staged) terms.set(key, term);
   }
   const learnedBySource = new Map<string, Term[]>();
   const targetPresence = new Map<string, Map<string, boolean>>();
@@ -120,7 +121,8 @@ export function checkDocumentTerminology(
       }
       return found;
     };
-    if (source.length !== target.length)
+    // Missing-pair decisions may depend on a baseline learned from other rows.
+    if (scope === 'document' && source.length !== target.length)
       for (const value of source) {
         const reference = terms.get(caseFold(value));
         if (!reference?.target || !containsTarget(reference.target))

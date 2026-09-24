@@ -188,7 +188,7 @@ QA 筛选只有 `qa_issue`；旧 `qa_error` / `qa_warning` 在存储读取边界
 
 Confirmation owns saving, status changes, Working TM updates, and repeat propagation. It has no dependency on QA results. Editor composition starts optional Instant QA after the save succeeds and does not await it; selection actions and navigation finish independently. A check failure shows an independent QA message, never a save error or a rollback. Late results are discarded after content, resource, or file changes.
 
-When Instant QA is enabled, the check includes fixed token checks and enabled single-row checks (empty targets, line breaks, numbers, URLs, Chinese, target text, Plain tags, and mounted TB terminology). It does not learn marked terminology or recalculate cross-row consistency. When disabled, the follow-up returns without checking or writing results, including token findings. Manual whole-file QA remains available.
+When Instant QA is enabled, the check includes fixed token checks and enabled single-row checks (empty targets, line breaks, numbers, URLs, Chinese, target text, Plain tags, and mounted TB terminology). Marked pairs are checked against mounted TB terms and repeated pairs in the same row, even when the expected translation appears elsewhere in the target. It does not learn marked terminology or recalculate cross-row consistency. Mark-count checks remain document-only because missing-pair decisions may depend on terms learned from other rows. When disabled, the follow-up returns without checking or writing results, including token findings. Manual whole-file QA remains available.
 
 ### AI response handling
 

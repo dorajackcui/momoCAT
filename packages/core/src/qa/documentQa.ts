@@ -18,6 +18,8 @@ export interface DocumentQaOptions {
   sourceLocale?: string;
   targetLocale?: string;
   tagPolicy?: 'default' | 'none';
+  /** Single-row checks cannot establish a document terminology baseline. */
+  terminologyScope?: 'document' | 'segment';
 }
 
 export function evaluateDocumentQa(
@@ -65,6 +67,7 @@ export function evaluateDocumentQa(
           settings,
           options.sourceLocale,
           options.targetLocale,
+          options.terminologyScope,
         )
       : { issues: new Map<string, QaIssue[]>(), sourceTerms: new Set<string>() };
     for (const segment of file)

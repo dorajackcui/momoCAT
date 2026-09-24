@@ -27,7 +27,7 @@ function structure(tags: readonly string[]): string[] {
   return stack.length ? ['INVALID'] : paths.sort();
 }
 
-/** All QA and AI callers compare their selected tags with this single set of rules. */
+/** Compare selected tags with the shared QA rules. */
 export function checkTagIntegrity(
   source: readonly string[],
   target: readonly string[],
@@ -60,6 +60,8 @@ export function checkTagIntegrity(
     options.expectedTagsSignature === undefined
       ? source.join('\u0000') !== target.join('\u0000')
       : options.expectedTagsSignature !== target.join('|');
+  // Report pure reordering only when no content, count or structure issue was found.
+  // This avoids cascading order findings while missing or malformed tags are being fixed.
   if (!issues.length && orderChanged) {
     add('tag-order', `Source: ${source.join(' → ')}; target: ${target.join(' → ')}`);
   }

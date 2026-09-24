@@ -9,6 +9,33 @@ import { createTransientSegment } from '../transientSegment';
 import { runQAFileCommand } from './qaFileCommand';
 
 describe('shared CLI QA', () => {
+  it('keeps the stored file identity when there are no segments', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'momocat-qa-empty-'));
+    try {
+      const dbPath = join(root, 'cat.db');
+      const db = new CATDatabase(dbPath);
+      let projectId: number;
+      let fileId: number;
+      try {
+        projectId = db.createProject('QA', 'en', 'zh');
+        fileId = db.createFile(projectId, 'empty.xlsx');
+      } finally {
+        db.close();
+      }
+      const before = readFileSync(dbPath);
+      expect(await runQAFileCommand({ dbPath, projectId, fileId })).toEqual({
+        fileId,
+        checkedSegments: 0,
+        issueCount: 0,
+        affectedSegments: 0,
+        issues: [],
+      });
+      expect(readFileSync(dbPath)).toEqual(before);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it.each(['{broken', 'null', '{"tagPolicy":"unknown"}'])(
     'reports corrupt stored import options without modifying the database: %s',
     async (importOptionsJson) => {

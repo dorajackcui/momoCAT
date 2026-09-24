@@ -63,7 +63,7 @@ export async function runQAFileCommand(config: QAFileCommandConfig) {
     const settings = normalizeQASettings(project.qaSettings);
     if (config.enabledRuleIds) settings.enabledRuleIds = config.enabledRuleIds as SegmentQaRuleId[];
     const tb = new TBService(new SqliteProjectRepository(db), new SqliteTBRepository(db));
-    return await runQA({
+    const report = await runQA({
       segments,
       settings,
       sourceLocale: project.srcLang,
@@ -71,6 +71,7 @@ export async function runQAFileCommand(config: QAFileCommandConfig) {
       tagPolicy,
       resolveTermMatches: (segment) => tb.findMatches(project.id, segment),
     });
+    return { ...report, fileId: config.fileId ?? report.fileId };
   } finally {
     db.close();
   }

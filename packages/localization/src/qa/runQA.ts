@@ -44,6 +44,7 @@ export async function runQA(input: RunQAInput) {
     sourceLocale: input.sourceLocale,
     targetLocale: input.targetLocale,
     tagPolicy: input.tagPolicy,
+    terminologyScope: input.terminologyScope,
   };
   const report = input.evaluate
     ? await input.evaluate(input.segments, options)
