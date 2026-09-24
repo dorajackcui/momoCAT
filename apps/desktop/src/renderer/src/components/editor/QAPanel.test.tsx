@@ -112,6 +112,23 @@ describe('QA result list', () => {
     expect(screen.getByRole('button', { name: 'Row 8 开启' })).toBeVisible();
   });
 
+  it('warns about saved results, including a saved clean result, until a fresh check completes', () => {
+    const input = props([]);
+    const { rerender } = render(<QAPanel {...input} checked={false} hasResults={false} />);
+    expect(screen.getByText('Not checked this session')).toBeVisible();
+    rerender(<QAPanel {...input} checked={false} hasResults />);
+    expect(screen.getByText('Saved results · Recheck needed')).toHaveClass('notice-warning');
+    expect(screen.queryByText('No QA problems found.')).not.toBeInTheDocument();
+    rerender(<QAPanel {...input} checked={false} hasResults stale />);
+    expect(screen.getByText('Changed · Recheck needed')).toHaveClass('notice-warning');
+    rerender(<QAPanel {...input} checked={false} hasResults stale running />);
+    expect(screen.getByText('Checking…')).toBeVisible();
+    expect(screen.queryByText(/Recheck needed/)).not.toBeInTheDocument();
+    rerender(<QAPanel {...input} hasResults />);
+    expect(screen.getByText('No QA problems found.')).toBeVisible();
+    expect(screen.queryByText(/Recheck needed/)).not.toBeInTheDocument();
+  });
+
   it('keeps reference navigation and ungrouped diagnostic details', () => {
     const input = props([
       { ...term, ruleId: 'substring-consistency', references: [{ segmentId: 'b', row: 2 }] },

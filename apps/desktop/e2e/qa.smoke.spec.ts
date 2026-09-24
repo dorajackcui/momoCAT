@@ -189,13 +189,26 @@ test('QA lists findings and filters CAT rows directly, retaining edits until rec
     await expect(
       terminology.getByRole('button', { name: 'Row 5 打开菜单', exact: true }),
     ).toBeVisible();
+    await expect(page.getByText('Saved results · Recheck needed', { exact: true })).toHaveClass(
+      /notice-warning/,
+    );
+    await terminology.getByRole('button', { name: 'Row 5 打开菜单', exact: true }).click();
+    await page.locator('.cm-content').fill('打开新菜单');
+    await expect(page.getByText('Changed · Recheck needed', { exact: true })).toHaveClass(
+      /notice-warning/,
+    );
+    await page.screenshot({
+      path: test.info().outputPath('qa-reopened-edited.png'),
+      animations: 'disabled',
+    });
     await page.getByRole('button', { name: 'Run QA', exact: true }).click();
     await expect(
       terminology.getByRole('button', { name: 'Open → 打开 · 2 rows', exact: true }),
     ).toBeVisible();
     await expect(
-      terminology.getByRole('button', { name: 'Row 5 打开菜单', exact: true }),
+      terminology.getByRole('button', { name: 'Row 5 打开新菜单', exact: true }),
     ).toHaveCount(0);
+    await expect(page.getByText(/Recheck needed/)).toHaveCount(0);
     expect(errors).toEqual([]);
   } finally {
     await closeEditorSmokeSession(session);

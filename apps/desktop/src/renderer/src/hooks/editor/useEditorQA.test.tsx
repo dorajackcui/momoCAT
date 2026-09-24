@@ -22,6 +22,54 @@ const segment: Segment = {
 };
 
 describe('QA completion while the editor remains interactive', () => {
+  it.each(['findings', 'clean'] as const)(
+    'tracks edits to loaded %s without requiring a new QA run',
+    (savedResult) => {
+      const store = createEditorSegmentStore();
+      const qaIssues =
+        savedResult === 'findings'
+          ? [{ ruleId: 'number', severity: 'info' as const, message: 'Saved finding' }]
+          : [];
+      let revision = 0;
+      const { result, rerender } = renderHook(
+        ({ fileId }) =>
+          useEditorQA(fileId, store, createSegmentChangeHint(undefined, revision), vi.fn()),
+        { initialProps: { fileId: 1 } },
+      );
+      expect(result.current.hasResults).toBe(false);
+      store.replaceAll([{ ...segment, qaIssues }]);
+      revision++;
+      rerender({ fileId: 1 });
+      expect(result.current.hasResults).toBe(true);
+      expect(result.current.checked).toBe(false);
+      expect(result.current.stale).toBe(false);
+      store.updateSegment('a', (row) => ({ ...row, status: 'confirmed' }));
+      revision++;
+      rerender({ fileId: 1 });
+      expect(result.current.stale).toBe(false);
+      store.updateSegment('a', (row) => ({
+        ...row,
+        targetTokens: [{ type: 'text', content: 'Count 1' }],
+      }));
+      revision++;
+      rerender({ fileId: 1 });
+      expect(result.current.checked).toBe(false);
+      expect(result.current.stale).toBe(true);
+      expect(store.getSegment('a')?.qaIssues).toEqual(qaIssues);
+      act(() => result.current.startRun());
+      act(() => result.current.acceptReport(evaluateDocumentQa(store.getSegments())));
+      expect(result.current.checked).toBe(true);
+      expect(result.current.stale).toBe(false);
+      expect(result.current.issues).toEqual([]);
+      store.replaceAll([{ ...segment, fileId: 2 }]);
+      revision++;
+      rerender({ fileId: 2 });
+      expect(result.current.checked).toBe(false);
+      expect(result.current.hasResults).toBe(false);
+      expect(result.current.stale).toBe(false);
+    },
+  );
+
   it('discards a result when resources change during a run even with no previous findings', () => {
     const store = createEditorSegmentStore([segment]);
     const { result } = renderHook(() =>

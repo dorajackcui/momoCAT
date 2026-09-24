@@ -8,6 +8,7 @@ interface QAResult {
   fileId: number;
   revision: number;
   stale: boolean;
+  checked: boolean;
 }
 
 export function useEditorQA(
@@ -50,35 +51,49 @@ export function useEditorQA(
         fileId,
         stale,
         revision,
+        checked: true,
       });
     },
     [fileId, store, publishChanges],
   );
 
-  useEffect(() => {
-    if (!current || current.stale) return;
-    const changed = current.revision !== store.getQARevision();
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- The external segment store supplies per-row changes.
-    if (changed) setResult({ ...current, stale: true });
-  }, [current, store, change]);
-
-  const issues = useMemo(
-    () =>
-      store.getSegments().flatMap((segment) =>
-        (segment.qaIssues ?? []).map((issue) => ({
-          ...issue,
-          segmentId: segment.segmentId,
-          row: segment.meta?.rowRef ?? segment.orderIndex + 1,
-        })),
-      ),
+  const { issues, hasResults } = useMemo(
+    () => {
+      const segments = store.getSegments().filter((segment) => segment.fileId === fileId);
+      return {
+        hasResults: segments.some((segment) => segment.qaIssues !== undefined),
+        issues: segments.flatMap((segment) =>
+          (segment.qaIssues ?? []).map((issue) => ({
+            ...issue,
+            segmentId: segment.segmentId,
+            row: segment.meta?.rowRef ?? segment.orderIndex + 1,
+          })),
+        ),
+      };
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- The mutable store is refreshed by its change hint.
-    [current, store, change],
+    [current, fileId, store, change],
   );
+
+  useEffect(() => {
+    if (!current) {
+      if (hasResults) {
+        // Loaded results are unverified, but edits after loading must still mark them stale.
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Capture the loaded external store revision.
+        setResult({ fileId, revision: store.getQARevision(), stale: false, checked: false });
+      }
+      return;
+    }
+    if (!current.stale && current.revision !== store.getQARevision())
+      setResult({ ...current, stale: true });
+  }, [current, fileId, store, change, hasResults]);
+
   return {
     startRun,
     acceptReport,
     issues,
-    checked: Boolean(current),
+    hasResults,
+    checked: current?.checked ?? false,
     stale: current?.stale ?? false,
   };
 }

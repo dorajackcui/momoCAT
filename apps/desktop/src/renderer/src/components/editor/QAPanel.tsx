@@ -12,6 +12,7 @@ export interface QAPanelProps {
   running: boolean;
   checked: boolean;
   stale: boolean;
+  hasResults?: boolean;
   getSegment: (id: string) => Segment | undefined;
   onRun: () => void;
   onFilter: (ids: string[], label: string) => void;
@@ -81,6 +82,7 @@ export function QAPanel({
   running,
   checked,
   stale,
+  hasResults = issues.length > 0,
   getSegment,
   onRun,
   onFilter,
@@ -109,8 +111,10 @@ export function QAPanel({
           </Button>
         </div>
         {(running || stale || !checked) &&
-          (stale && !running ? (
-            <p className="notice notice-warning">Changed · Recheck needed</p>
+          ((stale || (!checked && hasResults)) && !running ? (
+            <p className="notice notice-warning" role="status">
+              {stale ? 'Changed · Recheck needed' : 'Saved results · Recheck needed'}
+            </p>
           ) : (
             <p className="text-xs text-text-muted">
               {running ? 'Checking…' : 'Not checked this session'}
