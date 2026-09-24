@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document owns the durable contracts for tokens/tags, MT request planning, TM/TB references, Runtime TM, and desktop resource behavior.
+This document owns tokens/tags, QA semantics and result lifecycle, MT request planning, TM/TB references, Runtime TM, and shared resource behavior.
 
 Ownership by package:
 
@@ -23,6 +23,30 @@ Stable facades keep cross-layer callers independent of maintenance-oriented spli
 | Engine orchestration         | `LocalizationEngine`                   | assembly, unit preparation, resume fingerprinting, and option helpers                                                  |
 
 Callers should use the stable entrypoint rather than importing these collaborators as alternate public APIs.
+
+## Key entrypoints
+
+Start at the matching facade and its adjacent `*.test.ts` files. Application-only UI belongs to [Desktop](DESKTOP.md); CLI syntax belongs to [CLI](CLI.md#changing-a-command).
+
+| Concern                               | Source                                                                                                                                                                                                                                                              |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Token/tag helpers                     | [`packages/core/src/tag`](../packages/core/src/tag)                                                                                                                                                                                                                 |
+| Prompt and strict response contracts  | [`packages/core/src/project`](../packages/core/src/project)                                                                                                                                                                                                         |
+| Localization engine facade            | [`packages/localization/src/LocalizationEngine.ts`](../packages/localization/src/LocalizationEngine.ts)                                                                                                                                                             |
+| Engine orchestration collaborators    | [`packages/localization/src/engine`](../packages/localization/src/engine)                                                                                                                                                                                           |
+| Window request modes                  | [`packages/localization/src/requestModes`](../packages/localization/src/requestModes)                                                                                                                                                                               |
+| MT module facade                      | [`packages/localization/src/modules/MTModule.ts`](../packages/localization/src/modules/MTModule.ts)                                                                                                                                                                 |
+| MT prompt/response collaborators      | [`packages/localization/src/modules/MTModulePromptParams.ts`](../packages/localization/src/modules/MTModulePromptParams.ts), [`MTBatchResponseProcessor.ts`](../packages/localization/src/modules/MTBatchResponseProcessor.ts)                                      |
+| TM/TB prompt modules                  | [`packages/localization/src/modules/TMModule.ts`](../packages/localization/src/modules/TMModule.ts), [`TBModule.ts`](../packages/localization/src/modules/TBModule.ts)                                                                                              |
+| Source terminology precheck           | [`packages/localization/src/SourceTerminologyExtractor.ts`](../packages/localization/src/SourceTerminologyExtractor.ts), [`LocalizationSourceTerminologyPrechecker.ts`](../packages/localization/src/LocalizationSourceTerminologyPrechecker.ts)                    |
+| Runtime TM merge                      | [`packages/localization/src/runtimeTm`](../packages/localization/src/runtimeTm)                                                                                                                                                                                     |
+| Shared match services                 | [`packages/localization/src/services`](../packages/localization/src/services)                                                                                                                                                                                       |
+| Desktop TM match facade/collaborators | [`apps/desktop/src/main/services/TMService.ts`](../apps/desktop/src/main/services/TMService.ts), [`TMMatchScoring.ts`](../packages/localization/src/services/TMMatchScoring.ts), [`TMMatchSelection.ts`](../packages/localization/src/services/TMMatchSelection.ts) |
+| TM/TB repositories                    | [`packages/db/src/repos/TMRepo.ts`](../packages/db/src/repos/TMRepo.ts), [`TMSyncRepo.ts`](../packages/db/src/repos/TMSyncRepo.ts), [`TBRepo.ts`](../packages/db/src/repos/TBRepo.ts)                                                                               |
+| Desktop segment behavior              | [`apps/desktop/src/main/services/SegmentService.ts`](../apps/desktop/src/main/services/SegmentService.ts)                                                                                                                                                           |
+| Desktop TM/TB modules                 | [`apps/desktop/src/main/services/modules/TMModule.ts`](../apps/desktop/src/main/services/modules/TMModule.ts), [`TBModule.ts`](../apps/desktop/src/main/services/modules/TBModule.ts)                                                                               |
+| QA rules and settings                 | [core/qa](../packages/core/src/qa), [qaSettings.ts](../packages/core/src/project/qaSettings.ts)                                                                                                                                                                     |
+| QA workflow and persistence           | [localization/qa](../packages/localization/src/qa), [projectQA.test.ts](../packages/localization/src/qa/projectQA.test.ts)                                                                                                                                          |
 
 ## Token and tag contract
 
@@ -101,6 +125,8 @@ Two recovery layers have different jobs:
 
 Do not turn progress events or diagnostic artifacts into retry/resume truth.
 
+Single-row Translate/Refine sends one provider request per invocation. Window/Window-partial enforces the JSON/ID contract above. Dialogue retains response-contract retries for malformed JSON/IDs. Transport, parsing, and persistence failures remain execution failures; QA findings never trigger repair or retry. Marker-preservation prompt instructions and source-token mapping remain part of translation representation.
+
 ## TM matching and prompt selection
 
 Mounted persistent TMs are resolved by project. Matching uses normalized source text while preserving tag-aware hashes/signatures:
@@ -118,7 +144,7 @@ For one persistent prompt row, selection is capped at:
 
 Explicit Concordance Search is a separate desktop route from the active TM-match flow. Confirm which route is wrong before changing recall SQL or scoring.
 
-The desktop CAT panel keeps TM/TB application behavior unchanged while comparing the selected TM source with the active segment source. Removed TM text and added current text are highlighted separately, and tag tokens remain atomic; TB rows do not drive the source comparison.
+The desktop CAT panel compares the selected TM source with the active segment source. Removed TM text and added current text are highlighted separately, and tag tokens remain atomic; TB rows do not drive the source comparison.
 
 ### Language profiles
 
@@ -138,67 +164,71 @@ Read-only partial-window context rows do not receive TB blocks.
 
 ## Quality assurance
 
-[`evaluateDocumentQa`](../packages/core/src/qa/documentQa.ts) owns pure document checks. [`runQA`](../packages/localization/src/qa/runQA.ts) resolves mounted terminology and invokes the same engine for Desktop and CLI. Repeated sources share terminology lookups. Desktop runs whole-file loading, checks, and persistence in a worker; editor filters never limit check scope. CLI reports findings without changing the project's saved QA results.
+[`evaluateDocumentQa`](../packages/core/src/qa/documentQa.ts) owns pure checks; [`runQA`](../packages/localization/src/qa/runQA.ts) resolves mounted terminology and invokes the same engine for Desktop and CLI. Repeated sources share terminology lookups. [Desktop](DESKTOP.md#qa-panel-and-feedback) owns worker scheduling, filtering, and presentation; [Data model](DATA_MODEL.md#projects-and-files) owns persisted QA fields.
 
-The eleven categories are empty targets, terminology, same source/different targets, same target/different sources, substring consistency, tags/placeholders, line breaks, numbers, URLs, Chinese in target, and target text. [QA settings](../packages/core/src/project/qaSettings.ts) owns defaults and options. Reverse consistency, substring checks, Chinese detection, and ordinary tag order default off. Basic optional checks follow their category switch; only tag order and target-text subchecks have independent switches. Protected-token checks always run within QA, independently of those switches; findings are advisory.
+### Checks and configuration
 
-Terminology combines mounted TB matches and optional square/corner-bracket term pairs. Historical terms take precedence; conflicting marked pairs are reported without replacing the baseline. Findings group by term pair. Consistency normalizes whole surrounding quotes/brackets, retaining internal text. Substring checks use unique reference translations, configurable minimum letter counts, and locatable reference rows. Numbers and URLs compare occurrences without enforcing order. Target text checks punctuation, spaces, width mixing, and paired symbols.
+The eleven categories are empty targets, terminology, same source/different targets, same target/different sources, substring consistency, tags/placeholders, line breaks, numbers, URLs, Chinese in target, and target text. [QA settings](../packages/core/src/project/qaSettings.ts) owns defaults and options. Reverse consistency, substring checks, Chinese detection, and ordinary tag order default off. Basic checks follow their category; tag order and target-text subchecks have independent switches. Protected-token checks always run within QA.
 
-Learned marker terms are indexed once after the document baseline is established, then scanned against each distinct source. Strict matching still determines term presence; learned-term ordering, overlapping terms, conflict handling, and target checks are unchanged.
+Terminology combines mounted TB matches and optional square/corner-bracket term pairs. TB terms take precedence; conflicting marked pairs do not replace the baseline. Learned terms are indexed after establishing the document baseline and scanned against each distinct source. Findings group by term pair. The [QAtools comparison](#qatools-comparison) records matching boundaries and differences.
+
+Consistency normalizes whole surrounding quotes/brackets while retaining internal text. Substring checks use unique reference translations, minimum letter counts, and locatable reference rows. Numbers and URLs compare occurrences without enforcing order. Target text checks punctuation, spaces, width mixing, and paired symbols.
 
 ### Shared tag rules
 
-[`tagRules.ts`](../packages/core/src/qa/tagRules.ts) owns missing, extra, occurrence-count, closing/nesting, and order comparisons. These rules only produce findings; no QA finding blocks an operation or triggers an AI request.
+[`tagRules.ts`](../packages/core/src/qa/tagRules.ts) owns missing, extra, occurrence-count, closing/nesting, and order comparisons.
 
-| File import mode                    | QA behavior                                                                                                                                                                                    |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Protect CAT markers** (`default`) | [`checkProtectedTokens`](../packages/core/src/qa/protectedTokens.ts) compares tokenizer-generated tag tokens. These checks always run when QA runs and ignore optional tag types/ignore lists. |
-| **Plain marker-like text** (`none`) | Configurable **Standard tags** scans angle/color/brace/literal-newline text and optional tag order.                                                                                            |
+| File import mode                    | QA behavior                                                                                                                                                                                          |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Protect CAT markers** (`default`) | [`checkProtectedTokens`](../packages/core/src/qa/protectedTokens.ts) compares tokenizer-generated tokens whenever QA runs, independently of category switches, optional tag types, and ignore lists. |
+| **Plain marker-like text** (`none`) | Configurable **Standard tags** scans angle/color/brace/literal-newline text and optional tag order.                                                                                                  |
 
-One project may contain both file modes. The legacy project `tagMode` is accepted at the input boundary and removed by normalization. Literal text is never promoted to a protected token just because it resembles `{1}`. Editor markers are display representations of tokens.
+One project may contain both file modes. Literal text is never promoted to a protected token just because it resembles `{1}`; editor markers represent existing tokens. Comparisons preserve token content and occurrences, including Unicode angle tags, printf placeholders, and protected newline escapes. Actual line breaks belong to the line-break check. Invalid source nesting is not a structural baseline. Protected-token checks omit pure order differences.
 
-Comparisons preserve original token content and occurrences, including Unicode angle tags, printf placeholders, and protected newline escapes. Actual line breaks belong to the line-break check. Invalid source nesting is not used as a structural baseline. Protected-token checks omit pure order differences; Plain tag order remains optional.
-
-Findings use `info`. The public `TagValidator` retains legacy display severities as a compatibility adapter, but business workflows do not import it. The former `blocking` field and predicate have been removed. `FileQaReport` reports required `issueCount` (findings) and `affectedSegments` (distinct rows with findings); the obsolete `errorCount`/`warningCount` fields have been removed from both Desktop and CLI reports.
-
-New settings accept only independently optional checks in `disabledCheckIds`; normalization still drops obsolete IDs when reading legacy settings. All persisted-file QA entrypoints use the same import-policy parser. Missing options/policy retain the legacy Protect default; malformed JSON, non-object options, or an unsupported policy fail with the file ID and a clear reason, without replacing saved findings or silently switching modes.
+All persisted-file QA entrypoints use the shared [import-policy parser](../packages/localization/src/tagPolicy.ts). Missing options/policy use Protect; malformed JSON, non-object options, or unsupported policies fail with the file ID and a clear reason, preserving saved findings.
 
 ### QA entrypoints
 
-| Entry                                                      | Behavior                                                                                                                                                                                                    |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Desktop QA / CLI `qa`                                      | Run whole-file checks including cross-row consistency and learned terminology. Desktop persists results; CLI only reports them.                                                                             |
-| Editor Instant QA                                          | After successful single/selected confirmation, optionally run single-row QA through [`runProjectSegmentQA`](../packages/localization/src/qa/runProjectSegmentQA.ts). Results update feedback independently. |
-| Confirm, TM commit/application, repeat propagation, export | Do not consult QA. Existing findings never block, skip rows, or roll back these operations. Export has no QA override/force branch.                                                                         |
-| AI Translate / Refine / Window / Dialogue                  | Parse provider output without tag QA acceptance or repair. QA never causes another provider request or a failed translation batch.                                                                          |
+QA is advisory. No finding blocks, skips, rolls back, or triggers another business operation.
 
-CLI QA returns success when checking completes, including when findings exist. The former `--fail-on-issues` option is removed. CLI translation still reports execution failures through `summary.failed` and preserves partial output. It does not run whole-file QA before writing output. Inspect prepares matches and prompts only. [CLI](CLI.md) owns command syntax.
+| Entry                                                      | Scope and effect                                                                                                                      |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop Run QA                                             | Whole file, regardless of editor filters; includes cross-row consistency and learned terminology; atomically replaces saved findings. |
+| CLI `qa`                                                   | Whole-file checks using project settings; reports findings without changing saved results or input files.                             |
+| Editor Instant QA                                          | Optional single-row checks after successful single/selected confirmation; merges findings into the checked rows.                      |
+| Confirm, TM commit/application, repeat propagation, export | Do not consult QA findings.                                                                                                           |
+| AI Translate / Refine / Window / Dialogue                  | Do not use tag QA for acceptance, repair, or retry. Execution failures follow the [response contract](#strict-response-and-repair).   |
 
-### QA result lifecycle and legacy consumers
+`FileQaReport` exposes `issueCount` and `affectedSegments`; findings use `info`. CLI syntax and exit behavior belong to [CLI QA](CLI.md#check-a-file). CLI translation does not run whole-file QA before output; Inspect prepares references and prompts only.
 
-Panel、行内提示、文件问题数统一读取各行 `qaIssues` / `qaIssuesJson`。Panel 不再另存一份 `report.issues`。数据库 `NULL` 表示没有当前结果，`[]` 表示这次检查没有发现问题；即时检查仅覆盖当前行，不能作为整文件已检查的证明。
+### QA result lifecycle
 
-- [`runProjectFileQA`](../packages/localization/src/qa/runProjectFileQA.ts) 原子替换整文件行结果；即时检查写入同一来源，将已有 findings 与新单行结果按问题身份合并，无手写规则 ID 保留清单。单行检查不能替换跨行证据；旧问题由手动整文件重查移除。
-- 目标内容和状态变更均保留上次 QA 结果与问题数，保存和重新打开文件也不清除。编辑、AI、TM/TB 应用、重复传播共用此规则；编辑本身不会触发 QA。Confirm 后仍可按项目开关执行即时检查。
-- QA 设置变化清除该项目结果；术语新增、修改、清空、删除、挂载或取消挂载清除受影响项目结果。编辑器接收配置/术语失效事件，统一清除行内和 Panel 结果。不会自动启动整文件检查。
-- 异步 QA 在持久化前使用 immediate 事务核对数据库变动版本，包含其他连接的术语修改；期间有写入时先返回 `stale`，不再全量读取行，也不写旧结果。整文件 QA 的原始内容及设置快照在事务外生成；版本未变时仍在事务内复核输入，保留未提供版本的宿主的内容检查。编辑器还校验本地修改，防止尚未保存的编辑被旧结果覆盖。
-- 修改后的 QA 筛选行集合和旧 findings 保持稳定，用户可以继续修订；当前会话中 Panel 提示需要重查。退出筛选清空全部筛选，不恢复原条件。
+Panel, inline feedback, and file counts read segment `qaIssues` / `qaIssuesJson`. The renderer does not keep a separate authoritative report issue list.
 
-无消费者的 tag 插入/删除/空排序自动修复已移除，编辑器不再生成或携带 `autoFixSuggestions`。公开类型、`TagValidator.suggestions` 空数组和 deprecated `generateAutoFix()`（返回 `null`）只作为兼容边界。编辑器“插入源文 tag”是用户发起的文本编辑，与旧自动修复无关。
+| Event                                         | Result behavior                                                                                                                                                                                                                        |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Successful whole-file QA                      | [`runProjectFileQA`](../packages/localization/src/qa/runProjectFileQA.ts) atomically replaces all row findings, removing issues no longer found.                                                                                       |
+| Successful Instant QA                         | [`runProjectSegmentQA`](../packages/localization/src/qa/runProjectSegmentQA.ts) merges new and retained findings on the checked row by rule/message/group identity. It does not remove old findings or establish whole-file freshness. |
+| Content/status change, save, or reopen        | Retain previous findings and counts. Edits, AI output, TM/TB application, and repeat propagation share this rule; editing itself does not run QA.                                                                                      |
+| QA settings change                            | Clear that project's findings without automatically checking again.                                                                                                                                                                    |
+| Term-base entries or project TB mounts change | Clear findings in affected projects without automatically checking again.                                                                                                                                                              |
+| Inputs change while QA runs                   | Reject stale results instead of overwriting newer state.                                                                                                                                                                               |
 
-QA 筛选只有 `qa_issue`；旧 `qa_error` / `qa_warning` 在存储读取边界迁移，搜索缓存与过滤算法不再计算旧严重度分支。公开 `validateSegmentTags` / `validateSegmentTerminology` 和旧 severity 字段仍保留兼容；保存错误是独立写入反馈。
+Shared workflows compare a database revision inside the host's transaction before writing; Desktop uses an immediate transaction and a revision that includes changes from other connections. A changed revision returns `stale` before rereading all rows. Whole-file QA also compares current file policy, project settings/languages, and segment content against its snapshot, including for hosts without a revision provider. The original snapshot is serialized outside the transaction; an unchanged revision still requires the content comparison inside it. See [workflow tests](../packages/localization/src/qa/projectQA.test.ts).
+
+The renderer separately guards unsaved edits and file navigation. Display freshness and stable QA filter selections are owned by [Desktop](DESKTOP.md#filtering-and-freshness).
 
 ### Confirm and instant QA
 
-Confirmation owns saving, status changes, Working TM updates, and repeat propagation. It has no dependency on QA results. Editor composition starts optional Instant QA after the save succeeds and does not await it; selection actions and navigation finish independently. A check failure shows an independent QA message, never a save error or a rollback. Late results are discarded after content, resource, or file changes.
+Confirmation owns saving, status changes, Working TM updates, and repeat propagation. After success, editor composition starts optional Instant QA without awaiting it. Check failures show independent QA feedback and never become save errors. Late results are discarded after content, resource, or file changes.
 
-When Instant QA is enabled, the check includes fixed token checks and enabled single-row checks (empty targets, line breaks, numbers, URLs, Chinese, target text, Plain tags, and mounted TB terminology). Marked pairs are checked against mounted TB terms and repeated pairs in the same row, even when the expected translation appears elsewhere in the target. It does not learn marked terminology or recalculate cross-row consistency. Mark-count checks remain document-only because missing-pair decisions may depend on terms learned from other rows. When disabled, the follow-up returns without checking or writing results, including token findings. Manual whole-file QA remains available.
+When enabled, Instant QA includes protected-token checks and enabled single-row checks: empty targets, line breaks, numbers, URLs, Chinese, target text, Plain tags, and mounted TB terminology. Marked pairs are checked against mounted TB terms and repeated pairs in the same row, even when the expected translation appears elsewhere in the target. It neither learns document terminology nor recalculates cross-row consistency. Mark-count checks remain document-only because missing-pair decisions may depend on terms learned elsewhere. When disabled, the follow-up performs no checks or writes, including token checks.
 
-### AI response handling
+### QA compatibility boundaries
 
-Single-row Translate/Refine makes one provider request per invocation and parses the returned marker text. Window/Window-partial parses the strict JSON/ID contract and returns all rows; there is no tag repair request. Dialogue retains response-contract retries, including malformed JSON/IDs, but does not inspect QA findings. Transport, parsing, and persistence failures remain execution failures, and the job runner retains its task retry/resume policy.
-
-Tag repair prompts, injected QA validators, and tag repair audit events have no business consumers and are removed. Prompt instructions to preserve markers and the tokenizer's source-token mapping remain part of translation representation.
+- Settings normalization accepts then removes legacy project `tagMode`; file import policy controls tag handling. New settings accept only independently optional checks in `disabledCheckIds`; legacy normalization drops obsolete IDs.
+- Public `TagValidator`, `validateSegmentTags`, and `validateSegmentTerminology` remain compatibility APIs; business workflows do not use them as gates. Legacy severity remains readable and stored blocking metadata has no operational effect.
+- Compatibility autofix types, `TagValidator.suggestions` (empty), and deprecated `generateAutoFix()` (`null`) do not implement editing. The editor's source-tag insertion is a user edit.
 
 ### QAtools comparison
 
@@ -238,7 +268,7 @@ Tag repair prompts, injected QA validators, and tag repair audit events have no 
 - QAtools 术语引擎支持正则排除配置；当前项目 QA settings 没有对应的自定义正则项。
 - 对照时应统一 Chinese、空译文、tag 顺序与类型、术语 marker 和子串阈值；普通文本兼容样例使用 Plain 导入（`tagPolicy: none`）及 Standard tags 配置。Protect 文件使用 tokenizer 的固定完整性检查。
 
-相关行为测试：[`内容兼容样例`](../packages/core/src/qa/documentQa.compatibility.test.ts)、[`marker + 挂载 TB / CLI 集成`](../packages/localization/src/cli/qaFileCommand.test.ts)、[`多选确认`](../apps/desktop/src/renderer/src/hooks/editor/useSelectedSegmentActions.test.ts)、[`AI 批次修复`](../packages/localization/src/modules/MTModule.test.ts)。
+相关行为测试：[`内容兼容样例`](../packages/core/src/qa/documentQa.compatibility.test.ts)、[`marker + 挂载 TB / CLI 集成`](../packages/localization/src/cli/qaFileCommand.test.ts)。
 
 ## Source terminology precheck
 
@@ -248,7 +278,7 @@ The extractor accepts document-qualified units with source text and per-unit his
 
 Provider candidates are treated as untrusted. Extraction is deliberately precision-first: the prompt rejects ordinary vocabulary, descriptive phrases, and incidental concepts, says that an empty result is normal, forbids forced extraction, and allows the complete segment when it is itself one glossary-worthy unit. Capitalization, repetition, and phrase shape are explicitly insufficient on their own; glossary value is a semantic model decision based on localization consistency risk, not a language-specific word list or casing heuristic. Local validation remains deterministic: a candidate must be an exact substring of its source unit, is normalized and deduplicated, and is removed when the existing language-aware TB rules consider it covered by a historical term. Batch failures stay scoped to their units. Global aggregation preserves the first source spelling, records other surface variants, occurrence counts, document/unit identities, row numbers, and bounded source examples.
 
-The desktop Settings dialog exposes the selection-policy portion of this prompt as an app-wide named-prompt library. The current precision-first policy remains a read-only built-in default; users can create, rename, edit, activate, and delete multiple custom policies, while activating the Default card preserves the saved library. A legacy single custom policy is surfaced as a named prompt and migrates into the library on the next mutation. Invalid catalog data falls back to the valid entries or Default and surfaces a recovery warning before the next mutation replaces the invalid stored value. Source language, source rows, historical terms, prompt-injection protection, exact-substring/source-only requirements, strict response shape, id correlation, and validation-repair feedback remain application-owned and cannot be replaced by a customization. Each extraction job reads the active prompt in one settings snapshot when it starts, and prompt-size batching includes that policy.
+Settings > Term Extraction exposes the selection-policy portion of this prompt as an app-wide named-prompt library. The current precision-first policy remains a read-only built-in default; users can create, rename, edit, activate, and delete multiple custom policies, while activating the Default card preserves the saved library. A legacy single custom policy is surfaced as a named prompt and migrates into the library on the next mutation. Invalid catalog data falls back to the valid entries or Default and surfaces a recovery warning before the next mutation replaces the invalid stored value. Source language, source rows, historical terms, prompt-injection protection, exact-substring/source-only requirements, strict response shape, id correlation, and validation-repair feedback remain application-owned and cannot be replaced by a customization. Each extraction job reads the active prompt in one settings snapshot when it starts, and prompt-size batching includes that policy.
 
 The desktop `TM/TB` action offers source-term extraction alongside the existing TM/TB reference export. Reference export preserves the retained source sheet, overlays its target column from the file's current stored segments (including cleared targets), and appends the per-row TM/TB reference columns. Precheck runs in a worker, uses the project's configured provider, and writes an output workbook containing per-row historical TB/source candidates plus a `New_Terms` summary sheet. Cancellation is cooperative: no new lookup or provider batch starts after the request is observed, in-flight provider responses may finish, and their completed candidates are preserved in a partial workbook while untouched rows are marked `cancelled`. When the retained source workbook exists, the output preserves its first sheet; when that workbook is unavailable, desktop reconstructs a temporary source-only sheet from the file's stored segments and removes the temporary file after the worker finishes. Valid UTF-8 CSV source text is decoded explicitly so non-Latin content survives this fallback unchanged, while other encodings retain the existing binary parser path. It does not translate terms, update a TB, modify project segments, or feed candidates into AI translation. Those are separate future workflows.
 
@@ -278,7 +308,7 @@ Every translation project has a mounted read/write Working TM. Confirming a tran
 
 AI translation, refinement, and manual target edits write `draft` (or `empty` for an empty result) regardless of project type. These unconfirmed writes stay local and do not query repeat groups. Job/checkpoint result labels such as `translated`, `reused`, and `failed` describe execution outcomes and are separate from segment workflow status.
 
-The Files tab `Commit` action can write a whole file to either its writable Working TM or a mounted Main TM. It defaults to confirmed segments; `All with translations` also includes other statuses when both source and target are non-empty. Every segment written by the action is left confirmed; excluded rows remain unchanged. This action disables repeat propagation so each row keeps the translation being committed. Segment confirmations, entry writes, and FTS updates for the file run in one transaction, so a failed commit leaves both segment state and the target TM unchanged. A Working TM target must be the writable Working TM mounted to that file's translation project, and review/custom projects cannot use this route to populate a Working TM.
+The Tasks tab `Commit` action can write a whole file to either its writable Working TM or a mounted Main TM. It defaults to confirmed segments; `All with translations` also includes other statuses when both source and target are non-empty. Every segment written by the action is left confirmed; excluded rows remain unchanged. This action disables repeat propagation so each row keeps the translation being committed. Segment confirmations, entry writes, and FTS updates for the file run in one transaction, so a failed commit leaves both segment state and the target TM unchanged. A Working TM target must be the writable Working TM mounted to that file's translation project, and review/custom projects cannot use this route to populate a Working TM.
 
 The Project Translation Memory tab keeps Working TM management intentionally narrow: users can export its source/target rows to XLSX or reset all entries after confirmation. Export reads one stable database snapshot and serializes the workbook in a background worker, writing the stored source/target content and original tag text into two visible columns. Reset runs in a background worker and atomically removes the current entries plus their FTS rows, then reloads the pane and publishes a project-wide `working-tm-reset` invalidation. The TM resource, project mount, project files, and translated segments are preserved.
 
@@ -335,26 +365,6 @@ Same-TM delete, import, file commit, mapping update, and sync operations are mut
 Inspect and translate should use the same request mode, baseline, and tag policy during diagnosis. Secrets must never be serialized into any of these outputs.
 
 Provider HTTP failures report the numeric status and a local standard status label. Untrusted response bodies and status text are excluded from transport errors, including malformed JSON responses, because errors can flow into checkpoints, events, audit, and terminal output.
-
-## Key entrypoints
-
-| Concern                               | Source                                                                                                                                                                                                                                                              |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Token/tag helpers                     | [`packages/core/src/tag`](../packages/core/src/tag)                                                                                                                                                                                                                 |
-| Prompt and strict response contracts  | [`packages/core/src/project`](../packages/core/src/project)                                                                                                                                                                                                         |
-| Localization engine facade            | [`packages/localization/src/LocalizationEngine.ts`](../packages/localization/src/LocalizationEngine.ts)                                                                                                                                                             |
-| Engine orchestration collaborators    | [`packages/localization/src/engine`](../packages/localization/src/engine)                                                                                                                                                                                           |
-| Window request modes                  | [`packages/localization/src/requestModes`](../packages/localization/src/requestModes)                                                                                                                                                                               |
-| MT module facade                      | [`packages/localization/src/modules/MTModule.ts`](../packages/localization/src/modules/MTModule.ts)                                                                                                                                                                 |
-| MT prompt/response collaborators      | [`packages/localization/src/modules/MTModulePromptParams.ts`](../packages/localization/src/modules/MTModulePromptParams.ts), [`MTBatchResponseProcessor.ts`](../packages/localization/src/modules/MTBatchResponseProcessor.ts)                                      |
-| TM/TB prompt modules                  | [`packages/localization/src/modules/TMModule.ts`](../packages/localization/src/modules/TMModule.ts), [`TBModule.ts`](../packages/localization/src/modules/TBModule.ts)                                                                                              |
-| Source terminology precheck           | [`packages/localization/src/SourceTerminologyExtractor.ts`](../packages/localization/src/SourceTerminologyExtractor.ts), [`LocalizationSourceTerminologyPrechecker.ts`](../packages/localization/src/LocalizationSourceTerminologyPrechecker.ts)                    |
-| Runtime TM merge                      | [`packages/localization/src/runtimeTm`](../packages/localization/src/runtimeTm)                                                                                                                                                                                     |
-| Shared match services                 | [`packages/localization/src/services`](../packages/localization/src/services)                                                                                                                                                                                       |
-| Desktop TM match facade/collaborators | [`apps/desktop/src/main/services/TMService.ts`](../apps/desktop/src/main/services/TMService.ts), [`TMMatchScoring.ts`](../packages/localization/src/services/TMMatchScoring.ts), [`TMMatchSelection.ts`](../packages/localization/src/services/TMMatchSelection.ts) |
-| TM/TB repositories                    | [`packages/db/src/repos/TMRepo.ts`](../packages/db/src/repos/TMRepo.ts), [`TMSyncRepo.ts`](../packages/db/src/repos/TMSyncRepo.ts), [`TBRepo.ts`](../packages/db/src/repos/TBRepo.ts)                                                                               |
-| Desktop segment behavior              | [`apps/desktop/src/main/services/SegmentService.ts`](../apps/desktop/src/main/services/SegmentService.ts)                                                                                                                                                           |
-| Desktop TM/TB modules                 | [`apps/desktop/src/main/services/modules/TMModule.ts`](../apps/desktop/src/main/services/modules/TMModule.ts), [`TBModule.ts`](../apps/desktop/src/main/services/modules/TBModule.ts)                                                                               |
 
 ## Change checklist
 

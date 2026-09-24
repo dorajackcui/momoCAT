@@ -1,46 +1,33 @@
 # Repository agent guide
 
-This file applies to the entire repository. Keep it short and route durable detail to [`DOCS/`](DOCS/README.md).
+Applies to the whole repository. This file owns agent rules; [DOCS](DOCS/README.md) owns durable product and engineering contracts.
 
 ## Start here
 
-For every code change:
-
-1. Read [`DOCS/ARCHITECTURE.md`](DOCS/ARCHITECTURE.md).
-2. Read [`DOCS/DEVELOPMENT.md`](DOCS/DEVELOPMENT.md).
-3. Identify the active OS and CPU with `node -p "process.platform + ' ' + process.arch"`; for path, native-module, worktree, build, or packaging work, follow the [cross-platform rules](DOCS/DEVELOPMENT.md#cross-platform-development).
-4. Read the owning domain document selected in [`DOCS/README.md`](DOCS/README.md).
-5. Inspect `git status` and preserve unrelated user changes.
-6. Locate the implementation and nearest behavior tests before editing.
-
-Documentation-only changes may start with [`DOCS/README.md`](DOCS/README.md) and the owning topic document.
+1. Inspect `git status`; preserve unrelated changes.
+2. For code changes, read [Architecture](DOCS/ARCHITECTURE.md), the [validation matrix](DOCS/DEVELOPMENT.md#validation-strategy), and the task's section selected in the [document map](DOCS/README.md). Read other Development sections only as relevant. Documentation-only work starts with the map and owner.
+3. Identify the host with `node -p "process.platform + ' ' + process.arch"`; follow the [cross-platform rules](DOCS/DEVELOPMENT.md#cross-platform-development).
+4. Locate implementation and adjacent behavior tests before editing.
 
 ## Working rules
 
-- Put work in the owner layer defined by the architecture document; keep app shells and transport boundaries thin.
-- Use `rg` / `rg --files` for discovery and follow existing adjacent tests and conventions.
-- In Windows PowerShell, read repository text with `Get-Content -Encoding UTF8`; mojibake from the shell's legacy default is not evidence that the file is corrupt.
-- Use root `npm run format` only for agent-owned docs/scripts/config. `format:all` is an intentional repository-wide rewrite and must not be used during an ordinary feature task.
-- Preserve public contracts unless the task explicitly includes a migration.
-- Treat tokens, tags, schema compatibility, provider privacy, and resume identity as correctness boundaries.
-- For TM, TB, AI file-flow, or CLI smoke failures, follow the routing and data-safety rules in the [diagnostic playbooks](DOCS/DEVELOPMENT.md#diagnostic-playbooks) before changing matching or provider code.
-- Do not overwrite unrelated work or clean the worktree destructively.
-- Do not add permanent specs, plans, status reports, or dated reviews under `DOCS/`.
-- One durable fact has one owner document. Link to it instead of copying it into another README.
+- Keep behavior in its owner layer and app/transport shells thin. Preserve public contracts unless a migration is in scope.
+- Treat tokens/tags, schema compatibility, provider privacy, and resume identity as correctness boundaries.
+- Use `rg` / `rg --files`. In PowerShell read text with `Get-Content -Encoding UTF8`; legacy shell decoding is not evidence of file corruption.
+- Follow the [diagnostic playbooks](DOCS/DEVELOPMENT.md#diagnostic-playbooks) for TM/TB/AI/CLI failures before changing matching or provider code.
+- Do not overwrite unrelated work, clean the worktree destructively, or run `format:all` during a scoped task. Root `format` is only for agent-owned docs/scripts/config.
 
-## Validation
+## Documentation and traceability
 
-- Run the smallest relevant check before broad changes when practical, then rerun it after editing.
-- Use the validation matrix in [`DOCS/DEVELOPMENT.md`](DOCS/DEVELOPMENT.md).
-- Run `npm run docs:check` whenever documentation, package scripts, release markers, schema markers, or doc-linked paths change.
-- Run `npm run gate:text` after adding or renaming tracked text files; run `npm run format:check` when agent-owned docs, scripts, or root configuration change.
-- Treat `npm run gate:check` as the full repository audit. If it is not green before the task, record the failing stages and distinguish unchanged baseline failures from regressions; never claim the gate passed when it did not.
-- Do not broaden a scoped task merely to repair unrelated baseline failures.
+- Update docs when current behavior, a public contract, ownership, compatibility, or a reusable operating procedure changes. A completed task alone does not require a doc update.
+- Revise the existing owner paragraph; do not append a second account of the same fact. Keep current rules and necessary constraints, not the sequence of changes.
+- Keep plans, reviews, decisions specific to the change, test counts, logs, screenshots, and temporary investigations in the task/PR or untracked artifacts. Git records code history; do not create completion reports in `DOCS/`.
+- Keep exact styling values and implementation mechanics in code/tests unless callers need them as a contract. Link to their owner; preserve maintained compatibility references and boundary cases.
+- Use the [retention rules](DOCS/README.md#what-to-record-and-where) before adding content. Do not grow this guide with feature-specific rules or add a document when an existing owner fits.
 
-## Definition of done
+## Validation and handoff
 
-- The requested behavior or documentation outcome is complete.
-- Relevant focused checks pass, or exact blockers and unchanged baseline failures are reported.
-- Public behavior, schema, commands, and owning docs agree.
-- No secrets, private content, generated artifacts, or accidental dependency trees are added.
-- The final handoff names changed files and validation actually run.
+- Use the [validation matrix](DOCS/DEVELOPMENT.md#validation-strategy); run the smallest relevant check before/after changes when practical.
+- Run `npm run docs:check` for docs, package scripts, release/schema markers, or doc-linked path changes; `npm run format:check` for agent-owned docs/scripts/root config; `npm run gate:text` for added/renamed tracked text.
+- `npm run gate:check` is the full audit. Distinguish baseline failures from regressions and report only checks actually run; do not broaden scope to repair unrelated failures.
+- Finish with behavior, code, and owning docs in agreement, no private/generated artifacts added, and a handoff naming changed files, validation, and any remaining blockers.

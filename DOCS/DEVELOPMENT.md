@@ -178,12 +178,7 @@ npm run gate:check
 
 The `gate:check` script in [package.json](../package.json) owns the stage order. It stops at the first failing stage; successful earlier stages do not prove later stages ran. The focused commands above select checks during development, not an alternate definition of the full gate.
 
-Interpret the audit honestly:
-
-- If it is green before work, any new failure is a regression until proven otherwise.
-- If it is not green before work, record the failing stage and concise error before editing. Afterward, show that focused checks pass and that unrelated baseline failures did not expand.
-- Never report `gate:check` as passed when it stopped early or when its stages were run selectively.
-- Do not broaden a scoped task merely to repair unrelated baseline debt.
+Record baseline failures and concise errors in the task/PR. Treat new failures as regressions until verified otherwise; distinguish remaining baseline failures at handoff without expanding scope to repair unrelated debt. Report `gate:check` as passed only when the complete command succeeds.
 
 `gate:check` does not replace `npm test` or desktop e2e. Choose them based on behavioral risk.
 
@@ -221,7 +216,9 @@ npm run test:e2e:smoke --workspace=apps/desktop
 npm run test:e2e --workspace=apps/desktop
 ```
 
-Use smoke first for editor/renderer regressions. Full e2e is appropriate for broader cross-window or project workflows. The editor smoke suite creates an isolated temporary user-data directory; preserve that isolation when extending it. See [Desktop](DESKTOP.md#ownership-and-tests) for the UI and IPC test map. Switch back with `npm run rebuild:test` before returning to Node-based DB tests.
+Use smoke first for editor/renderer regressions. Full e2e also covers project/settings, QA, and resource workflows; use it for those changes. Every Electron test must set `MOMOCAT_USER_DATA_DIR` to its own temporary or test-output directory, including tests that launch Electron directly. Never rely on the normal development profile or hard-code `.cat_data` paths in fixtures. The [shared session helper](../apps/desktop/e2e/support/editorSmokeSession.ts) owns editor fixture setup and cleanup. See [Desktop](DESKTOP.md#ownership-and-tests) for the UI and IPC test map.
+
+Node DB tests and Electron share the active native binary: run them sequentially, not concurrently across processes or linked worktrees. Switch with `npm run rebuild:test` before Node DB work and `npm run rebuild:electron` before desktop work. Keep test logs/screenshots in untracked output; report the commands and results in the task/PR.
 
 Packaging must run on its target platform:
 
@@ -278,15 +275,7 @@ Before deleting a script, confirm that it has no package command, import, test, 
 
 ## Documentation workflow
 
-Update the owning topic document when behavior, public contracts, commands, schema, or boundaries change. Do not add permanent specs, plans, status reports, or dated review files. Temporary planning stays with the task/PR and is deleted once durable facts are absorbed.
-
-Run:
-
-```bash
-npm run docs:check
-```
-
-See [Documentation](README.md) for ownership and content rules.
+Use the [document map and retention rules](README.md#what-to-record-and-where) to decide whether a change belongs in docs and who owns it. Validate documentation changes with `npm run docs:check` and `npm run format:check`; this does not require running native/application tests unless executable behavior also changed.
 
 ## Failure triage
 

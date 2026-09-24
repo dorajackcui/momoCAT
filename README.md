@@ -11,8 +11,9 @@ momoCAT 是一个基于 Electron、React、TypeScript 和 SQLite 的桌面 CAT�
 - TB 术语库、英文/CJK 匹配策略与编辑器实时命中
 - CSV/XLSX 导入导出、列映射及 TM/TB 外部表格同步
 - AI 翻译、项目级连接/模型/提示词配置与可恢复文件任务
-- 重复段落跟随/脱离语义、Working TM 原子更新与桌面引用刷新
-- 面向自动化的 `momocat` CLI：环境检查、项目检查、无请求 inspect、文件翻译与续跑
+- 文件内重复段落首条确认后同步、Working TM 原子更新与桌面引用刷新
+- 桌面与 CLI 共用 QA 检查，支持术语、一致性、标签及文本质量问题定位
+- 面向自动化的 `momocat` CLI：环境检查、项目检查、无请求 inspect、文件翻译与续跑、QA
 
 ## 快速开始
 

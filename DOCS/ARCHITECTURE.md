@@ -60,7 +60,8 @@ The shared orchestration layer owns:
 - checkpoints, events, snapshots, audit records, and optional artifacts;
 - `LocalizationEngine` plus TM, TB, MT, provider, and Runtime TM modules;
 - engine composition, unit preparation, and resume fingerprint collaborators behind the `LocalizationEngine` facade;
-- SQLite adapters used by command-facing APIs.
+- SQLite adapters used by command-facing APIs;
+- shared QA orchestration and result persistence, with pure checks delegated to `@cat/core` and host scheduling supplied by the application.
 
 It may depend on `@cat/db` and focused `@cat/core` entrypoints. It must not depend on either application.
 

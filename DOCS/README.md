@@ -4,7 +4,7 @@ This directory documents the current, durable behavior of momoCAT. It is a navig
 
 ## Agent entrypoint
 
-Follow the startup and completion rules in [AGENTS.md](../AGENTS.md). After the architecture and development foundations, select only the topic needed for the task. Start at its linked implementation and adjacent behavior tests; expand to another topic when the change crosses its boundary.
+Follow [AGENTS.md](../AGENTS.md), then use the task map below to read the relevant contract and open its implementation/test links. Read Architecture for dependency direction and the Development validation matrix for checks; setup, diagnostics, ABI, and packaging sections are needed only when the task touches them. Do not read all topic documents on every session. Expand when a change crosses an ownership boundary.
 
 ## Choose a document
 
@@ -19,19 +19,21 @@ Follow the startup and completion rules in [AGENTS.md](../AGENTS.md). After the 
 
 ## Common task map
 
-| Task surface                          | Primary code home                                                                                                     |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Renderer/editor state and behavior    | [Desktop ownership and tests](DESKTOP.md#ownership-and-tests)                                                         |
-| Desktop IPC and typed bridge          | [Desktop boundary changes](DESKTOP.md#changing-a-desktop-boundary)                                                    |
-| Project file import/export/inspect    | [Desktop files and background jobs](DESKTOP.md#files-and-background-jobs)                                             |
-| AI/provider and file translation      | [`modules/ai`](../apps/desktop/src/main/services/modules/ai), [`packages/localization`](../packages/localization/src) |
-| QA checks and QAtools comparison      | [QA entrypoints](LOCALIZATION.md#qa-entrypoints), [QAtools comparison](LOCALIZATION.md#qatools-comparison)            |
-| TM/TB matching and resource lifecycle | [`LOCALIZATION.md`](LOCALIZATION.md) and its entrypoint table                                                         |
-| SQLite/schema/repositories            | [`DATA_MODEL.md`](DATA_MODEL.md) and [`packages/db/src`](../packages/db/src)                                          |
-| CLI parsing and operation             | [`CLI.md`](CLI.md), [`apps/cli/src`](../apps/cli/src)                                                                 |
-| TM/TB/AI flow diagnosis and CLI smoke | [`DEVELOPMENT.md`](DEVELOPMENT.md#diagnostic-playbooks)                                                               |
-| Repository scripts and generators     | [`DEVELOPMENT.md`](DEVELOPMENT.md#script-ownership-and-maintenance)                                                   |
-| Build, packaging, and updates         | [`DEVELOPMENT.md`](DEVELOPMENT.md), [`scripts/pack-platform.mjs`](../scripts/pack-platform.mjs)                       |
+| Task surface                            | Primary code home                                                                                                     |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Renderer/editor state and behavior      | [Desktop ownership and tests](DESKTOP.md#ownership-and-tests)                                                         |
+| Project/global settings and shared UI   | [Settings](DESKTOP.md#project-and-global-settings), [UI foundation](DESKTOP.md#ui-foundation)                         |
+| Desktop IPC and typed bridge            | [Desktop boundary changes](DESKTOP.md#changing-a-desktop-boundary)                                                    |
+| Project file import/export/inspect      | [Desktop files and background jobs](DESKTOP.md#files-and-background-jobs)                                             |
+| AI/provider and file translation        | [`modules/ai`](../apps/desktop/src/main/services/modules/ai), [`packages/localization`](../packages/localization/src) |
+| QA checks and QAtools comparison        | [QA entrypoints](LOCALIZATION.md#qa-entrypoints), [QAtools comparison](LOCALIZATION.md#qatools-comparison)            |
+| QA retention, invalidation, and display | [Result lifecycle](LOCALIZATION.md#qa-result-lifecycle), [QA panel](DESKTOP.md#qa-panel-and-feedback)                 |
+| TM/TB matching and resource lifecycle   | [`LOCALIZATION.md`](LOCALIZATION.md) and its entrypoint table                                                         |
+| SQLite/schema/repositories              | [`DATA_MODEL.md`](DATA_MODEL.md) and [`packages/db/src`](../packages/db/src)                                          |
+| CLI parsing and operation               | [`CLI.md`](CLI.md), [`apps/cli/src`](../apps/cli/src)                                                                 |
+| TM/TB/AI flow diagnosis and CLI smoke   | [`DEVELOPMENT.md`](DEVELOPMENT.md#diagnostic-playbooks)                                                               |
+| Repository scripts and generators       | [`DEVELOPMENT.md`](DEVELOPMENT.md#script-ownership-and-maintenance)                                                   |
+| Build, packaging, and updates           | [`DEVELOPMENT.md`](DEVELOPMENT.md), [`scripts/pack-platform.mjs`](../scripts/pack-platform.mjs)                       |
 
 The root [README](../README.md) is the product entrypoint. Package-specific READMEs contain short build/usage pointers; the topic document owns operational defaults and detailed contracts. Use the [validation matrix](DEVELOPMENT.md#validation-strategy) to choose commands, and the owning topic's code/test links to select the focused cases.
 
@@ -46,36 +48,26 @@ When documentation and implementation disagree, verify in this order:
 
 Fix the owning topic document in the same change as the behavior. Do not copy a correction into several files.
 
-## What belongs here
+## What to record and where
 
-- Current architecture and stable boundaries.
-- Commands that exist in `package.json` or a package manifest.
-- Persistent schema and compatibility behavior.
-- User-visible or integration-visible localization contracts.
-- Failure handling that a contributor or operator needs repeatedly.
+| Information                                                                                                | Home                                              |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Current behavior, cross-layer contracts, ownership, defaults, compatibility, reusable operating procedures | The existing topic document                       |
+| A stable constraint whose omission would lead to an incorrect implementation                               | Explain it briefly beside its contract            |
+| Code changes and implementation history                                                                    | Git commits; link from a task/PR when useful      |
+| Change-specific rationale, alternatives, reviews, plans, progress, and validation results                  | Task or PR                                        |
+| Reproduction logs, screenshots, generated output, temporary scripts, and investigation notes               | Untracked task artifacts; do not add them to DOCS |
+| Exact style values, exhaustive rule IDs, function inventories, and code-level test cases                   | Code/tests; link to the maintained entrypoint     |
 
-## What does not belong here
-
-- Feature specs, execution plans, scratch notes, or task checklists.
-- Dated status reports, roadmaps, commit reviews, or completed investigations.
-- Large code excerpts that will drift from their source.
-- Real local paths, project/customer names, source text, prompts, provider endpoints, model configuration, keys, or generated artifacts.
-
-Keep temporary specs and plans in the task or pull request that needs them. When work lands, move only the durable result into the owning topic document and delete the temporary record.
+A documentation update is warranted when a future maintainer needs a changed contract or procedure, not simply because work was completed. Maintain the [QAtools comparison](LOCALIZATION.md#qatools-comparison) as a versioned compatibility reference, including known differences; it is not a completed-review report.
 
 ## Maintenance rules
 
-1. One fact has one owner. Link to it instead of restating it.
-2. Describe current behavior in present tense; use Git history for history.
-3. Prefer stable concepts and code entrypoints over line numbers or file-size snapshots.
-4. Avoid “last updated” badges and live status sections; they age without proving correctness.
-5. Keep examples generic and safe to commit.
-6. Add a new top-level document only when none of the existing owners fits.
-7. Never place `node_modules`, generated outputs, or local artifacts under `DOCS/`.
-8. Run the documentation check before submitting changes:
+1. One fact has one owner. Revise or replace the existing description and link from other topics.
+2. State current behavior. Keep old behavior only when a supported compatibility boundary requires it; Git owns the rest of the history.
+3. Keep concise headings, contracts, and code/test entrypoints. Avoid long implementation narratives, copied code, live status sections, test-count snapshots, and “last updated” badges.
+4. Keep examples generic. Never commit real local paths, customer/source text, provider metadata, prompts containing private content, keys, or generated artifacts.
+5. Use existing topic sections before adding documents. Do not add specs, plans, archives, or dated reviews under DOCS. Keep AGENTS limited to repository-wide operating rules.
+6. At handoff, absorb durable facts and remove obsolete repository notes; task/PR discussion remains the trace of the work. Do not copy it into a new summary document.
 
-```bash
-npm run docs:check
-```
-
-The check validates the allowed document set, Markdown tables, local links, release/schema markers, root/workspace package-script context, and the absence of retired or generated documentation paths.
+Run `npm run docs:check` after changing docs. The check validates the document set, Markdown tables, local links, release/schema markers, package-script context, and retired/generated paths. Semantic accuracy and duplication still require review against code and tests.
