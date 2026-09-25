@@ -84,6 +84,19 @@ export class TMMatchScorer {
       return null;
     }
 
+    // A one-sided acronym collision rejects both scores, regardless of overlap.
+    if (
+      source.profile === 'english' &&
+      this.hasOneSidedShortAcronymCollision(
+        source.textOnly,
+        candidateTextOnly,
+        source.profileNormalized,
+        candidateProfileNormalized,
+      )
+    ) {
+      return null;
+    }
+
     let standardSimilarity = 0;
     let localOverlap = { ...EMPTY_LOCAL_OVERLAP };
 
@@ -103,16 +116,7 @@ export class TMMatchScorer {
     }
 
     if (source.profile === 'english') {
-      const hasAcronymCollision = this.hasOneSidedShortAcronymCollision(
-        source.textOnly,
-        candidateTextOnly,
-        source.profileNormalized,
-        candidateProfileNormalized,
-      );
-      if (hasAcronymCollision) {
-        standardSimilarity = 0;
-        localOverlap = { ...EMPTY_LOCAL_OVERLAP };
-      } else if (source.profileNormalized === candidateProfileNormalized) {
+      if (source.profileNormalized === candidateProfileNormalized) {
         standardSimilarity = Math.max(
           standardSimilarity,
           this.computeEnglishExactCanonicalSimilarity(
@@ -121,7 +125,11 @@ export class TMMatchScorer {
             source.profileNormalized,
           ),
         );
-      } else {
+      } else if (
+        source.profileNormalized !== source.normalized ||
+        candidateProfileNormalized !== candidateNormalized
+      ) {
+        // Identical input pairs already have the same weighted score above.
         standardSimilarity = Math.max(
           standardSimilarity,
           this.computeProfileStandardSimilarity(

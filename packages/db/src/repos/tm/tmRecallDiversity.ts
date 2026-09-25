@@ -4,6 +4,9 @@ import type { TMRecallDbRow } from './tmEntryRows';
 
 const TM_RECALL_DIVERSITY_MAX_PER_BUCKET = 2;
 const TM_RECALL_DIVERSITY_MIN_CJK_BUCKET_LENGTH = 4;
+const HAS_POSSIBLE_CJK_DIVERSITY_BUCKET = new RegExp(
+  `[\\u4e00-\\u9fa5]{${TM_RECALL_DIVERSITY_MIN_CJK_BUCKET_LENGTH},}`,
+);
 
 export function diversifyConcordanceRows(
   query: string,
@@ -104,6 +107,10 @@ function getConcordanceDiversityBucket(query: string, row: TMEntryRow): string |
 }
 
 function getBestDiversityBucket(query: string, candidateTexts: string[]): string | null {
+  // A valid bucket must be a substring of the normalized query. Without a
+  // sufficiently long CJK run, every candidate would produce a null bucket.
+  if (!HAS_POSSIBLE_CJK_DIVERSITY_BUCKET.test(query)) return null;
+
   let best = '';
 
   for (const candidateText of candidateTexts) {

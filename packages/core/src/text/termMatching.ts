@@ -74,16 +74,16 @@ export function findTermPositionsInText(
 
   if (!normalizedSource.text || !normalizedTerm) return [];
 
+  // Word boundaries cannot turn an absent substring into a match.
+  let index = normalizedSource.text.indexOf(normalizedTerm);
+  if (index < 0) return [];
+
   const requireBoundaries = shouldRequireBoundaries(normalizedTerm);
   const boundaries = requireBoundaries ? buildBoundarySet(normalizedSource.text, locale) : null;
 
   const positions: TermMatchPosition[] = [];
-  let from = 0;
 
-  while (from < normalizedSource.text.length) {
-    const index = normalizedSource.text.indexOf(normalizedTerm, from);
-    if (index < 0) break;
-
+  while (index >= 0) {
     const end = index + normalizedTerm.length;
     const boundaryMatch =
       !requireBoundaries || (boundaries?.has(index) && boundaries?.has(end));
@@ -97,7 +97,7 @@ export function findTermPositionsInText(
       });
     }
 
-    from = index + Math.max(normalizedTerm.length, 1);
+    index = normalizedSource.text.indexOf(normalizedTerm, end);
   }
 
   return positions;
