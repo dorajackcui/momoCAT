@@ -27,6 +27,8 @@ import { SettingsRepo } from "./repos/SettingsRepo";
 import { TBRepo } from "./repos/TBRepo";
 import { TMRepo } from "./repos/TMRepo";
 export * from "./types";
+export { exportCloudProject, restoreCloudProject, CloudSnapshotOutbox } from './cloud/CloudProjectSnapshot';
+export type { CloudProjectSnapshot } from './cloud/CloudProjectSnapshot';
 export { normalizeProjectFileName } from "./projectFileName";
 export { CURRENT_SCHEMA_VERSION, UnsupportedDatabaseSchemaError } from "./currentSchema";
 

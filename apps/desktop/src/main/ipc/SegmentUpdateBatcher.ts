@@ -5,6 +5,7 @@ import { IPC_CHANNELS } from '../../shared/ipcChannels';
 const BATCH_WINDOW_MS = 50;
 
 export class SegmentUpdateBatcher {
+  constructor(private readonly windows = () => BrowserWindow.getAllWindows()) {}
   private buffer: SegmentsUpdatedPayload[] = [];
   private timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -21,7 +22,7 @@ export class SegmentUpdateBatcher {
     this.buffer = [];
     if (batch.length === 0) return;
 
-    BrowserWindow.getAllWindows().forEach((win) => {
+    this.windows().forEach((win) => {
       win.webContents.send(IPC_CHANNELS.events.segmentsUpdatedBatch, batch);
     });
   }
@@ -34,7 +35,7 @@ export class SegmentUpdateBatcher {
       this.buffer = [];
       if (batch.length === 0) return;
 
-      BrowserWindow.getAllWindows().forEach((win) => {
+      this.windows().forEach((win) => {
         win.webContents.send(IPC_CHANNELS.events.segmentsUpdatedBatch, batch);
       });
     }

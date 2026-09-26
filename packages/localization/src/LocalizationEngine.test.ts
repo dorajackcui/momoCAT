@@ -194,6 +194,23 @@ function escapeRegExp(value: string): string {
 }
 
 describe('LocalizationEngine.translateUnits', () => {
+  it('can resolve device-owned provider settings without storing them in a cloud project database', async () => {
+    const local = new CATDatabase(':memory:');
+    const cache = new CATDatabase(':memory:');
+    try {
+      const localId = local.createProject('Local account settings', 'en', 'fr');
+      seedConfiguredAIProvider(local, localId);
+      const projectId = cache.createProject('Cloud cache', 'en', 'fr');
+      cache.updateProjectAISettings(projectId, null, 'provider:gpt-demo');
+      const engine = new LocalizationEngine(cache, {
+        dbPath: ':memory:', aiTransport: createTransport(),
+        settingsRepo: { getSetting: key => local.getSetting(key), setSetting: (key, value) => local.setSetting(key, value) },
+      });
+      expect(await engine.inspectProject(projectId)).toMatchObject({ ready: true, model: 'gpt-demo', apiKeySet: true });
+      expect(cache.getSetting('ai_connection_key::connection:test')).toBeUndefined();
+      expect(cache.getSetting('ai_connection_catalog_v1')).toBeUndefined();
+    } finally { cache.close(); local.close(); }
+  });
   it('translates external units through project MT without creating files or segments', async () => {
     const db = new CATDatabase(':memory:');
     try {

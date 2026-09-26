@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useId, useState } from 'react';
+import type { CloudProjectSummary } from '../../../shared/cloud';
 import type { Project, ProjectType } from '@cat/core/project';
 import type { WorkspaceView } from '../hooks/useWorkspaceNavigation';
 import { Icon, IconButton, Menu, MenuItem, MenuHeading, MenuSeparator } from './ui';
 
-type IconName = 'project' | 'plus' | 'pin' | 'tm' | 'tb' | 'settings' | 'trash';
+type IconName = 'project' | 'cloud' | 'plus' | 'pin' | 'tm' | 'tb' | 'settings' | 'trash';
 
 interface WorkspaceSidebarPreferences {
   pinnedProjectIds: number[];
@@ -70,6 +71,7 @@ function NavIcon({
     );
   }
   const paths: Record<Exclude<IconName, 'tm' | 'tb' | 'settings'>, string> = {
+    cloud: 'M7 19h11a4 4 0 0 0 0-8 6 6 0 0 0-11.6-1.8A5 5 0 0 0 7 19Z',
     project: 'M3.5 5h6l2 2h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z',
     plus: 'M12 5v14 M5 12h14',
     pin: 'M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6Z M12 14v7',
@@ -122,6 +124,10 @@ function SectionChevron({ collapsed }: { collapsed: boolean }) {
 
 interface WorkspaceSidebarProps {
   projects: Project[];
+  cloudProjects?: CloudProjectSummary[];
+  onOpenCloud?: (id: string) => void;
+  onRefreshCloud?: () => void;
+  cloudError?: string;
   view: WorkspaceView;
   disabled: boolean;
   hidden?: boolean;
@@ -132,6 +138,10 @@ interface WorkspaceSidebarProps {
 
 export function WorkspaceSidebar({
   projects,
+  cloudProjects = [],
+  onOpenCloud,
+  onRefreshCloud,
+  cloudError,
   view,
   disabled,
   hidden = false,
@@ -143,7 +153,7 @@ export function WorkspaceSidebar({
   const [preferences, setPreferences] = useState(readWorkspaceSidebarPreferences);
   const menuId = useId();
   const closeMenu = useCallback(() => setMenu(null), []);
-  const activeProjectId = 'projectId' in view ? view.projectId : null;
+  const activeProjectId = !view.cloudId && 'projectId' in view ? view.projectId : null;
   const menuProject = projects.find((project) => project.id === menu?.projectId);
   const pinnedProjectIds = new Set(preferences.pinnedProjectIds);
   const pinnedProjects = projects.filter(
@@ -291,16 +301,49 @@ export function WorkspaceSidebar({
           {!preferences.projectsCollapsed && (
             <div role="group" aria-label="Projects list">
               {regularProjects.map(renderProject)}
-              {projects.length === 0 && (
+              {cloudProjects.map((project) => (
+                <div key={`cloud:${project.id}`} className="workspace-project">
+                  <button
+                    type="button"
+                    className="workspace-nav-item"
+                    disabled={disabled}
+                    aria-current={view.cloudId === project.id ? 'page' : undefined}
+                    aria-label={project.name}
+                    aria-description="Cloud project"
+                    title={`${project.name} · Cloud · v${project.revision}`}
+                    onClick={() => onOpenCloud?.(project.id)}
+                  >
+                    <NavIcon name="cloud" />
+                    <span className="truncate">{project.name}</span>
+                  </button>
+                </div>
+              ))}
+              {projects.length === 0 && cloudProjects.length === 0 && (
                 <p className="px-3 py-1 text-xs text-text-faint">Your projects will appear here.</p>
               )}
             </div>
           )}
         </div>
+        {onRefreshCloud && (
+          <button
+            type="button"
+            className="workspace-nav-item"
+            disabled={disabled}
+            onClick={onRefreshCloud}
+          >
+            <NavIcon name="cloud" />
+            <span>Refresh cloud projects</span>
+          </button>
+        )}
+        {cloudError && (
+          <p className="px-3 py-1 text-xs text-text-muted" role="status">
+            {cloudError}
+          </p>
+        )}
       </nav>
       <nav className="workspace-resource-nav" aria-label="Resources">
-        {navItem('tm', 'Translation memory', 'tm')}
-        {navItem('tb', 'Term bases', 'tb')}
+        {navItem('tm', view.cloudId ? 'Project translation memory' : 'Translation memory', 'tm')}
+        {navItem('tb', view.cloudId ? 'Project term bases' : 'Term bases', 'tb')}
       </nav>
       <div className="workspace-settings-nav">{navItem('settings', 'Settings', 'settings')}</div>
       {disabled && (

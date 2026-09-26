@@ -1,5 +1,5 @@
 import { AppearanceControls, Tabs, TabsList, TabsPanel } from './ui';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { AppUpdatesController } from '../hooks/useAppUpdates';
 import { AIConnectionsTab } from './settings/AIConnectionsTab';
 import { ProxySettingsTab } from './settings/ProxySettingsTab';
@@ -8,9 +8,16 @@ import { UpdatesTab } from './settings/UpdatesTab';
 import { useAIConnectionsController } from './settings/useAIConnectionsController';
 import { useProxySettingsController } from './settings/useProxySettingsController';
 
-type SettingsTabId = 'connections' | 'term-extraction' | 'proxy' | 'updates' | 'appearance';
+type SettingsTabId =
+  | 'connections'
+  | 'term-extraction'
+  | 'proxy'
+  | 'updates'
+  | 'appearance'
+  | 'account';
 
 const SETTINGS_TABS: Array<{ id: SettingsTabId; label: string }> = [
+  { id: 'account', label: 'Account' },
   { id: 'connections', label: 'AI Connections' },
   { id: 'proxy', label: 'Proxy' },
   { id: 'term-extraction', label: 'Term Extraction' },
@@ -18,7 +25,13 @@ const SETTINGS_TABS: Array<{ id: SettingsTabId; label: string }> = [
   { id: 'updates', label: 'Updates' },
 ];
 
-export function SettingsPage({ updates }: { updates: AppUpdatesController }) {
+export function SettingsPage({
+  updates,
+  account,
+}: {
+  updates: AppUpdatesController;
+  account?: ReactNode;
+}) {
   const proxySettings = useProxySettingsController(true);
   const aiConnections = useAIConnectionsController(true, proxySettings.applyProxySettings);
   const [activeTab, setActiveTab] = useState<SettingsTabId>('connections');
@@ -48,6 +61,7 @@ export function SettingsPage({ updates }: { updates: AppUpdatesController }) {
         style={{ scrollbarGutter: 'stable' }}
       >
         <div className="w-full max-w-3xl space-y-6">
+          {activeTab === 'account' && account}
           {activeTab === 'connections' && (
             <AIConnectionsTab controller={aiConnections} busy={busy} />
           )}

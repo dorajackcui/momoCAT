@@ -42,8 +42,15 @@ import { registerJobHandlers } from './ipc/jobHandlers';
 import { registerSystemHandlers } from './ipc/systemHandlers';
 import { focusPrimaryWindow } from './singleInstance';
 import { resolveDesktopUserDataPath } from './userDataPath';
+import { CloudWorkspace } from './cloud/CloudWorkspace';
+import { IpcContextRouter } from './cloud/IpcContextRouter';
 
 const { autoUpdater } = electronUpdater;
+let cloudWorkspace: CloudWorkspace | undefined;
+const localWindows = () =>
+  BrowserWindow.getAllWindows().filter(
+    (window) => !cloudWorkspace?.hasWindow(window.webContents.id),
+  );
 
 // Disable hardware acceleration to avoid crashes in some environments
 app.disableHardwareAcceleration();
@@ -113,7 +120,7 @@ function setupProxy() {
   }
 }
 
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -139,6 +146,7 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
+  return mainWindow;
 }
 
 function createEditMenu(): MenuItemConstructorOptions {
@@ -232,7 +240,7 @@ function broadcastAppUpdateStatus(status: AppUpdateStatusEvent) {
 }
 
 function broadcastReferenceDataChanged(event: ReferenceDataChangedEvent) {
-  BrowserWindow.getAllWindows().forEach((win) => {
+  localWindows().forEach((win) => {
     try {
       win.webContents.send(IPC_CHANNELS.events.referenceDataChanged, event);
     } catch (error) {
@@ -309,17 +317,39 @@ primaryInstanceReady?.then(async () => {
   }
   const aiRuntimeConfigService = new AIRuntimeConfigService(aiRuntimeConfigPath);
   await aiRuntimeConfigService.initialize();
+  const router = new IpcContextRouter(ipcMain);
+  const localIpc = router.local;
+  const jobManager = new JobManager();
+  cloudWorkspace = new CloudWorkspace({
+    ipcMain,
+    router,
+    userDataPath,
+    localDb: db,
+    runtime: aiRuntimeConfigService,
+    localJobs: jobManager,
+  });
+  void cloudWorkspace.initialize();
+  app.on('before-quit', (event) => {
+    if (!cloudWorkspace?.hasOpenProjects) return;
+    event.preventDefault();
+    void dialog.showMessageBox({
+      type: 'info',
+      title: 'Close cloud projects before quitting',
+      message:
+        'Close the current cloud project, keeping changes on this device or saving them to cloud, then quit momoCAT.',
+      buttons: ['Keep open'],
+    });
+  });
 
   const projectService = new ProjectService(db, projectsDir, dbPath, {
     aiRuntimeConfigProvider: aiRuntimeConfigService,
     translationAuditSink: translationAudit?.sink,
   });
-  const jobManager = new JobManager();
   const referenceLookup = new ReferenceLookupWorkerManager({ dbPath });
   const referenceLookupPrefetch = new ReferenceLookupWorkerManager({ dbPath });
   void referenceLookup.warmUp();
   void referenceLookupPrefetch.warmUp();
-  app.on('before-quit', () => {
+  app.on('will-quit', () => {
     void referenceLookup.dispose();
     void referenceLookupPrefetch.dispose();
   });
@@ -343,16 +373,16 @@ primaryInstanceReady?.then(async () => {
     projectService,
     notifyReferenceDataChanged,
   );
-  app.on('before-quit', unsubscribeWorkingTMReferenceDataChanges);
+  app.on('will-quit', unsubscribeWorkingTMReferenceDataChanges);
 
-  registerProjectHandlers({ ipcMain, projectService });
+  registerProjectHandlers({ ipcMain: localIpc, projectService });
   const unsubscribeQAInvalidation = projectService.onQAInvalidated((projectId) => {
-    for (const window of BrowserWindow.getAllWindows())
+    for (const window of localWindows())
       window.webContents.send(IPC_CHANNELS.events.qaInvalidated, projectId);
   });
-  app.on('before-quit', unsubscribeQAInvalidation);
+  app.on('will-quit', unsubscribeQAInvalidation);
   registerTMHandlers({
-    ipcMain,
+    ipcMain: localIpc,
     projectService,
     jobManager,
     referenceLookup,
@@ -360,18 +390,18 @@ primaryInstanceReady?.then(async () => {
     notifyReferenceDataChanged,
   });
   registerTBHandlers({
-    ipcMain,
+    ipcMain: localIpc,
     projectService,
     jobManager,
     referenceLookup,
     referenceLookupPrefetch,
     notifyReferenceDataChanged,
   });
-  registerAIHandlers({ ipcMain, projectService, jobManager });
-  registerDialogHandlers({ ipcMain, dialog });
-  registerClipboardHandlers({ ipcMain, clipboard });
-  registerJobHandlers({ ipcMain, jobManager });
-  registerSystemHandlers({ ipcMain, shell });
+  registerAIHandlers({ ipcMain: localIpc, projectService, jobManager });
+  registerDialogHandlers({ ipcMain: localIpc, dialog });
+  registerClipboardHandlers({ ipcMain: localIpc, clipboard });
+  registerJobHandlers({ ipcMain: localIpc, jobManager });
+  registerSystemHandlers({ ipcMain: localIpc, shell });
 
   const appUpdateService = createAppUpdateService({
     appName: 'momoCAT',
@@ -389,20 +419,20 @@ primaryInstanceReady?.then(async () => {
 
   // Listen for progress updates and broadcast to all windows
   projectService.onProgress((data) => {
-    BrowserWindow.getAllWindows().forEach((win) => {
+    localWindows().forEach((win) => {
       win.webContents.send(IPC_CHANNELS.events.appProgress, data);
     });
   });
 
   // Listen for segment updates and broadcast to all windows (batched)
-  const segmentUpdateBatcher = new SegmentUpdateBatcher();
+  const segmentUpdateBatcher = new SegmentUpdateBatcher(localWindows);
   projectService.onSegmentsUpdated((data) => {
     segmentUpdateBatcher.enqueue(data);
   });
 
   // IPC: Job Management
   jobManager.on('progress', (progress) => {
-    BrowserWindow.getAllWindows().forEach((win) => {
+    localWindows().forEach((win) => {
       win.webContents.send(IPC_CHANNELS.events.jobProgress, progress);
     });
   });

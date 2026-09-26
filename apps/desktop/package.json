@@ -78,6 +78,7 @@
     ]
   },
   "dependencies": {
+    "@cat/cloud-contracts": "*",
     "@cat/core": "*",
     "@cat/db": "*",
     "@cat/localization": "*",

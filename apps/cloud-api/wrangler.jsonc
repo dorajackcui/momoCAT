@@ -1,0 +1,19 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "momocat-cloud-v1",
+  "account_id": "7a483170c61a9126f29c1d734ad065bc",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "momocat-cloud-v1",
+      "database_id": "ae059cfc-1862-40a3-8c17-f19370f07f03",
+      "migrations_dir": "migrations",
+    },
+  ],
+}

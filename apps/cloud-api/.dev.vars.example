@@ -1,0 +1,8 @@
+# Set these as Worker secrets with `wrangler secret put NAME` before deployment.
+# Never commit actual values or copy the desktop AI provider keys here.
+BETTER_AUTH_SECRET=
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+BETTER_AUTH_URL=https://momocat-cloud-v1.YOUR_SUBDOMAIN.workers.dev
+# Comma-separated verified GitHub email addresses; empty denies all access.
+ALLOWED_EMAILS=

@@ -10,6 +10,7 @@ export interface IpcMainLike {
 }
 
 export interface IpcMainInvokeEventLike {
+  sender?: { id: number };
   senderFrame?: {
     url: string;
   } | null;

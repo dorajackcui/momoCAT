@@ -110,6 +110,12 @@ Each TM external-file sync value stores the linked file path, reviewed source/ta
 
 AI runtime tuning is deliberately outside SQLite in `ai-runtime.json` next to the resolved user-data database (under `.cat_data/` in source development). Optional proxy values live in `proxy.env`. Neither belongs in tracked documentation or diagnostics.
 
+## Cloud cache format
+
+Cloud project copies retain the local v15 document schema. [CloudProjectSnapshot](../packages/db/src/cloud/CloudProjectSnapshot.ts) exports an explicit column allowlist for a single project and its mounted resources; it never exports `app_settings`. Restoration requires an empty isolated cache and validates table shape, project identity, filenames, and foreign keys. TM/TB FTS rows and stable entry IDs travel with the complete resource set. Isolating the FTS corpus can change BM25 recall ordering compared with a local database containing unrelated resources; identical matching code does not imply identical rankings across different corpora.
+
+Only a cloud cache receives `cloud_outbox` and dirty-tracking triggers. The dirty generation changes in the same SQLite transaction as document, resource, and mount writes. A full upload snapshot, original file chunks, and operation ID persist before transmission; acknowledgement only advances the captured generation, preserving subsequent edits. Cache metadata is scoped by service origin, account, and project. Cloud-side identity, revision comparison, operation deduplication, and immutable blob manifests use separate [D1 migrations](../apps/cloud-api/migrations); they do not change the local schema marker.
+
 ## Required shape vs maintained shape
 
 `REQUIRED_TABLES` and `REQUIRED_COLUMNS` define the base v15 shape that must already exist. Additive structures such as `project_prompts`, `tm_sync_staging`, `ftsRowid`, and performance indexes are created by `applyCurrentSchemaMaintenance()` so current-v15 databases from earlier builds remain usable.

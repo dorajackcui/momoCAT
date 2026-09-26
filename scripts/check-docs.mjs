@@ -25,6 +25,8 @@ const forbiddenGeneratedPaths = ['DOCS/node_modules'];
 const packageManifests = [
   { workspace: 'root', manifest: 'package.json' },
   { workspace: 'apps/cli', manifest: 'apps/cli/package.json' },
+  { workspace: 'apps/cloud-api', manifest: 'apps/cloud-api/package.json' },
+  { workspace: 'packages/cloud-contracts', manifest: 'packages/cloud-contracts/package.json' },
   { workspace: 'apps/desktop', manifest: 'apps/desktop/package.json' },
   { workspace: 'packages/core', manifest: 'packages/core/package.json' },
   { workspace: 'packages/db', manifest: 'packages/db/package.json' },

@@ -1,4 +1,5 @@
 import type { Segment, SegmentStatus, TBMatch, TMEntry, Token } from '@cat/core/models';
+import type { CloudApi } from './cloud';
 import type {
   FileQaReport,
   Project,
@@ -423,7 +424,7 @@ export interface DialogFileFilter {
   extensions: string[];
 }
 
-export interface DesktopApi extends AssetRenameApi, AISettingsApi {
+export interface DesktopApi extends AssetRenameApi, AISettingsApi, CloudApi {
   checkForUpdates: () => Promise<void>;
   openLocalFile: (filePath: string) => Promise<void>;
 

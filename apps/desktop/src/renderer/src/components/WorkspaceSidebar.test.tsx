@@ -142,3 +142,26 @@ describe('WorkspaceSidebar', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 });
+
+it('shows local and cloud projects together without confusing equal internal ids', () => {
+  const callbacks = props();
+  const onOpenCloud = vi.fn();
+  render(
+    <WorkspaceSidebar
+      {...callbacks}
+      view={{ kind: 'project', projectId: 1, cloudId: 'remote-1' }}
+      cloudProjects={[{ id: 'remote-1', name: 'Cloud translation', revision: 3 }]}
+      onOpenCloud={onOpenCloud}
+    />,
+  );
+  const list = screen.getByRole('group', { name: 'Projects list' });
+  expect(within(list).getByRole('button', { name: 'Product localization' })).not.toHaveAttribute(
+    'aria-current',
+  );
+  const cloud = within(list).getByRole('button', { name: 'Cloud translation' });
+  expect(cloud).toHaveAttribute('aria-description', 'Cloud project');
+  expect(cloud).toHaveAttribute('aria-current', 'page');
+  fireEvent.click(cloud);
+  expect(onOpenCloud).toHaveBeenCalledWith('remote-1');
+  expect(callbacks.onNavigate).not.toHaveBeenCalled();
+});

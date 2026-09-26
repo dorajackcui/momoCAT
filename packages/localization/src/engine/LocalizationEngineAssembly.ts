@@ -32,7 +32,7 @@ export function createLocalizationEngineAssembly(
   options: LocalizationEngineConstructorOptions,
 ): LocalizationEngineAssembly {
   const projectRepo = new SqliteProjectRepository(db);
-  const settingsRepo = new SqliteSettingsRepository(db);
+  const settingsRepo = options.settingsRepo ?? new SqliteSettingsRepository(db);
   const tmRepo = new SqliteTMRepository(db);
   const tbRepo = new SqliteTBRepository(db);
   const tmModule = new TMModule({

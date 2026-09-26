@@ -83,6 +83,7 @@ export class ProjectService {
     const tmRepo = new SqliteTMRepository(db);
     const tbRepo = new SqliteTBRepository(db);
     const settingsRepo = new SqliteSettingsRepository(db);
+    const aiSettingsRepo = deps.settingsRepo ?? settingsRepo;
     const tx = new SqliteTransactionManager(db);
 
     const filter = deps.filter ?? new SpreadsheetFilter();
@@ -143,7 +144,7 @@ export class ProjectService {
       new AIModule(
         projectRepo,
         segmentRepo,
-        settingsRepo,
+        aiSettingsRepo,
         this.segmentService,
         aiTransport,
         new ProxySettingsManager(),
@@ -153,6 +154,7 @@ export class ProjectService {
           tbService,
         },
         new LocalizationEngine(db, {
+          settingsRepo: aiSettingsRepo,
           dbPath,
           aiTransport,
           aiRuntimeConfigProvider,

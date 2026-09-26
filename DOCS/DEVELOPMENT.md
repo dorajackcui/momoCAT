@@ -25,6 +25,20 @@ npm run build:cli
 npm --silent run cli -- --help
 ```
 
+## Cloud experiment deployment
+
+Cloud V1 uses real Cloudflare Workers and D1, with Better Auth and GitHub OAuth. The experiment uses the Workers Free plan and stores file/snapshot chunks privately in D1, so R2 activation and payment details are unnecessary. There is no production fallback to a simulated backend. The desktop and CLI keep their pinned Node version; the cloud deployment tool requires Node 22 or newer. Run the cloud workspace commands from a Node 22 shell without changing the desktop runtime pin.
+
+1. Create a dedicated D1 database on the free plan; configure its identifier and account in [wrangler.jsonc](../apps/cloud-api/wrangler.jsonc). Keep the database accessible only through the authenticated Worker routes.
+2. Register a GitHub OAuth application with homepage `https://<worker>.workers.dev` and callback `https://<worker>.workers.dev/api/auth/callback/github`.
+3. Use `wrangler secret put <NAME>` from `apps/cloud-api` for `BETTER_AUTH_SECRET` (at least 32 random bytes), `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `BETTER_AUTH_URL`, and `ALLOWED_EMAILS`. The last value is a comma-separated list of invited verified GitHub emails; an empty list denies access. See [.dev.vars.example](../apps/cloud-api/.dev.vars.example). Do not commit secrets or enable Worker request-body logging.
+4. Run `npm run db:apply --workspace=apps/cloud-api`, then `npm run deploy --workspace=apps/cloud-api`. Apply migrations only to the dedicated experiment database. `npm run deploy:check --workspace=apps/cloud-api` bundles and validates configuration without deploying; it does not prove login or remote storage works.
+5. Set `MOMOCAT_CLOUD_URL` to the deployed HTTPS origin before starting the desktop. Use two isolated `MOMOCAT_USER_DATA_DIR` directories for a same-machine two-client check; actual Windows/macOS validation remains a separate requirement. Sign in and choose Cloud in the existing New project dialog. Add synthetic files/resources, edit locally, verify the remote version does not change until Save to cloud, then open or Get latest in the second client. Also verify stale uploads and pulling over unpublished edits are rejected. The server requires `mode: relay` for create/commit; the earlier automatic-sync prototype must be updated before writing. Existing versioned manifests remain readable.
+
+The experiment limits each account to ten projects and 64 MiB of reserved immutable blobs, with a 128 MiB reservation limit across the dedicated database. The 4 MiB transport chunks are stored as smaller base64-encoded D1 rows; all parts and their ready marker commit atomically. These limits leave space for encoding and database overhead but do not replace Cloudflare's storage, daily query, or Worker CPU limits. Old blobs and abandoned reservations count toward the limit; V1 has no automatic garbage collection. Keep experiments small until retention and incremental document synchronization are implemented. D1 storage timings do not represent a future object-storage deployment.
+
+Cloud validation includes `npm run typecheck --workspace=apps/cloud-api`, Worker bundle validation, adjacent protocol/storage tests, desktop IPC/cache tests, and the desktop checks below. Test doubles exist only in tests. A passing local test or deployment dry run must not be reported as a real-service or cross-platform result.
+
 ## Cross-platform development
 
 At the start of a task, identify the actual host instead of inferring it from path examples or the developer's other machine:

@@ -11,7 +11,7 @@ import type {
 } from './modules/ProjectReferenceFileOperations';
 import type { TBModule } from './modules/TBModule';
 import type { TMModule } from './modules/TMModule';
-import type { AIRuntimeConfigProvider, AITransport, SpreadsheetGateway } from './ports';
+import type { AIRuntimeConfigProvider, AITransport, SpreadsheetGateway, SettingsRepository } from './ports';
 
 export interface ImportProgress {
   current: number;
@@ -20,6 +20,7 @@ export interface ImportProgress {
 }
 
 export interface ProjectServiceDependencies {
+  settingsRepo?: SettingsRepository;
   filter?: SpreadsheetGateway;
   tmService?: TMService;
   tbService?: TBService;

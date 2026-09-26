@@ -1,5 +1,6 @@
 import type { DesktopApi } from '../../shared/ipc';
 import { createAppApi } from './appApi';
+import { createCloudApi } from './cloudApi';
 import { createAIApi } from './aiApi';
 import { createClipboardApi } from './clipboardApi';
 import { createDialogApi } from './dialogApi';
@@ -12,6 +13,7 @@ import type { IpcRendererLike } from './types';
 
 export function createDesktopApi(ipcRenderer: IpcRendererLike): DesktopApi {
   return {
+    ...createCloudApi(ipcRenderer),
     ...createAppApi(ipcRenderer),
     ...createProjectApi(ipcRenderer),
     ...createTMApi(ipcRenderer),

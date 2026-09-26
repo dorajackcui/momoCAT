@@ -1,10 +1,11 @@
 import { useCallback, useRef, useState } from 'react';
 import { feedbackService } from '../services/feedbackService';
 
-export type WorkspaceView =
+export type WorkspaceView = (
   | { kind: 'home' | 'tm' | 'tb' | 'settings' }
   | { kind: 'project'; projectId: number }
-  | { kind: 'editor'; projectId: number; fileId: number };
+  | { kind: 'editor'; projectId: number; fileId: number }
+) & { cloudId?: string };
 
 export type WorkspaceNavigationGuard = () => Promise<boolean>;
 

@@ -3,7 +3,11 @@
   "ignorePatterns": ["**/dist/**", "**/out/**", "**/build/**", "**/node_modules/**"],
   "overrides": [
     {
-      "files": ["packages/**/*.{ts,tsx}", "apps/cli/src/**/*.{ts,tsx}"],
+      "files": [
+        "packages/**/*.{ts,tsx}",
+        "apps/cli/src/**/*.{ts,tsx}",
+        "apps/cloud-api/src/**/*.ts"
+      ],
       "parser": "@typescript-eslint/parser",
       "plugins": ["@typescript-eslint"],
       "extends": ["eslint:recommended"],

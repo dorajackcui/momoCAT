@@ -2,7 +2,7 @@
 
 ## System shape
 
-momoCAT is a monorepo with two application surfaces and three shared packages:
+momoCAT is a monorepo with desktop and CLI surfaces, an experimental cloud API, and shared packages:
 
 ```text
 apps/cli ───────────> @cat/localization ─────> @cat/db ─────> @cat/core
@@ -12,9 +12,13 @@ apps/cli ───────────> @cat/localization ─────> @
 apps/desktop ───────> @cat/localization
        │────────────> @cat/db
        └────────────> @cat/core
+
+apps/desktop ───────> @cat/cloud-contracts <────── apps/cloud-api
 ```
 
 The CLI is deliberately thin. The desktop is a richer application host and currently consumes all three shared packages directly. Shared headless behavior belongs in `@cat/localization`; desktop-only UI and lifecycle behavior belongs under `apps/desktop`.
+
+`apps/cloud-api` owns Better Auth login, account authorization, project revisions with conditional commits, and private D1 storage. The experiment stores immutable file/snapshot chunks through [D1BlobStore](../apps/cloud-api/src/D1BlobStore.ts), keeping the client protocol independent of that storage choice. It does not run native SQLite or TM/TB matching. `packages/cloud-contracts` owns the bounded cloud transport format. Local projects do not depend on a cloud account or a network connection.
 
 ## Workspace ownership
 

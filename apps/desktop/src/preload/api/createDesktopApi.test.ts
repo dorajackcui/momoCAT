@@ -5,6 +5,26 @@ import { createDesktopApi } from './createDesktopApi';
 import type { IpcRendererLike } from './types';
 
 describe('createDesktopApi smoke', () => {
+  it('forwards cloud commands without exposing the session token', async () => {
+    const invoke = vi.fn().mockResolvedValue(undefined);
+    const on = vi.fn();
+    const removeListener = vi.fn();
+    const api = createDesktopApi({ invoke, on, removeListener } as unknown as IpcRendererLike);
+    await api.cloudCreateProject('New cloud', 'en', 'zh', 'translation');
+    await api.cloudOpenProject('cloud-id');
+    await api.cloudSync();
+    expect(invoke.mock.calls).toEqual([
+      ['cloud-create-project', 'New cloud', 'en', 'zh', 'translation'],
+      ['cloud-open-project', 'cloud-id', undefined],
+      ['cloud-sync'],
+    ]);
+    const callback = vi.fn();
+    const unsubscribe = api.onCloudCloseRequested(callback);
+    on.mock.calls[0][1]();
+    expect(callback).toHaveBeenCalledOnce();
+    unsubscribe();
+    expect(removeListener).toHaveBeenCalledWith('cloud-close-requested', on.mock.calls[0][1]);
+  });
   it('forwards selected segment updates through the typed bridge', async () => {
     const invoke = vi.fn().mockResolvedValue([]);
     const api = createDesktopApi({ invoke } as unknown as IpcRendererLike);
