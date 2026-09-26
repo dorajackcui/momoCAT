@@ -72,36 +72,3 @@ export interface TextPromptBundle {
   sourcePayload: string;
   sections: TextPromptSections;
 }
-
-export interface DialoguePromptSegment {
-  id: string;
-  speaker: string;
-  sourcePayload: string;
-  tmReference?: PromptTMReference;
-  tmReferences?: PromptTMReference[];
-  concordanceReferences?: PromptConcordanceReference[];
-  tbReferences?: PromptTBReference[];
-}
-
-export interface DialoguePromptPreviousGroup {
-  speaker: string;
-  sourceText: string;
-  targetText: string;
-}
-
-export interface DialogueUserPromptBuildParams {
-  srcLang: string;
-  tgtLang: string;
-  segments: DialoguePromptSegment[];
-  previousGroup?: DialoguePromptPreviousGroup;
-  validationFeedback?: string;
-}
-
-export interface DialoguePromptBundleBuildParams extends DialogueUserPromptBuildParams {
-  projectPrompt?: string;
-}
-
-export interface DialoguePromptBundle {
-  systemPrompt: string;
-  userPrompt: string;
-}

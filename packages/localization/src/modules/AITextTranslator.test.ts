@@ -1,11 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AITransport } from '../../ports';
 import type { Segment } from '@cat/core/models';
-import type { Project } from '@cat/core/project';
 import { evaluateSegmentQa } from '@cat/core/qa';
 import { parseDisplayTextToTokens, serializeTokensToEditorText } from '@cat/core/tag';
 import { AITextTranslator } from './AITextTranslator';
-import { translateDialogueUnit } from './dialogueTranslation';
 
 const cases = [
   ['missing', '{name}', 'Texte'],
@@ -39,39 +36,6 @@ function textParams(segment: Segment, source: string) {
     tgtLang: 'fr',
   };
 }
-function dialogueParams(segment: Segment, transport: AITransport) {
-  return {
-    ...connection,
-    projectId: 1,
-    project: {
-      id: 1,
-      uuid: 'project',
-      name: 'Test',
-      srcLang: 'en',
-      tgtLang: 'fr',
-      createdAt: '',
-      updatedAt: '',
-    } as Project,
-    runtimeConfig: { reasoningEffort: 'medium' as const },
-    unit: {
-      speaker: 'Speaker',
-      speakerKey: 'speaker',
-      charCount: 10,
-      segments: [
-        {
-          segment,
-          speaker: 'Speaker',
-          speakerKey: 'speaker',
-          sourceText: 'Text',
-          sourcePayload: serializeTokensToEditorText(segment.sourceTokens, segment.sourceTokens),
-        },
-      ],
-    },
-    transport,
-    tagPolicy: 'default' as const,
-    resolveTranslationPromptReferences: async () => ({}),
-  };
-}
 describe.each(cases)('AI output with tag %s findings', (_name, source, output) => {
   it.each(['translate', 'refine'])('returns %s output without QA retry', async (flow) => {
     const segment = row(source);
@@ -88,24 +52,8 @@ describe.each(cases)('AI output with tag %s findings', (_name, source, output) =
     expect(transport.createResponse).toHaveBeenCalledOnce();
     expect(evaluateSegmentQa({ ...segment, targetTokens }).length).toBeGreaterThan(0);
   });
-  it('returns the dialogue unit without retrying QA findings', async () => {
-    const segment = row(source);
-    const transport = {
-      testConnection: vi.fn(),
-      createResponse: vi
-        .fn()
-        .mockResolvedValue(
-          response(JSON.stringify({ translations: [{ id: 'row', text: output }] })),
-        ),
-    };
-    const result = await translateDialogueUnit(dialogueParams(segment, transport));
-    expect(transport.createResponse).toHaveBeenCalledOnce();
-    expect(
-      evaluateSegmentQa({ ...segment, targetTokens: result.updates[0].targetTokens }).length,
-    ).toBeGreaterThan(0);
-  });
 });
-it.each(['translation', 'review', 'custom'] as const)(
+it.each(['translation', 'custom'] as const)(
   'does not retry missing tags in %s projects',
   async (projectType) => {
     const segment = row('{name}');
@@ -120,18 +68,3 @@ it.each(['translation', 'review', 'custom'] as const)(
     expect(transport.createResponse).toHaveBeenCalledOnce();
   },
 );
-it('retains dialogue retries for malformed response JSON', async () => {
-  const segment = row('Text');
-  const transport = {
-    testConnection: vi.fn(),
-    createResponse: vi
-      .fn()
-      .mockResolvedValueOnce(response('invalid JSON'))
-      .mockResolvedValueOnce(
-        response(JSON.stringify({ translations: [{ id: 'row', text: 'Texte' }] })),
-      ),
-  };
-  const result = await translateDialogueUnit(dialogueParams(segment, transport));
-  expect(transport.createResponse).toHaveBeenCalledTimes(2);
-  expect(result.updates).toHaveLength(1);
-});

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CATDatabase } from '../../db/src';
 import { LocalizationEngine } from './LocalizationEngine';
-import type { LocalizationTargetScope, TranslateFileJobOptions } from './types';
+import type { LocalizationTargetBaseline, TranslateFileJobOptions } from './types';
 
 const runDynamic = process.env.LOCALIZATION_ENGINE_FILE_DYNAMIC === '1';
 const maybeIt = runDynamic ? it : it.skip;
@@ -108,7 +108,7 @@ describe('LocalizationEngine CLI file runner', () => {
     const projectId = Number(requireEnv('LOCALIZATION_ENGINE_PROJECT_ID'));
     const inputPath = requireEnv('LOCALIZATION_ENGINE_INPUT_PATH');
     const outputPath = requireEnv('LOCALIZATION_ENGINE_OUTPUT_PATH');
-    const targetScope = process.env.LOCALIZATION_ENGINE_TARGET_SCOPE;
+    const targetBaseline = process.env.LOCALIZATION_ENGINE_TARGET_BASELINE;
     const db = new CATDatabase(dbPath);
 
     try {
@@ -117,7 +117,7 @@ describe('LocalizationEngine CLI file runner', () => {
         projectId,
         inputPath,
         outputPath,
-        options: targetScope ? { targetScope: targetScope as LocalizationTargetScope } : undefined,
+        options: targetBaseline ? { targetBaseline: targetBaseline as LocalizationTargetBaseline } : undefined,
         job: buildTranslateFileJobFromEnv(process.env),
       });
 

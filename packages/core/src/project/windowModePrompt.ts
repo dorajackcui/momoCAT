@@ -21,7 +21,7 @@ function trimOptional(value: string | undefined): string {
 function getWindowModeProjectType(
   projectType: WindowModePromptBundleBuildParams["projectType"],
 ): WindowModeProjectType {
-  if (projectType === "review" || projectType === "custom") {
+  if (projectType === "custom") {
     return projectType;
   }
   return "translation";
@@ -79,16 +79,20 @@ function buildSystemPrompt(params: WindowModePromptBundleBuildParams): string {
 }
 
 function buildBatchBlock(params: WindowModePromptBundleBuildParams): string {
+  const translationProject = isTranslationProject(params);
   if (getRequestMode(params.requestMode) === "window-partial") {
     return [
-      `Batch: partial window request from ${params.srcLang} to ${params.tgtLang}.`,
+      translationProject
+        ? `Batch: partial window request from ${params.srcLang} to ${params.tgtLang}.`
+        : "Batch: partial window processing request.",
       `Return target text for ids: ${params.currentSegments.map((segment) => segment.id).join(", ")}`,
     ].join("\n");
   }
 
-  const action = isTranslationProject(params) ? "translate" : "process";
   return [
-    `Batch: ${action} ${params.currentSegments.length} current segment(s) from ${params.srcLang} to ${params.tgtLang}.`,
+    translationProject
+      ? `Batch: translate ${params.currentSegments.length} current segment(s) from ${params.srcLang} to ${params.tgtLang}.`
+      : `Batch: process ${params.currentSegments.length} current segment(s).`,
     `Current ids: ${params.currentSegments.map((segment) => segment.id).join(", ")}`,
   ].join("\n");
 }
@@ -227,13 +231,16 @@ function buildTBReferenceBlock(segments: WindowModeCurrentSegment[]): string {
 
 function buildPreviousContextBlock(
   rows: WindowModePromptBundleBuildParams["previousContext"],
+  projectType: WindowModePromptBundleBuildParams["projectType"],
 ): string {
   if (!rows || rows.length === 0) {
     return "";
   }
 
   return [
-    "Previous 5 translated rows",
+    isTranslationProject({ projectType })
+      ? "Previous 5 translated rows"
+      : "Previous 5 processed rows",
     ...rows.map((row, index) => `${index + 1}. ${row.source} -> ${row.target}`),
   ].join("\n");
 }
@@ -341,7 +348,7 @@ export function buildAIWindowModePromptBundle(
     referencePromptBlock: "",
     previousContextBlock:
       requestMode === "window"
-        ? buildPreviousContextBlock(params.previousContext)
+        ? buildPreviousContextBlock(params.previousContext, params.projectType)
         : readOnlyContextBlock,
     nextContextBlock:
       requestMode === "window" ? buildNextContextBlock(params.nextContext) : "",

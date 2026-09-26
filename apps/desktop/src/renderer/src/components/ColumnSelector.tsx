@@ -27,26 +27,13 @@ export function ColumnSelector({
   const [tagPolicy, setTagPolicy] = useState<TagPolicy>('default');
   const wasOpenRef = useRef(isOpen);
 
-  const isReviewProject = projectType === 'review';
   const isCustomProject = projectType === 'custom';
-  const sourceLabel = isReviewProject
-    ? 'Translation Column'
-    : isCustomProject
-      ? 'Input Column'
-      : 'Source Column';
-  const targetLabel = isReviewProject
-    ? 'Review Output Column'
-    : isCustomProject
-      ? 'Output Column'
-      : 'Target Column';
-  const contextLabel = isReviewProject
-    ? 'Original Column'
-    : isCustomProject
-      ? 'Context Column'
-      : 'Comment/Context Column';
-  const sourceTagLabel = isReviewProject ? 'Translation' : isCustomProject ? 'Input' : 'Source';
-  const targetTagLabel = isReviewProject ? 'Review Output' : isCustomProject ? 'Output' : 'Target';
-  const contextTagLabel = isReviewProject ? 'Original' : 'Context';
+  const sourceLabel = isCustomProject ? 'Input Column' : 'Source Column';
+  const targetLabel = isCustomProject ? 'Output Column' : 'Target Column';
+  const contextLabel = isCustomProject ? 'Context Column' : 'Comment/Context Column';
+  const sourceTagLabel = isCustomProject ? 'Input' : 'Source';
+  const targetTagLabel = isCustomProject ? 'Output' : 'Target';
+  const contextTagLabel = 'Context';
 
   const maxCols = previewData.length > 0 ? previewData[0].length : 0;
   const colIndexes = Array.from({ length: maxCols }, (_, i) => i);
@@ -64,8 +51,6 @@ export function ColumnSelector({
     const defaultContextCol = resolveDefaultContextColumn({
       hasHeader,
       previewData,
-      projectType,
-      sourceCol,
     });
     if (defaultContextCol === undefined) return;
 
@@ -83,11 +68,9 @@ export function ColumnSelector({
       closeOnBackdrop={false}
       title="Import Configuration"
       description={
-        isReviewProject
-          ? 'Select translation/original/output columns for AI review'
-          : isCustomProject
-            ? 'Select input/context/output columns for AI custom processing'
-            : 'Select the columns to import from your spreadsheet'
+        isCustomProject
+          ? 'Select input/context/output columns for AI custom processing'
+          : 'Select the columns to import from your spreadsheet'
       }
       size="xl"
       footer={
@@ -101,7 +84,7 @@ export function ColumnSelector({
                 hasHeader,
                 sourceCol,
                 targetCol,
-                contextCol: isReviewProject ? (contextCol ?? 0) : contextCol,
+                contextCol,
                 tagPolicy,
               })
             }
@@ -158,19 +141,17 @@ export function ColumnSelector({
           </label>
           <Select
             size="compact"
-            value={
-              contextCol === undefined ? (isReviewProject ? (colIndexes[0] ?? 0) : -1) : contextCol
-            }
+            value={contextCol === undefined ? -1 : contextCol}
             onChange={(e) => {
               const val = parseInt(e.target.value, 10);
-              if (!isReviewProject && val === -1) {
+              if (val === -1) {
                 setContextCol(undefined);
                 return;
               }
               setContextCol(val);
             }}
           >
-            {!isReviewProject && <option value={-1}>None (Ignore)</option>}
+            <option value={-1}>None (Ignore)</option>
             {colIndexes.map((i) => (
               <option key={i} value={i}>
                 Column {XLSX_COL_NAME(i)}

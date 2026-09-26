@@ -1,29 +1,17 @@
 import type { Segment } from '@cat/core/models';
 import type { CancellationToken, LocalizationEngine } from '@cat/localization';
-import type {
-  AITranslateFileOptions as DesktopAITranslateFileOptions,
-  AIBatchTargetBaseline,
-} from '../../../../shared/ipc';
+import type { AITranslateFileOptions as DesktopAITranslateFileOptions } from '../../../../shared/ipc';
 import { parseAITranslationSegmentIds } from '../../../../shared/aiTranslationScope';
 import { resolveFileTagPolicy } from '../../../../shared/fileTagPolicy';
-import type {
-  AIRuntimeConfigProvider,
-  AITransport,
-  ProjectRepository,
-  SegmentRepository,
-} from '../../ports';
+import type { AIRuntimeConfigProvider, ProjectRepository, SegmentRepository } from '../../ports';
 import { SegmentService } from '../../SegmentService';
-import { resolveTranslationPromptReferences } from './promptReferences';
-import type { PromptReferenceResolvers, TranslationPromptReferences } from './types';
+import { resolveTranslationPromptReferences } from '@cat/localization';
+import type { PromptReferenceResolvers, TranslationPromptReferences } from '@cat/localization';
 import { AIProviderCatalogService } from './AIProviderCatalogService';
-import { AITextTranslator } from './AITextTranslator';
+import { AITextTranslator } from '@cat/localization';
 import { SegmentPagingIterator } from './SegmentPagingIterator';
-import { resolveBatchTargetScope } from './translationTargetScope';
-import { runDialogueFileTranslation } from './dialogueTranslationWorkflow';
-import { runStandardFileTranslation } from './fileTranslationWorkflow';
 import { runLocalizationFileTranslation } from './localizationFileTranslationWorkflow';
 import {
-  buildSegmentWorkflowDeps,
   createSegmentOperationLock,
   runSegmentRefinement,
   runSegmentTranslation,
@@ -37,15 +25,12 @@ export interface AITranslateFileOptions extends DesktopAITranslateFileOptions {
 }
 
 export class AITranslationOrchestrator {
-  private static readonly TRANSLATION_INTERVAL_MS = 40;
-  private static readonly STANDARD_FILE_TRANSLATION_CONCURRENCY = 4;
   private readonly segmentWorkflow = createSegmentOperationLock();
 
   constructor(
     private readonly projectRepo: ProjectRepository,
     private readonly segmentRepo: SegmentRepository,
     private readonly segmentService: SegmentService,
-    private readonly transport: AITransport,
     private readonly aiRuntimeConfigProvider: AIRuntimeConfigProvider,
     private readonly providerCatalogService: AIProviderCatalogService,
     private readonly textTranslator: AITextTranslator,
@@ -66,80 +51,23 @@ export class AITranslationOrchestrator {
     if (!project) throw new Error('Project not found');
 
     const segmentIds = parseAITranslationSegmentIds(options?.segmentIds);
-    if (
-      segmentIds &&
-      ((project.projectType || 'translation') !== 'translation' ||
-        options?.mode === 'dialogue' ||
-        !this.localizationEngine)
-    ) {
-      throw new Error('Filtered AI translation requires the window translation workflow.');
+    if (!this.localizationEngine) {
+      throw new Error('File translation requires the shared localization engine.');
     }
 
-    const tagPolicy = resolveFileTagPolicy(file);
-    const { provider, apiKey } = this.providerCatalogService.resolveProviderConfig(
-      options?.model ?? project.aiModel,
-    );
-    const runtimeConfig = await this.aiRuntimeConfigProvider.getModelConfig(provider.model);
-    const targetScope = resolveBatchTargetScope(options?.targetScope);
-
-    if ((project.projectType || 'translation') === 'translation' && options?.mode === 'dialogue') {
-      return runDialogueFileTranslation({
-        fileId,
-        project,
-        apiKey,
-        baseUrl: provider.baseUrl,
-        model: provider.model,
-        runtimeConfig,
-        tagPolicy,
-        targetScope,
-        transport: this.transport,
-        textTranslator: this.textTranslator,
-        segmentService: this.segmentService,
-        segmentPagingIterator: this.segmentPagingIterator,
-        resolveTranslationPromptReferences: (projectId, segment) =>
-          this.resolveTranslationPromptReferences(projectId, segment),
-        onProgress: options?.onProgress,
-        intervalMs: AITranslationOrchestrator.TRANSLATION_INTERVAL_MS,
-        cancellationToken: options?.cancellationToken,
-      });
-    }
-
-    if ((project.projectType || 'translation') === 'translation' && this.localizationEngine) {
-      return runLocalizationFileTranslation({
-        fileId,
-        fileName: file.name,
-        segmentIds,
-        project,
-        targetBaseline: resolveTargetBaseline(options),
-        tagPolicy,
-        providerId: options?.model ?? project.aiModel,
-        localizationEngine: this.localizationEngine,
-        segmentPagingIterator: this.segmentPagingIterator,
-        segmentService: this.segmentService,
-        onProgress: options?.onProgress,
-        translationAuditFlush: this.translationAuditFlush,
-        cancellationToken: options?.cancellationToken,
-      });
-    }
-
-    return runStandardFileTranslation({
+    return runLocalizationFileTranslation({
       fileId,
-      projectId: file.projectId,
+      fileName: file.name,
+      segmentIds,
       project,
-      apiKey,
-      baseUrl: provider.baseUrl,
-      model: provider.model,
-      runtimeConfig,
-      tagPolicy,
-      targetScope,
+      targetBaseline: options?.targetBaseline ?? 'use-current-targets',
+      tagPolicy: resolveFileTagPolicy(file),
+      providerId: options?.model ?? project.aiModel,
+      localizationEngine: this.localizationEngine,
       segmentPagingIterator: this.segmentPagingIterator,
-      textTranslator: this.textTranslator,
       segmentService: this.segmentService,
-      resolveTranslationPromptReferences: (projectId, segment) =>
-        this.resolveTranslationPromptReferences(projectId, segment),
       onProgress: options?.onProgress,
-      intervalMs: AITranslationOrchestrator.TRANSLATION_INTERVAL_MS,
-      maxConcurrency: AITranslationOrchestrator.STANDARD_FILE_TRANSLATION_CONCURRENCY,
+      translationAuditFlush: this.translationAuditFlush,
       cancellationToken: options?.cancellationToken,
     });
   }
@@ -184,16 +112,16 @@ export class AITranslationOrchestrator {
   }
 
   private createSegmentWorkflowDeps() {
-    return buildSegmentWorkflowDeps({
+    return {
       projectRepo: this.projectRepo,
       segmentRepo: this.segmentRepo,
       segmentService: this.segmentService,
       providerCatalogService: this.providerCatalogService,
       aiRuntimeConfigProvider: this.aiRuntimeConfigProvider,
       textTranslator: this.textTranslator,
-      resolveTranslationPromptReferences: (projectId, segment) =>
+      resolveTranslationPromptReferences: (projectId: number, segment: Segment) =>
         this.resolveTranslationPromptReferences(projectId, segment),
-    });
+    };
   }
 
   private async resolveTranslationPromptReferences(
@@ -206,14 +134,4 @@ export class AITranslationOrchestrator {
       resolvers: this.promptReferenceResolvers,
     });
   }
-}
-
-function resolveTargetBaseline(options: AITranslateFileOptions | undefined): AIBatchTargetBaseline {
-  if (options?.targetBaseline) {
-    return options.targetBaseline;
-  }
-
-  return options?.targetScope === 'overwrite-non-confirmed'
-    ? 'ignore-current-targets'
-    : 'use-current-targets';
 }

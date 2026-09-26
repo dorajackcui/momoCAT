@@ -20,21 +20,6 @@ export interface MTModuleDependencies {
   aiTransport: AITransport;
 }
 
-export interface ComposePromptInput {
-  unitId: string;
-  project: Project;
-  segment: Segment;
-  tm: TMArtifact;
-  tb: TBArtifact;
-  tagPolicy?: TagPolicy;
-  mtOptions?: LocalizationMTOptions;
-  providerOverride?: string;
-  projectPromptOverride?: string;
-  context?: string;
-  currentTranslationPayload?: string;
-  refinementInstruction?: string;
-}
-
 export interface MTBatchCurrentUnitInput {
   responseId: string;
   documentId: string;
@@ -79,15 +64,6 @@ export interface PromptMTConfig {
   reasoningEffort: ReasoningEffort;
 }
 
-export interface PreparedPromptInput extends ComposePromptInput {
-  baseUrl: string;
-  model: string;
-  reasoningEffort?: ReasoningEffort;
-  srcLang: string;
-  tgtLang: string;
-  provider?: ResolvedAIProviderConfig['provider'];
-}
-
 export interface PreparedBatchPromptInput extends ComposeBatchPromptInput {
   baseUrl: string;
   model: string;
@@ -98,17 +74,8 @@ export interface PreparedBatchPromptInput extends ComposeBatchPromptInput {
   audit?: TranslationAuditContext;
 }
 
-export interface TranslatePreparedPromptInput extends PreparedPromptInput {
-  apiKey: string;
-}
-
 export interface TranslatePreparedBatchPromptInput extends PreparedBatchPromptInput {
   apiKey: string;
-}
-
-export interface MTTranslateResult {
-  targetTokens: Segment['targetTokens'];
-  prompt: PromptArtifact;
 }
 
 export interface MTBatchUnitResult {

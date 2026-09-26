@@ -220,6 +220,8 @@ describe('IPC argument boundaries', () => {
     [ai.translateFile, [NaN, {}]],
     [ai.translateFile, [1, []]],
     [ai.translateFile, [1, { mode: 'unknown' }]],
+    [ai.translateFile, [1, { mode: 'dialogue' }]],
+    [project.create, ['Project', 'en', 'zh', 'review']],
     [ai.translateFile, [1, { targetScope: null }]],
     [ai.translateFile, [1, { targetBaseline: false }]],
     [ai.cancelFileJob, ['']],
@@ -241,7 +243,7 @@ describe('IPC argument boundaries', () => {
 describe('valid IPC payload compatibility', () => {
   it.each([
     [project.create, 'createProject', ['Project', 'en', 'zh'], ['Project', 'en', 'zh', undefined]],
-    [project.create, 'createProject', ['Project', 'en', 'zh', 'review']],
+    [project.create, 'createProject', ['Project', 'en', 'zh', 'custom']],
     [project.create, 'createProject', ['Project', 'en', 'zh', 'custom']],
     [project.updateAISettings, 'updateProjectAISettings', [1, null, null]],
     [project.updatePrompt, 'updateProjectPrompt', [1, '']],

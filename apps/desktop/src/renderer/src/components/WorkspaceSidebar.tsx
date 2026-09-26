@@ -52,7 +52,6 @@ function persistWorkspaceSidebarPreferences(preferences: WorkspaceSidebarPrefere
 
 const projectTypeLabels: Record<ProjectType, string> = {
   translation: 'Translation',
-  review: 'Review',
   custom: 'Custom',
 };
 

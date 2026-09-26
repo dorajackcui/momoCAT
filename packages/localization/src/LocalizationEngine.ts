@@ -5,26 +5,18 @@ import {
   createLocalizationEngineAssembly,
   type LocalizationEngineAssembly,
 } from './engine/LocalizationEngineAssembly';
+import { mergeMTOptions, normalizeWindowJobOptions } from './engine/localizationEngineOptions';
 import {
-  mergeMTOptions,
-  normalizeWindowJobOptions,
-  resolveLocalizationMode,
-} from './engine/localizationEngineOptions';
-import {
-  prepareExternalTranslationUnit,
   prepareJobTranslationUnit,
   unitResultToPublicResult,
 } from './engine/LocalizationUnitPreparation';
 import { translateSpreadsheetFileJob } from './fileTranslationJobAdapter';
 import { translateProjectSegmentsJob } from './projectSegmentJobAdapter';
-import { translateSpreadsheetFile } from './spreadsheetFileAdapter';
 import { RuntimeTMContext, RuntimeTMReferenceResolver } from './runtimeTm';
 import { resolveTagPolicy } from './tagPolicy';
-import { resolveBatchTargetScope } from './translationTargetScope';
 import { unitKey } from './requestModes/shared/unitIdentity';
 import type { RequestModeReferenceResolver } from './requestModes/shared/references';
 import {
-  buildTranslateUnitsResult,
   jobUnitToExternalUnit,
   toArtifactRecord,
   toUnitResult,
@@ -41,12 +33,9 @@ import type {
 import type {
   LocalizationEngineConstructorOptions,
   LocalizationEngineProfile,
-  LocalizationTargetScope,
   TranslateFileInput,
   TranslateFileResult,
   TranslateProjectSegmentsInput,
-  TranslateUnitResult,
-  TranslateUnitsInput,
   TranslateUnitsResult,
 } from './types';
 
@@ -117,74 +106,6 @@ export class LocalizationEngine {
     };
   }
 
-  public async translateUnits(input: TranslateUnitsInput): Promise<TranslateUnitsResult> {
-    const project = this.assembly.projectRepo.getProject(input.projectId);
-    if (!project) {
-      throw new Error(`Project not found: ${input.projectId}`);
-    }
-
-    const mode = resolveLocalizationMode(input.options?.mode, this.options);
-    if (mode === 'dialogue') {
-      throw new Error('Dialogue mode is not supported for external translation units.');
-    }
-
-    const targetScope = resolveBatchTargetScope(
-      input.options?.targetScope ?? this.options.defaultTargetScope,
-    ) as LocalizationTargetScope;
-    const tagPolicy = resolveTagPolicy(input.options?.tagPolicy);
-    const maxConcurrency = input.options?.maxConcurrency ?? this.options.maxConcurrency;
-    const preparedUnits = input.units.map((unit, index) =>
-      prepareExternalTranslationUnit(unit, index, project, targetScope, tagPolicy),
-    );
-    const hasTranslatableUnits = preparedUnits.some((prepared) => prepared.kind === 'translatable');
-
-    if (!hasTranslatableUnits) {
-      return buildTranslateUnitsResult(
-        preparedUnits.map((prepared) => {
-          if (prepared.kind !== 'skipped') {
-            throw new Error('Unexpected translatable unit in skip-only batch.');
-          }
-          return prepared.result;
-        }),
-      );
-    }
-
-    const mtOptions = mergeMTOptions(this.options.mt, input.options?.mt);
-    const mtConfig = await this.assembly.mtModule.resolveConfig(
-      project,
-      mtOptions,
-      input.options?.providerOverride,
-    );
-
-    const translatableUnits = preparedUnits.flatMap((prepared) =>
-      prepared.kind === 'translatable' ? [{ unit: prepared.unit, segment: prepared.segment }] : [],
-    );
-    const translated = await this.assembly.legacyStrategy.translateUnits({
-      project,
-      mtConfig,
-      mtOptions,
-      tagPolicy,
-      includeReferences: Boolean(input.options?.includeReferences),
-      maxConcurrency,
-      units: translatableUnits,
-    });
-    const translatedResults = [...translated.results];
-    const results = preparedUnits.map((prepared): TranslateUnitResult => {
-      if (prepared.kind === 'skipped') {
-        return prepared.result;
-      }
-
-      const translatedResult = translatedResults.shift();
-      if (!translatedResult) {
-        throw new Error(`Legacy MT strategy did not return a result for unit: ${prepared.unit.id}`);
-      }
-
-      return translatedResult;
-    });
-
-    return buildTranslateUnitsResult(results);
-  }
-
   public createTaskExecutor(
     options: LocalizationTaskExecutorOptions = {},
   ): TranslationTaskExecutor {
@@ -202,10 +123,6 @@ export class LocalizationEngine {
     }
 
     const translationOptions = context.job.translationOptions;
-    const mode = resolveLocalizationMode(translationOptions?.mode, this.options);
-    if (mode === 'dialogue') {
-      throw new Error('Dialogue mode is not supported for external translation units.');
-    }
 
     const tagPolicy = resolveTagPolicy(translationOptions?.tagPolicy);
     const preparedUnits = task.units.map((unit, index) =>
@@ -282,77 +199,62 @@ export class LocalizationEngine {
   }
 
   public async translateFile(input: TranslateFileInput): Promise<TranslateFileResult> {
-    if (input.job) {
-      const mode = resolveLocalizationMode(input.options?.mode, this.options);
-      if (mode === 'dialogue') {
-        throw new Error('Dialogue mode is not supported for external translation units.');
-      }
-      const tagPolicy = resolveTagPolicy(input.options?.tagPolicy);
+    const tagPolicy = resolveTagPolicy(input.options?.tagPolicy);
 
-      const project = this.assembly.projectRepo.getProject(input.projectId);
-      if (!project) {
-        throw new Error(`Project not found: ${input.projectId}`);
-      }
-      const normalizedOptions = normalizeWindowJobOptions(input.options, this.options);
-      const normalizedInput = { ...input, options: normalizedOptions };
-      const resumeFingerprint = await buildFileTranslationResumeFingerprint({
-        input: normalizedInput,
-        project,
-        options: this.options,
-        mtModule: this.assembly.mtModule,
-        tmRepo: this.assembly.tmRepo,
-        tbRepo: this.assembly.tbRepo,
-      });
-      const runtimeTm =
-        (project.projectType ?? 'translation') === 'translation'
-          ? RuntimeTMContext.create({
-              srcLang: project.srcLang,
-              tgtLang: project.tgtLang,
-              tagPolicy,
-            })
-          : undefined;
-      const referenceResolver = runtimeTm
-        ? new RuntimeTMReferenceResolver(runtimeTm).resolve
-        : undefined;
-
-      try {
-        return await translateSpreadsheetFileJob(
-          {
-            ...normalizedInput,
-            job: {
-              ...input.job,
-              resumeFingerprint,
-            },
-          },
-          {
-            taskExecutor: this.createTaskExecutor({ referenceResolver }),
-            defaultMaxConcurrency: this.options.maxConcurrency,
-            runtimeTm: runtimeTm
-              ? {
-                  seed: (results) => {
-                    runtimeTm.seedResults(results);
-                  },
-                  commit: (results) => {
-                    runtimeTm.commitResults(results);
-                  },
-                  summary: () => runtimeTm.summary(),
-                }
-              : undefined,
-            auditSink: this.options.auditSink,
-          },
-        );
-      } finally {
-        runtimeTm?.dispose();
-      }
+    const project = this.assembly.projectRepo.getProject(input.projectId);
+    if (!project) {
+      throw new Error(`Project not found: ${input.projectId}`);
     }
+    const normalizedOptions = normalizeWindowJobOptions(input.options);
+    const normalizedInput = { ...input, options: normalizedOptions };
+    const resumeFingerprint = await buildFileTranslationResumeFingerprint({
+      input: normalizedInput,
+      project,
+      options: this.options,
+      mtModule: this.assembly.mtModule,
+      tmRepo: this.assembly.tmRepo,
+      tbRepo: this.assembly.tbRepo,
+    });
+    const runtimeTm =
+      (project.projectType ?? 'translation') === 'translation'
+        ? RuntimeTMContext.create({
+            srcLang: project.srcLang,
+            tgtLang: project.tgtLang,
+            tagPolicy,
+          })
+        : undefined;
+    const referenceResolver = runtimeTm
+      ? new RuntimeTMReferenceResolver(runtimeTm).resolve
+      : undefined;
 
-    return translateSpreadsheetFile(input, (units) =>
-      this.translateUnits({
-        projectId: input.projectId,
-        units,
-        options: input.options,
-      }),
-    );
+    try {
+      return await translateSpreadsheetFileJob(
+        {
+          ...normalizedInput,
+          job: {
+            ...input.job,
+            resumeFingerprint,
+          },
+        },
+        {
+          taskExecutor: this.createTaskExecutor({ referenceResolver }),
+          runtimeTm: runtimeTm
+            ? {
+                seed: (results) => {
+                  runtimeTm.seedResults(results);
+                },
+                commit: (results) => {
+                  runtimeTm.commitResults(results);
+                },
+                summary: () => runtimeTm.summary(),
+              }
+            : undefined,
+          auditSink: this.options.auditSink,
+        },
+      );
+    } finally {
+      runtimeTm?.dispose();
+    }
   }
 
   public async translateProjectSegments(
@@ -361,11 +263,6 @@ export class LocalizationEngine {
     const project = this.assembly.projectRepo.getProject(input.projectId);
     if (!project) {
       throw new Error(`Project not found: ${input.projectId}`);
-    }
-
-    const mode = resolveLocalizationMode(input.options?.mode, this.options);
-    if (mode === 'dialogue') {
-      throw new Error('Dialogue mode is not supported for project segment jobs.');
     }
 
     const tagPolicy = resolveTagPolicy(input.options?.tagPolicy);
@@ -380,7 +277,7 @@ export class LocalizationEngine {
     const referenceResolver = runtimeTm
       ? new RuntimeTMReferenceResolver(runtimeTm).resolve
       : undefined;
-    const normalizedOptions = normalizeWindowJobOptions(input.options, this.options);
+    const normalizedOptions = normalizeWindowJobOptions(input.options);
 
     try {
       return await translateProjectSegmentsJob(

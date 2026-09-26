@@ -4,7 +4,7 @@ import type {
   PromptTMReference,
 } from "./aiPromptTypes";
 
-export type WindowModeProjectType = "translation" | "review" | "custom";
+export type WindowModeProjectType = "translation" | "custom";
 
 export type WindowModeRequestMode = "window" | "window-partial";
 

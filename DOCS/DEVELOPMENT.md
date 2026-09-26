@@ -143,7 +143,7 @@ Use this only after isolated TM/TB matching is correct but desktop AI translatio
 npm run trace:ai-file -- --project-id <id> --file-id <id>
 ```
 
-This command runs the real legacy desktop AI translation path against the configured provider and writes translation results. `--file <path>` additionally imports that spreadsheet into the project before translation. Use a disposable project/database copy, start with the default `blank-only` target scope, and use `overwrite-non-confirmed` only when overwriting existing non-confirmed targets is intentional. `--project-name` requires an exact unique name; explicit IDs are safer for automation.
+This command runs the desktop adapter over the shared translation engine against the configured provider and writes translation results. `--file <path>` additionally imports that spreadsheet into the project before translation. Use a disposable project/database copy, start with the default `use-current-targets` baseline, and use `--target-baseline ignore-current-targets` only when overwriting existing non-confirmed targets is intentional. `--project-name` requires an exact unique name; explicit IDs are safer for automation.
 
 Each JSON line is an event. Verify `ai_file_flow_start`, mounted resources, leading-segment `ai_file_flow_reference_preview` events, progress, and `ai_file_flow_complete` in order. An `ai_file_flow_imported_file` event appears only with `--file`. If references are already wrong in the preview, return to the TM/TB trace; if previews are correct, investigate request planning, provider response handling, or persistence.
 

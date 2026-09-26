@@ -105,7 +105,7 @@ function App(): JSX.Element {
                     <p className="mt-3 text-sm leading-6 text-text-muted">
                       {projects.length
                         ? 'Choose a project in the sidebar to continue your work.'
-                        : 'Create a project to start translating, reviewing, or processing your files.'}
+                        : 'Create a project to start translating or processing your files.'}
                     </p>
                     <Button
                       variant="primary"

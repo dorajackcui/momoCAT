@@ -82,12 +82,7 @@ export function ProjectDetailHeader({
 }
 
 function ProjectSummary({ project }: { project: Project }) {
-  const projectTypeLabel =
-    project.projectType === 'review'
-      ? 'Review'
-      : project.projectType === 'custom'
-        ? 'Custom'
-        : 'Translation';
+  const projectTypeLabel = project.projectType === 'custom' ? 'Custom' : 'Translation';
   return (
     <div className="text-xs text-text-muted flex items-center gap-2">
       <span>

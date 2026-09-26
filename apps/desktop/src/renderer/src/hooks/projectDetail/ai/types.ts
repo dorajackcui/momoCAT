@@ -1,9 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type { Project, ProjectAIModel } from '@cat/core/project';
 import type {
-  AIBatchMode,
   AIBatchTargetBaseline,
-  AIBatchTargetScope,
   AIProviderSummary,
   ProjectSavedPrompt,
 } from '../../../../../shared/ipc';
@@ -38,8 +36,6 @@ export interface AITestMetaInput {
 export type TrackedAIJob = AIFileJob;
 
 export interface StartAITranslateFileOptions {
-  mode?: AIBatchMode;
-  targetScope?: AIBatchTargetScope;
   targetBaseline?: AIBatchTargetBaseline;
   confirm?: boolean;
 }
@@ -90,7 +86,7 @@ export interface ProjectAIController {
   startAITranslateFile: (
     fileId: number,
     fileName: string,
-    options?: AIBatchMode | StartAITranslateFileOptions,
+    options?: StartAITranslateFileOptions,
   ) => Promise<void>;
   cancelAITranslateFile: (fileId: number) => Promise<void>;
   getFileJob: (fileId: number) => TrackedAIJob | null;

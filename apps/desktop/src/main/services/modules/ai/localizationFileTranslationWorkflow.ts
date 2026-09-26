@@ -65,7 +65,6 @@ export async function runLocalizationFileTranslation(
       documentId: `file-${params.fileId}:${params.fileName}`,
       units,
       options: {
-        mode: 'standard',
         requestMode: 'window-partial',
         targetBaseline: params.targetBaseline,
         tagPolicy: params.tagPolicy,

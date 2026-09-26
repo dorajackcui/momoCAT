@@ -86,7 +86,7 @@ type ElementPredicate = (element: TestElement) => boolean;
 
 function renderPane(
   controller: ProjectAIController,
-  projectType?: 'translation' | 'review' | 'custom',
+  projectType?: 'translation' | 'custom',
 ) {
   return renderToStaticMarkup(
     React.createElement(ProjectAIPane, {

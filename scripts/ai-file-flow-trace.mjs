@@ -16,22 +16,21 @@ Options:
   --db <path>                    SQLite DB path. Default: .cat_data/cat_v1.db
   --project-id <id>              Project id that owns the file and mounted TM/TB resources.
   --project-name <name>          Exact project name to resolve when project id is unknown.
-  --file-id <id>                 Existing file id to translate through the legacy desktop AI flow.
+  --file-id <id>                 Existing file id to translate through the shared translation engine.
   --file <path>                  Spreadsheet path to import into the project before translation.
   --source-col <n>               Optional zero-based source column override for --file.
   --target-col <n>               Optional zero-based target column override for --file.
   --context-col <n>              Optional zero-based context column for --file.
   --no-header                    Import all rows; by default --file auto-detects source/target headers.
   --model <provider-id>          Optional AI provider id override.
-  --mode <mode>                  standard or dialogue. Default: standard.
-  --target-scope <scope>         blank-only or overwrite-non-confirmed. Default: blank-only.
+  --target-baseline <scope>         use-current-targets or ignore-current-targets. Default: use-current-targets.
   --preview-limit <n>            Number of leading segments to preview for TM/TB references. Default: 3.
   -h, --help                     Show this help.
 
 Examples:
   npm run trace:ai-file -- --project-id 1 --file-id 23
   npm run trace:ai-file -- --project-name "Example project" --file "example-input.xlsx"
-  npm run trace:ai-file -- --project-id 1 --file-id 23 --target-scope overwrite-non-confirmed
+  npm run trace:ai-file -- --project-id 1 --file-id 23 --target-baseline ignore-current-targets
   npm run trace:ai-file -- --db .cat_data/cat_v1.db --project-id 1 --file-id 23 --preview-limit 5`);
 }
 
@@ -56,8 +55,7 @@ function parseArgs(argv) {
     contextCol: '',
     hasManualImportOptions: false,
     model: '',
-    mode: 'standard',
-    targetScope: '',
+    targetBaseline: '',
     previewLimit: '',
   };
 
@@ -165,22 +163,13 @@ function parseArgs(argv) {
       config.model = arg.slice('--model='.length);
       continue;
     }
-    if (arg === '--mode') {
-      config.mode = readValue(argv, index, arg);
+    if (arg === '--target-baseline') {
+      config.targetBaseline = readValue(argv, index, arg);
       index += 1;
       continue;
     }
-    if (arg.startsWith('--mode=')) {
-      config.mode = arg.slice('--mode='.length);
-      continue;
-    }
-    if (arg === '--target-scope') {
-      config.targetScope = readValue(argv, index, arg);
-      index += 1;
-      continue;
-    }
-    if (arg.startsWith('--target-scope=')) {
-      config.targetScope = arg.slice('--target-scope='.length);
+    if (arg.startsWith('--target-baseline=')) {
+      config.targetBaseline = arg.slice('--target-baseline='.length);
       continue;
     }
     if (arg === '--preview-limit') {
@@ -218,15 +207,12 @@ function parseArgs(argv) {
       validateNonNegativeInteger(config.contextCol, '--context-col');
     }
   }
-  if (config.mode !== 'standard' && config.mode !== 'dialogue') {
-    throw new Error('--mode must be standard or dialogue.');
-  }
   if (
-    config.targetScope &&
-    config.targetScope !== 'blank-only' &&
-    config.targetScope !== 'overwrite-non-confirmed'
+    config.targetBaseline &&
+    config.targetBaseline !== 'use-current-targets' &&
+    config.targetBaseline !== 'ignore-current-targets'
   ) {
-    throw new Error('--target-scope must be blank-only or overwrite-non-confirmed.');
+    throw new Error('--target-baseline must be use-current-targets or ignore-current-targets.');
   }
   if (
     config.previewLimit &&
@@ -279,8 +265,7 @@ function runTrace(config) {
     AI_FILE_FLOW_FILE_ID: config.fileId,
     AI_FILE_FLOW_FILE_PATH: config.filePath,
     AI_FILE_FLOW_MODEL: config.model,
-    AI_FILE_FLOW_MODE: config.mode,
-    AI_FILE_FLOW_TARGET_SCOPE: config.targetScope,
+    AI_FILE_FLOW_TARGET_BASELINE: config.targetBaseline,
     AI_FILE_FLOW_PREVIEW_LIMIT: config.previewLimit,
   };
   if (config.hasManualImportOptions) {

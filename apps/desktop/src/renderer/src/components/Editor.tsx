@@ -178,7 +178,7 @@ export const Editor: React.FC<EditorProps> = ({
       setActiveSegmentId(initialActiveSegmentId);
     }
   }, [filteredSegments, initialActiveSegmentId, loading, segments.length, setActiveSegmentId]);
-  const supportsBatchActions = project?.projectType === 'translation';
+  const supportsBatchActions = Boolean(project);
   const qa = useEditorQA(fileId, segmentStore, segmentChangeHint, publishSegmentChanges);
   const batchActions = useEditorBatchActions({
     onQAComplete: qa.acceptReport,
@@ -400,6 +400,7 @@ export const Editor: React.FC<EditorProps> = ({
     >
       {supportsBatchActions && batchActions.isBatchAIModalOpen && (
         <ProjectAITranslateModal
+          projectType={project?.projectType}
           open={batchActions.isBatchAIModalOpen}
           fileName={file?.name || null}
           filteredSegmentCount={batchActions.batchAIFilteredCount}
@@ -456,6 +457,7 @@ export const Editor: React.FC<EditorProps> = ({
                 onAction: handleSelectionAction,
               }}
               supportsBatchActions={supportsBatchActions}
+              customProject={project?.projectType === 'custom'}
               canRunActions={Boolean(file)}
               isBatchAITranslating={batchActions.isBatchAITranslating}
               isBatchAIStopping={batchActions.isBatchAIStopping}

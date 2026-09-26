@@ -96,7 +96,7 @@ export function isSegment(value: unknown): value is Segment {
 }
 
 export function isProjectType(value: unknown): value is ProjectType {
-  return value === 'translation' || value === 'review' || value === 'custom';
+  return value === 'translation' || value === 'custom';
 }
 
 export function isProjectQASettings(value: unknown): value is ProjectQASettings {

@@ -91,7 +91,7 @@ Target baseline is resolved before planning:
 - `use-current-targets`: preserve existing target cells; partial mode requests eligible blanks and can use existing targets as context.
 - `ignore-current-targets`: clear eligible, non-confirmed current targets before planning so they can be regenerated.
 
-Legacy `targetScope` belongs to single-unit concurrent translation and is not interpreted by window planners.
+Translation and Custom projects share these planners, target baselines, strict response validation, retries, and cancellation. Translation supplies language instructions and TM/TB references; Custom supplies its processing prompt without translation-language constraints or translation-memory reuse. Desktop defaults both project types to `window-partial`; CLI exposes both window strategies. There is no project-specific batch executor.
 
 For a selected segment scope, rows form a contiguous context sequence in original file order for `window-partial`: excluded rows do not enter its scan windows or neighboring context. Results retain their original segment IDs and are written back only to those segments. Progress counts the selected scope, and existing-target baseline and confirmed-row locking rules still apply. Empty scopes and IDs outside the current file are rejected. [Desktop](DESKTOP.md#files-and-background-jobs) owns the UI selection behavior.
 
@@ -125,7 +125,7 @@ Two recovery layers have different jobs:
 
 Do not turn progress events or diagnostic artifacts into retry/resume truth.
 
-Single-row Translate/Refine sends one provider request per invocation. Window/Window-partial enforces the JSON/ID contract above. Dialogue retains response-contract retries for malformed JSON/IDs. Transport, parsing, and persistence failures remain execution failures; QA findings never trigger repair or retry. Marker-preservation prompt instructions and source-token mapping remain part of translation representation.
+Single-row Translate/Refine sends one provider request per invocation. Window/Window-partial enforces the JSON/ID contract above. Transport, parsing, and persistence failures remain execution failures; QA findings never trigger repair or retry. Marker-preservation prompt instructions and source-token mapping remain part of translation representation.
 
 ## TM matching and prompt selection
 
@@ -197,7 +197,7 @@ QA is advisory. No finding blocks, skips, rolls back, or triggers another busine
 | CLI `qa`                                                   | Whole-file checks using project settings; reports findings without changing saved results or input files.                             |
 | Editor Instant QA                                          | Optional single-row checks after successful single/selected confirmation; merges findings into the checked rows.                      |
 | Confirm, TM commit/application, repeat propagation, export | Do not consult QA findings.                                                                                                           |
-| AI Translate / Refine / Window / Dialogue                  | Do not use tag QA for acceptance, repair, or retry. Execution failures follow the [response contract](#strict-response-and-repair).   |
+| AI Translate / Refine / Window                             | Do not use tag QA for acceptance, repair, or retry. Execution failures follow the [response contract](#strict-response-and-repair).   |
 
 `FileQaReport` exposes `issueCount` and `affectedSegments`; findings use `info`. CLI syntax and exit behavior belong to [CLI QA](CLI.md#check-a-file). CLI translation does not run whole-file QA before output; Inspect prepares references and prompts only.
 
@@ -286,7 +286,7 @@ The desktop `TM/TB` action offers source-term extraction alongside the existing 
 
 Runtime TM is an isolated in-memory SQLite TM for one shared translation job. It reuses the normal repository/service/module recall path and is discarded when the job ends.
 
-For translation projects, it is enabled for `LocalizationEngine.translateFile()` and `translateProjectSegments()` with `window` or `window-partial`, including the desktop adapter over the shared project-segment job. It is not used by review/custom projects, inspect, legacy concurrent `translateUnits()`, or legacy desktop translation workflows.
+For translation projects, it is enabled for `LocalizationEngine.translateFile()` and `translateProjectSegments()` with `window` or `window-partial`, including the desktop adapter over the shared project-segment job. It is not used by Custom projects, inspect, or single-segment operations.
 
 Eligible non-empty `translated` and `skipped` results are appended after their task results have been persisted. On resume, compatible checkpoint results rebuild Runtime TM before new requests continue.
 
@@ -304,11 +304,11 @@ Runtime TM never writes Working TM, Main TM, or the persistent project database 
 
 ## Desktop Working TM and repeated segments
 
-Every translation project has a mounted read/write Working TM. Confirming a translation segment normally updates that TM inside the same transaction as the segment/file state. Review and custom project types do not perform this commit.
+Every translation project has a mounted read/write Working TM. Confirming a translation segment normally updates that TM inside the same transaction as the segment/file state. Custom projects do not perform this commit.
 
 AI translation, refinement, and manual target edits write `draft` (or `empty` for an empty result) regardless of project type. These unconfirmed writes stay local and do not query repeat groups. Job/checkpoint result labels such as `translated`, `reused`, and `failed` describe execution outcomes and are separate from segment workflow status.
 
-The Tasks tab `Commit` action can write a whole file to either its writable Working TM or a mounted Main TM. It defaults to confirmed segments; `All with translations` also includes other statuses when both source and target are non-empty. Every segment written by the action is left confirmed; excluded rows remain unchanged. This action disables repeat propagation so each row keeps the translation being committed. Segment confirmations, entry writes, and FTS updates for the file run in one transaction, so a failed commit leaves both segment state and the target TM unchanged. A Working TM target must be the writable Working TM mounted to that file's translation project, and review/custom projects cannot use this route to populate a Working TM.
+The Tasks tab `Commit` action can write a whole file to either its writable Working TM or a mounted Main TM. It defaults to confirmed segments; `All with translations` also includes other statuses when both source and target are non-empty. Every segment written by the action is left confirmed; excluded rows remain unchanged. This action disables repeat propagation so each row keeps the translation being committed. Segment confirmations, entry writes, and FTS updates for the file run in one transaction, so a failed commit leaves both segment state and the target TM unchanged. A Working TM target must be the writable Working TM mounted to that file's translation project, and Custom projects cannot use this route to populate a Working TM.
 
 The Project Translation Memory tab keeps Working TM management intentionally narrow: users can export its source/target rows to XLSX or reset all entries after confirmation. Export reads one stable database snapshot and serializes the workbook in a background worker, writing the stored source/target content and original tag text into two visible columns. Reset runs in a background worker and atomically removes the current entries plus their FTS rows, then reloads the pane and publishes a project-wide `working-tm-reset` invalidation. The TM resource, project mount, project files, and translated segments are preserved.
 

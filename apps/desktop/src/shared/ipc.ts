@@ -334,13 +334,9 @@ export interface AISegmentTranslateResult {
   serverAppliedAt: string;
 }
 
-export type AIBatchMode = 'default' | 'dialogue';
-export type AIBatchTargetScope = 'blank-only' | 'overwrite-non-confirmed';
 export type AIBatchTargetBaseline = 'use-current-targets' | 'ignore-current-targets';
 
 export interface AITranslateFileOptions {
-  mode?: AIBatchMode;
-  targetScope?: AIBatchTargetScope;
   targetBaseline?: AIBatchTargetBaseline;
   /** Omit for the entire file; selected rows form one context sequence in file order. */
   segmentIds?: string[];

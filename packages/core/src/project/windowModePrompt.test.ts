@@ -129,13 +129,15 @@ describe("Window Mode prompt builder", () => {
     expect(bundle.systemPrompt).not.toContain("From en to fr. Output in fr");
   });
 
-  it("uses neutral custom project wording outside the stable JSON schema", () => {
+  it.each(["window", "window-partial"] as const)("uses neutral custom project wording in %s outside the stable JSON schema", (requestMode) => {
     const bundle = buildAIWindowModePromptBundle({
       projectType: "custom",
+      requestMode,
       srcLang: "en",
       tgtLang: "fr",
       projectPrompt: "Classify sentiment.",
       currentSegments: [{ id: "row-2", sourcePayload: "Great work" }],
+      previousContext: [{ source: "Bad work", target: "negative" }],
     });
     const proseOutsideJsonSchemaLine = bundle.userPrompt
       .split("\n")
@@ -152,9 +154,15 @@ describe("Window Mode prompt builder", () => {
     expect(bundle.systemPrompt).toContain(
       "Process every current segment exactly once",
     );
-    expect(bundle.userPrompt).toContain("Current segments to process");
-    expect(bundle.userPrompt).toContain("Batch: process 1 current segment(s)");
-    expect(proseOutsideJsonSchemaLine).not.toMatch(/\btranslate\b/i);
+    if (requestMode === "window") {
+      expect(bundle.userPrompt).toContain("Current segments to process");
+      expect(bundle.userPrompt).toContain("Batch: process 1 current segment(s).");
+      expect(bundle.userPrompt).toContain("Previous 5 processed rows");
+    } else {
+      expect(bundle.userPrompt).toContain("Batch: partial window processing request.");
+    }
+    expect(bundle.systemPrompt + bundle.userPrompt).not.toMatch(/from en to fr/i);
+    expect(proseOutsideJsonSchemaLine).not.toMatch(/\btranslated?\b/i);
     expect(proseOutsideJsonSchemaLine).not.toMatch(/translations for ids/i);
   });
 

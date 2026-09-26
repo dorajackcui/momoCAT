@@ -14,7 +14,7 @@ export interface ResolvedReferences {
 export interface PreparedTranslationArtifacts {
   tm: ResolvedReferences['tm'];
   tb: ResolvedReferences['tb'];
-  prompt: Awaited<ReturnType<MTModule['translate']>>['prompt'];
+  prompt: Awaited<ReturnType<MTModule['translateBatch']>>['prompt'];
 }
 
 export interface PreparedWindowBatchResult {

@@ -2,11 +2,9 @@ import type { Segment } from '@cat/core/models';
 import {
   DEFAULT_PROJECT_AI_MODEL,
   buildAIWindowModePromptBundle,
-  buildAITextPromptBundle,
   normalizeProjectAIModel,
   type Project,
 } from '@cat/core/project';
-import { parseEditorTextToTokens } from '@cat/core/tag';
 import type { AIProviderCatalogService } from '../providers/AIProviderCatalogService';
 import type { AIRuntimeConfigProvider, AITransport, ReasoningEffort } from '../ports';
 import type { PromptArtifact } from '../artifacts';
@@ -17,34 +15,26 @@ import {
 import type { MTModuleOptions as LocalizationMTOptions } from '../types';
 import { resolveTagPolicy } from '../tagPolicy';
 import { processMTBatchResponse } from './MTBatchResponseProcessor';
-import { buildBatchPromptParams, buildPromptParams } from './MTModulePromptParams';
+import { buildBatchPromptParams } from './MTModulePromptParams';
 import type {
   ComposeBatchPromptInput,
-  ComposePromptInput,
   MTBatchTranslateResult,
   MTModuleDependencies,
-  MTTranslateResult,
   PreparedBatchPromptInput,
-  PreparedPromptInput,
   PromptMTConfig,
   ResolvedMTConfig,
   TranslatePreparedBatchPromptInput,
-  TranslatePreparedPromptInput,
 } from './MTModuleTypes';
 export type {
   ComposeBatchPromptInput,
-  ComposePromptInput,
   MTBatchCurrentUnitInput,
   MTBatchTranslateResult,
   MTBatchUnitResult,
   MTModuleDependencies,
-  MTTranslateResult,
   PreparedBatchPromptInput,
-  PreparedPromptInput,
   PromptMTConfig,
   ResolvedMTConfig,
   TranslatePreparedBatchPromptInput,
-  TranslatePreparedPromptInput,
 } from './MTModuleTypes';
 
 type SegmentLanguageMeta = Segment['meta'] & {
@@ -122,24 +112,6 @@ export class MTModule {
     };
   }
 
-  async composePrompt(input: ComposePromptInput): Promise<PromptArtifact> {
-    const config = await this.resolvePromptConfig(
-      input.project,
-      input.mtOptions,
-      input.providerOverride,
-    );
-    const meta = input.segment.meta as SegmentLanguageMeta;
-    return this.composePreparedPrompt({
-      ...input,
-      baseUrl: config.provider.baseUrl,
-      model: config.model,
-      reasoningEffort: config.reasoningEffort,
-      provider: config.provider,
-      srcLang: meta.sourceLanguage ? String(meta.sourceLanguage) : input.project.srcLang,
-      tgtLang: meta.targetLanguage ? String(meta.targetLanguage) : input.project.tgtLang,
-    });
-  }
-
   async composeBatchPrompt(input: ComposeBatchPromptInput): Promise<PromptArtifact> {
     const config = await this.resolvePromptConfig(
       input.project,
@@ -156,46 +128,6 @@ export class MTModule {
       srcLang: meta?.sourceLanguage ? String(meta.sourceLanguage) : input.project.srcLang,
       tgtLang: meta?.targetLanguage ? String(meta.targetLanguage) : input.project.tgtLang,
     });
-  }
-
-  composePreparedPrompt(input: PreparedPromptInput): PromptArtifact {
-    const promptParams = buildPromptParams(input);
-    const promptBundle = buildAITextPromptBundle(promptParams.projectType, {
-      srcLang: input.srcLang,
-      tgtLang: input.tgtLang,
-      projectPrompt: promptParams.projectPrompt,
-      sourceText: promptParams.sourceText,
-      sourceTagPreservedText: promptParams.sourceTagPreservedText,
-      context: promptParams.context,
-      currentTranslationPayload: promptParams.currentTranslationPayload,
-      refinementInstruction: promptParams.refinementInstruction,
-      ...promptParams.references,
-    });
-
-    return {
-      unitId: input.unitId,
-      provider: {
-        id: input.provider?.id ?? null,
-        name: input.provider?.name ?? null,
-        baseUrl: input.baseUrl,
-      },
-      model: input.model,
-      reasoningEffort: input.reasoningEffort ?? null,
-      projectPrompt: promptParams.projectPrompt,
-      projectType: promptParams.projectType,
-      sourcePayload: promptBundle.sourcePayload,
-      tmPromptBlock: promptBundle.sections.tmPromptBlock,
-      concordancePromptBlock: promptBundle.sections.concordancePromptBlock,
-      tbPromptBlock: promptBundle.sections.tbPromptBlock,
-      referencePromptBlock: promptBundle.sections.referencePromptBlock,
-      systemPrompt: promptBundle.systemPrompt,
-      userPrompt: promptBundle.userPrompt,
-      promptChars: {
-        system: promptBundle.systemPrompt.length,
-        user: promptBundle.userPrompt.length,
-        total: promptBundle.systemPrompt.length + promptBundle.userPrompt.length,
-      },
-    };
   }
 
   composePreparedBatchPrompt(input: PreparedBatchPromptInput): PromptArtifact {
@@ -259,25 +191,6 @@ export class MTModule {
             }
           : {}),
       },
-    };
-  }
-
-  async translate(input: TranslatePreparedPromptInput): Promise<MTTranslateResult> {
-    const prompt = this.composePreparedPrompt(input);
-    const tagPolicy = resolveTagPolicy(input.tagPolicy);
-    const response = await this.aiTransport.createResponse({
-      apiKey: input.apiKey,
-      baseUrl: input.baseUrl,
-      model: input.model,
-      reasoningEffort: input.reasoningEffort ?? 'medium',
-      systemPrompt: prompt.systemPrompt,
-      userPrompt: prompt.userPrompt,
-    });
-    const trimmed = response.content.trim();
-    if (!trimmed) throw new Error('AI provider response was empty');
-    return {
-      targetTokens: parseEditorTextToTokens(trimmed, input.segment.sourceTokens, { tagPolicy }),
-      prompt,
     };
   }
 

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { JobUnit, UnitResult } from '../../job/types';
 import type { TranslateUnitResult } from '../../types';
 import {
-  buildTranslateUnitsResult,
   jobUnitToExternalUnit,
   toArtifactRecord,
   toUnitResult,
@@ -77,25 +76,6 @@ describe('result helpers', () => {
       context: 'button',
       rowNumber: 2,
       metadata: { rowIndex: 1, rowNumber: 2 },
-    });
-  });
-
-  it('summarizes translated, skipped, failed, and reused unit results', () => {
-    expect(
-      buildTranslateUnitsResult([
-        { id: 'a', source: 'A', target: 'AA', status: 'translated' },
-        { id: 'b', source: 'B', target: 'BB', status: 'skipped' },
-        { id: 'c', source: 'C', error: 'boom', status: 'failed' },
-        { id: 'd', source: 'D', target: 'DD', status: 'reused' },
-      ]),
-    ).toEqual({
-      summary: { total: 4, translated: 1, skipped: 1, failed: 1, reused: 1 },
-      results: [
-        { id: 'a', source: 'A', target: 'AA', status: 'translated' },
-        { id: 'b', source: 'B', target: 'BB', status: 'skipped' },
-        { id: 'c', source: 'C', error: 'boom', status: 'failed' },
-        { id: 'd', source: 'D', target: 'DD', status: 'reused' },
-      ],
     });
   });
 });

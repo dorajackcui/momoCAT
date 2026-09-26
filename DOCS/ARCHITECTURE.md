@@ -35,7 +35,7 @@ renderer -> typed preload API -> IPC handlers -> services/modules -> adapters/sh
 - Adapters translate desktop service ports to `CATDatabase` and other infrastructure.
 - Workers handle expensive import, sync, and reference work without blocking the Electron main thread.
 
-Desktop file translation has both legacy single-unit workflows and adapters over the shared localization engine. Keep the boundary explicit when moving behavior; do not silently give the desktop a second implementation of a shared request contract.
+Desktop and CLI host the shared localization capabilities. Single-segment translation/refinement and batch execution live in `@cat/localization`; desktop adapters load editor state, serialize operations, persist results, and publish events. Both Translation and Custom projects use the same window job pipeline. File translation always uses that pipeline, including calls without explicit job options.
 
 [Desktop](DESKTOP.md) owns editor persistence, UI/event coordination, and the code/test map for changing these boundaries.
 

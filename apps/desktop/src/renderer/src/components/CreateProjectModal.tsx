@@ -45,20 +45,13 @@ export function CreateProjectModal({
       <form id={formId} onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="field-label mb-2">Project Type</label>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <ToggleButton
               pressed={projectType === 'translation'}
               tone="brand"
               onClick={() => setProjectType('translation')}
             >
               Translation
-            </ToggleButton>
-            <ToggleButton
-              pressed={projectType === 'review'}
-              tone="brand"
-              onClick={() => setProjectType('review')}
-            >
-              Review
             </ToggleButton>
             <ToggleButton
               pressed={projectType === 'custom'}

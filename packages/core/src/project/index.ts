@@ -18,7 +18,7 @@ export interface ProjectFile {
   updatedAt: string;
 }
 
-export type ProjectType = 'translation' | 'review' | 'custom';
+export type ProjectType = 'translation' | 'custom';
 
 import type { ProjectQASettings } from './qaSettings';
 export * from './qaSettings';
@@ -54,8 +54,6 @@ export interface FileQaReport {
 }
 
 export {
-  buildAIDialoguePromptBundle,
-  buildAIDialogueUserPrompt,
   buildAISystemPrompt,
   buildAITextPromptBundle,
   buildAIUserPrompt,
@@ -75,11 +73,6 @@ export type {
   SourceTerminologyPromptUnit,
 } from './sourceTerminologyPrompt';
 export type {
-  DialoguePromptBundle,
-  DialoguePromptBundleBuildParams,
-  DialoguePromptPreviousGroup,
-  DialoguePromptSegment,
-  DialogueUserPromptBuildParams,
   PromptConcordanceReference,
   PromptTBReference,
   PromptTMReference,

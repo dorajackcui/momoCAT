@@ -433,7 +433,7 @@ describe('fileTranslationJobAdapter', () => {
           projectId: 7,
           inputPath,
           outputPath,
-          options: { targetScope: 'blank-only' },
+          options: { targetBaseline: 'use-current-targets' },
           job: { jobId: 'same-job', checkpointPath, maxAttempts: 1 },
         },
         { taskExecutor: executor },
@@ -447,7 +447,7 @@ describe('fileTranslationJobAdapter', () => {
           projectId: 7,
           inputPath,
           outputPath,
-          options: { targetScope: 'blank-only' },
+          options: { targetBaseline: 'use-current-targets' },
           job: { jobId: 'same-job', checkpointPath, resume: true, maxAttempts: 1 },
         },
         { taskExecutor: executor },
@@ -841,7 +841,6 @@ describe('fileTranslationJobAdapter', () => {
           job: {},
         },
         {
-          defaultMaxConcurrency: 3,
           taskExecutor: async () => ({ results: [] }),
           runnerFactory: () => ({
             run: async (job) => {
@@ -865,7 +864,6 @@ describe('fileTranslationJobAdapter', () => {
           job: {},
         },
         {
-          defaultMaxConcurrency: 3,
           taskExecutor: async () => ({ results: [] }),
           runnerFactory: () => ({
             run: async (job) => {

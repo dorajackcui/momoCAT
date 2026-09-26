@@ -1,13 +1,10 @@
+import { resolveTargetBaseline } from '../targetBaseline';
 import { createHash } from 'crypto';
 import type { MTModule } from '../modules/MTModule';
 import type { ProjectRecord, TBRepository, TMRepository } from '../ports';
 import { tagPolicyFingerprintValue } from '../tagPolicy';
 import type { LocalizationEngineConstructorOptions, TranslateFileInput } from '../types';
-import {
-  mergeMTOptions,
-  resolveLocalizationMode,
-  resolveWindowTargetBaseline,
-} from './localizationEngineOptions';
+import { mergeMTOptions } from './localizationEngineOptions';
 
 export async function buildFileTranslationResumeFingerprint(params: {
   input: TranslateFileInput;
@@ -18,8 +15,7 @@ export async function buildFileTranslationResumeFingerprint(params: {
   tbRepo: Pick<TBRepository, 'getProjectMountedTermBases' | 'getTermBaseStats'>;
 }): Promise<string> {
   const { input, project, options, mtModule, tmRepo, tbRepo } = params;
-  const targetBaseline = resolveWindowTargetBaseline(input.options, options);
-  const mode = resolveLocalizationMode(input.options?.mode, options);
+  const targetBaseline = resolveTargetBaseline(input.options);
   const mtOptions = mergeMTOptions(options.mt, input.options?.mt);
   const mtConfig = await mtModule.resolvePromptConfig(
     project,
@@ -67,7 +63,8 @@ export async function buildFileTranslationResumeFingerprint(params: {
     ['project.tgtLang', project.tgtLang],
     ['project.type', project.projectType ?? 'translation'],
     ['targetBaseline', targetBaseline],
-    ['mode', mode],
+    // Keep the historical constant so existing Translation checkpoints retain their identity.
+    ['mode', 'standard'],
     ['requestMode', input.options?.requestMode ?? 'window-partial'],
     ['tagPolicy', tagPolicyFingerprintValue(input.options?.tagPolicy)],
     ['provider.id', mtConfig.provider.id],

@@ -2,11 +2,7 @@ import type { TagPolicy } from '@cat/core/tag';
 import type { TranslationAuditSink } from './audit/TranslationAudit';
 import type { AIRuntimeConfigProvider, AITransport, ReasoningEffort } from './ports';
 
-export type LocalizationTargetScope = 'blank-only' | 'overwrite-non-confirmed';
-
 export type LocalizationTargetBaseline = 'use-current-targets' | 'ignore-current-targets';
-
-export type LocalizationMode = 'standard' | 'dialogue';
 
 export type LocalizationRequestMode = 'window' | 'window-partial';
 
@@ -34,13 +30,11 @@ export interface MTModuleOptions {
 }
 
 export interface TranslateUnitsOptions {
-  targetScope?: LocalizationTargetScope;
+  maxConcurrency?: number;
   targetBaseline?: LocalizationTargetBaseline;
-  mode?: LocalizationMode;
   requestMode?: LocalizationRequestMode;
   tagPolicy?: TagPolicy;
   includeReferences?: boolean;
-  maxConcurrency?: number;
   batchSize?: number;
   providerOverride?: string;
   mt?: MTModuleOptions;
@@ -61,10 +55,8 @@ export interface TranslateFileJobOptions {
 }
 
 export interface LocalizationEngineOptions {
-  dbPath?: string;
   maxConcurrency?: number;
-  defaultTargetScope?: LocalizationTargetScope;
-  defaultMode?: LocalizationMode;
+  dbPath?: string;
   mt?: MTModuleOptions;
   auditSink?: TranslationAuditSink;
 }
@@ -144,12 +136,6 @@ export interface TranslateUnitsResult {
   };
   results: TranslateUnitResult[];
   runtimeTm?: RuntimeTMSummary;
-}
-
-export interface TranslateUnitsInput {
-  projectId: number;
-  units: ExternalTranslationUnit[];
-  options?: TranslateUnitsOptions;
 }
 
 export interface TranslateProjectSegmentUnit extends ExternalTranslationUnit {

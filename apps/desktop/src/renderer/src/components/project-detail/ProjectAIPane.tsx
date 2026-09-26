@@ -9,7 +9,6 @@ interface ProjectAIPaneProps {
 }
 
 export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPaneProps) {
-  const isReviewProject = projectType === 'review';
   const isCustomProject = projectType === 'custom';
   const selectedProvider = ai.providerOptions.find((provider) => provider.id === ai.modelDraft);
   const shouldShowUnavailableCurrentProvider = Boolean(ai.modelDraft) && !selectedProvider;
@@ -95,19 +94,15 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
           onChange={(event) => ai.setPromptDraft(event.target.value)}
           rows={6}
           placeholder={
-            isReviewProject
-              ? 'Optional. Add project-specific review instructions (accuracy, fluency, style, severity rules).'
-              : isCustomProject
-                ? 'Optional. Override the default system prompt with full custom processing instructions.'
-                : 'Optional. Add project-specific translation instructions (tone, terminology, style).'
+            isCustomProject
+              ? 'Optional. Override the default system prompt with full custom processing instructions.'
+              : 'Optional. Add project-specific translation instructions (tone, terminology, style).'
           }
         />
         <p className="mt-2 text-xs text-text-muted">
-          {isReviewProject
-            ? 'Saved custom prompt is appended to the default AI review rules.'
-            : isCustomProject
-              ? 'Saved custom prompt overrides the default system prompt.'
-              : 'Saved custom prompt is appended to the default translation rules.'}
+          {isCustomProject
+            ? 'Saved custom prompt overrides the default system prompt.'
+            : 'Saved custom prompt is appended to the default translation rules.'}
         </p>
       </div>
       <details className="workspace-config-section group">
@@ -142,7 +137,7 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
         <div className="mt-3">
           <p className="mb-3 text-xs text-text-muted">Uses saved AI settings.</p>
           <label className="block text-xs font-medium text-text-muted mb-1">
-            {isReviewProject ? 'Test text' : isCustomProject ? 'Test input' : 'Test source'}
+            {isCustomProject ? 'Test input' : 'Test source'}
           </label>
           <div className="flex gap-2">
             <Input
@@ -150,11 +145,9 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
               value={ai.testSource}
               onChange={(event) => ai.setTestSource(event.target.value)}
               placeholder={
-                isReviewProject
-                  ? 'Enter a short sentence to test AI review'
-                  : isCustomProject
-                    ? 'Enter a short sentence to test AI custom processing'
-                    : 'Enter a short sentence to test AI translation'
+                isCustomProject
+                  ? 'Enter a short sentence to test AI custom processing'
+                  : 'Enter a short sentence to test AI translation'
               }
               className="flex-1"
             />
@@ -175,21 +168,15 @@ export function ProjectAIPane({ ai, projectType = 'translation' }: ProjectAIPane
             value={ai.testContext}
             onChange={(event) => ai.setTestContext(event.target.value)}
             placeholder={
-              isReviewProject
-                ? 'Optional source-language context for review'
-                : isCustomProject
-                  ? 'Optional context for custom processing'
-                  : 'Optional translation context'
+              isCustomProject
+                ? 'Optional context for custom processing'
+                : 'Optional translation context'
             }
           />
           {ai.testResult && (
             <div className="mt-2">
               <div className="text-xs font-medium text-text-muted mb-1">
-                {isReviewProject
-                  ? 'Reviewed text'
-                  : isCustomProject
-                    ? 'Processed text'
-                    : 'Translated text'}
+                {isCustomProject ? 'Processed text' : 'Translated text'}
               </div>
               <Card variant="surface" className="text-xs text-text-muted px-3 py-2">
                 {ai.testResult}

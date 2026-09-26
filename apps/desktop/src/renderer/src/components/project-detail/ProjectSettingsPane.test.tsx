@@ -270,7 +270,7 @@ describe('Project settings', () => {
     },
   );
 
-  it.each(['review', 'custom'] as const)(
+  it.each(['custom'] as const)(
     'keeps %s settings limited to supported configuration',
     async (projectType) => {
       render(<Harness projectType={projectType} />);

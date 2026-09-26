@@ -45,7 +45,7 @@ Validate facade behavior in [TMRepo.test.ts](../packages/db/src/repos/TMRepo.tes
 
 Important project fields:
 
-- `projectType` controls translation/review/custom behavior.
+- `projectType` selects Translation or Custom behavior. Repository reads expose legacy `review` rows as Custom with their effective review instruction materialized into `aiPrompt`; inputs, contexts, outputs, timestamps, and stored rows remain unchanged on read. Saving the project prompt or AI settings persists the Custom type and edited prompt, so language instructions are not reapplied. New Review projects are rejected.
 - `aiModel` stores the selected provider id, not a secret. An unset provider uses the empty-string default; nullable API inputs are normalized on write so a project prompt can be saved before a provider is configured.
 - `aiPrompt` is the legacy/default project prompt surface.
 - `aiTemperature` remains for compatibility but is not the runtime tuning source of truth.
@@ -56,7 +56,7 @@ Important file/segment fields:
 - `files.importOptionsJson` persists column selection and file-level tag policy used by token parsing and QA.
 - Renaming an imported file preserves its extension, identity, segments, statistics, import options, and `updatedAt`. When the internal project copy exists it is renamed with the metadata; if it is already missing, the metadata rename succeeds with an explicit degraded result so the desktop can warn that path-based operations remain unavailable.
 - `segments.sourceTokensJson` and `targetTokensJson` are authoritative token payloads.
-- Segment workflow status is `empty`, `draft`, or `confirmed`. Unconfirmed targets with non-whitespace content (including tags) are `draft`; the rest are `empty`. Explicit confirmation is retained until an edit replaces it. AI translation and review produce unconfirmed targets and do not encode their origin in workflow status.
+- Segment workflow status is `empty`, `draft`, or `confirmed`. Unconfirmed targets with non-whitespace content (including tags) are `draft`; the rest are `empty`. Explicit confirmation is retained until an edit replaces it. AI translation and custom processing produce unconfirmed targets and do not encode their origin in workflow status.
 - This status change is repository-only compatibility on the existing v15 `TEXT` column: reads map legacy `new`, `translated`, and `reviewed` values by target content, while every insert/update writes a canonical state. Opening a database does not rewrite segment data or timestamps. Project/file aggregates use the same normalization for legacy rows, including readonly connections; file progress exposes `emptySegments` for the remaining empty bucket.
 - `tagsSignature`, `matchKey`, and `srcHash` support tag-aware TM/repeat matching.
 - `segments.metaJson` stores row/context metadata.

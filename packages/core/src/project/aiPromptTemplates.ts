@@ -1,6 +1,4 @@
 import type {
-  DialoguePromptBundleBuildParams,
-  DialogueUserPromptBuildParams,
   PromptConcordanceReference,
   PromptTMReference,
   SystemPromptBuildParams,
@@ -11,14 +9,12 @@ import type {
 } from "./aiPromptTypes";
 import { AI_PROMPT_TEMPLATE_CATALOG } from "./aiPromptTemplateCatalog.generated";
 
-type ProjectType = "translation" | "review" | "custom";
+type ProjectType = "translation" | "custom";
 
 type TemplateValue = string | number;
 
 const TRANSLATION_PROMPTS = AI_PROMPT_TEMPLATE_CATALOG.translation;
-const REVIEW_PROMPTS = AI_PROMPT_TEMPLATE_CATALOG.review;
 const CUSTOM_PROMPTS = AI_PROMPT_TEMPLATE_CATALOG.custom;
-const DIALOGUE_PROMPTS = AI_PROMPT_TEMPLATE_CATALOG.dialogue;
 const MAX_TM_TB_REFERENCES_WITH_CONCORDANCE = 15;
 
 function renderTemplate(
@@ -41,28 +37,6 @@ function buildTranslationSourceHeader(
     hasProtectedMarkers
       ? TRANSLATION_PROMPTS.sourceHeaderProtected
       : TRANSLATION_PROMPTS.sourceHeaderPlain,
-    { srcLang },
-  );
-}
-
-function buildReviewLanguageInstruction(
-  srcLang: string,
-  tgtLang: string,
-): string {
-  return renderTemplate(REVIEW_PROMPTS.languageInstruction, {
-    srcLang,
-    tgtLang,
-  });
-}
-
-function buildReviewSourceHeader(
-  srcLang: string,
-  hasProtectedMarkers: boolean,
-): string {
-  return renderTemplate(
-    hasProtectedMarkers
-      ? REVIEW_PROMPTS.sourceHeaderProtected
-      : REVIEW_PROMPTS.sourceHeaderPlain,
     { srcLang },
   );
 }
@@ -265,69 +239,6 @@ function buildTranslationUserPrompt(params: UserPromptBuildParams): string {
   return buildTranslationUserPromptParts(params).userPrompt;
 }
 
-function buildReviewSystemPrompt(params: SystemPromptBuildParams): string {
-  const trimmedProjectPrompt = params.projectPrompt?.trim();
-  const languageInstruction = buildReviewLanguageInstruction(
-    params.srcLang,
-    params.tgtLang,
-  );
-
-  if (trimmedProjectPrompt) {
-    return `${languageInstruction}\n${trimmedProjectPrompt}`;
-  }
-
-  return renderTemplate(REVIEW_PROMPTS.defaultSystemBody, {
-    srcLang: params.srcLang,
-    tgtLang: params.tgtLang,
-  });
-}
-
-function buildReviewUserPrompt(params: UserPromptBuildParams): string {
-  return buildReviewUserPromptParts(params).userPrompt;
-}
-
-function buildReviewUserPromptParts(params: UserPromptBuildParams): {
-  userPrompt: string;
-  sections: TextPromptSections;
-} {
-  const sourceBlock = [
-    buildReviewSourceHeader(params.srcLang, params.hasProtectedMarkers),
-    params.sourcePayload,
-  ].join("\n");
-
-  const contextText =
-    typeof params.context === "string" ? params.context.trim() : "";
-  const contextBlock = renderTemplate(REVIEW_PROMPTS.contextLine, {
-    context: contextText,
-  });
-  const currentTranslationBlock = buildCurrentTranslationBlock(params);
-
-  const validationFeedbackBlock = params.validationFeedback
-    ? joinBlock([
-        REVIEW_PROMPTS.validationFeedbackHeader,
-        params.validationFeedback,
-      ])
-    : "";
-
-  const sections = {
-    ...buildEmptyTextPromptSections(),
-    sourceBlock,
-    contextBlock,
-    currentTranslationBlock,
-    validationFeedbackBlock,
-  };
-
-  return {
-    userPrompt: joinPromptBlocks([
-      sourceBlock,
-      contextBlock,
-      currentTranslationBlock,
-      validationFeedbackBlock,
-    ]),
-    sections,
-  };
-}
-
 function buildCustomSystemPrompt(params: SystemPromptBuildParams): string {
   const trimmedProjectPrompt = params.projectPrompt?.trim();
   if (trimmedProjectPrompt) {
@@ -363,125 +274,6 @@ function buildCustomUserPrompt(params: UserPromptBuildParams): string {
   return userParts.join("\n");
 }
 
-function buildDialogueTranslationUserPrompt(
-  params: DialogueUserPromptBuildParams,
-): string {
-  const omitConcordanceReferences = shouldOmitConcordanceReferences(
-    countDialogueTmReferences(params.segments),
-    countDialogueTbReferences(params.segments),
-  );
-  const userParts: string[] = [
-    renderTemplate(DIALOGUE_PROMPTS.introLine, {
-      srcLang: params.srcLang,
-      tgtLang: params.tgtLang,
-    }),
-    DIALOGUE_PROMPTS.jsonContractIntro,
-    DIALOGUE_PROMPTS.jsonContractSchema,
-    DIALOGUE_PROMPTS.preserveIdLine,
-    DIALOGUE_PROMPTS.noOmitIdsLine,
-    "",
-    DIALOGUE_PROMPTS.segmentsHeader,
-  ];
-
-  params.segments.forEach((segment, index) => {
-    userParts.push(
-      renderTemplate(DIALOGUE_PROMPTS.segmentIndexLine, {
-        index: index + 1,
-        id: segment.id,
-      }),
-      renderTemplate(DIALOGUE_PROMPTS.segmentSpeakerLine, {
-        speaker: segment.speaker,
-      }),
-      DIALOGUE_PROMPTS.segmentSourceLabel,
-      segment.sourcePayload,
-    );
-
-    const tmReferences = normalizeTMReferences(
-      segment.tmReferences,
-      segment.tmReference,
-    );
-    const tbReferences = segment.tbReferences ?? [];
-    const concordanceReferences = omitConcordanceReferences
-      ? []
-      : (segment.concordanceReferences ?? []);
-    if (tmReferences.length > 0) {
-      userParts.push(DIALOGUE_PROMPTS.tmHeader);
-      for (const reference of tmReferences) {
-        userParts.push(
-          renderTemplate(DIALOGUE_PROMPTS.tmEntrySummary, {
-            similarity: reference.similarity,
-            tmName: reference.tmName,
-          }),
-          renderTemplate(DIALOGUE_PROMPTS.tmEntrySource, {
-            sourceText: reference.sourceText,
-          }),
-          renderTemplate(DIALOGUE_PROMPTS.tmEntryTarget, {
-            targetText: reference.targetText,
-          }),
-        );
-      }
-    }
-
-    if (concordanceReferences.length > 0) {
-      userParts.push(DIALOGUE_PROMPTS.concordanceHeader);
-      for (const reference of concordanceReferences) {
-        userParts.push(
-          renderTemplate(DIALOGUE_PROMPTS.concordanceEntrySummary, {
-            matchedSourceText: reference.matchedSourceText,
-            tmName: reference.tmName,
-          }),
-          renderTemplate(DIALOGUE_PROMPTS.concordanceEntrySource, {
-            sourceText: reference.sourceText,
-          }),
-          renderTemplate(DIALOGUE_PROMPTS.concordanceEntryTarget, {
-            targetText: reference.targetText,
-          }),
-        );
-      }
-    }
-
-    if (tbReferences.length > 0) {
-      userParts.push(DIALOGUE_PROMPTS.tbHeader);
-      for (const reference of tbReferences) {
-        const note =
-          typeof reference.note === "string" ? reference.note.trim() : "";
-        const noteSuffix = note ? ` (note: ${note})` : "";
-        userParts.push(
-          renderTemplate(DIALOGUE_PROMPTS.tbEntry, {
-            srcTerm: reference.srcTerm,
-            tgtTerm: reference.tgtTerm,
-            noteSuffix,
-          }),
-        );
-      }
-    }
-  });
-
-  if (params.previousGroup) {
-    userParts.push(
-      "",
-      DIALOGUE_PROMPTS.previousGroupHeader,
-      renderTemplate(DIALOGUE_PROMPTS.previousGroupSpeakerLine, {
-        speaker: params.previousGroup.speaker,
-      }),
-      DIALOGUE_PROMPTS.previousGroupSourceLabel,
-      params.previousGroup.sourceText,
-      DIALOGUE_PROMPTS.previousGroupTargetLabel,
-      params.previousGroup.targetText,
-    );
-  }
-
-  if (params.validationFeedback) {
-    userParts.push(
-      "",
-      DIALOGUE_PROMPTS.validationFeedbackHeader,
-      params.validationFeedback,
-    );
-  }
-
-  return userParts.join("\n");
-}
-
 function resolveTextSourcePayload(
   params: Pick<
     TextPromptBundleBuildParams,
@@ -505,9 +297,6 @@ function resolveTextSourcePayload(
 }
 
 export function normalizeProjectType(projectType?: ProjectType): ProjectType {
-  if (projectType === "review") {
-    return "review";
-  }
   if (projectType === "custom") {
     return "custom";
   }
@@ -520,9 +309,6 @@ export function buildAISystemPrompt(
 ): string {
   const normalizedType = normalizeProjectType(projectType);
 
-  if (normalizedType === "review") {
-    return buildReviewSystemPrompt(params);
-  }
   if (normalizedType === "custom") {
     return buildCustomSystemPrompt(params);
   }
@@ -535,19 +321,10 @@ export function buildAIUserPrompt(
 ): string {
   const normalizedType = normalizeProjectType(projectType);
 
-  if (normalizedType === "review") {
-    return buildReviewUserPrompt(params);
-  }
   if (normalizedType === "custom") {
     return buildCustomUserPrompt(params);
   }
   return buildTranslationUserPrompt(params);
-}
-
-export function buildAIDialogueUserPrompt(
-  params: DialogueUserPromptBuildParams,
-): string {
-  return buildDialogueTranslationUserPrompt(params);
 }
 
 export function buildAITextPromptBundle(
@@ -573,8 +350,6 @@ export function buildAITextPromptBundle(
   const userPromptParts =
     normalizedType === "translation"
       ? buildTranslationUserPromptParts(userPromptParams)
-      : normalizedType === "review"
-        ? buildReviewUserPromptParts(userPromptParams)
       : {
           userPrompt: buildAIUserPrompt(normalizedType, userPromptParams),
           sections: buildEmptyTextPromptSections(),
@@ -632,46 +407,4 @@ function shouldOmitConcordanceReferences(
     tbReferenceCount > 0 &&
     tmReferenceCount + tbReferenceCount > MAX_TM_TB_REFERENCES_WITH_CONCORDANCE
   );
-}
-
-function countDialogueTmReferences(
-  segments: DialogueUserPromptBuildParams["segments"],
-): number {
-  return segments.reduce(
-    (count, segment) =>
-      count +
-      normalizeTMReferences(segment.tmReferences, segment.tmReference).length,
-    0,
-  );
-}
-
-function countDialogueTbReferences(
-  segments: DialogueUserPromptBuildParams["segments"],
-): number {
-  return segments.reduce(
-    (count, segment) => count + (segment.tbReferences?.length ?? 0),
-    0,
-  );
-}
-
-export function buildAIDialoguePromptBundle(
-  params: DialoguePromptBundleBuildParams,
-): {
-  systemPrompt: string;
-  userPrompt: string;
-} {
-  return {
-    systemPrompt: buildAISystemPrompt("translation", {
-      srcLang: params.srcLang,
-      tgtLang: params.tgtLang,
-      projectPrompt: params.projectPrompt,
-    }),
-    userPrompt: buildAIDialogueUserPrompt({
-      srcLang: params.srcLang,
-      tgtLang: params.tgtLang,
-      segments: params.segments,
-      previousGroup: params.previousGroup,
-      validationFeedback: params.validationFeedback,
-    }),
-  };
 }

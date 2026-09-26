@@ -129,8 +129,6 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
 
       projectService
         .aiTranslateFile(fileId, {
-          mode: options?.mode,
-          targetScope: options?.targetScope,
           targetBaseline: options?.targetBaseline,
           segmentIds: options?.segmentIds,
           cancellationToken,

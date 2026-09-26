@@ -1,20 +1,11 @@
-import type { LocalizationTargetBaseline, LocalizationTargetScope } from './types';
+import type { LocalizationTargetBaseline } from './types';
 
 export interface TargetBaselineOptions {
   targetBaseline?: LocalizationTargetBaseline;
-  targetScope?: LocalizationTargetScope;
 }
 
-export function resolveTargetBaseline(
-  options?: TargetBaselineOptions,
-): LocalizationTargetBaseline {
-  if (options?.targetBaseline) {
-    return options.targetBaseline;
-  }
-
-  return options?.targetScope === 'overwrite-non-confirmed'
-    ? 'ignore-current-targets'
-    : 'use-current-targets';
+export function resolveTargetBaseline(options?: TargetBaselineOptions): LocalizationTargetBaseline {
+  return options?.targetBaseline ?? 'use-current-targets';
 }
 
 export function normalizeTargetForBaseline(input: {

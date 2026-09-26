@@ -4,11 +4,7 @@ import type {
   UnitResult,
   UnitResultStatus,
 } from '../../job/types';
-import type {
-  ExternalTranslationUnit,
-  TranslateUnitResult,
-  TranslateUnitsResult,
-} from '../../types';
+import type { ExternalTranslationUnit, TranslateUnitResult } from '../../types';
 import type { PreparedTranslationArtifacts } from '../types';
 
 export function jobUnitToExternalUnit(unit: {
@@ -69,20 +65,4 @@ export function toArtifactRecord(
     error: result.error,
     at: new Date().toISOString(),
   };
-}
-
-export function buildTranslateUnitsResult(results: TranslateUnitResult[]): TranslateUnitsResult {
-  const reused = results.filter((result) => result.status === 'reused').length;
-  const summary: TranslateUnitsResult['summary'] = {
-    total: results.length,
-    translated: results.filter((result) => result.status === 'translated').length,
-    skipped: results.filter((result) => result.status === 'skipped').length,
-    failed: results.filter((result) => result.status === 'failed').length,
-  };
-
-  if (reused > 0) {
-    summary.reused = reused;
-  }
-
-  return { summary, results };
 }

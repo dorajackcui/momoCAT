@@ -193,385 +193,8 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-describe('LocalizationEngine.translateUnits', () => {
-  it('translates external units through project MT without creating files or segments', async () => {
-    const db = new CATDatabase(':memory:');
-    try {
-      const projectId = db.createProject('External MT', 'en', 'fr');
-      seedConfiguredAIProvider(db, projectId);
-      const initialFiles = db.listFiles(projectId);
-      const transport = createTransport('Bonjour');
-      const engine = new LocalizationEngine(db, {
-        dbPath: ':memory:',
-        aiTransport: transport,
-      });
-
-      const result = await engine.translateUnits({
-        projectId,
-        units: [{ id: 'unit-1', source: 'Hello' }],
-      });
-
-      expect(result.summary).toEqual({
-        total: 1,
-        translated: 1,
-        skipped: 0,
-        failed: 0,
-      });
-      expect(result.results).toEqual([
-        {
-          id: 'unit-1',
-          source: 'Hello',
-          target: 'Bonjour',
-          status: 'translated',
-          metadata: undefined,
-          references: undefined,
-        },
-      ]);
-      expect(transport.createResponse).toHaveBeenCalledTimes(1);
-      expect(db.listFiles(projectId)).toEqual(initialFiles);
-      expect(db.getProjectStats(projectId)).toEqual([]);
-    } finally {
-      db.close();
-    }
-  });
-
-  it('translates marker-like external units as plain text when tag policy is none', async () => {
-    const db = new CATDatabase(':memory:');
-    try {
-      const projectId = db.createProject('External Plain Markers', 'en', 'fr');
-      seedConfiguredAIProvider(db, projectId);
-      const transport = createTransport('Bonjour {1>nom<2}');
-      const engine = new LocalizationEngine(db, {
-        dbPath: ':memory:',
-        aiTransport: transport,
-      });
-
-      const result = await engine.translateUnits({
-        projectId,
-        units: [{ id: 'unit-1', source: 'Hello {1>name<2} <b>x</b>' }],
-        options: { tagPolicy: 'none' },
-      });
-
-      expect(result.results[0]).toMatchObject({
-        id: 'unit-1',
-        source: 'Hello {1>name<2} <b>x</b>',
-        target: 'Bonjour {1>nom<2}',
-        status: 'translated',
-      });
-      const request = transport.createResponse.mock.calls[0]?.[0];
-      expect(request.userPrompt).toContain('Hello {1>name<2} <b>x</b>');
-      expect(request.userPrompt).not.toContain('{1>x<2}');
-      expect(transport.createResponse).toHaveBeenCalledTimes(1);
-    } finally {
-      db.close();
-    }
-  });
-
-  it('resolves TM and TB references for transient units without persisting file records', async () => {
-    const db = new CATDatabase(':memory:');
-    try {
-      const projectId = db.createProject('External References', 'en', 'fr');
-      seedConfiguredAIProvider(db, projectId);
-      const tmId = db.createTM('Client Main TM', 'en', 'fr', 'main');
-      db.mountTMToProject(projectId, tmId, 10, 'read');
-      const tmEntry = createTMEntry({
-        tmId,
-        projectId,
-        sourceText: 'Hello world',
-        targetText: 'Bonjour le monde',
-      });
-      const tmEntryId = db.upsertTMEntryBySrcHash(tmEntry);
-      db.replaceTMFts(
-        tmId,
-        serializeTokensToDisplayText(tmEntry.sourceTokens),
-        serializeTokensToDisplayText(tmEntry.targetTokens),
-        tmEntryId,
-      );
-
-      const tbId = db.createTermBase('Client Terms', 'en', 'fr');
-      db.mountTermBaseToProject(projectId, tbId, 20);
-      db.insertTBEntryIfAbsentBySrcTerm({
-        id: 'term-world',
-        tbId,
-        srcLang: 'en',
-        srcTerm: 'world',
-        tgtTerm: 'monde',
-        note: 'Use the common noun.',
-      });
-
-      const transport = createTransport('Bonjour le monde');
-      const engine = new LocalizationEngine(db, {
-        dbPath: ':memory:',
-        aiTransport: transport,
-      });
-
-      const result = await engine.translateUnits({
-        projectId,
-        units: [{ id: 'unit-1', source: 'Hello world' }],
-        options: { includeReferences: true },
-      });
-
-      expect(result.summary).toEqual({
-        total: 1,
-        translated: 1,
-        skipped: 0,
-        failed: 0,
-      });
-      expect(result.results[0]).toMatchObject({
-        id: 'unit-1',
-        target: 'Bonjour le monde',
-        status: 'translated',
-        references: {
-          tm: [
-            expect.objectContaining({
-              kind: 'tm',
-              tmName: 'Client Main TM',
-              sourceText: 'Hello world',
-              targetText: 'Bonjour le monde',
-              similarity: 100,
-            }),
-          ],
-          tb: [
-            expect.objectContaining({
-              tbName: 'Client Terms',
-              srcTerm: 'world',
-              tgtTerm: 'monde',
-              note: 'Use the common noun.',
-            }),
-          ],
-        },
-      });
-      const request = transport.createResponse.mock.calls[0]?.[0];
-      expect(request.userPrompt).toMatch(/Client Main TM[\s\S]*Use the common noun\./);
-      expect(request.userPrompt).toContain('Client Main TM');
-      expect(request.userPrompt).toContain('Bonjour le monde');
-      expect(request.userPrompt).toContain('world');
-      expect(request.userPrompt).toContain('monde');
-      expect(db.listFiles(projectId)).toEqual([]);
-    } finally {
-      db.close();
-    }
-  });
-
-  it('skips non-empty targets in blank-only mode without calling provider transport', async () => {
-    const db = new CATDatabase(':memory:');
-    try {
-      const projectId = db.createProject('Blank Only', 'en', 'fr');
-      const transport = createTransport('Bonjour');
-      const engine = new LocalizationEngine(db, {
-        dbPath: ':memory:',
-        aiTransport: transport,
-      });
-
-      const result = await engine.translateUnits({
-        projectId,
-        units: [{ id: 'unit-1', source: 'Hello', target: 'Already translated' }],
-        options: { targetScope: 'blank-only' },
-      });
-
-      expect(result.summary).toEqual({
-        total: 1,
-        translated: 0,
-        skipped: 1,
-        failed: 0,
-      });
-      expect(result.results).toEqual([
-        {
-          id: 'unit-1',
-          source: 'Hello',
-          target: 'Already translated',
-          status: 'skipped',
-          metadata: undefined,
-        },
-      ]);
-      expect(transport.createResponse).not.toHaveBeenCalled();
-      expect(db.listFiles(projectId)).toEqual([]);
-    } finally {
-      db.close();
-    }
-  });
-
-  it('does not require provider setup for skip-only batches without an API key', async () => {
-    const db = new CATDatabase(':memory:');
-    try {
-      const projectId = db.createProject('Skip Without Key', 'en', 'fr');
-      const transport = createTransport('Bonjour');
-      const engine = new LocalizationEngine(db, {
-        dbPath: ':memory:',
-        aiTransport: transport,
-      });
-
-      const result = await engine.translateUnits({
-        projectId,
-        units: [
-          { id: 'blank-source', source: '   ' },
-          { id: 'already-targeted', source: 'Hello', target: 'Deja traduit' },
-        ],
-        options: { targetScope: 'blank-only' },
-      });
-
-      expect(result.summary).toEqual({
-        total: 2,
-        translated: 0,
-        skipped: 2,
-        failed: 0,
-      });
-      expect(result.results).toEqual([
-        {
-          id: 'blank-source',
-          source: '   ',
-          target: '',
-          status: 'skipped',
-          metadata: undefined,
-        },
-        {
-          id: 'already-targeted',
-          source: 'Hello',
-          target: 'Deja traduit',
-          status: 'skipped',
-          metadata: undefined,
-        },
-      ]);
-      expect(transport.createResponse).not.toHaveBeenCalled();
-    } finally {
-      db.close();
-    }
-  });
-
-  it('applies constructor MT defaults when call options omit them', async () => {
-    const db = new CATDatabase(':memory:');
-    try {
-      const projectId = db.createProject('Constructor MT Defaults', 'en', 'fr');
-      seedConfiguredAIProvider(db, projectId);
-      const transport = createTransport('Salut');
-      const engine = new LocalizationEngine(db, {
-        dbPath: ':memory:',
-        aiTransport: transport,
-        mt: {
-          model: 'engine-default-model',
-          reasoningEffort: 'low',
-          systemPrompt: 'Use nautical tone.',
-        },
-      });
-
-      await engine.translateUnits({
-        projectId,
-        units: [{ id: 'unit-1', source: 'Hello' }],
-      });
-
-      const request = transport.createResponse.mock.calls[0]?.[0];
-      expect(request.model).toBe('engine-default-model');
-      expect(request.reasoningEffort).toBe('low');
-      expect(request.systemPrompt).toContain('Use nautical tone.');
-    } finally {
-      db.close();
-    }
-  });
-
-  it('keeps constructor MT defaults when call MT fields are explicitly undefined', async () => {
-    const db = new CATDatabase(':memory:');
-    try {
-      const projectId = db.createProject('Constructor MT Undefined Defaults', 'en', 'fr');
-      seedConfiguredAIProvider(db, projectId);
-      const transport = createTransport('Salut');
-      const engine = new LocalizationEngine(db, {
-        dbPath: ':memory:',
-        aiTransport: transport,
-        mt: {
-          model: 'engine-default-model',
-          reasoningEffort: 'low',
-          systemPrompt: 'Use nautical tone.',
-        },
-      });
-
-      await engine.translateUnits({
-        projectId,
-        units: [{ id: 'unit-1', source: 'Hello' }],
-        options: {
-          mt: {
-            model: undefined,
-            reasoningEffort: undefined,
-            systemPrompt: undefined,
-          },
-        },
-      });
-
-      const request = transport.createResponse.mock.calls[0]?.[0];
-      expect(request.model).toBe('engine-default-model');
-      expect(request.reasoningEffort).toBe('low');
-      expect(request.systemPrompt).toContain('Use nautical tone.');
-    } finally {
-      db.close();
-    }
-  });
-
-  it('rejects dialogue mode for external units without contacting the provider', async () => {
-    const db = new CATDatabase(':memory:');
-    try {
-      const projectId = db.createProject('Dialogue External', 'en', 'fr');
-      const transport = createTransport('Bonjour');
-      const engine = new LocalizationEngine(db, {
-        dbPath: ':memory:',
-        aiTransport: transport,
-      });
-
-      await expect(
-        engine.translateUnits({
-          projectId,
-          units: [{ id: 'unit-1', source: 'Hello' }],
-          options: { mode: 'dialogue' },
-        }),
-      ).rejects.toThrow(/dialogue mode is not supported/i);
-      expect(transport.createResponse).not.toHaveBeenCalled();
-    } finally {
-      db.close();
-    }
-  });
-
-  it('keeps legacy translateUnits on bounded single-unit concurrency', async () => {
-    const db = new CATDatabase(':memory:');
-    try {
-      const projectId = db.createProject('Legacy Concurrency', 'en', 'fr');
-      seedConfiguredAIProvider(db, projectId);
-      let active = 0;
-      let maxActive = 0;
-      const transport = createTransport();
-      transport.createResponse.mockImplementation(async () => {
-        active += 1;
-        maxActive = Math.max(maxActive, active);
-        await delay(20);
-        active -= 1;
-        return {
-          content: 'Bonjour',
-          status: 200,
-          endpoint: '/mock',
-        };
-      });
-      const engine = new LocalizationEngine(db, {
-        dbPath: ':memory:',
-        aiTransport: transport,
-      });
-
-      await engine.translateUnits({
-        projectId,
-        units: [
-          { id: 'unit-1', source: 'Hello 1' },
-          { id: 'unit-2', source: 'Hello 2' },
-          { id: 'unit-3', source: 'Hello 3' },
-        ],
-        options: { maxConcurrency: 2 },
-      });
-
-      expect(transport.createResponse).toHaveBeenCalledTimes(3);
-      expect(maxActive).toBe(2);
-    } finally {
-      db.close();
-    }
-  });
-});
-
 describe('LocalizationEngine.translateFile job mode', () => {
-  it('uses explicit Window Mode batches and sends later batches only after earlier targets exist', async () => {
+  it.each([true, false])('uses sequential Window Mode batches with explicit job options: %s', async (withJob) => {
     const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
     const db = new CATDatabase(':memory:');
     try {
@@ -615,7 +238,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
         inputPath,
         outputPath,
         options: { requestMode: 'window' },
-        job: { maxAttempts: 1 },
+        job: withJob ? { maxAttempts: 1 } : undefined,
       });
 
       expect(result.summary).toEqual({ total: 6, translated: 6, skipped: 0, failed: 0 });
@@ -891,7 +514,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
         projectId,
         inputPath,
         outputPath,
-        options: { requestMode: 'window-partial', targetScope: 'blank-only' },
+        options: { requestMode: 'window-partial', targetBaseline: 'use-current-targets' },
         job: { maxAttempts: 1 },
       });
 
@@ -955,7 +578,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
         projectId,
         inputPath,
         outputPath,
-        options: { requestMode: 'window-partial', targetScope: 'blank-only' },
+        options: { requestMode: 'window-partial', targetBaseline: 'use-current-targets' },
         job: { maxAttempts: 1 },
       });
 
@@ -1042,7 +665,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
     }
   });
 
-  it('honors blank-only target scope without contacting the provider', async () => {
+  it('preserves the current-target baseline without contacting the provider', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
     const db = new CATDatabase(':memory:');
     try {
@@ -1070,7 +693,7 @@ describe('LocalizationEngine.translateFile job mode', () => {
         projectId,
         inputPath,
         outputPath,
-        options: { targetScope: 'blank-only' },
+        options: { targetBaseline: 'use-current-targets' },
         job: { maxAttempts: 1 },
       });
 
@@ -1141,45 +764,6 @@ describe('LocalizationEngine.translateFile job mode', () => {
         defval: '',
       }) as string[][];
       expect(rows[2][1]).toBe('Milieu');
-    } finally {
-      db.close();
-      await rm(root, { recursive: true, force: true });
-    }
-  });
-
-  it('rejects dialogue mode before starting a file job', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'cat-engine-file-job-'));
-    const db = new CATDatabase(':memory:');
-    try {
-      const projectId = db.createProject('External File Dialogue', 'en', 'fr');
-      const inputPath = join(root, 'mt.xlsx');
-      const outputPath = join(root, 'mt.translated.xlsx');
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(
-        workbook,
-        XLSX.utils.aoa_to_sheet([
-          ['source', 'target'],
-          ['Hello', ''],
-        ]),
-        'Sheet1',
-      );
-      XLSX.writeFile(workbook, inputPath);
-      const transport = createTransport('Bonjour');
-      const engine = new LocalizationEngine(db, {
-        dbPath: ':memory:',
-        aiTransport: transport,
-      });
-
-      await expect(
-        engine.translateFile({
-          projectId,
-          inputPath,
-          outputPath,
-          options: { mode: 'dialogue' },
-          job: { maxAttempts: 1 },
-        }),
-      ).rejects.toThrow(/dialogue mode is not supported/i);
-      expect(transport.createResponse).not.toHaveBeenCalled();
     } finally {
       db.close();
       await rm(root, { recursive: true, force: true });
@@ -1479,7 +1063,7 @@ describe('LocalizationEngine.translateProjectSegments', () => {
           { id: 'seg-5', source: 'Save progress' },
           { id: 'seg-6', source: 'Install package' },
         ],
-        options: { targetScope: 'blank-only' },
+        options: { targetBaseline: 'use-current-targets' },
         job: { maxAttempts: 1 },
         onResult,
       });
@@ -1540,7 +1124,7 @@ describe('LocalizationEngine.translateProjectSegments', () => {
     }
   });
 
-  it('uses defaultTargetScope for project segment jobs with existing non-confirmed targets', async () => {
+  it('uses an explicit overwrite baseline for project segment jobs with existing non-confirmed targets', async () => {
     const db = new CATDatabase(':memory:');
     try {
       const projectId = db.createProject('Project Segment Default Target Scope', 'en', 'fr');
@@ -1553,13 +1137,14 @@ describe('LocalizationEngine.translateProjectSegments', () => {
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',
         aiTransport: transport,
-        defaultTargetScope: 'overwrite-non-confirmed',
+
       });
 
       const result = await engine.translateProjectSegments({
         projectId,
         documentId: 'doc-1',
         units: [{ id: 'seg-1', source: 'Draft copy', target: 'Ancien brouillon' }],
+        options: { targetBaseline: 'ignore-current-targets' },
         job: { maxAttempts: 1 },
       });
 
@@ -1597,7 +1182,8 @@ describe('LocalizationEngine task executor', () => {
       Reflect.set(options, 'tagPolicy', 'html-only');
 
       await expect(
-        engine.translateUnits({
+        engine.translateProjectSegments({
+          documentId: 'test',
           projectId,
           units: [{ id: 'unit-1', source: 'Hello' }],
           options,
@@ -1748,7 +1334,6 @@ describe('LocalizationEngine task executor', () => {
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',
         aiTransport: transport,
-        defaultTargetScope: 'blank-only',
       });
 
       const result = await engine.executeTranslationTask(
@@ -2035,7 +1620,6 @@ describe('LocalizationEngine task executor', () => {
       const engine = new LocalizationEngine(db, {
         dbPath: ':memory:',
         aiTransport: transport,
-        defaultTargetScope: 'blank-only',
       });
       const units = [
         {

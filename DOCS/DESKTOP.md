@@ -24,7 +24,7 @@ Paths below are relative to `apps/desktop/src` unless linked elsewhere. Start wi
 
 The renderer has a project sidebar and one content area. Project pages order **Tasks | AI provider | Translation memory | Term bases | QA**; global Settings orders **AI Connections | Proxy | Term Extraction | Appearance | Updates**. Global TM/TB catalogs manage resources; project resource tabs manage mounting. Each task is an imported file.
 
-CAT hides the sidebar. Returning to the project restores direct navigation. Project menus support keyboard dismissal, persistent pinning, and typed-name confirmation for deletion. Pinned and regular project sections collapse independently and restore their local preferences across launches. Project icons show T, R, or C for translation, review, or custom projects; an unspecified type uses T.
+CAT hides the sidebar. Returning to the project restores direct navigation. Project menus support keyboard dismissal, persistent pinning, and typed-name confirmation for deletion. Pinned and regular project sections collapse independently and restore their local preferences across launches. Project icons show T or C for Translation or Custom projects; an unspecified type uses T.
 
 Clicking a task title or non-control row space opens the file; rename fields and actions handle their own clicks. Task actions stay visible with right-side breathing room and wrap on narrow windows. Rows distinguish confirmation progress, QA issue count, and background-job progress. Global TM/TB catalogs use responsive cards; their entry previews show at most ten rows.
 
@@ -117,7 +117,7 @@ Workspace and CAT have independent saved color and typography preferences. Works
 - `border-subtle` separates regions; `border` outlines controls. The active target and selected TM result use `shadow-active`. Status, match badges, QA, search, selection, caret, and focus have independent semantic roles.
 - Reference badges use green for exact matches, blue for fuzzy, gold for TB, and neutral gray for concordance, with white lettering. Resource provenance remains in tooltips and accessible labels.
 
-[Theme tests](../apps/desktop/src/renderer/src/theme/ThemeProvider.test.tsx) cover preference restoration and failures; [theme E2E](../apps/desktop/e2e/editor-themes.smoke.spec.ts) covers palettes, portals, editing continuity, and review projects.
+[Theme tests](../apps/desktop/src/renderer/src/theme/ThemeProvider.test.tsx) cover preference restoration and failures; [theme E2E](../apps/desktop/e2e/editor-themes.smoke.spec.ts) covers palettes, portals, editing continuity, and Custom projects.
 
 ### Typography
 
@@ -165,7 +165,7 @@ The editor's unload/pagehide hooks start a best-effort flush. They are not an aw
 
 Paste imports name the task from the first five filename-safe characters of the first non-empty segment plus the local date (`YYYY-MM-DD`), retaining the CSV extension and adding a numeric suffix on collisions.
 
-The CAT editor toolbar's AI Translate action defaults to the current filtered results when filters are active and offers the entire file as an alternative. Opening the dialog snapshots all matching segment IDs using the latest filter input, including context searches. Display sorting does not change translation order. The Tasks tab translates entire files. Planning, confirmed-row locking, and selected-scope result identity follow the [localization contract](LOCALIZATION.md#mt-request-planning).
+For Translation and Custom projects, the CAT editor toolbar's AI Translate / AI Process action defaults to the current filtered results when filters are active and offers the entire file as an alternative. Opening the dialog snapshots all matching segment IDs using the latest filter input, including context searches. Display sorting does not change translation order. The Tasks tab processes entire files. Both project types offer preserving existing outputs or regenerating unconfirmed rows. Planning, confirmed-row locking, and selected-scope result identity follow the [localization contract](LOCALIZATION.md#mt-request-planning).
 
 Job handlers dispatch long operations through `JobManager` and the corresponding service/worker. The renderer tracks returned job identities and progress; progress notifications do not prove that a write committed. Preserve cooperative cancellation and the workflow's completion/failure outcome when adding UI actions. Reference export, source terminology precheck, and TM/TB sync retain their own [localization contracts](LOCALIZATION.md).
 

@@ -137,7 +137,7 @@ function createAIControllerMock(overrides?: Partial<ProjectAIController>): {
   return { ai, startAITranslateFile };
 }
 
-function renderPane(ai: ProjectAIController, projectType: 'translation' | 'review' | 'custom') {
+function renderPane(ai: ProjectAIController, projectType: 'translation' | 'custom') {
   return render(
     React.createElement(ProjectFilesPane, {
       files: [createFile()],
@@ -273,9 +273,7 @@ describe('ProjectFilesPane', () => {
 
   it('keeps one-click AI action for non-translation projects', () => {
     const { ai } = createAIControllerMock();
-    const html = renderPane(ai, 'review');
-
-    expect(html).toContain('AI Review');
+    const html = renderPane(ai, 'custom');
     expect(html).not.toContain('TM/TB');
     expect(html).not.toContain('AI Translate Options');
   });
