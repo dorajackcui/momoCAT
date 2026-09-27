@@ -109,7 +109,7 @@ The [UI boundary check](../apps/desktop/src/renderer/src/components/ui/boundary.
 
 Workspace and CAT have independent saved color and typography preferences. Workspace defaults to Sand; CAT defaults to Classic. Both also offer Nord through the shared [AppearancePicker](../apps/desktop/src/renderer/src/components/ui/AppearancePicker.tsx). [ThemeProvider](../apps/desktop/src/renderer/src/theme/ThemeProvider.tsx) applies the active scope's palette to the document root; switching scope restores its preference without remounting the editor. Storage failures do not block switching.
 
-[colorThemes.ts](../apps/desktop/src/renderer/src/theme/colorThemes.ts) owns labels and defaults; [themePreferences.ts](../apps/desktop/src/renderer/src/theme/themePreferences.ts) owns restoration. Charcoal preferences migrate to Nord; unsupported values fall back to the active scope's default. Palette source comments identify upstream colors and application adjustments.
+[colorThemes.ts](../apps/desktop/src/renderer/src/theme/colorThemes.ts) owns labels and defaults; [themePreferences.ts](../apps/desktop/src/renderer/src/theme/themePreferences.ts) owns saved-value normalization and restoration. Palette source comments identify upstream colors and application adjustments.
 
 - Brand roles identify primary actions, selected choices, and running progress. `brand-solid` pairs with `brand-contrast` for filled actions; `brand` serves contrasting small text. Auxiliary actions and persistent in-use labels are neutral.
 - Green identifies successful outcomes, confirmation progress, and added diff text. Import mapping uses brand for source/input, info for target/output, and neutral for context.
@@ -121,7 +121,7 @@ Workspace and CAT have independent saved color and typography preferences. Works
 
 ### Typography
 
-[typography.ts](../apps/desktop/src/renderer/src/theme/typography.ts) owns Chinese/Western font choices, sizes, and scoped preferences. The default is Noto Sans SC with Source Serif 4 at 16px; alternatives are Noto Serif SC, Source Sans 3, and 14px. Missing saved sizes use 16px; the retired Western Noto choice falls back to Source Serif 4 while preserving the Chinese choice.
+[typography.ts](../apps/desktop/src/renderer/src/theme/typography.ts) owns Chinese/Western font choices, sizes, defaults, and saved-value normalization. Each preference is restored independently within its workspace or CAT scope.
 
 [TypographyProvider](../apps/desktop/src/renderer/src/theme/TypographyProvider.tsx) applies choices without remounting content. Controls keep the interface sans-serif stack. CAT source/target, reference text, context, and workspace previews use separate named reading roles, so changing one does not resize unrelated labels. CAT Western body text uses the typography owner's fixed-weight aliases; Chinese fallback and interface weights remain independent. Context stays right-aligned, italic, single-line, and reveals full text on hover.
 

@@ -14,7 +14,7 @@ apps/desktop ───────> @cat/localization
        └────────────> @cat/core
 ```
 
-The CLI is deliberately thin. The desktop is a richer application host and currently consumes all three shared packages directly. Shared headless behavior belongs in `@cat/localization`; desktop-only UI and lifecycle behavior belongs under `apps/desktop`.
+CLI and Desktop are application hosts. Shared headless behavior belongs in `@cat/localization`; desktop UI and lifecycle behavior belongs under `apps/desktop`, which consumes all three shared packages directly.
 
 ## Workspace ownership
 
@@ -35,7 +35,7 @@ renderer -> typed preload API -> IPC handlers -> services/modules -> adapters/sh
 - Adapters translate desktop service ports to `CATDatabase` and other infrastructure.
 - Workers handle expensive import, sync, and reference work without blocking the Electron main thread.
 
-Desktop and CLI host the shared localization capabilities. Single-segment translation/refinement and batch execution live in `@cat/localization`; desktop adapters load editor state, serialize operations, persist results, and publish events. Both Translation and Custom projects use the same window job pipeline. File translation always uses that pipeline, including calls without explicit job options.
+Desktop adapters load editor state, serialize operations, persist results, and publish events. They delegate single-segment translation/refinement and batch execution to `@cat/localization`; project behavior and request contracts belong to [Localization](LOCALIZATION.md#mt-request-planning).
 
 [Desktop](DESKTOP.md) owns editor persistence, UI/event coordination, and the code/test map for changing these boundaries.
 
@@ -55,6 +55,7 @@ It must not import `@cat/db`, `@cat/core`, or desktop internals directly. This r
 The shared orchestration layer owns:
 
 - external file adapters and transient units;
+- single-segment translation/refinement and prompt testing;
 - inspect and reference-export workflows;
 - request-mode planning and resumable jobs;
 - checkpoints, events, snapshots, audit records, and optional artifacts;

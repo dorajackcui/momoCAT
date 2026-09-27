@@ -13,11 +13,9 @@ Startup behavior is intentionally strict:
 3. A current-v15 database receives idempotent same-version maintenance before use.
 4. A non-v15 or partial base schema is rejected; normal startup does not replay historical migrations.
 
-“Same-version maintenance” is narrower than a historical migration. It currently creates performance indexes and additive support structures used by features introduced while the marker remained v15. Code that needs a recovery/import path must implement it explicitly rather than weakening startup validation.
-
 ## Repository ownership
 
-Applications and shared services continue to call `CATDatabase`; TM workflows enter through `TMRepo`. Internal collaborators share the same SQLite connection and are not alternate application APIs.
+Applications and shared services call `CATDatabase`; TM workflows enter through `TMRepo`. Internal collaborators share the same SQLite connection and are not alternate application APIs.
 
 | Responsibility                                                    | Owner                                                                                                                                                      |
 | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -36,20 +34,20 @@ Validate facade behavior in [TMRepo.test.ts](../packages/db/src/repos/TMRepo.tes
 
 ### Projects and files
 
-| Table             | Role                                                                                                      |
-| ----------------- | --------------------------------------------------------------------------------------------------------- |
-| `projects`        | Project identity, language pair, project type, AI selection/prompt compatibility fields, and QA settings. |
-| `files`           | Imported project files, import options, segment totals, and confirmed totals.                             |
-| `segments`        | Ordered token-backed source/target units, status, hashes, metadata, and QA issues.                        |
-| `project_prompts` | Named project-level saved prompts. A grandfathered authoritative table added through v15 maintenance.     |
+| Table             | Role                                                                                         |
+| ----------------- | -------------------------------------------------------------------------------------------- |
+| `projects`        | Project identity, language pair, project type, AI provider/prompt settings, and QA settings. |
+| `files`           | Imported project files, import options, segment totals, and confirmed totals.                |
+| `segments`        | Ordered token-backed source/target units, status, hashes, metadata, and QA issues.           |
+| `project_prompts` | Named project-level saved prompts.                                                           |
 
 Important project fields:
 
-- `projectType` selects Translation or Custom behavior. Repository reads expose legacy `review` rows as Custom with their effective review instruction materialized into `aiPrompt`; inputs, contexts, outputs, timestamps, and stored rows remain unchanged on read. Saving the project prompt or AI settings persists the Custom type and edited prompt, so language instructions are not reapplied. New Review projects are rejected.
+- `projectType` accepts Translation or Custom. Stored `review` rows read as Custom with their effective instruction in `aiPrompt`, without database writes. Saving the prompt or AI settings persists that conversion. [Compatibility tests](../packages/db/src/repos/ProjectRepo.compatibility.test.ts) own this boundary.
 - `aiModel` stores the selected provider id, not a secret. An unset provider uses the empty-string default; nullable API inputs are normalized on write so a project prompt can be saved before a provider is configured.
-- `aiPrompt` is the legacy/default project prompt surface.
+- `aiPrompt` stores the active project instruction; `project_prompts` stores reusable named prompts.
 - `aiTemperature` remains for compatibility but is not the runtime tuning source of truth.
-- `qaSettingsJson` stores enabled category IDs, disabled optional check IDs, instant-on-confirm, and tag/term/substring options (including standard tag types; legacy tagMode is accepted then removed during normalization). Missing fields receive shared defaults without enabling extra categories in existing saved configurations. The contract lives in [QA settings](../packages/core/src/project/qaSettings.ts); this remains schema v15 JSON.
+- `qaSettingsJson` stores enabled categories, disabled optional checks, instant-on-confirm, and tag/term/substring options. [QA settings](../packages/core/src/project/qaSettings.ts) owns defaults and normalization; [QA compatibility](LOCALIZATION.md#qa-compatibility-boundaries) owns accepted older values.
 
 Important file/segment fields:
 
@@ -57,16 +55,13 @@ Important file/segment fields:
 - Renaming an imported file preserves its extension, identity, segments, statistics, import options, and `updatedAt`. When the internal project copy exists it is renamed with the metadata; if it is already missing, the metadata rename succeeds with an explicit degraded result so the desktop can warn that path-based operations remain unavailable.
 - `segments.sourceTokensJson` and `targetTokensJson` are authoritative token payloads.
 - Segment workflow status is `empty`, `draft`, or `confirmed`. Unconfirmed targets with non-whitespace content (including tags) are `draft`; the rest are `empty`. Explicit confirmation is retained until an edit replaces it. AI translation and custom processing produce unconfirmed targets and do not encode their origin in workflow status.
-- This status change is repository-only compatibility on the existing v15 `TEXT` column: reads map legacy `new`, `translated`, and `reviewed` values by target content, while every insert/update writes a canonical state. Opening a database does not rewrite segment data or timestamps. Project/file aggregates use the same normalization for legacy rows, including readonly connections; file progress exposes `emptySegments` for the remaining empty bucket.
+- Reads normalize stored `new`, `translated`, and `reviewed` values by target content without rewriting data or timestamps; writes use canonical states. Project/file aggregates apply the same normalization, including on readonly connections; file progress exposes `emptySegments` for the empty bucket.
 - `tagsSignature`, `matchKey`, and `srcHash` support tag-aware TM/repeat matching.
 - `segments.metaJson` stores row/context metadata.
 - `segments.qaIssuesJson` stores the last persisted QA findings, including optional group identity/label, terminology origins, and reference rows. NULL means no saved result; `[]` is a saved result with no findings. Neither alone proves whole-file freshness. Replacement, merging, and invalidation follow the [QA result lifecycle](LOCALIZATION.md#qa-result-lifecycle); legacy fields follow the [compatibility boundary](LOCALIZATION.md#qa-compatibility-boundaries).
 - `files.totalSegments` and `confirmedSegments` are maintained statistics; segment state remains the behavioral source.
 
-Repeat groups and their first occurrence are derived from `fileId`, `srcHash`, and `orderIndex`.
-No follow/detach state is persisted. Legacy `metaJson.repeatPropagation` values are ignored and
-left untouched; opening or editing an existing v15 database needs no metadata rewrite or schema
-change. Propagation behavior is owned by [Localization](LOCALIZATION.md#desktop-working-tm-and-repeated-segments).
+Repeat groups and their first occurrence are derived from `fileId`, `srcHash`, and `orderIndex`. Stored `metaJson.repeatPropagation` values are ignored and left untouched. Propagation behavior is owned by [Localization](LOCALIZATION.md#desktop-working-tm-and-repeated-segments).
 
 ### Translation memories
 
@@ -106,7 +101,7 @@ Durable key families include:
 - TM/TB external-file sync configuration and last outcome;
 - other app-level settings owned by repository/services.
 
-Each TM external-file sync value stores the linked file path, reviewed source/target columns, and a column identity. Header-based identities contain the reviewed positions and header text; headerless identities contain the reviewed positions, while their one-use review authorization remains process-local and is never persisted. Bindings created before this identity existed remain readable for UI display but must be reviewed and re-saved before strict sync. The same JSON also stores the latest run outcome and the last fully successful conflict baseline. A changed binding starts without the previous run history; legacy deletion-policy fields are tolerated on read but have no behavioral effect.
+TM external-file sync settings store the linked path, source/target column positions, column identity, latest outcome, and last successful conflict baseline. Header-based identities also store header text; headerless one-use approval is process-local. Mapping validation, binding changes, and older fields follow the [TM sync contract](LOCALIZATION.md#tm-sync).
 
 AI runtime tuning is deliberately outside SQLite in `ai-runtime.json` next to the resolved user-data database (under `.cat_data/` in source development). Optional proxy values live in `proxy.env`. Neither belongs in tracked documentation or diagnostics.
 
@@ -114,9 +109,7 @@ AI runtime tuning is deliberately outside SQLite in `ai-runtime.json` next to th
 
 `REQUIRED_TABLES` and `REQUIRED_COLUMNS` define the base v15 shape that must already exist. Additive structures such as `project_prompts`, `tm_sync_staging`, `ftsRowid`, and performance indexes are created by `applyCurrentSchemaMaintenance()` so current-v15 databases from earlier builds remain usable.
 
-`project_prompts` is an existing exception: it stores authoritative user data even though it was introduced through same-version maintenance. Treat it as grandfathered behavior, not as precedent for adding more business tables without a schema-version design.
-
-Do not casually add new business data through maintenance to avoid a version bump. Use this distinction:
+The authoritative `project_prompts` table is a v15 maintenance exception. For other schema changes:
 
 - Rebuildable indexes, scratch tables, and safely derivable mappings may be maintenance.
 - New authoritative data, changed meaning, destructive transforms, or a required non-derivable column need an explicit schema-version and compatibility design.

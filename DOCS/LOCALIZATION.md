@@ -4,25 +4,7 @@
 
 This document owns tokens/tags, QA semantics and result lifecycle, MT request planning, TM/TB references, Runtime TM, and shared resource behavior.
 
-Ownership by package:
-
-- `@cat/core`: pure tokens, tag/protected-marker transforms, text normalization/hashes, QA, prompt builders, strict response parsing, and shared contracts.
-- `@cat/db`: persistent TM/TB/project repositories and FTS recall primitives.
-- `@cat/localization`: file/unit orchestration, request modes, jobs, modules, provider transport, Runtime TM, inspect, and artifacts.
-- `apps/desktop`: project editing, Working/Main TM lifecycle, repeated-segment behavior, resource UI, and external-file sync.
-- `apps/cli`: syntax and terminal behavior only.
-
-Stable facades keep cross-layer callers independent of maintenance-oriented splits:
-
-| Boundary                     | Stable entrypoint                      | Internal collaborators                                                                                                 |
-| ---------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Term matching                | `@cat/core/text` and `termMatching.ts` | normalization, search planning, and English inflection helpers                                                         |
-| Persistent TM matching       | desktop `TMService`                    | shared scoring and result-selection collaborators in `@cat/localization`; diagnostic traces still call the facade      |
-| Persistent TM storage/recall | `CATDatabase` / `TMRepo`               | [Repository ownership](DATA_MODEL.md#repository-ownership) maps entry/index, fuzzy/concordance, and sync collaborators |
-| MT prompt/response handling  | `MTModule`                             | prompt-parameter construction and batch-response processing                                                            |
-| Engine orchestration         | `LocalizationEngine`                   | assembly, unit preparation, resume fingerprinting, and option helpers                                                  |
-
-Callers should use the stable entrypoint rather than importing these collaborators as alternate public APIs.
+Package boundaries follow [Architecture](ARCHITECTURE.md#workspace-ownership). Callers use the public services and facades below; internal scoring, prompt, and job helpers are not alternate application APIs.
 
 ## Key entrypoints
 
@@ -33,6 +15,7 @@ Start at the matching facade and its adjacent `*.test.ts` files. Application-onl
 | Token/tag helpers                     | [`packages/core/src/tag`](../packages/core/src/tag)                                                                                                                                                                                                                 |
 | Prompt and strict response contracts  | [`packages/core/src/project`](../packages/core/src/project)                                                                                                                                                                                                         |
 | Localization engine facade            | [`packages/localization/src/LocalizationEngine.ts`](../packages/localization/src/LocalizationEngine.ts)                                                                                                                                                             |
+| Single-segment AI / prompt testing    | [`segmentTranslation.ts`](../packages/localization/src/modules/segmentTranslation.ts), [`AITextTranslator.ts`](../packages/localization/src/modules/AITextTranslator.ts)                                                                                            |
 | Engine orchestration collaborators    | [`packages/localization/src/engine`](../packages/localization/src/engine)                                                                                                                                                                                           |
 | Window request modes                  | [`packages/localization/src/requestModes`](../packages/localization/src/requestModes)                                                                                                                                                                               |
 | MT module facade                      | [`packages/localization/src/modules/MTModule.ts`](../packages/localization/src/modules/MTModule.ts)                                                                                                                                                                 |
@@ -60,9 +43,9 @@ Three text forms must remain distinct:
 | Editor text          | Editable representation whose markers can map back to source tag tokens.             |
 | Protected MT payload | Numbered markers such as paired `{1>…<2}` and standalone `{3}` sent through prompts. |
 
-The MT module boundary (`MTModule` and its batch-response collaborator) is the only localization layer that interprets provider output as editor-marker text. It parses the response back to tokens before request-mode strategies produce display-text `UnitResult.target` values. QA does not accept, reject, or repair provider output.
+Shared translation code interprets provider output as editor-marker text: `AITextTranslator` returns tokens for single-segment operations, while `MTModule` and its batch-response processor parse batch results before request strategies produce display-text `UnitResult.target` values. QA does not accept, reject, or repair provider output.
 
-A consumer persisting a `UnitResult.target` into a token store must use `parseDisplayTextToTokens()` (or preserve returned tokens if the API grows that field). Running `parseEditorTextToTokens()` a second time can reinterpret literal placeholder-like text and corrupt tag identity.
+A consumer persisting a `UnitResult.target` into a token store must use `parseDisplayTextToTokens()`. Running `parseEditorTextToTokens()` a second time can reinterpret literal placeholder-like text and corrupt tag identity.
 
 File tag policy is resolved at import/planning time:
 
@@ -91,7 +74,7 @@ Target baseline is resolved before planning:
 - `use-current-targets`: preserve existing target cells; partial mode requests eligible blanks and can use existing targets as context.
 - `ignore-current-targets`: clear eligible, non-confirmed current targets before planning so they can be regenerated.
 
-Translation and Custom projects share these planners, target baselines, strict response validation, retries, and cancellation. Translation supplies language instructions and TM/TB references; Custom supplies its processing prompt without translation-language constraints or translation-memory reuse. Desktop defaults both project types to `window-partial`; CLI exposes both window strategies. There is no project-specific batch executor.
+Translation and Custom projects share these planners, target baselines, strict response validation, retries, and cancellation. Translation supplies language instructions and TM/TB references; Custom supplies its processing prompt without translation-language constraints or translation-memory reuse. Desktop defaults both project types to `window-partial`; CLI exposes both window strategies.
 
 For a selected segment scope, rows form a contiguous context sequence in original file order for `window-partial`: excluded rows do not enter its scan windows or neighboring context. Results retain their original segment IDs and are written back only to those segments. Progress counts the selected scope, and existing-target baseline and confirmed-row locking rules still apply. Empty scopes and IDs outside the current file are rejected. [Desktop](DESKTOP.md#files-and-background-jobs) owns the UI selection behavior.
 
@@ -226,7 +209,7 @@ When enabled, Instant QA includes protected-token checks and enabled single-row 
 
 ### QA compatibility boundaries
 
-- Settings normalization accepts then removes legacy project `tagMode`; file import policy controls tag handling. New settings accept only independently optional checks in `disabledCheckIds`; legacy normalization drops obsolete IDs.
+- Settings normalization accepts then removes legacy project `tagMode`; file import policy controls tag handling. Missing options use defaults without adding categories to saved selections. New settings accept only independently optional checks in `disabledCheckIds`; legacy normalization drops obsolete IDs.
 - Public `TagValidator`, `validateSegmentTags`, and `validateSegmentTerminology` remain compatibility APIs; business workflows do not use them as gates. Legacy severity remains readable and stored blocking metadata has no operational effect.
 - Compatibility autofix types, `TagValidator.suggestions` (empty), and deprecated `generateAutoFix()` (`null`) do not implement editing. The editor's source-tag insertion is a user edit.
 
@@ -272,15 +255,15 @@ When enabled, Instant QA includes protected-token checks and enabled single-row 
 
 ## Source terminology precheck
 
-Source terminology precheck is a provider-backed, read-only workflow that discovers source-language term candidates not already covered by the project's mounted TB matches. The reusable extractor belongs to `@cat/localization`; desktop file handling is its first application adapter, and future CLI surfaces must delegate to the same contract instead of recreating extraction logic.
+Source terminology precheck is a provider-backed, read-only workflow that discovers source-language term candidates not already covered by the project's mounted TB matches. `@cat/localization` owns extraction; Desktop adapts project files to that shared capability.
 
 The extractor accepts document-qualified units with source text and per-unit historical terms. Equivalent source rows may share one provider request, but results are mapped back to every original unit identity. Provider requests contain at most ten unique source rows and may be split earlier by prompt-size budget. Independent batches use the shared bounded scheduler and honor `maxConcurrency`. Strict responses return every opaque request id exactly once and contain source terms only—no target suggestions, translations, classifications, or prose. Malformed or contract-invalid responses may receive bounded repair feedback; provider transport and authentication failures fail that batch immediately instead of being resent as validation feedback.
 
 Provider candidates are treated as untrusted. Extraction is deliberately precision-first: the prompt rejects ordinary vocabulary, descriptive phrases, and incidental concepts, says that an empty result is normal, forbids forced extraction, and allows the complete segment when it is itself one glossary-worthy unit. Capitalization, repetition, and phrase shape are explicitly insufficient on their own; glossary value is a semantic model decision based on localization consistency risk, not a language-specific word list or casing heuristic. Local validation remains deterministic: a candidate must be an exact substring of its source unit, is normalized and deduplicated, and is removed when the existing language-aware TB rules consider it covered by a historical term. Batch failures stay scoped to their units. Global aggregation preserves the first source spelling, records other surface variants, occurrence counts, document/unit identities, row numbers, and bounded source examples.
 
-Settings > Term Extraction exposes the selection-policy portion of this prompt as an app-wide named-prompt library. The current precision-first policy remains a read-only built-in default; users can create, rename, edit, activate, and delete multiple custom policies, while activating the Default card preserves the saved library. A legacy single custom policy is surfaced as a named prompt and migrates into the library on the next mutation. Invalid catalog data falls back to the valid entries or Default and surfaces a recovery warning before the next mutation replaces the invalid stored value. Source language, source rows, historical terms, prompt-injection protection, exact-substring/source-only requirements, strict response shape, id correlation, and validation-repair feedback remain application-owned and cannot be replaced by a customization. Each extraction job reads the active prompt in one settings snapshot when it starts, and prompt-size batching includes that policy.
+Settings > Term Extraction exposes the selection-policy portion of this prompt as an app-wide named-prompt library. The current precision-first policy remains a read-only built-in default; users can create, rename, edit, activate, and delete multiple custom policies, while activating the Default card preserves the saved library. Saved-policy compatibility is owned by [SourceTerminologyPromptSettingsService](../packages/localization/src/SourceTerminologyPromptSettingsService.ts). Invalid catalog data falls back to the valid entries or Default and surfaces a recovery warning before the next mutation replaces the invalid stored value. Source language, source rows, historical terms, prompt-injection protection, exact-substring/source-only requirements, strict response shape, id correlation, and validation-repair feedback remain application-owned and cannot be replaced by a customization. Each extraction job reads the active prompt in one settings snapshot when it starts, and prompt-size batching includes that policy.
 
-The desktop `TM/TB` action offers source-term extraction alongside the existing TM/TB reference export. Reference export preserves the retained source sheet, overlays its target column from the file's current stored segments (including cleared targets), and appends the per-row TM/TB reference columns. Precheck runs in a worker, uses the project's configured provider, and writes an output workbook containing per-row historical TB/source candidates plus a `New_Terms` summary sheet. Cancellation is cooperative: no new lookup or provider batch starts after the request is observed, in-flight provider responses may finish, and their completed candidates are preserved in a partial workbook while untouched rows are marked `cancelled`. When the retained source workbook exists, the output preserves its first sheet; when that workbook is unavailable, desktop reconstructs a temporary source-only sheet from the file's stored segments and removes the temporary file after the worker finishes. Valid UTF-8 CSV source text is decoded explicitly so non-Latin content survives this fallback unchanged, while other encodings retain the existing binary parser path. It does not translate terms, update a TB, modify project segments, or feed candidates into AI translation. Those are separate future workflows.
+The desktop `TM/TB` action offers source-term extraction alongside the existing TM/TB reference export. Reference export preserves the retained source sheet, overlays its target column from the file's current stored segments (including cleared targets), and appends the per-row TM/TB reference columns. Precheck runs in a worker, uses the project's configured provider, and writes an output workbook containing per-row historical TB/source candidates plus a `New_Terms` summary sheet. Cancellation is cooperative: no new lookup or provider batch starts after the request is observed, in-flight provider responses may finish, and their completed candidates are preserved in a partial workbook while untouched rows are marked `cancelled`. When the retained source workbook exists, the output preserves its first sheet; when that workbook is unavailable, desktop reconstructs a temporary source-only sheet from the file's stored segments and removes the temporary file after the worker finishes. Valid UTF-8 CSV source text is decoded explicitly so non-Latin content survives this fallback unchanged, while other encodings retain the existing binary parser path. It does not translate terms, update a TB, modify project segments, or feed candidates into AI translation.
 
 ## Runtime TM
 
