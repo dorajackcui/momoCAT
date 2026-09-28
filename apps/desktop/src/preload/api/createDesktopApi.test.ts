@@ -57,6 +57,7 @@ describe('createDesktopApi smoke', () => {
       connectionId: 'connection:demo',
       model: 'gpt-demo',
     });
+    await api.refreshAIConnection('connection:demo');
     await api.deleteAIConnection('connection:demo');
     await api.deleteAIProvider('custom:demo');
     await api.getProxySettings();
@@ -110,6 +111,7 @@ describe('createDesktopApi smoke', () => {
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.getSettings);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.listConnections);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.listProviders);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.refreshConnection, 'connection:demo');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.testConnection, {
       name: 'OpenAI',
       baseUrl: 'https://api.openai.com/v1',

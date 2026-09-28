@@ -124,6 +124,7 @@ const requests: Array<{ channel: string; args: unknown[] }> = [
     channel: ai.testConnection,
     args: [{ name: 'Connection', baseUrl: 'https://example.test', apiKey: 'example-key' }],
   },
+  { channel: ai.refreshConnection, args: ['connection-1'] },
   { channel: ai.deleteConnection, args: ['connection-1'] },
   {
     channel: ai.addProvider,
@@ -285,6 +286,7 @@ describe('valid IPC payload compatibility', () => {
       'addAIProvider',
       [{ name: 'Provider', connectionId: 'connection-1', model: 'model' }],
     ],
+    [ai.refreshConnection, 'refreshAIConnection', ['connection-1']],
     [ai.deleteConnection, 'deleteAIConnection', ['connection-1']],
     [ai.deleteProvider, 'deleteAIProvider', ['provider-1']],
     [ai.setProxySettings, 'setProxySettings', [{ mode: 'system' }]],

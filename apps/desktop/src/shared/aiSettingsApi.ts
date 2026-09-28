@@ -97,6 +97,7 @@ export interface AISettingsApi {
   getAISettings: () => Promise<AISettings>;
   listAIConnections: () => Promise<AIConnectionSummary[]>;
   testAIConnection: (input: TestAIConnectionInput) => Promise<AITestConnectionResult>;
+  refreshAIConnection: (connectionId: string) => Promise<AITestConnectionResult>;
   deleteAIConnection: (connectionId: string) => Promise<void>;
   listAIProviders: () => Promise<AIProviderSummary[]>;
   addAIProvider: (input: AddAIProviderInput) => Promise<AIProviderSummary>;

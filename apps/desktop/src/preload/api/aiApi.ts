@@ -6,6 +6,7 @@ type AIApiKeys =
   | 'getAISettings'
   | 'listAIConnections'
   | 'testAIConnection'
+  | 'refreshAIConnection'
   | 'deleteAIConnection'
   | 'listAIProviders'
   | 'addAIProvider'
@@ -31,6 +32,10 @@ export function createAIApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<AIApi
     testAIConnection: (input) =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.testConnection, input) as ReturnType<
         DesktopApi['testAIConnection']
+      >,
+    refreshAIConnection: (connectionId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.ai.refreshConnection, connectionId) as ReturnType<
+        DesktopApi['refreshAIConnection']
       >,
     deleteAIConnection: (connectionId) =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.deleteConnection, connectionId) as ReturnType<

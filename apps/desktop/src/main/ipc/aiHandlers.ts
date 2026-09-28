@@ -37,6 +37,15 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
 
   registerHandle(
     { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.ai.refreshConnection,
+    (_event, ...args) => {
+      const connectionId = readArgument(args[0], 'connectionId', isNonEmptyString);
+      return projectService.refreshAIConnection(connectionId);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
     IPC_CHANNELS.ai.deleteConnection,
     (_event, ...args) => {
       const connectionId = readArgument(args[0], 'connectionId', isNonEmptyString);

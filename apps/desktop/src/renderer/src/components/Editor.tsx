@@ -26,6 +26,8 @@ import {
   useEditorSelection,
   type SegmentSelectionModifiers,
 } from '../hooks/editor/useEditorSelection';
+import { useEditorClipboard } from '../hooks/editor/useEditorClipboard';
+import { SegmentPasteDialog } from './editor/SegmentPasteDialog';
 import type { SelectedSegmentAction } from '../hooks/editor/useSelectedSegmentActions';
 
 interface EditorProps {
@@ -110,6 +112,7 @@ export const Editor: React.FC<EditorProps> = ({
     segmentStats,
     fileTagPolicy,
     runSelectedSegmentAction,
+    pasteSelectedSegments,
     isSelectedSegmentActionRunning,
   } = useEditor({ activeFileId: fileId, activeTab });
 
@@ -162,11 +165,8 @@ export const Editor: React.FC<EditorProps> = ({
     () => filteredSegments.map((item) => item.segment.segmentId),
     [filteredSegments],
   );
-  const { selectedIds, selectSingle, selectSegment, selectAll } = useEditorSelection(
-    fileId,
-    selectableIds,
-    activeSegmentId,
-  );
+  const { selectedIds, isRowSelection, selectSingle, selectSegment, selectAll } =
+    useEditorSelection(fileId, selectableIds, activeSegmentId);
 
   useEffect(() => {
     if (loading || segments.length === 0 || positionRestoredRef.current) return;
@@ -303,6 +303,16 @@ export const Editor: React.FC<EditorProps> = ({
     [runSelectedSegmentAction, selectedIds, selectionActionsDisabled],
   );
 
+  const clipboard = useEditorClipboard({
+    fileId,
+    orderedIds: selectableIds,
+    selectedIds,
+    isRowSelection,
+    disabled: selectionActionsDisabled,
+    getSegment: segmentStore.getSegment,
+    pasteSegments: pasteSelectedSegments,
+  });
+
   const handleSelectionShortcut = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.nativeEvent.isComposing || event.altKey || isSelectedSegmentActionRunning) return;
     const target = event.target as HTMLElement;
@@ -398,6 +408,13 @@ export const Editor: React.FC<EditorProps> = ({
       aria-busy={isSelectedSegmentActionRunning}
       {...(isSelectedSegmentActionRunning ? { inert: '' } : {})}
     >
+      {clipboard.pendingPaste && (
+        <SegmentPasteDialog
+          lineCount={clipboard.pendingPaste.lines.length}
+          onChoose={clipboard.choosePaste}
+          onClose={clipboard.cancelPaste}
+        />
+      )}
       {supportsBatchActions && batchActions.isBatchAIModalOpen && (
         <ProjectAITranslateModal
           projectType={project?.projectType}

@@ -33,7 +33,7 @@ export interface AIConnectionsController {
   updateProviderName: (value: string) => void;
   testConnection: () => Promise<void>;
   changeModel: (model: string) => void;
-  useConnection: (connection: AIConnectionSummary) => void;
+  useConnection: (connection: AIConnectionSummary) => Promise<void>;
   addProvider: () => Promise<void>;
   deleteConnection: (connectionId: string) => Promise<void>;
   deleteProvider: (providerId: string) => Promise<void>;
@@ -164,7 +164,7 @@ export function useAIConnectionsController(
     }
   };
 
-  const useConnection = (connection: AIConnectionSummary) => {
+  const useConnection = async (connection: AIConnectionSummary) => {
     const model = chooseInitialProviderModel(connection, providers);
     setConnectionNameInput(connection.name);
     setConnectionBaseUrlInput(connection.baseUrl);
@@ -172,7 +172,31 @@ export function useAIConnectionsController(
     setTestedConnection(connection);
     setSelectedModel(model);
     setProviderNameInput(buildProviderName(connection, model));
-    setStatus('Saved connection selected. Stored key will be reused when adding a provider.');
+    setTestingProvider(true);
+    setStatus('Refreshing models...');
+    try {
+      await applyProxySettings();
+      const result = await apiClient.refreshAIConnection(connection.id);
+      if (!result.ok || !result.connection) {
+        throw new Error(result.error || 'Unknown error');
+      }
+      const refreshed = result.connection;
+      const refreshedModel = chooseInitialProviderModel(refreshed, providers);
+      setTestedConnection(refreshed);
+      setSelectedModel(refreshedModel);
+      setProviderNameInput(buildProviderName(refreshed, refreshedModel));
+      setConnections((current) =>
+        current.map((item) => (item.id === refreshed.id ? refreshed : item)),
+      );
+      setStatus(`Models refreshed: ${refreshed.discoveredModels.length} models discovered.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(
+        `Model refresh failed: ${message}. Using the saved model list. Click Use connection to retry.`,
+      );
+    } finally {
+      setTestingProvider(false);
+    }
   };
 
   const addProvider = async () => {
@@ -243,8 +267,8 @@ export function useAIConnectionsController(
   );
   const apiKeyPlaceholder = savedConnectionReuseActive
     ? testedConnection?.apiKeyLast4
-      ? `Saved key ****${testedConnection.apiKeyLast4}; enter a new key to retest`
-      : 'Saved key will be reused; enter a new key to retest'
+      ? `Saved key ****${testedConnection.apiKeyLast4}; reused automatically`
+      : 'Saved key will be reused automatically'
     : 'sk-...';
 
   return {

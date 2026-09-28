@@ -82,6 +82,7 @@ export const IPC_CHANNELS = {
     getSettings: 'ai-settings-get',
     listConnections: 'ai:list-connections',
     testConnection: 'ai:test-connection',
+    refreshConnection: 'ai:refresh-connection',
     deleteConnection: 'ai:delete-connection',
     listProviders: 'ai-providers-list',
     addProvider: 'ai-provider-add',

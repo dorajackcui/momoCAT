@@ -38,17 +38,24 @@ export function useSelectedSegmentActions({
     };
   }, [fileId]);
   const run = useCallback(
-    async (action: SelectedSegmentAction, segmentIds: string[]) => {
+    async (
+      action: SelectedSegmentAction | 'paste',
+      segmentIds: string[],
+      targetTexts?: string[],
+    ) => {
       if (running.current || fileId === null || segmentIds.length === 0) return;
       const ids = [...new Set(segmentIds)];
+      const texts = targetTexts ? [...targetTexts] : undefined;
       const scopeVersion = scope.current;
       running.current = true;
       setIsRunning(true);
       try {
+        if (action === 'paste' && texts?.length !== ids.length)
+          throw new Error('Paste row count must match the selected segments');
         await flushPending();
         if (scopeVersion !== scope.current) return;
         const updates: SelectedSegmentUpdate[] = [];
-        for (const id of ids) {
+        for (const [index, id] of ids.entries()) {
           const segment = getSegment(id);
           if (!segment || segment.fileId !== fileId)
             throw new Error('Selected segment is unavailable');
@@ -60,10 +67,12 @@ export function useSelectedSegmentActions({
             });
           } else {
             const targetTokens =
-              action === 'clear'
+              action === 'clear' || (action === 'paste' && texts![index] === '')
                 ? []
                 : parseTargetEditorText(
-                    serializeTokensToEditorText(segment.sourceTokens, segment.sourceTokens),
+                    action === 'paste'
+                      ? texts![index]
+                      : serializeTokensToEditorText(segment.sourceTokens, segment.sourceTokens),
                     segment.sourceTokens,
                     tagPolicy,
                   );
@@ -82,7 +91,13 @@ export function useSelectedSegmentActions({
           if (action === 'confirm') onConfirmed(updates.map((update) => update.segmentId));
         }
         const label =
-          action === 'confirm' ? 'Confirmed' : action === 'clear' ? 'Cleared' : 'Copied source to';
+          action === 'confirm'
+            ? 'Confirmed'
+            : action === 'clear'
+              ? 'Cleared'
+              : action === 'paste'
+                ? 'Pasted into'
+                : 'Copied source to';
         feedbackService.success(`${label} ${updates.length} segments.`);
       } catch (error) {
         if (scopeVersion !== scope.current) return;
@@ -98,5 +113,13 @@ export function useSelectedSegmentActions({
     },
     [applyUpdates, clearSaveError, fileId, flushPending, getSegment, onConfirmed, tagPolicy],
   );
-  return { runSelectedSegmentAction: run, isSelectedSegmentActionRunning: isRunning };
+  const pasteSelectedSegments = useCallback(
+    (ids: string[], targets: string[]) => run('paste', ids, targets),
+    [run],
+  );
+  return {
+    runSelectedSegmentAction: run,
+    pasteSelectedSegments,
+    isSelectedSegmentActionRunning: isRunning,
+  };
 }

@@ -96,6 +96,10 @@ export class AIModule {
     return this.providerCatalogService.testConnection(input);
   }
 
+  public async refreshAIConnection(connectionId: string): Promise<AITestConnectionResult> {
+    return this.providerCatalogService.refreshConnection(connectionId);
+  }
+
   public async addAIProvider(input: AddAIProviderInput): Promise<AIProviderSummary> {
     return this.providerCatalogService.addProvider(input);
   }
