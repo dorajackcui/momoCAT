@@ -276,3 +276,41 @@ test('copies bilingual rows and pastes targets while distinguishing cell and row
     await closeEditorSmokeSession(session);
   }
 });
+
+for (const filter of ['source', 'status']) {
+  test(`confirmation advances within the ${filter} filter and stops at the last visible row`, async () => {
+    const session = await createEditorSmokeSession([
+      ['Keep first', 'First target', ''],
+      ['Hidden middle', '', ''],
+      ['Keep last', 'Last target', ''],
+    ]);
+    try {
+      const { page, fileId } = session;
+      if (filter === 'source') {
+        await page.getByPlaceholder('Filter source text').fill('Keep');
+      } else {
+        await page.getByRole('button', { name: 'Open filters', exact: true }).click();
+        await page.getByRole('button', { name: 'Draft', exact: true }).click();
+        await page.keyboard.press('Escape');
+      }
+      const rows = page.locator('.editor-row');
+      await expect(rows).toHaveCount(2);
+      await rows.first().locator('.editor-target-cell').click();
+      await page.locator('.cm-content').press(`${modifier}+Enter`);
+      const lastTarget = rows.filter({ hasText: 'Keep last' }).locator('.cm-content');
+      await expect(lastTarget).toBeFocused();
+      await expect
+        .poll(async () => (await storedSegments(page, fileId))[0].status)
+        .toBe('confirmed');
+      expect((await storedSegments(page, fileId))[1].status).toBe('empty');
+      await lastTarget.press(`${modifier}+Enter`);
+      await expect
+        .poll(async () => (await storedSegments(page, fileId))[2].status)
+        .toBe('confirmed');
+      await expect(lastTarget).toBeFocused();
+      await expect(rows).toHaveCount(2);
+    } finally {
+      await closeEditorSmokeSession(session);
+    }
+  });
+}

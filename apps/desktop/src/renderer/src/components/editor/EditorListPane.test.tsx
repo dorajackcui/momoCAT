@@ -31,8 +31,8 @@ it.each([64, 79.375])('positions %spx rows without overlap and scrolls', (rowHei
     status: 'empty',
   })) as Segment[];
   const store = createEditorSegmentStore(segments);
-  const filteredSegments = segments.map((segment, originalIndex) => ({
-    segment,
+  const visibleRows = segments.map((segment, originalIndex) => ({
+    segmentId: segment.segmentId,
     originalIndex,
     sourceText: '',
     targetText: '',
@@ -48,7 +48,7 @@ it.each([64, 79.375])('positions %spx rows without overlap and scrolls', (rowHei
         <EditorListPane
           scrollElement={scrollElement}
           virtualized
-          filteredSegments={filteredSegments}
+          visibleRows={visibleRows}
           segmentStore={store}
           activeFilteredIndex={-1}
           activeSegmentId={null}

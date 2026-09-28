@@ -83,3 +83,33 @@ describe('editorSegmentStore', () => {
     expect(store.getIndexById().get('seg-1')).toBe(1);
   });
 });
+
+it('publishes every transaction with complete stats, even before React renders', () => {
+  const store = createEditorSegmentStore([createSegment('a'), createSegment('b')]);
+  const statuses: number[] = [];
+  store.subscribe(() => statuses.push(store.getStats().confirmedSegments));
+  store.updateSegment('a', (row) => ({ ...row, status: 'confirmed' }));
+  store.updateSegment('b', (row) => ({ ...row, status: 'confirmed' }));
+  expect(statuses).toEqual([1, 2]);
+});
+
+it('keeps order, stats and QA results stable during an ordinary target edit', () => {
+  const store = createEditorSegmentStore([
+    {
+      ...createSegment('a', 'old'),
+      qaIssues: [{ ruleId: 'number', severity: 'info', message: 'finding' }],
+    },
+  ]);
+  const order = store.getOrderIds(),
+    stats = store.getStats(),
+    qa = store.getQAResults();
+  const validity = store.getQARevision();
+  store.updateSegment('a', (row) => ({ ...row, targetTokens: [{ type: 'text', content: 'new' }] }));
+  expect(store.getOrderIds()).toBe(order);
+  expect(store.getStats()).toBe(stats);
+  expect(store.getQAResults()).toBe(qa);
+  expect(store.getQARevision()).toBeGreaterThan(validity);
+  store.updateSegment('a', (row) => ({ ...row, qaIssues: [] }));
+  expect(store.getQAResults()).not.toBe(qa);
+  expect(store.getQAResults()).toEqual({ hasResults: true, issues: [] });
+});

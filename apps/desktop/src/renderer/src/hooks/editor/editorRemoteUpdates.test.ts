@@ -8,7 +8,7 @@ import {
   drainQueuedSegmentsUpdatedEvents,
   handleIncomingSegmentsUpdatedBatch,
   handleIncomingSegmentsUpdatedEvent,
-} from './useEditorDataLoader';
+} from './editorRemoteUpdates';
 import { createEditorSegmentStore } from './editorSegmentStore';
 
 vi.mock('../../services/apiClient', () => ({
@@ -61,6 +61,7 @@ function createHandlers(overrides?: {
     isRemoteUpdateStale: overrides?.isStale ?? (() => false),
     applySegmentsUpdatedEvent: vi.fn(),
     applySegmentsUpdatedBatch: vi.fn(),
+    applyFinalState: vi.fn(),
   };
 }
 
@@ -76,7 +77,7 @@ describe('applyConfirmedSegmentUpdate', () => {
       propagatedIds: ['B', 'C'],
     };
     applyConfirmedSegmentUpdate(event, handlers);
-    expect(handlers.applySegmentsUpdatedEvent).toHaveBeenCalledWith(event);
+    expect(handlers.applyFinalState).toHaveBeenCalledWith(buildBatchFinalState([event]));
     expect([...handlers.queuedRemoteUpdates.keys()]).toEqual(['unrelated']);
   });
 
@@ -85,7 +86,7 @@ describe('applyConfirmedSegmentUpdate', () => {
     const event = createEvent('A');
     handlers.queuedRemoteUpdates.set('A', event);
     applyConfirmedSegmentUpdate(event, handlers);
-    expect(handlers.applySegmentsUpdatedEvent).not.toHaveBeenCalled();
+    expect(handlers.applyFinalState).not.toHaveBeenCalled();
     expect(handlers.queuedRemoteUpdates.get('A')).toBe(event);
   });
 });
@@ -109,7 +110,7 @@ describe('handleIncomingSegmentsUpdatedEvent', () => {
     const result = handleIncomingSegmentsUpdatedEvent(event, handlers);
 
     expect(result).toBe('queued');
-    expect(handlers.applySegmentsUpdatedEvent).not.toHaveBeenCalled();
+    expect(handlers.applyFinalState).not.toHaveBeenCalled();
     expect(handlers.queuedRemoteUpdates.get('seg-2')).toEqual(event);
   });
 
@@ -120,7 +121,7 @@ describe('handleIncomingSegmentsUpdatedEvent', () => {
     const result = handleIncomingSegmentsUpdatedEvent(event, handlers);
 
     expect(result).toBe('queued');
-    expect(handlers.applySegmentsUpdatedEvent).not.toHaveBeenCalled();
+    expect(handlers.applyFinalState).not.toHaveBeenCalled();
     expect(handlers.queuedRemoteUpdates.get('seg-origin')).toEqual(event);
   });
 

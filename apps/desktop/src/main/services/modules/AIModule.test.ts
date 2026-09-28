@@ -10,6 +10,14 @@ import { SegmentService } from '../SegmentService';
 import type { TBService } from '../TBService';
 import type { TMService } from '../TMService';
 
+function createSegmentServiceMock(repo: SegmentRepository, result: unknown): SegmentService {
+  const service = new SegmentService(repo, {} as TMService, { runInTransaction: (work) => work() });
+  vi.spyOn(service, 'updateSegment').mockResolvedValue(
+    result as Awaited<ReturnType<SegmentService['updateSegment']>>,
+  );
+  return service;
+}
+
 function createSegment(params: {
   segmentId: string;
   sourceText: string;
@@ -20,12 +28,12 @@ function createSegment(params: {
   context?: string;
   orderIndex?: number;
 }): Segment {
-  const sourceTokens = params.sourceTokens ?? (params.sourceText
-    ? [{ type: 'text', content: params.sourceText as string }]
-    : []);
-  const targetTokens = params.targetTokens ?? (params.targetText
-    ? [{ type: 'text', content: params.targetText as string }]
-    : []);
+  const sourceTokens =
+    params.sourceTokens ??
+    (params.sourceText ? [{ type: 'text', content: params.sourceText as string }] : []);
+  const targetTokens =
+    params.targetTokens ??
+    (params.targetText ? [{ type: 'text', content: params.targetText as string }] : []);
   return {
     segmentId: params.segmentId,
     fileId: 1,
@@ -176,9 +184,7 @@ describe('AIModule.aiTranslateFile', () => {
       ],
     });
 
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, undefined);
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
@@ -289,9 +295,7 @@ describe('AIModule.aiTranslateFile', () => {
     const segmentRepo = {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, undefined);
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn(),
@@ -348,9 +352,7 @@ describe('AIModule.aiTranslateFile', () => {
     const segmentRepo = {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, undefined);
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn(),
@@ -423,9 +425,7 @@ describe('AIModule.aiTranslateFile', () => {
     const segmentRepo = {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, undefined);
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn(),
@@ -455,8 +455,7 @@ describe('AIModule.aiTranslateFile', () => {
   });
 
   it('writes localization display targets without reinterpreting placeholder-like tags as editor markers', async () => {
-    const sourceText =
-      '<Yellow_20>{1}</>邀请你进入<Yellow_20>喵舞训练营·灿烂烟花</>，是否接受？';
+    const sourceText = '<Yellow_20>{1}</>邀请你进入<Yellow_20>喵舞训练营·灿烂烟花</>，是否接受？';
     const targetText =
       "<Yellow_20>{1}</> vous invite à entrer dans <Yellow_20>Camp de danse de Momo : feux d'artifice</>. Accepter ?";
     const segments: Segment[] = [
@@ -483,9 +482,7 @@ describe('AIModule.aiTranslateFile', () => {
     const segmentRepo = {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, undefined);
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn(),
@@ -563,9 +560,7 @@ describe('AIModule.aiTranslateFile', () => {
     const segmentRepo = {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, undefined);
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn(),
@@ -644,9 +639,7 @@ describe('AIModule.aiTranslateFile', () => {
     const segmentRepo = {
       getSegmentsPage: vi.fn().mockReturnValue(segments),
     } as unknown as SegmentRepository;
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, undefined);
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
       createResponse: vi.fn(),
@@ -689,7 +682,6 @@ describe('AIModule.aiTranslateFile', () => {
       }),
     ]);
   });
-
 });
 
 describe('AIModule.aiTestTranslate', () => {
@@ -712,9 +704,7 @@ describe('AIModule.aiTestTranslate', () => {
 
     const settingsRepo = createAISettingsRepository();
 
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, undefined);
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
@@ -758,9 +748,7 @@ describe('AIModule.aiTestTranslate', () => {
 
     const settingsRepo = createAISettingsRepository();
 
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, undefined);
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
@@ -799,9 +787,7 @@ describe('AIModule.aiTestTranslate', () => {
 
     const settingsRepo = createAISettingsRepository();
 
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, undefined);
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
@@ -853,12 +839,10 @@ describe('AIModule.aiTranslateSegment', () => {
 
     const settingsRepo = createAISettingsRepository();
 
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue({
-        propagatedIds: ['single-propagated-1'],
-        serverAppliedAt: '2026-06-12T00:00:00.000Z',
-      }),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, {
+      propagatedIds: ['single-propagated-1'],
+      serverAppliedAt: '2026-06-12T00:00:00.000Z',
+    });
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
@@ -913,6 +897,8 @@ describe('AIModule.aiTranslateSegment', () => {
       'single-1',
       expect.any(Array),
       'draft',
+      undefined,
+      expect.any(Function),
     );
     const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(request.userPrompt).toContain('Context: UI button label');
@@ -947,12 +933,10 @@ describe('AIModule.aiTranslateSegment', () => {
 
     const settingsRepo = createAISettingsRepository();
 
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue({
-        propagatedIds: [],
-        serverAppliedAt: '2026-06-12T00:00:02.000Z',
-      }),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, {
+      propagatedIds: [],
+      serverAppliedAt: '2026-06-12T00:00:02.000Z',
+    });
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
@@ -979,6 +963,8 @@ describe('AIModule.aiTranslateSegment', () => {
       'single-unchanged-1',
       expect.any(Array),
       'draft',
+      undefined,
+      expect.any(Function),
     );
   });
 
@@ -1014,12 +1000,10 @@ describe('AIModule.aiTranslateSegment', () => {
 
     const settingsRepo = createAISettingsRepository();
 
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue({
-        propagatedIds: [],
-        serverAppliedAt: '2026-06-12T00:00:02.000Z',
-      }),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, {
+      propagatedIds: [],
+      serverAppliedAt: '2026-06-12T00:00:02.000Z',
+    });
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
@@ -1039,6 +1023,8 @@ describe('AIModule.aiTranslateSegment', () => {
       'single-policy-none-1',
       expectedTokens,
       'draft',
+      undefined,
+      expect.any(Function),
     );
     expect(transport.createResponse).toHaveBeenCalledTimes(1);
   });
@@ -1075,12 +1061,10 @@ describe('AIModule.aiTranslateSegment', () => {
 
     const settingsRepo = createAISettingsRepository();
 
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue({
-        propagatedIds: [],
-        serverAppliedAt: '2026-06-12T00:00:03.000Z',
-      }),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, {
+      propagatedIds: [],
+      serverAppliedAt: '2026-06-12T00:00:03.000Z',
+    });
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
@@ -1100,6 +1084,8 @@ describe('AIModule.aiTranslateSegment', () => {
       'single-display-policy-none-1',
       expectedTokens,
       'draft',
+      undefined,
+      expect.any(Function),
     );
     expect(transport.createResponse).toHaveBeenCalledTimes(1);
   });
@@ -1132,9 +1118,7 @@ describe('AIModule.aiRefineSegment', () => {
 
     const settingsRepo = createAISettingsRepository();
 
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, undefined);
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
@@ -1189,6 +1173,8 @@ describe('AIModule.aiRefineSegment', () => {
       'refine-1',
       expect.any(Array),
       'draft',
+      undefined,
+      expect.any(Function),
     );
     const request = (transport.createResponse as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(request.userPrompt).toContain('Context: UI button label');
@@ -1226,9 +1212,7 @@ describe('AIModule.aiRefineSegment', () => {
 
     const settingsRepo = createAISettingsRepository();
 
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, undefined);
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
@@ -1292,9 +1276,7 @@ describe('AIModule.aiRefineSegment', () => {
 
     const settingsRepo = createAISettingsRepository();
 
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, undefined);
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
@@ -1335,9 +1317,7 @@ describe('AIModule.aiRefineSegment', () => {
 
     const settingsRepo = createAISettingsRepository();
 
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, undefined);
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),
@@ -1381,9 +1361,7 @@ describe('AIModule.segmentAIOperationLock', () => {
 
     const settingsRepo = createAISettingsRepository();
 
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, undefined);
 
     const pending = createDeferred<{ content: string; status: number; endpoint: string }>();
     const transport = {
@@ -1430,9 +1408,7 @@ describe('AIModule.segmentAIOperationLock', () => {
 
     const settingsRepo = createAISettingsRepository();
 
-    const segmentService = {
-      updateSegment: vi.fn().mockResolvedValue(undefined),
-    } as unknown as SegmentService;
+    const segmentService = createSegmentServiceMock(segmentRepo, undefined);
 
     const transport = {
       testConnection: vi.fn().mockResolvedValue({ ok: true }),

@@ -272,3 +272,20 @@ describe('ai handlers', () => {
     expect(projectService.aiTestTranslate).toHaveBeenCalledWith(11, 'Input', 'Context');
   });
 });
+
+it('validates and forwards optional single-segment operation identities', () => {
+  const { handlers, ipcMain } = createIpcMainStub();
+  const aiTranslateSegment = vi.fn(),
+    aiRefineSegment = vi.fn();
+  registerAIHandlers({
+    ipcMain,
+    projectService: { aiTranslateSegment, aiRefineSegment } as never,
+    jobManager: {} as never,
+  });
+  handlers.get(IPC_CHANNELS.ai.translateSegment)!({}, 'a', 'request-a');
+  handlers.get(IPC_CHANNELS.ai.refineSegment)!({}, 'a', 'shorten', 'request-b');
+  expect(aiTranslateSegment).toHaveBeenCalledWith('a', { clientRequestId: 'request-a' });
+  expect(aiRefineSegment).toHaveBeenCalledWith('a', 'shorten', { clientRequestId: 'request-b' });
+  expect(() => handlers.get(IPC_CHANNELS.ai.translateSegment)!({}, 'a', {})).toThrow();
+  expect(() => handlers.get(IPC_CHANNELS.ai.refineSegment)!({}, 'a', 'shorten', 42)).toThrow();
+});

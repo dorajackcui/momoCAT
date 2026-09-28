@@ -112,7 +112,10 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     IPC_CHANNELS.ai.translateSegment,
     (_event, ...args) => {
       const segmentId = readArgument(args[0], 'segmentId', isNonEmptyString);
-      return projectService.aiTranslateSegment(segmentId);
+      const clientRequestId = readOptionalArgument(args[1], 'clientRequestId', isNonEmptyString);
+      return clientRequestId
+        ? projectService.aiTranslateSegment(segmentId, { clientRequestId })
+        : projectService.aiTranslateSegment(segmentId);
     },
   );
 
@@ -122,7 +125,10 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     (_event, ...args) => {
       const segmentId = readArgument(args[0], 'segmentId', isNonEmptyString);
       const instruction = readArgument(args[1], 'instruction', isString);
-      return projectService.aiRefineSegment(segmentId, instruction);
+      const clientRequestId = readOptionalArgument(args[2], 'clientRequestId', isNonEmptyString);
+      return clientRequestId
+        ? projectService.aiRefineSegment(segmentId, instruction, { clientRequestId })
+        : projectService.aiRefineSegment(segmentId, instruction);
     },
   );
 

@@ -28,8 +28,9 @@ describe('advisory instant QA', () => {
     };
     const store = createEditorSegmentStore([segment]);
     const publish = vi.fn();
+    store.subscribe(publish);
     vi.mocked(apiClient.checkSegmentQA).mockResolvedValue(null);
-    await refreshInstantQA(['a'], store, publish);
+    await refreshInstantQA(['a'], store);
     expect(publish).not.toHaveBeenCalled();
     expect(store.getSegment('a')?.qaIssues).toEqual(segment.qaIssues);
   });
@@ -41,15 +42,29 @@ describe('advisory instant QA', () => {
       segment: { ...segment, qaIssues },
       stale: false,
     });
-    await refreshInstantQA(['a'], store, vi.fn());
+    await refreshInstantQA(['a'], store);
     expect(store.getSegment('a')).toMatchObject({ status: 'confirmed', qaIssues });
   });
   it('reports a check failure independently of the successful confirmation', async () => {
     const store = createEditorSegmentStore([row()]);
     vi.mocked(apiClient.checkSegmentQA).mockRejectedValue(new Error('TB unavailable'));
-    await expect(refreshInstantQA(['a'], store, vi.fn())).resolves.toBeUndefined();
+    await expect(refreshInstantQA(['a'], store)).resolves.toBeUndefined();
     expect(store.getSegment('a')?.status).toBe('confirmed');
     expect(feedbackService.info).toHaveBeenCalledWith('Instant QA failed: TB unavailable');
+  });
+  it('publishes completed checks once even when a later check fails', async () => {
+    const first = row();
+    const store = createEditorSegmentStore([first, { ...first, segmentId: 'b' }]);
+    const publish = vi.fn();
+    store.subscribe(publish);
+    vi.mocked(apiClient.checkSegmentQA)
+      .mockResolvedValueOnce({ segment: { ...first, qaIssues: [] }, stale: false })
+      .mockRejectedValueOnce(new Error('Check unavailable'));
+    await refreshInstantQA(['a', 'b'], store);
+    expect(store.getSegment('a')?.qaIssues).toEqual([]);
+    expect(store.getSegment('b')?.qaIssues).toBeUndefined();
+    expect(publish).toHaveBeenCalledOnce();
+    expect(feedbackService.info).toHaveBeenCalledWith('Instant QA failed: Check unavailable');
   });
   it('discards delayed findings after local edits', async () => {
     const segment = row();
@@ -62,12 +77,14 @@ describe('advisory instant QA', () => {
         }),
     );
     const publish = vi.fn();
-    const pending = refreshInstantQA(['a'], store, publish);
+    store.subscribe(publish);
+    const pending = refreshInstantQA(['a'], store);
     store.applyUpdates(
       new Map([
         ['a', { ...segment, status: 'draft', targetTokens: [{ type: 'text', content: 'Edited' }] }],
       ]),
     );
+    publish.mockClear();
     finish({
       segment: {
         ...segment,

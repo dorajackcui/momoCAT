@@ -50,6 +50,7 @@ export class SegmentService extends EventEmitter {
   private tmService: TMService;
   private tx: TransactionManager;
   private lastBatch: PropagationBatch | null = null;
+  private pendingWriteGuards = new Map<string, Set<() => void>>();
 
   constructor(db: SegmentRepository, tmService: TMService, tx: TransactionManager) {
     super();
@@ -70,11 +71,15 @@ export class SegmentService extends EventEmitter {
     targetTokens: Token[],
     status: SegmentStatus,
     clientRequestId?: string,
+    canCommit?: () => boolean,
   ) {
     status = normalizeSegmentStatus(status, targetTokens);
-    const { fileId, propagatedIds, workingTMUpdate } = this.tx.runInTransaction(() =>
-      this.updateSegmentInternal(segmentId, targetTokens, status),
-    );
+    const { fileId, propagatedIds, workingTMUpdate } = this.tx.runInTransaction(() => {
+      if (canCommit && !canCommit()) {
+        throw new Error('Segment changed during AI processing; the latest edit was kept.');
+      }
+      return this.updateSegmentInternal(segmentId, targetTokens, status);
+    });
     const serverAppliedAt = new Date().toISOString();
 
     this.emitSegmentUpdated({
@@ -91,6 +96,51 @@ export class SegmentService extends EventEmitter {
     }
 
     return { fileId, propagatedIds, clientRequestId, serverAppliedAt };
+  }
+
+  /** Guard one async operation, including edits subsequently undone to the same content. */
+  public async withUnchangedSegment<T>(
+    segmentId: string,
+    task: (
+      snapshot: Segment,
+      commit: (
+        targetTokens: Token[],
+        status: SegmentStatus,
+        clientRequestId?: string,
+      ) => ReturnType<SegmentService['updateSegment']>,
+    ) => Promise<T>,
+  ): Promise<T> {
+    const snapshot = this.db.getSegment(segmentId);
+    if (!snapshot) throw new Error('Segment not found');
+    const source = JSON.stringify(snapshot.sourceTokens);
+    const target = JSON.stringify(snapshot.targetTokens);
+    let unchanged = true;
+    const invalidate = () => {
+      unchanged = false;
+    };
+    const guards = this.pendingWriteGuards.get(segmentId) ?? new Set<() => void>();
+    guards.add(invalidate);
+    this.pendingWriteGuards.set(segmentId, guards);
+    try {
+      return await task(snapshot, (tokens, status, requestId) =>
+        this.updateSegment(segmentId, tokens, status, requestId, () => {
+          const current = this.db.getSegment(segmentId);
+          return (
+            unchanged &&
+            Boolean(
+              current &&
+              current.status === snapshot.status &&
+              JSON.stringify(current.sourceTokens) === source &&
+              JSON.stringify(current.targetTokens) === target,
+            )
+          );
+        }),
+      );
+    } finally {
+      invalidate();
+      guards.delete(invalidate);
+      if (!guards.size) this.pendingWriteGuards.delete(segmentId);
+    }
   }
 
   /**
@@ -221,7 +271,14 @@ export class SegmentService extends EventEmitter {
     return { fileId, propagatedIds, workingTMUpdate };
   }
 
+  private invalidatePendingWrites(ids: Iterable<string>) {
+    for (const id of ids) {
+      for (const invalidate of this.pendingWriteGuards.get(id) ?? []) invalidate();
+    }
+  }
+
   private emitSegmentUpdated(payload: SegmentUpdateEventPayload) {
+    this.invalidatePendingWrites([payload.segmentId, ...payload.propagatedIds]);
     this.emit('segments-updated', payload);
   }
 
@@ -282,6 +339,7 @@ export class SegmentService extends EventEmitter {
     console.log(`[SegmentService] Undoing propagation batch: ${this.lastBatch.id}`);
     for (const change of this.lastBatch.changes) {
       this.db.updateSegmentTarget(change.segmentId, change.oldTargetTokens, change.oldStatus);
+      this.invalidatePendingWrites([change.segmentId]);
     }
 
     this.lastBatch = null;

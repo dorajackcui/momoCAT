@@ -3,6 +3,36 @@ import { createEditorSmokeSession, closeEditorSmokeSession } from './support/edi
 import { IPC_CHANNELS } from '../src/shared/ipcChannels';
 import type { DesktopApi } from '../src/shared/ipc';
 
+test('confirmation advances within QA results and keeps the last filtered row active', async () => {
+  const session = await createEditorSmokeSession([
+    ['Count 1', 'Count 2', ''],
+    ['Clean', 'Correct', ''],
+    ['Count 3', 'Count 4', ''],
+  ]);
+  try {
+    const { page, fileId } = session;
+    await page.getByRole('button', { name: 'Run batch QA', exact: true }).click();
+    await page.getByRole('button', { name: 'Numbers · 2 rows', exact: true }).click();
+    await expect(page.locator('.editor-source-text')).toHaveText(['Count 1', 'Count 3']);
+    await page.locator('.editor-row').first().locator('.editor-target-cell').click();
+    await page.keyboard.press('Control+Enter');
+    await expect(page.locator('.cm-content')).toHaveText('Count 4');
+    await page.keyboard.press('Control+Enter');
+    await expect
+      .poll(() =>
+        page.evaluate(async (id) => {
+          const rows = await (window as unknown as { api: DesktopApi }).api.getSegments(id, 0, 10);
+          return rows.map((row) => row.status);
+        }, fileId),
+      )
+      .toEqual(['confirmed', 'draft', 'confirmed']);
+    await expect(page.locator('.cm-content')).toHaveText('Count 4');
+    await expect(page.locator('.editor-row')).toHaveCount(2);
+  } finally {
+    await closeEditorSmokeSession(session);
+  }
+});
+
 test('Confirm succeeds with QA findings and skips checks when instant QA is off', async () => {
   const session = await createEditorSmokeSession([
     ['Count 1', 'Count 2', ''],

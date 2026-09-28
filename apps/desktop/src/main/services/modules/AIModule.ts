@@ -151,6 +151,7 @@ export class AIModule {
     segmentId: string,
     options?: {
       model?: string;
+      clientRequestId?: string;
     },
   ) {
     return this.translationOrchestrator.aiTranslateSegment(segmentId, options);
@@ -161,6 +162,7 @@ export class AIModule {
     instruction: string,
     options?: {
       model?: string;
+      clientRequestId?: string;
     },
   ) {
     return this.translationOrchestrator.aiRefineSegment(segmentId, instruction, options);

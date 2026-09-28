@@ -1,19 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Segment } from '@cat/core/models';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   EditorFilterCriteria,
   EditorMatchMode,
   EditorQualityFilter,
-  SearchableEditorSegment,
   EditorSortBy,
   EditorSortDirection,
   EditorStatusFilter,
   EditorTargetSearchScope,
   countActiveFilterFields,
   createDefaultEditorFilterCriteria,
-  filterSearchableSegments,
   toggleFilterSelection,
-  sortSearchableSegments,
 } from '../components/editorFilterUtils';
 import {
   buildEditorFilterStorageKey as buildEditorFilterStorageKeyInternal,
@@ -21,16 +17,9 @@ import {
   persistFilterState,
   sanitizePersistedEditorFilterState as sanitizePersistedEditorFilterStateInternal,
 } from './editor/editorFilterStateStorage';
-import {
-  buildSearchableEditorSegments,
-  buildSearchableEditorSegmentsIncrementally,
-  buildSearchableEditorSegmentsWithWeakCache,
-  createEditorSearchableListCache,
-  resolveActiveFilteredSegmentIndex,
-  resolveActiveSegmentIdForFilteredList,
-} from './editor/editorSearchableSegments';
+import { createEditorView } from './editor/editorView';
+import type { EditorSegmentStore } from './editor/editorSegmentStore';
 import { useEditorFilterMenus } from './editor/useEditorFilterMenus';
-import type { SegmentChangeHint } from './editor/editorSegmentState';
 
 const SEARCH_DEBOUNCE_MS = 120;
 
@@ -66,9 +55,7 @@ export const FILTER_SORT_OPTIONS: Array<{
 
 export interface UseEditorFiltersParams {
   fileId: number;
-  segments: Segment[];
-  segmentChangeHint?: SegmentChangeHint;
-  segmentIndexById?: ReadonlyMap<string, number>;
+  segmentStore: EditorSegmentStore;
   segmentSaveErrors: Record<string, string>;
   activeSegmentId: string | null;
   setActiveSegmentId: (segmentId: string) => void;
@@ -82,15 +69,6 @@ const QUALITY_VALUES = new Set(FILTER_QUALITY_OPTIONS.map((item) => item.value))
 const SORT_BY_VALUES = new Set<EditorSortBy>(['default', 'source_length', 'target_length']);
 const SORT_DIRECTION_VALUES = new Set<EditorSortDirection>(['asc', 'desc']);
 const TARGET_SEARCH_SCOPE_VALUES = new Set<EditorTargetSearchScope>(['target', 'context']);
-
-export {
-  buildSearchableEditorSegments,
-  buildSearchableEditorSegmentsIncrementally,
-  buildSearchableEditorSegmentsWithWeakCache,
-  createEditorSearchableListCache,
-  resolveActiveFilteredSegmentIndex,
-  resolveActiveSegmentIdForFilteredList,
-};
 
 export function buildEditorFilterStorageKey(fileId: number): string {
   return buildEditorFilterStorageKeyInternal(fileId);
@@ -110,92 +88,9 @@ export function sanitizePersistedEditorFilterState(raw: unknown): EditorFilterCr
   });
 }
 
-export function canReuseEditorSegmentListWithoutRefreshingSearchText(
-  criteria: EditorFilterCriteria,
-): boolean {
-  return (
-    criteria.statuses.length === 0 &&
-    criteria.qualityFilters.length === 0 &&
-    !criteria.firstRepeatOnly &&
-    criteria.sourceQuery.trim().length === 0 &&
-    criteria.targetQuery.trim().length === 0 &&
-    criteria.sortBy === 'default'
-  );
-}
-
-export interface EditorFilterSnapshotCache {
-  resolve(params: {
-    scopeKey: string | number;
-    segments: SearchableEditorSegment[];
-    criteria: EditorFilterCriteria;
-    refreshToken?: number;
-  }): SearchableEditorSegment[];
-}
-
-function buildEditorFilterSnapshotKey(
-  scopeKey: string | number,
-  criteria: EditorFilterCriteria,
-): string {
-  return JSON.stringify([
-    scopeKey,
-    criteria.sourceQuery,
-    criteria.targetQuery,
-    criteria.targetSearchScope,
-    criteria.statuses,
-    criteria.matchMode,
-    criteria.qualityFilters,
-    criteria.firstRepeatOnly,
-    criteria.sortBy,
-    criteria.sortDirection,
-  ]);
-}
-
-export function createEditorFilterSnapshotCache(): EditorFilterSnapshotCache {
-  let snapshotKey: string | null = null;
-  let snapshotIds: string[] = [];
-  let lastRefreshToken: number | undefined;
-
-  return {
-    resolve: ({ scopeKey, segments, criteria, refreshToken }) => {
-      if (canReuseEditorSegmentListWithoutRefreshingSearchText(criteria)) {
-        snapshotKey = null;
-        snapshotIds = [];
-        lastRefreshToken = refreshToken;
-        return segments;
-      }
-
-      const nextSnapshotKey = buildEditorFilterSnapshotKey(scopeKey, criteria);
-      const shouldRefresh =
-        snapshotKey !== nextSnapshotKey ||
-        (refreshToken !== undefined && refreshToken !== lastRefreshToken);
-
-      if (shouldRefresh) {
-        snapshotKey = nextSnapshotKey;
-        lastRefreshToken = refreshToken;
-        const matches = filterSearchableSegments(segments, criteria);
-        const sorted = sortSearchableSegments(matches, criteria.sortBy, criteria.sortDirection);
-        snapshotIds = sorted.map((item) => item.segment.segmentId);
-        return sorted;
-      }
-
-      const currentById = new Map(segments.map((item) => [item.segment.segmentId, item]));
-      const currentSnapshot = snapshotIds.flatMap((segmentId) => {
-        const item = currentById.get(segmentId);
-        return item ? [item] : [];
-      });
-      if (currentSnapshot.length !== snapshotIds.length) {
-        snapshotIds = currentSnapshot.map((item) => item.segment.segmentId);
-      }
-      return currentSnapshot;
-    },
-  };
-}
-
 export function useEditorFilters({
   fileId,
-  segments,
-  segmentChangeHint,
-  segmentIndexById,
+  segmentStore,
   segmentSaveErrors,
   activeSegmentId,
   setActiveSegmentId,
@@ -212,8 +107,8 @@ export function useEditorFilters({
   const [debouncedSourceQuery, setDebouncedSourceQuery] = useState('');
   const [debouncedTargetQuery, setDebouncedTargetQuery] = useState('');
   const filterStateHydratedRef = useRef(false);
-  const searchableListCache = useMemo(() => createEditorSearchableListCache(), []);
-  const filterSnapshotCache = useMemo(() => createEditorFilterSnapshotCache(), []);
+  const projection = useMemo(() => createEditorView(), [segmentStore]);
+  const orderIds = useSyncExternalStore(segmentStore.subscribe, segmentStore.getOrderIds);
 
   const menus = useEditorFilterMenus();
   const {
@@ -234,65 +129,15 @@ export function useEditorFilters({
     }),
     [filterState, debouncedSourceQuery, debouncedTargetQuery],
   );
-  const canReuseSearchableList =
-    canReuseEditorSegmentListWithoutRefreshingSearchText(effectiveCriteria);
-
-  const searchableSegments = useMemo(() => {
-    return searchableListCache.resolve({
-      segments,
-      segmentSaveErrors,
-      changedSegmentIds: segmentChangeHint?.changedSegmentIds,
-      segmentIndexById,
-      orderChanged: segmentChangeHint?.orderChanged ?? true,
-      contentIndependent: canReuseSearchableList,
-    });
-  }, [
-    canReuseSearchableList,
-    searchableListCache,
-    segments,
-    segmentChangeHint,
-    segmentIndexById,
-    segmentSaveErrors,
-  ]);
-
-  const qaSearchableSegments = useMemo(() => {
-    if (!qaFilter) return searchableSegments;
-    const byId = new Map(searchableSegments.map((item) => [item.segment.segmentId, item]));
-    return qaFilter.ids.flatMap((id) => {
-      const item = byId.get(id);
-      return item ? [item] : [];
-    });
-  }, [qaFilter, searchableSegments]);
-  const filteredSegments = useMemo(
-    () =>
-      filterSnapshotCache.resolve({
-        scopeKey: qaFilter ? `${fileId}:${JSON.stringify(qaFilter.ids)}` : fileId,
-        segments: qaSearchableSegments,
-        criteria: effectiveCriteria,
-        refreshToken: segmentChangeHint?.orderChanged ? segmentChangeHint.revision : undefined,
-      }),
-    [
-      effectiveCriteria,
-      fileId,
-      filterSnapshotCache,
-      qaSearchableSegments,
-      qaFilter,
-      segmentChangeHint,
-    ],
-  );
-
+  const view = projection.resolve({
+    store: segmentStore,
+    criteria: effectiveCriteria,
+    qaIds: qaFilter?.ids,
+    saveErrors: segmentSaveErrors,
+  });
   const activeFilterCount = countActiveFilterFields(filterState) + Number(Boolean(qaFilter));
   const hasActiveFilter = activeFilterCount > 0 || filterState.sortBy !== 'default';
-  const activeFilteredIndex = useMemo(
-    () =>
-      resolveActiveFilteredSegmentIndex({
-        activeSegmentId,
-        filteredSegments,
-        segmentIndexById,
-        canUseSegmentIndex: !hasActiveFilter,
-      }),
-    [activeSegmentId, filteredSegments, hasActiveFilter, segmentIndexById],
-  );
+  const activeFilteredIndex = activeSegmentId ? (view.indexById.get(activeSegmentId) ?? -1) : -1;
 
   const clearFilters = useCallback(() => {
     setQASelection(null);
@@ -411,36 +256,35 @@ export function useEditorFilters({
   }, [fileId, filterState]);
 
   useEffect(() => {
-    const nextActiveSegmentId = resolveActiveSegmentIdForFilteredList({
-      activeSegmentId,
-      segments,
-      filteredSegments,
-      segmentIndexById,
-    });
-    if (!nextActiveSegmentId) return;
-    if (nextActiveSegmentId === activeSegmentId) return;
-    setActiveSegmentId(nextActiveSegmentId);
-  }, [activeSegmentId, filteredSegments, segmentIndexById, segments, setActiveSegmentId]);
+    if (view.ids.length && (!activeSegmentId || !segmentStore.getSegment(activeSegmentId))) {
+      setActiveSegmentId(view.ids[0]);
+    }
+  }, [activeSegmentId, view.ids, orderIds, segmentStore, setActiveSegmentId]);
 
-  // Resolve on demand using the latest input, even before the display search debounce settles.
+  // Batch operations can resolve input that has not reached the debounced display yet.
   const getFilteredSegmentIds = useCallback((): string[] | null => {
     if (activeFilterCount === 0) return null;
     if (
       filterState.sourceQuery === debouncedSourceQuery &&
       filterState.targetQuery === debouncedTargetQuery
-    ) {
-      return filteredSegments.map(({ segment }) => segment.segmentId);
-    }
-    return filterSearchableSegments(qaSearchableSegments, filterState).map(
-      ({ segment }) => segment.segmentId,
-    );
+    )
+      return [...view.ids];
+    return projection.searchIds({
+      store: segmentStore,
+      criteria: filterState,
+      qaIds: qaFilter?.ids,
+      saveErrors: segmentSaveErrors,
+    });
   }, [
     activeFilterCount,
     debouncedSourceQuery,
     debouncedTargetQuery,
-    filteredSegments,
+    view.ids,
     filterState,
-    qaSearchableSegments,
+    projection,
+    segmentStore,
+    qaFilter,
+    segmentSaveErrors,
   ]);
 
   return {
@@ -459,7 +303,8 @@ export function useEditorFilters({
     sortDirection: filterState.sortDirection,
     isFilterMenuOpen,
     isSortMenuOpen,
-    filteredSegments,
+    visibleRows: view.rows,
+    visibleIds: view.ids,
     activeFilteredIndex,
     activeFilterCount,
     hasActiveFilter,

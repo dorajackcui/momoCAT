@@ -529,8 +529,15 @@ export interface DesktopApi extends AssetRenameApi, AISettingsApi {
   setTBSyncConfig: (tbId: string, config: TBSyncConfigInput) => Promise<void>;
   syncTBWithExcel: (tbId: string) => Promise<TBSyncStartResult>;
 
-  aiTranslateSegment: (segmentId: string) => Promise<AISegmentTranslateResult>;
-  aiRefineSegment: (segmentId: string, instruction: string) => Promise<AISegmentTranslateResult>;
+  aiTranslateSegment: (
+    segmentId: string,
+    clientRequestId?: string,
+  ) => Promise<AISegmentTranslateResult>;
+  aiRefineSegment: (
+    segmentId: string,
+    instruction: string,
+    clientRequestId?: string,
+  ) => Promise<AISegmentTranslateResult>;
   aiTranslateFile: (fileId: number, options?: AITranslateFileOptions) => Promise<string>;
   aiCancelFileJob: (jobId: string) => Promise<boolean>;
   aiTestTranslate: (

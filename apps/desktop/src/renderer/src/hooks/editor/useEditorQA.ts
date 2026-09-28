@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { Segment } from '@cat/core/models';
 import type { FileQaReport } from '@cat/core/project';
-import type { EditorSegmentChange, EditorSegmentStore } from './editorSegmentStore';
-import type { SegmentChangeHint } from './editorSegmentState';
+import type { EditorSegmentStore } from './editorSegmentStore';
 
 interface QAResult {
   fileId: number;
@@ -11,20 +10,17 @@ interface QAResult {
   checked: boolean;
 }
 
-export function useEditorQA(
-  fileId: number,
-  store: EditorSegmentStore,
-  change: SegmentChangeHint,
-  publishChanges: (changes: EditorSegmentChange[]) => void,
-) {
+export function useEditorQA(fileId: number, store: EditorSegmentStore) {
   const [result, setResult] = useState<QAResult | null>(null);
   const pending = useRef<{ fileId: number; revision: number } | null>(null);
   const current = result?.fileId === fileId ? result : null;
+  const { issues, hasResults } = useSyncExternalStore(store.subscribe, store.getQAResults);
+  // Edits only flip validity once; unchanged findings never rebuild or rerender per keystroke.
+  const stale = useSyncExternalStore(store.subscribe, () =>
+    Boolean(current && (current.stale || current.revision !== store.getQARevision())),
+  );
   const startRun = useCallback(() => {
-    pending.current = {
-      fileId,
-      revision: store.getQARevision(),
-    };
+    pending.current = { fileId, revision: store.getQARevision() };
   }, [fileId, store]);
   const acceptReport = useCallback(
     (report: FileQaReport) => {
@@ -45,55 +41,21 @@ export function useEditorQA(
           if (JSON.stringify(qaIssues) !== JSON.stringify(segment.qaIssues))
             updates.set(segment.segmentId, { ...segment, qaIssues });
         }
-        publishChanges(store.applyUpdates(updates));
+        store.applyUpdates(updates);
       }
-      setResult({
-        fileId,
-        stale,
-        revision,
-        checked: true,
-      });
+      setResult({ fileId, stale, revision, checked: true });
     },
-    [fileId, store, publishChanges],
+    [fileId, store],
   );
-
-  const { issues, hasResults } = useMemo(
-    () => {
-      const segments = store.getSegments().filter((segment) => segment.fileId === fileId);
-      return {
-        hasResults: segments.some((segment) => segment.qaIssues !== undefined),
-        issues: segments.flatMap((segment) =>
-          (segment.qaIssues ?? []).map((issue) => ({
-            ...issue,
-            segmentId: segment.segmentId,
-            row: segment.meta?.rowRef ?? segment.orderIndex + 1,
-          })),
-        ),
-      };
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- The mutable store is refreshed by its change hint.
-    [current, fileId, store, change],
-  );
-
   useEffect(() => {
-    if (!current) {
-      if (hasResults) {
-        // Loaded results are unverified, but edits after loading must still mark them stale.
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- Capture the loaded external store revision.
-        setResult({ fileId, revision: store.getQARevision(), stale: false, checked: false });
-      }
-      return;
+    if (!current && hasResults) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Capture the loaded result's validity boundary.
+      setResult({ fileId, revision: store.getQARevision(), stale: false, checked: false });
     }
-    if (!current.stale && current.revision !== store.getQARevision())
-      setResult({ ...current, stale: true });
-  }, [current, fileId, store, change, hasResults]);
-
-  return {
-    startRun,
-    acceptReport,
-    issues,
-    hasResults,
-    checked: current?.checked ?? false,
-    stale: current?.stale ?? false,
-  };
+  }, [current, fileId, store, hasResults]);
+  const checked = current?.checked ?? false;
+  return useMemo(
+    () => ({ startRun, acceptReport, issues, hasResults, checked, stale }),
+    [startRun, acceptReport, issues, hasResults, checked, stale],
+  );
 }

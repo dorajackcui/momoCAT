@@ -76,6 +76,7 @@ export class AITranslationOrchestrator {
     segmentId: string,
     options?: {
       model?: string;
+      clientRequestId?: string;
     },
   ) {
     return runSegmentTranslation(
@@ -91,6 +92,7 @@ export class AITranslationOrchestrator {
     instruction: string,
     options?: {
       model?: string;
+      clientRequestId?: string;
     },
   ) {
     return runSegmentRefinement(
@@ -114,7 +116,6 @@ export class AITranslationOrchestrator {
   private createSegmentWorkflowDeps() {
     return {
       projectRepo: this.projectRepo,
-      segmentRepo: this.segmentRepo,
       segmentService: this.segmentService,
       providerCatalogService: this.providerCatalogService,
       aiRuntimeConfigProvider: this.aiRuntimeConfigProvider,

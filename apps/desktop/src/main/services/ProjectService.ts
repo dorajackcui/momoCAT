@@ -565,6 +565,7 @@ export class ProjectService {
     segmentId: string,
     options?: {
       model?: string;
+      clientRequestId?: string;
     },
   ) {
     return this.aiModule.aiTranslateSegment(segmentId, options);
@@ -575,6 +576,7 @@ export class ProjectService {
     instruction: string,
     options?: {
       model?: string;
+      clientRequestId?: string;
     },
   ) {
     return this.aiModule.aiRefineSegment(segmentId, instruction, options);

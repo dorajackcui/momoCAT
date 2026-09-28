@@ -566,3 +566,77 @@ describe('SegmentService transactional confirmation flow', () => {
     expect(mountedTMs).toHaveLength(0);
   });
 });
+
+describe('async segment write guards', () => {
+  it.each(['direct', 'selected', 'batch', 'propagation'] as const)(
+    'rejects an AI commit after %s writes, including editing back to the original content',
+    async (kind) => {
+      const leader = buildSegment('leader', 1, 0, 'hash');
+      const initial = buildSegment('guarded', 1, 1, 'hash');
+      const repo = new InMemorySegmentRepository([leader, initial]);
+      const service = new SegmentService(
+        repo,
+        { upsertFromConfirmedSegment: vi.fn() } as unknown as TMService,
+        { runInTransaction: (work) => work() },
+      );
+      const events = vi.fn();
+      service.on('segments-updated', events);
+      let finish!: () => void;
+      const response = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const request = service.withUnchangedSegment(initial.segmentId, async (_snapshot, commit) => {
+        await response;
+        return commit([{ type: 'text', content: 'AI result' }], 'draft', 'ai-request');
+      });
+      const edit = {
+        segmentId: initial.segmentId,
+        targetTokens: [{ type: 'text' as const, content: 'human edit' }],
+        status: 'draft' as const,
+      };
+      if (kind === 'propagation') {
+        await service.updateSegment(leader.segmentId, edit.targetTokens, 'confirmed');
+        await service.undoLastPropagation();
+      } else {
+        if (kind === 'direct')
+          await service.updateSegment(edit.segmentId, edit.targetTokens, edit.status);
+        if (kind === 'selected') await service.updateSelectedSegments(1, [edit]);
+        if (kind === 'batch') await service.updateSegmentsAtomically([edit]);
+        await service.updateSegment(initial.segmentId, initial.targetTokens, initial.status);
+      }
+      expect(repo.getSegment(initial.segmentId)?.targetTokens).toEqual(initial.targetTokens);
+      expect(repo.getSegment(initial.segmentId)?.status).toEqual(initial.status);
+      events.mockClear();
+      finish();
+      await expect(request).rejects.toThrow('latest edit was kept');
+      expect(events).not.toHaveBeenCalled();
+      expect(repo.getSegment(initial.segmentId)?.targetTokens).toEqual(initial.targetTokens);
+      // A fresh request can commit; the completed guard does not poison later work.
+      await service.withUnchangedSegment(initial.segmentId, async (_snapshot, commit) =>
+        commit(edit.targetTokens, 'draft', 'fresh-request'),
+      );
+      expect(events).toHaveBeenCalledWith(
+        expect.objectContaining({ clientRequestId: 'fresh-request' }),
+      );
+    },
+  );
+
+  it('checks the snapshot inside the transaction even for writes outside the service', async () => {
+    const initial = buildSegment('guarded', 1, 0, 'hash');
+    const repo = new InMemorySegmentRepository([initial]);
+    const service = new SegmentService(repo, {} as TMService, {
+      runInTransaction: (work) => work(),
+    });
+    await expect(
+      service.withUnchangedSegment(initial.segmentId, async (_snapshot, commit) => {
+        repo.updateSegmentTarget(
+          initial.segmentId,
+          [{ type: 'text', content: 'external draft' }],
+          'draft',
+        );
+        return commit([{ type: 'text', content: 'AI result' }], 'draft');
+      }),
+    ).rejects.toThrow('latest edit was kept');
+    expect(repo.getSegment(initial.segmentId)?.targetTokens[0].content).toBe('external draft');
+  });
+});

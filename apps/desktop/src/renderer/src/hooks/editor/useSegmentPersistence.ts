@@ -1,5 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
-import type { SetStateAction } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { Segment, SegmentStatus, Token } from '@cat/core/models';
 import { apiClient } from '../../services/apiClient';
 
@@ -24,6 +23,11 @@ interface SegmentPersistorDeps {
   debounceMs?: number;
 }
 
+export interface SegmentOperation {
+  clientRequestId: string;
+  isCurrent: (segmentId?: string) => boolean;
+}
+
 interface SegmentPersistor {
   queueSegmentUpdate: (input: QueueSegmentUpdateInput) => void;
   flushSegment: (segmentId: string) => Promise<void>;
@@ -32,6 +36,12 @@ interface SegmentPersistor {
   shouldDelayRemoteUpdate: (segmentId: string) => boolean;
   isRemoteUpdateStale: (segmentId: string, clientRequestId?: string) => boolean;
   clear: () => void;
+  subscribe: (listener: () => void) => () => void;
+  beginOperation: (segmentId: string) => SegmentOperation;
+  runCommit: <T>(
+    segmentId: string,
+    task: (operation: SegmentOperation) => Promise<T>,
+  ) => Promise<T>;
 }
 
 export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersistor {
@@ -39,41 +49,52 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
   const pendingBySegment = new Map<string, QueueSegmentUpdateInput>();
   const debounceTimerBySegment = new Map<string, ReturnType<typeof setTimeout>>();
   const latestRequestSeqBySegment = new Map<string, number>();
-  const requestSeqByRequestIdBySegment = new Map<string, Map<string, number>>();
   const inFlightPromiseBySegment = new Map<string, Promise<void>>();
   const inFlightRequestIdBySegment = new Map<string, string>();
   const editingSegments = new Set<string>();
   let generation = 0;
+  let requestSequence = 0;
+  let editVersion = 0;
+  const editedAt = new Map<string, number>();
+  const commits = new Map<string, Promise<unknown>>();
+  const listeners = new Set<() => void>();
+  let notificationPending = false;
 
   const notifyStateChange = () => {
     deps.onStateChange?.();
+    if (!notificationPending) {
+      notificationPending = true;
+      queueMicrotask(() => {
+        notificationPending = false;
+        for (const listener of [...listeners]) listener();
+      });
+    }
   };
 
   const nextRequestSeq = (segmentId: string): number => {
-    const nextSeq = (latestRequestSeqBySegment.get(segmentId) ?? 0) + 1;
+    const nextSeq = ++requestSequence;
     latestRequestSeqBySegment.set(segmentId, nextSeq);
     return nextSeq;
   };
 
-  const createRequestId = (segmentId: string, requestSeq: number): string =>
-    `${segmentId}:${requestSeq}:${Date.now()}:${Math.random().toString(16).slice(2, 10)}`;
+  // Opaque identities carry this editor session's revision, so even very late
+  // echoes remain recognizable without an unbounded or prematurely pruned history.
+  const requestPrefix = `editor-${Date.now()}-${Math.random().toString(16).slice(2)}:`;
+  const createRequestId = (segmentId: string, seq: number, owned = false): string =>
+    `${requestPrefix}${generation}:${seq}:${editedAt.get(segmentId) ?? 0}:${Number(owned)}`;
 
-  const trackRequest = (segmentId: string, requestId: string, requestSeq: number): void => {
-    const seqByRequestId =
-      requestSeqByRequestIdBySegment.get(segmentId) ?? new Map<string, number>();
-    seqByRequestId.set(requestId, requestSeq);
-
-    // Bound retained request history to avoid unbounded growth.
-    if (seqByRequestId.size > 32) {
-      const minKeptSeq = Math.max(1, requestSeq - 8);
-      for (const [id, seq] of seqByRequestId.entries()) {
-        if (seq < minKeptSeq) {
-          seqByRequestId.delete(id);
-        }
-      }
-    }
-
-    requestSeqByRequestIdBySegment.set(segmentId, seqByRequestId);
+  const beginOperation = (segmentId: string): SegmentOperation => {
+    const seq = nextRequestSeq(segmentId);
+    const clientRequestId = createRequestId(segmentId, seq, true);
+    const startedAt = editVersion;
+    const scope = generation;
+    return {
+      clientRequestId,
+      isCurrent: (id = segmentId) =>
+        scope === generation &&
+        (editedAt.get(id) ?? 0) <= startedAt &&
+        (latestRequestSeqBySegment.get(id) ?? 0) <= seq,
+    };
   };
 
   const clearDebounceTimer = (segmentId: string): void => {
@@ -85,6 +106,9 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
   };
 
   const runSinglePersist = async (segmentId: string): Promise<void> => {
+    // A newer draft waits for an explicit commit, so persisted order matches edit order.
+    const commit = commits.get(segmentId);
+    if (commit) await commit.catch(() => {});
     const activeRequest = inFlightPromiseBySegment.get(segmentId);
     if (activeRequest) {
       await activeRequest;
@@ -97,7 +121,6 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
 
     const requestSeq = nextRequestSeq(segmentId);
     const clientRequestId = createRequestId(segmentId, requestSeq);
-    trackRequest(segmentId, clientRequestId, requestSeq);
     deps.clearSegmentSaveError(segmentId);
 
     const requestGeneration = generation;
@@ -142,8 +165,46 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
     await requestTask;
   };
 
+  const flushSegment = async (segmentId: string): Promise<void> => {
+    do {
+      clearDebounceTimer(segmentId);
+      const commit = commits.get(segmentId);
+      if (commit) await commit;
+      const inFlight = inFlightPromiseBySegment.get(segmentId);
+      if (inFlight) await inFlight;
+      if (pendingBySegment.has(segmentId)) await runSinglePersist(segmentId);
+      // Input may arrive during a save. Explicit actions require the latest draft.
+    } while (
+      pendingBySegment.has(segmentId) ||
+      inFlightPromiseBySegment.has(segmentId) ||
+      commits.has(segmentId)
+    );
+  };
+
   return {
+    beginOperation,
+    runCommit: async (segmentId, task) => {
+      const previous = commits.get(segmentId);
+      if (previous) await previous.catch(() => {});
+      const operation = beginOperation(segmentId);
+      const promise = Promise.resolve().then(() => task(operation));
+      commits.set(segmentId, promise);
+      notifyStateChange();
+      try {
+        return await promise;
+      } finally {
+        if (commits.get(segmentId) === promise) commits.delete(segmentId);
+        notifyStateChange();
+      }
+    },
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
     queueSegmentUpdate: (input) => {
+      editedAt.set(input.segmentId, ++editVersion);
       pendingBySegment.set(input.segmentId, input);
       const existingTimer = debounceTimerBySegment.get(input.segmentId);
       if (existingTimer !== undefined) {
@@ -167,38 +228,18 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
       notifyStateChange();
     },
 
-    flushSegment: async (segmentId) => {
-      clearDebounceTimer(segmentId);
-
-      const inFlight = inFlightPromiseBySegment.get(segmentId);
-      if (inFlight) {
-        await inFlight;
-      }
-
-      if (!pendingBySegment.has(segmentId)) return;
-      await runSinglePersist(segmentId);
-    },
-
+    flushSegment,
     flushAll: async () => {
-      const targetSegmentIds = new Set<string>([
-        ...pendingBySegment.keys(),
-        ...inFlightPromiseBySegment.keys(),
-      ]);
-      const results = await Promise.allSettled(
-        [...targetSegmentIds].map(async (segmentId) => {
-          clearDebounceTimer(segmentId);
-          const inFlight = inFlightPromiseBySegment.get(segmentId);
-          if (inFlight) {
-            await inFlight;
-          }
-          if (pendingBySegment.has(segmentId)) {
-            await runSinglePersist(segmentId);
-          }
-        }),
-      );
-      const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
-      if (failures.length > 0) {
-        throw new Error(`${failures.length} segment(s) failed to save`);
+      while (true) {
+        const ids = new Set([
+          ...pendingBySegment.keys(),
+          ...inFlightPromiseBySegment.keys(),
+          ...commits.keys(),
+        ]);
+        if (!ids.size) return;
+        const results = await Promise.allSettled([...ids].map(flushSegment));
+        const failures = results.filter((result) => result.status === 'rejected');
+        if (failures.length) throw new Error(`${failures.length} segment(s) failed to save`);
       }
     },
 
@@ -220,15 +261,21 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
       editingSegments.has(segmentId) ||
       pendingBySegment.has(segmentId) ||
       debounceTimerBySegment.has(segmentId) ||
-      inFlightPromiseBySegment.has(segmentId),
+      inFlightPromiseBySegment.has(segmentId) ||
+      commits.has(segmentId),
 
     isRemoteUpdateStale: (segmentId, clientRequestId) => {
-      if (!clientRequestId) return false;
-      const seqByRequestId = requestSeqByRequestIdBySegment.get(segmentId);
-      if (!seqByRequestId) return false;
-      const eventSeq = seqByRequestId.get(clientRequestId);
-      if (eventSeq === undefined) return false;
-      return eventSeq < (latestRequestSeqBySegment.get(segmentId) ?? 0);
+      if (!clientRequestId?.startsWith(requestPrefix)) return false;
+      const [requestGeneration, seq, edit, owned] = clientRequestId
+        .slice(requestPrefix.length)
+        .split(':')
+        .map(Number);
+      return (
+        requestGeneration !== generation ||
+        owned === 1 ||
+        edit < (editedAt.get(segmentId) ?? 0) ||
+        seq < (latestRequestSeqBySegment.get(segmentId) ?? 0)
+      );
     },
 
     clear: () => {
@@ -239,10 +286,11 @@ export function createSegmentPersistor(deps: SegmentPersistorDeps): SegmentPersi
       pendingBySegment.clear();
       debounceTimerBySegment.clear();
       latestRequestSeqBySegment.clear();
-      requestSeqByRequestIdBySegment.clear();
       inFlightPromiseBySegment.clear();
       inFlightRequestIdBySegment.clear();
       editingSegments.clear();
+      editedAt.clear();
+      commits.clear();
       notifyStateChange();
     },
   };
@@ -257,22 +305,11 @@ interface UseSegmentPersistenceParams {
   clearSegmentSaveError: (segmentId: string) => void;
 }
 
-export function resolveSegmentStateUpdate(
-  current: Segment[],
-  update: SetStateAction<Segment[]>,
-): Segment[] {
-  return typeof update === 'function'
-    ? (update as (previous: Segment[]) => Segment[])(current)
-    : update;
-}
-
 export function useSegmentPersistence({
   updateSegmentState,
   setSegmentSaveError,
   clearSegmentSaveError,
 }: UseSegmentPersistenceParams) {
-  const [syncStateVersion, setSyncStateVersion] = useState(0);
-
   const persistor = useMemo(
     () =>
       createSegmentPersistor({
@@ -280,9 +317,6 @@ export function useSegmentPersistence({
           apiClient.updateSegment(segmentId, targetTokens, status, clientRequestId),
         setSegmentSaveError,
         clearSegmentSaveError,
-        onStateChange: () => {
-          setSyncStateVersion((prev) => prev + 1);
-        },
         debounceMs: DEFAULT_PERSIST_DEBOUNCE_MS,
       }),
     [clearSegmentSaveError, setSegmentSaveError],
@@ -330,7 +364,9 @@ export function useSegmentPersistence({
     flushAllSegmentUpdates,
     shouldDelayRemoteUpdate: persistor.shouldDelayRemoteUpdate,
     isRemoteUpdateStale: persistor.isRemoteUpdateStale,
-    syncStateVersion,
+    subscribeSyncState: persistor.subscribe,
+    beginOperation: persistor.beginOperation,
+    runCommit: persistor.runCommit,
     clearPersistQueue: persistor.clear,
   };
 }

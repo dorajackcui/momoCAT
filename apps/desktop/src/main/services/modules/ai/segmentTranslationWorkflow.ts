@@ -5,17 +5,17 @@ import {
   type SegmentTranslationDependencies,
 } from '@cat/localization';
 import { resolveFileTagPolicy } from '../../../../shared/fileTagPolicy';
-import type { ProjectRepository, SegmentRepository } from '../../ports';
+import type { ProjectRepository } from '../../ports';
 import type { SegmentService } from '../../SegmentService';
 
 interface SegmentWorkflowDeps extends SegmentTranslationDependencies {
   projectRepo: ProjectRepository;
-  segmentRepo: SegmentRepository;
   segmentService: SegmentService;
 }
 
 interface SegmentWorkflowOptions {
   model?: string;
+  clientRequestId?: string;
 }
 interface WithSegmentLock {
   <T>(segmentId: string, task: () => Promise<T>): Promise<T>;
@@ -48,35 +48,31 @@ async function runSegmentOperation(
   instruction?: string,
 ): Promise<{ segmentId: string; status: SegmentStatus }> {
   return withSegmentLock(segmentId, async () => {
-    const segment = deps.segmentRepo.getSegment(segmentId);
-    if (!segment) throw new Error('Segment not found');
-    const file = deps.projectRepo.getFile(segment.fileId);
-    if (!file) throw new Error('File not found');
-    const project = deps.projectRepo.getProject(file.projectId);
-    if (!project) throw new Error('Project not found');
-    const targetTokens = await translateProjectSegment(
-      project,
-      segment,
-      resolveFileTagPolicy(file),
-      deps,
-      options?.model,
-      instruction,
-    );
-    const status = normalizeSegmentStatus('draft', targetTokens);
-    const updateResult = await deps.segmentService.updateSegment(
-      segment.segmentId,
-      targetTokens,
-      status,
-    );
+    return deps.segmentService.withUnchangedSegment(segmentId, async (segment, commit) => {
+      const file = deps.projectRepo.getFile(segment.fileId);
+      if (!file) throw new Error('File not found');
+      const project = deps.projectRepo.getProject(file.projectId);
+      if (!project) throw new Error('Project not found');
+      const targetTokens = await translateProjectSegment(
+        project,
+        segment,
+        resolveFileTagPolicy(file),
+        deps,
+        options?.model,
+        instruction,
+      );
+      const status = normalizeSegmentStatus('draft', targetTokens);
+      const updateResult = await commit(targetTokens, status, options?.clientRequestId);
 
-    return {
-      fileId: updateResult?.fileId ?? segment.fileId,
-      segmentId: segment.segmentId,
-      targetTokens,
-      status,
-      propagatedIds: updateResult?.propagatedIds ?? [],
-      serverAppliedAt: updateResult?.serverAppliedAt ?? new Date().toISOString(),
-    };
+      return {
+        fileId: updateResult?.fileId ?? segment.fileId,
+        segmentId: segment.segmentId,
+        targetTokens,
+        status,
+        propagatedIds: updateResult?.propagatedIds ?? [],
+        serverAppliedAt: updateResult?.serverAppliedAt ?? new Date().toISOString(),
+      };
+    });
   });
 }
 

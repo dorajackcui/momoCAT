@@ -3,6 +3,7 @@ import type { Project, ProjectFile } from '@cat/core/project';
 import { ProjectAITranslateModal } from './project-detail/ProjectAITranslateModal';
 import { useEditor } from '../hooks/useEditor';
 import { useEditorFilters } from '../hooks/useEditorFilters';
+import { useReferenceLookupController } from '../hooks/editor/useReferenceLookupController';
 import { useEditorQA } from '../hooks/editor/useEditorQA';
 import { Button } from './ui';
 import { apiClient } from '../services/apiClient';
@@ -26,6 +27,7 @@ import {
   useEditorSelection,
   type SegmentSelectionModifiers,
 } from '../hooks/editor/useEditorSelection';
+import { useConfirmAndAdvance } from '../hooks/editor/useConfirmAndAdvance';
 import { useEditorClipboard } from '../hooks/editor/useEditorClipboard';
 import { SegmentPasteDialog } from './editor/SegmentPasteDialog';
 import type { SelectedSegmentAction } from '../hooks/editor/useSelectedSegmentActions';
@@ -89,9 +91,6 @@ export const Editor: React.FC<EditorProps> = ({
     segments,
     segmentStore,
     activeSegmentId,
-    activeMatches,
-    activeTerms,
-    referenceLoading,
     segmentSaveErrors,
     aiTranslatingSegmentIds,
     loading,
@@ -106,15 +105,12 @@ export const Editor: React.FC<EditorProps> = ({
     handleApplyMatch,
     handleApplyTerm,
     projectId,
-    publishSegmentChanges,
-    segmentChangeHint,
-    segmentIndexById,
     segmentStats,
     fileTagPolicy,
     runSelectedSegmentAction,
     pasteSelectedSegments,
     isSelectedSegmentActionRunning,
-  } = useEditor({ activeFileId: fileId, activeTab });
+  } = useEditor({ activeFileId: fileId });
 
   const {
     sourceQueryInput,
@@ -131,7 +127,8 @@ export const Editor: React.FC<EditorProps> = ({
     sortDirection,
     isFilterMenuOpen,
     isSortMenuOpen,
-    filteredSegments,
+    visibleRows,
+    visibleIds: selectableIds,
     getFilteredSegmentIds,
     activeFilteredIndex,
     activeFilterCount,
@@ -152,34 +149,32 @@ export const Editor: React.FC<EditorProps> = ({
     debouncedTargetQuery,
   } = useEditorFilters({
     fileId,
-    segments,
-    segmentChangeHint,
-    segmentIndexById,
+    segmentStore,
     segmentSaveErrors,
     activeSegmentId,
     setActiveSegmentId,
   });
 
   const { layoutRef, sidebarWidth, startSidebarResize } = useEditorLayout();
-  const selectableIds = useMemo(
-    () => filteredSegments.map((item) => item.segment.segmentId),
-    [filteredSegments],
-  );
   const { selectedIds, isRowSelection, selectSingle, selectSegment, selectAll } =
     useEditorSelection(fileId, selectableIds, activeSegmentId);
 
   useEffect(() => {
     if (loading || segments.length === 0 || positionRestoredRef.current) return;
     positionRestoredRef.current = true;
-    if (
-      initialActiveSegmentId &&
-      filteredSegments.some((item) => item.segment.segmentId === initialActiveSegmentId)
-    ) {
+    if (initialActiveSegmentId && selectableIds.includes(initialActiveSegmentId)) {
       setActiveSegmentId(initialActiveSegmentId);
     }
-  }, [filteredSegments, initialActiveSegmentId, loading, segments.length, setActiveSegmentId]);
+  }, [selectableIds, initialActiveSegmentId, loading, segments.length, setActiveSegmentId]);
   const supportsBatchActions = Boolean(project);
-  const qa = useEditorQA(fileId, segmentStore, segmentChangeHint, publishSegmentChanges);
+  const qa = useEditorQA(fileId, segmentStore);
+  const { activeMatches, activeTerms, referenceLoading } = useReferenceLookupController({
+    enabled: activeTab === 'tm',
+    activeSegmentId,
+    projectId,
+    segmentStore,
+    visibleIds: selectableIds,
+  });
   const batchActions = useEditorBatchActions({
     onQAComplete: qa.acceptReport,
     onQAStart: qa.startRun,
@@ -196,16 +191,11 @@ export const Editor: React.FC<EditorProps> = ({
     ? clampJobProgress(activeBatchAIJob.progress || 0)
     : 0;
 
-  const totalSegments = segmentStats.totalSegments;
-  const confirmedSegments = segmentStats.confirmedSegments;
+  const { totalSegments, confirmedSegments } = segmentStats;
   const saveErrorCount = Object.keys(segmentSaveErrors).length;
   const activeSourceTokens = activeSegmentId
     ? (segmentStore.getSegment(activeSegmentId)?.sourceTokens ?? [])
     : [];
-
-  const handleExport = useCallback(() => {
-    void handleBatchExport();
-  }, [handleBatchExport]);
 
   const prepareToLeave = useCallback(async () => {
     if (isSelectedSegmentActionRunning) return false;
@@ -234,11 +224,23 @@ export const Editor: React.FC<EditorProps> = ({
     void handleBatchQA();
   }, [handleBatchQA, setActiveTab]);
 
-  const handleConfirmBatchAITranslate = useCallback(
-    (options: Parameters<typeof handleBatchAITranslate>[0]) => {
-      void handleBatchAITranslate(options);
-    },
-    [handleBatchAITranslate],
+  const qaPanel = useMemo(
+    () => ({
+      ...qa,
+      segmentStore,
+      running: batchActions.isBatchQARunning,
+      onRun: handleRunBatchQA,
+      onFilter: applyQAFilter,
+      onLocate: setActiveSegmentId,
+    }),
+    [
+      qa,
+      segmentStore,
+      batchActions.isBatchQARunning,
+      handleRunBatchQA,
+      applyQAFilter,
+      setActiveSegmentId,
+    ],
   );
 
   const handleToggleNonPrintingSymbols = useCallback(() => {
@@ -281,6 +283,14 @@ export const Editor: React.FC<EditorProps> = ({
     },
     [selectSingle, setActiveSegmentId],
   );
+
+  const confirmAndAdvance = useConfirmAndAdvance({
+    fileId,
+    visibleIds: selectableIds,
+    activeId: activeSegmentId,
+    confirm: confirmSegment,
+    activate: handleRowActivate,
+  });
 
   const handleSelectSegment = useCallback(
     (segmentId: string, modifiers: SegmentSelectionModifiers) => {
@@ -336,7 +346,7 @@ export const Editor: React.FC<EditorProps> = ({
       event.preventDefault();
       event.stopPropagation();
       if (selectedIds.size > 1) handleSelectionAction('confirm');
-      else if (!selectionActionsDisabled) void confirmSegment([...selectedIds][0]);
+      else if (!selectionActionsDisabled) void confirmAndAdvance([...selectedIds][0]);
     }
   };
 
@@ -423,7 +433,7 @@ export const Editor: React.FC<EditorProps> = ({
           filteredSegmentCount={batchActions.batchAIFilteredCount}
           totalSegmentCount={totalSegments}
           onClose={batchActions.closeBatchAIModal}
-          onConfirm={handleConfirmBatchAITranslate}
+          onConfirm={handleBatchAITranslate}
         />
       )}
 
@@ -436,7 +446,7 @@ export const Editor: React.FC<EditorProps> = ({
         confirmedSegments={confirmedSegments}
         totalSegments={totalSegments}
         onBack={onBack}
-        onExport={handleExport}
+        onExport={handleBatchExport}
       />
 
       {activeBatchAIJob && (
@@ -519,7 +529,7 @@ export const Editor: React.FC<EditorProps> = ({
             {qaFilter && (
               <div className="flex items-center justify-between gap-2 border-b border-border-subtle px-4 py-2 text-sm">
                 <span className="min-w-0 break-words">
-                  QA filter: {qaFilter.label} · {filteredSegments.length} rows
+                  QA filter: {qaFilter.label} · {visibleRows.length} rows
                 </span>
                 <Button size="sm" onClick={clearFilters}>
                   Exit QA filter
@@ -531,7 +541,7 @@ export const Editor: React.FC<EditorProps> = ({
               onSelectSegment={handleSelectSegment}
               scrollElement={listScrollElement}
               virtualized={isVirtualizedListEnabled}
-              filteredSegments={filteredSegments}
+              visibleRows={visibleRows}
               segmentStore={segmentStore}
               activeFilteredIndex={activeFilteredIndex}
               activeSegmentId={activeSegmentId}
@@ -546,7 +556,7 @@ export const Editor: React.FC<EditorProps> = ({
               onTargetEditorControllerChange={handleTargetEditorControllerChange}
               onAITranslate={translateSegmentWithAI}
               onAIRefine={refineSegmentWithAI}
-              onConfirm={confirmSegment}
+              onConfirm={confirmAndAdvance}
               aiTranslatingSegmentIds={aiTranslatingSegmentIds}
               segmentSaveErrors={segmentSaveErrors}
               sourceHighlightQuery={debouncedSourceQuery}
@@ -559,14 +569,7 @@ export const Editor: React.FC<EditorProps> = ({
         </div>
 
         <EditorSidebar
-          qa={{
-            ...qa,
-            getSegment: segmentStore.getSegment,
-            running: batchActions.isBatchQARunning,
-            onRun: handleRunBatchQA,
-            onFilter: applyQAFilter,
-            onLocate: setActiveSegmentId,
-          }}
+          qa={qaPanel}
           sidebarWidth={sidebarWidth}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
