@@ -21,8 +21,7 @@ interface EnvTraceConfig {
     contextCol?: number;
   };
   model?: string;
-  mode?: 'dialogue';
-  targetScope?: 'blank-only' | 'overwrite-non-confirmed';
+  targetBaseline?: 'use-current-targets' | 'ignore-current-targets';
   previewLimit?: number;
 }
 
@@ -374,14 +373,10 @@ function readEnvTraceConfig(env: NodeJS.ProcessEnv): EnvTraceConfig | null {
     ? readNonNegativeInt(env.AI_FILE_FLOW_PREVIEW_LIMIT, 'AI_FILE_FLOW_PREVIEW_LIMIT')
     : undefined;
 
-  const mode = env.AI_FILE_FLOW_MODE;
-  if (mode && mode !== 'standard' && mode !== 'dialogue') {
-    throw new Error('AI_FILE_FLOW_MODE must be standard or dialogue.');
-  }
 
-  const targetScope = env.AI_FILE_FLOW_TARGET_SCOPE;
-  if (targetScope && targetScope !== 'blank-only' && targetScope !== 'overwrite-non-confirmed') {
-    throw new Error('AI_FILE_FLOW_TARGET_SCOPE must be blank-only or overwrite-non-confirmed.');
+  const targetBaseline = env.AI_FILE_FLOW_TARGET_BASELINE;
+  if (targetBaseline && targetBaseline !== 'use-current-targets' && targetBaseline !== 'ignore-current-targets') {
+    throw new Error('AI_FILE_FLOW_TARGET_BASELINE must be use-current-targets or ignore-current-targets.');
   }
 
   return {
@@ -392,8 +387,7 @@ function readEnvTraceConfig(env: NodeJS.ProcessEnv): EnvTraceConfig | null {
     filePath,
     importOptions: readEnvImportOptions(env),
     model: env.AI_FILE_FLOW_MODEL || undefined,
-    mode: mode === 'standard' ? undefined : mode,
-    targetScope,
+    targetBaseline,
     previewLimit,
   };
 }

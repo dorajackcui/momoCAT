@@ -7,7 +7,7 @@ import { WorkspaceSidebar } from './WorkspaceSidebar';
 
 const projects = [
   { id: 1, name: 'Product localization', srcLang: 'en', tgtLang: 'zh', projectType: 'translation' },
-  { id: 2, name: 'Help Center Review', srcLang: 'en', tgtLang: 'zh', projectType: 'review' },
+  { id: 2, name: 'Help Center Custom', srcLang: 'en', tgtLang: 'zh', projectType: 'custom' },
 ] as Project[];
 
 function props() {
@@ -55,7 +55,7 @@ describe('WorkspaceSidebar', () => {
   it('delegates the chosen project action and dismisses on an outside click', () => {
     const callbacks = props();
     render(<WorkspaceSidebar {...callbacks} />);
-    const trigger = screen.getByRole('button', { name: 'Actions for Help Center Review' });
+    const trigger = screen.getByRole('button', { name: 'Actions for Help Center Custom' });
     fireEvent.click(trigger);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Open project' }));
     expect(callbacks.onNavigate).toHaveBeenCalledWith({ kind: 'project', projectId: 2 });
@@ -121,7 +121,7 @@ describe('WorkspaceSidebar', () => {
     expect(
       screen.queryByRole('button', { name: /Collapse sidebar|Expand sidebar|Switch project/ }),
     ).not.toBeInTheDocument();
-    fireEvent.click(within(nav).getByRole('button', { name: 'Help Center Review', exact: true }));
+    fireEvent.click(within(nav).getByRole('button', { name: 'Help Center Custom', exact: true }));
     expect(callbacks.onNavigate).toHaveBeenCalledWith({ kind: 'project', projectId: 2 });
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     rerender(<WorkspaceSidebar {...callbacks} hidden />);
@@ -130,7 +130,7 @@ describe('WorkspaceSidebar', () => {
     ).not.toBeInTheDocument();
     rerender(<WorkspaceSidebar {...callbacks} />);
     expect(screen.getByRole('button', { name: 'Product localization', exact: true })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Help Center Review', exact: true })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Help Center Custom', exact: true })).toBeVisible();
   });
 
   it('keeps project creation reachable when the sidebar has no projects', () => {

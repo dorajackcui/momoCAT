@@ -522,6 +522,10 @@ export class ProjectService {
     return this.aiModule.testAIConnection(input);
   }
 
+  public async refreshAIConnection(connectionId: string): Promise<AITestConnectionResult> {
+    return this.aiModule.refreshAIConnection(connectionId);
+  }
+
   public async addAIProvider(input: AddAIProviderInput): Promise<AIProviderSummary> {
     return this.aiModule.addAIProvider(input);
   }
@@ -563,6 +567,7 @@ export class ProjectService {
     segmentId: string,
     options?: {
       model?: string;
+      clientRequestId?: string;
     },
   ) {
     return this.aiModule.aiTranslateSegment(segmentId, options);
@@ -573,6 +578,7 @@ export class ProjectService {
     instruction: string,
     options?: {
       model?: string;
+      clientRequestId?: string;
     },
   ) {
     return this.aiModule.aiRefineSegment(segmentId, instruction, options);

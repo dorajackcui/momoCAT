@@ -165,6 +165,68 @@ describe('AIProviderCatalogService', () => {
     expect(settingsRepo.dump().ai_connection_catalog_v1).toBeUndefined();
   });
 
+  it('refreshes models with the stored key while preserving connection and provider identity', async () => {
+    const repo = createSettingsRepo();
+    const transport = createTransport();
+    const service = new AIProviderCatalogService(repo, transport);
+    const initial = await service.testConnection({
+      name: 'Gateway',
+      baseUrl: 'https://example.com/v1',
+      apiKey: 'secret-key-1234',
+    });
+    const connection = initial.connection!;
+    const provider = await service.addProvider({
+      name: 'Existing',
+      connectionId: connection.id,
+      model: 'gpt-demo',
+    });
+    vi.mocked(transport.listModels).mockResolvedValueOnce({
+      models: ['gpt-new', 'image-model'],
+      status: 200,
+      endpoint: 'https://example.com/v1/models',
+    });
+    const result = await service.refreshConnection(connection.id);
+    expect(result.ok).toBe(true);
+    expect(result.connection).toMatchObject({
+      id: connection.id,
+      createdAt: connection.createdAt,
+      discoveredModels: ['gpt-new'],
+    });
+    expect(transport.listModels).toHaveBeenLastCalledWith({
+      apiKey: 'secret-key-1234',
+      baseUrl: connection.baseUrl,
+    });
+    expect(service.listConnections()).toEqual([result.connection]);
+    expect(service.listProviders()).toEqual([provider]);
+    expect(JSON.stringify(result)).not.toContain('secret-key-1234');
+    expect(service.resolveProviderConfig(provider.id).apiKey).toBe('secret-key-1234');
+  });
+
+  it('preserves the saved catalog after discovery failure and rejects missing connections or keys', async () => {
+    const repo = createSettingsRepo();
+    const transport = createTransport();
+    const service = new AIProviderCatalogService(repo, transport);
+    const initial = await service.testConnection({
+      name: 'Gateway',
+      baseUrl: 'https://example.com/v1',
+      apiKey: 'secret-key-1234',
+    });
+    const snapshot = repo.dump();
+    vi.mocked(transport.listModels).mockRejectedValueOnce(new Error('Offline'));
+    expect(await service.refreshConnection(initial.connection!.id)).toMatchObject({
+      ok: false,
+      error: 'Offline',
+    });
+    expect(repo.dump()).toEqual(snapshot);
+    expect(await service.refreshConnection('missing')).toMatchObject({ ok: false });
+    repo.setSetting(`ai_connection_key::${initial.connection!.id}`, null);
+    expect(await service.refreshConnection(initial.connection!.id)).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('API key is missing'),
+    });
+    expect(transport.listModels).toHaveBeenCalledTimes(2);
+  });
+
   it('creates a configured provider from a saved connection model', async () => {
     const settingsRepo = createSettingsRepo();
     const transport = createTransport();

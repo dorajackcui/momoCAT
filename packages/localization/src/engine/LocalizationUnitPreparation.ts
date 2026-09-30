@@ -4,11 +4,7 @@ import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { UnitResult } from '../job/types';
 import type { ProjectRecord } from '../ports';
 import { createTransientSegment } from '../transientSegment';
-import type {
-  ExternalTranslationUnit,
-  LocalizationTargetScope,
-  TranslateUnitResult,
-} from '../types';
+import type { ExternalTranslationUnit, TranslateUnitResult } from '../types';
 
 export type PreparedLocalizationUnit =
   | {
@@ -21,35 +17,33 @@ export type PreparedLocalizationUnit =
       segment: Segment;
     };
 
-export function prepareExternalTranslationUnit(
-  unit: ExternalTranslationUnit,
-  index: number,
-  project: ProjectRecord,
-  targetScope: LocalizationTargetScope,
-  tagPolicy: TagPolicy,
-): PreparedLocalizationUnit {
-  return prepareTranslationUnit({
-    unit,
-    index,
-    project,
-    tagPolicy,
-    skipExistingTarget: targetScope === 'blank-only',
-  });
-}
-
 export function prepareJobTranslationUnit(
   unit: ExternalTranslationUnit,
   index: number,
   project: ProjectRecord,
   tagPolicy: TagPolicy,
 ): PreparedLocalizationUnit {
-  return prepareTranslationUnit({
+  if (!unit.source.trim() || unit.locked) {
+    return skippedUnit(unit, unit.target ?? '');
+  }
+
+  const segment = createTransientSegment(
     unit,
     index,
-    project,
-    tagPolicy,
-    skipExistingTarget: true,
-  });
+    {
+      projectId: project.id,
+      sourceLanguage: project.srcLang,
+      targetLanguage: project.tgtLang,
+      fileName: unit.fileName,
+    },
+    { tagPolicy },
+  );
+  const existingTarget = serializeTokensToDisplayText(segment.targetTokens);
+  if (existingTarget.trim()) {
+    return skippedUnit(unit, existingTarget);
+  }
+
+  return { kind: 'translatable', unit, segment };
 }
 
 export function unitResultToPublicResult(result: UnitResult): TranslateUnitResult {
@@ -74,37 +68,6 @@ export function unitResultToPublicResult(result: UnitResult): TranslateUnitResul
     references: result.references,
     metadata: result.metadata,
   };
-}
-
-function prepareTranslationUnit(params: {
-  unit: ExternalTranslationUnit;
-  index: number;
-  project: ProjectRecord;
-  tagPolicy: TagPolicy;
-  skipExistingTarget: boolean;
-}): PreparedLocalizationUnit {
-  const { unit, index, project, tagPolicy, skipExistingTarget } = params;
-  if (!unit.source.trim() || unit.locked) {
-    return skippedUnit(unit, unit.target ?? '');
-  }
-
-  const segment = createTransientSegment(
-    unit,
-    index,
-    {
-      projectId: project.id,
-      sourceLanguage: project.srcLang,
-      targetLanguage: project.tgtLang,
-      fileName: unit.fileName,
-    },
-    { tagPolicy },
-  );
-  const existingTarget = serializeTokensToDisplayText(segment.targetTokens);
-  if (skipExistingTarget && existingTarget.trim()) {
-    return skippedUnit(unit, existingTarget);
-  }
-
-  return { kind: 'translatable', unit, segment };
 }
 
 function skippedUnit(unit: ExternalTranslationUnit, target: string): PreparedLocalizationUnit {

@@ -9,7 +9,6 @@ import { TMModule } from '../modules/TMModule';
 import { AIProviderTransport } from '../providers/AIProviderTransport';
 import { DefaultAIRuntimeConfigProvider } from '../providers/AIRuntimeConfigService';
 import { AIProviderCatalogService } from '../providers/AIProviderCatalogService';
-import { LegacySingleUnitConcurrentStrategy } from '../requestModes/legacySingleUnitConcurrent/LegacySingleUnitConcurrentStrategy';
 import { WindowPartialSequentialBatchStrategy } from '../requestModes/windowPartialSequentialBatch/WindowPartialSequentialBatchStrategy';
 import { WindowModeSequentialBatchStrategy } from '../requestModes/windowSequentialBatch/WindowModeSequentialBatchStrategy';
 import { TBService } from '../services/TBService';
@@ -24,7 +23,6 @@ export interface LocalizationEngineAssembly {
   mtModule: MTModule;
   windowModeStrategy: WindowModeSequentialBatchStrategy;
   windowPartialStrategy: WindowPartialSequentialBatchStrategy;
-  legacyStrategy: LegacySingleUnitConcurrentStrategy;
 }
 
 export function createLocalizationEngineAssembly(
@@ -61,6 +59,5 @@ export function createLocalizationEngineAssembly(
     mtModule,
     windowModeStrategy: new WindowModeSequentialBatchStrategy(strategyModules),
     windowPartialStrategy: new WindowPartialSequentialBatchStrategy(strategyModules),
-    legacyStrategy: new LegacySingleUnitConcurrentStrategy(strategyModules),
   };
 }

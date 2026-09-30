@@ -289,6 +289,11 @@ test('global settings retain tab order and fit all three themes at wide and narr
       };
       ipcMain.removeHandler(channels.listConnections);
       ipcMain.handle(channels.listConnections, () => [connection]);
+      ipcMain.removeHandler(channels.refreshConnection);
+      ipcMain.handle(channels.refreshConnection, (_event, connectionId) => ({
+        ok: connectionId === connection.id,
+        connection: { ...connection, discoveredModels: ['preview-model', 'fresh-model'] },
+      }));
       ipcMain.removeHandler(channels.listProviders);
       ipcMain.handle(channels.listProviders, () => [
         {
@@ -328,6 +333,11 @@ test('global settings retain tab order and fit all three themes at wide and narr
             await expect(
               page.getByRole('textbox', { name: 'Connection name', exact: true }),
             ).toHaveValue('Preview connection');
+            await expect(page.getByText('Models refreshed: 2 models discovered.')).toBeVisible();
+            await expect(page.getByRole('combobox', { name: 'Model', exact: true })).toHaveValue(
+              'fresh-model',
+            );
+            await expect(page.getByLabel('API key', { exact: true })).toHaveValue('');
           }
           if (tab === 'Term Extraction') {
             await expect(page.getByLabel('Term extraction selection prompt')).not.toHaveValue('');

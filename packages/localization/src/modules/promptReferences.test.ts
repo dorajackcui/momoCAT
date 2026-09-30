@@ -1,6 +1,6 @@
 import type { Segment, TBMatch, Token } from '@cat/core/models';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { TMMatch } from '../../TMService';
+import type { TMMatch } from '../services/TMService';
 import { resolveTranslationPromptReferences } from './promptReferences';
 
 describe('resolveTranslationPromptReferences', () => {
@@ -73,9 +73,11 @@ describe('resolveTranslationPromptReferences', () => {
       segment: createSegment(),
       resolvers: {
         tbService: {
-          findMatches: vi.fn().mockResolvedValue([
-            createTBMatch({ srcTerm: 'account', tgtTerm: 'compte', note: undefined }),
-          ]),
+          findMatches: vi
+            .fn()
+            .mockResolvedValue([
+              createTBMatch({ srcTerm: 'account', tgtTerm: 'compte', note: undefined }),
+            ]),
         },
       },
     });

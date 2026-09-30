@@ -335,13 +335,9 @@ export interface AISegmentTranslateResult {
   serverAppliedAt: string;
 }
 
-export type AIBatchMode = 'default' | 'dialogue';
-export type AIBatchTargetScope = 'blank-only' | 'overwrite-non-confirmed';
 export type AIBatchTargetBaseline = 'use-current-targets' | 'ignore-current-targets';
 
 export interface AITranslateFileOptions {
-  mode?: AIBatchMode;
-  targetScope?: AIBatchTargetScope;
   targetBaseline?: AIBatchTargetBaseline;
   /** Omit for the entire file; selected rows form one context sequence in file order. */
   segmentIds?: string[];
@@ -534,8 +530,15 @@ export interface DesktopApi extends AssetRenameApi, AISettingsApi, CloudApi {
   setTBSyncConfig: (tbId: string, config: TBSyncConfigInput) => Promise<void>;
   syncTBWithExcel: (tbId: string) => Promise<TBSyncStartResult>;
 
-  aiTranslateSegment: (segmentId: string) => Promise<AISegmentTranslateResult>;
-  aiRefineSegment: (segmentId: string, instruction: string) => Promise<AISegmentTranslateResult>;
+  aiTranslateSegment: (
+    segmentId: string,
+    clientRequestId?: string,
+  ) => Promise<AISegmentTranslateResult>;
+  aiRefineSegment: (
+    segmentId: string,
+    instruction: string,
+    clientRequestId?: string,
+  ) => Promise<AISegmentTranslateResult>;
   aiTranslateFile: (fileId: number, options?: AITranslateFileOptions) => Promise<string>;
   aiCancelFileJob: (jobId: string) => Promise<boolean>;
   aiTestTranslate: (

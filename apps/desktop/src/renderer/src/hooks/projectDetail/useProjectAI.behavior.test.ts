@@ -27,25 +27,14 @@ describe('useProjectAI controller behaviors', () => {
     });
   });
 
-  it('forces default target baseline for non-translation projects', () => {
-    const reviewConfig = resolveAITranslateStartConfig({
-      projectType: 'review',
-      options: { targetBaseline: 'ignore-current-targets' },
-    });
+  it('honors overwrite baseline for custom projects', () => {
     const customConfig = resolveAITranslateStartConfig({
       projectType: 'custom',
-      options: { targetBaseline: 'use-current-targets' },
+      options: { targetBaseline: 'ignore-current-targets' },
     });
 
-    expect(reviewConfig).toMatchObject({
-      effectiveMode: 'default',
-      effectiveTargetBaseline: 'use-current-targets',
-      actionLabel: 'review',
-      targetLabel: 'target',
-    });
     expect(customConfig).toMatchObject({
-      effectiveMode: 'default',
-      effectiveTargetBaseline: 'use-current-targets',
+      effectiveTargetBaseline: 'ignore-current-targets',
       actionLabel: 'processing',
       targetLabel: 'output',
     });
@@ -53,7 +42,6 @@ describe('useProjectAI controller behaviors', () => {
 
   it('builds confirmation message with target baseline wording', () => {
     const message = buildAIStartConfirmMessage('demo.xlsx', {
-      effectiveMode: 'default',
       effectiveTargetBaseline: 'ignore-current-targets',
       actionLabel: 'translation',
       targetLabel: 'target',

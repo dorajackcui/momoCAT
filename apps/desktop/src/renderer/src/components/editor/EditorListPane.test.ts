@@ -52,7 +52,11 @@ describe('EditorListPane store-backed rows', () => {
   it('renders the current store snapshot when the searchable list still holds an old segment', () => {
     const previous = createSegment('before');
     const store = createEditorSegmentStore([previous]);
-    const filteredSegments = buildSearchableEditorSegments([previous], {});
+    const visibleRows = buildSearchableEditorSegments([previous], {}).map((item) => ({
+      segmentId: item.segment.segmentId,
+      originalIndex: item.originalIndex,
+      repeatedSourceRole: item.repeatedSourceRole,
+    }));
     store.updateSegment('seg-1', (segment) => ({
       ...segment,
       targetTokens: [{ type: 'text', content: 'after' }],
@@ -60,9 +64,9 @@ describe('EditorListPane store-backed rows', () => {
 
     const html = renderToStaticMarkup(
       React.createElement(EditorListPane, {
-        scrollParentRef: { current: null },
+        scrollElement: null,
         virtualized: false,
-        filteredSegments,
+        visibleRows,
         segmentStore: store,
         activeFilteredIndex: 0,
         activeSegmentId: 'seg-1',
@@ -101,13 +105,17 @@ describe('EditorListPane store-backed rows', () => {
       srcHash: first.srcHash,
     };
     const store = createEditorSegmentStore([first, repeated]);
-    const filteredSegments = buildSearchableEditorSegments([first, repeated], {});
+    const visibleRows = buildSearchableEditorSegments([first, repeated], {}).map((item) => ({
+      segmentId: item.segment.segmentId,
+      originalIndex: item.originalIndex,
+      repeatedSourceRole: item.repeatedSourceRole,
+    }));
 
     const html = renderToStaticMarkup(
       React.createElement(EditorListPane, {
-        scrollParentRef: { current: null },
+        scrollElement: null,
         virtualized: false,
-        filteredSegments,
+        visibleRows,
         segmentStore: store,
         activeFilteredIndex: 0,
         activeSegmentId: first.segmentId,

@@ -1,93 +1,72 @@
-import { useCallback, useLayoutEffect, useRef } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
-import type { Segment } from '@cat/core/models';
+import { useCallback, useRef } from 'react';
 import type { SegmentsUpdatedEvent } from '../../../../shared/ipc';
 import { apiClient } from '../../services/apiClient';
-import type { SetSegmentsWithChangeHint } from './editorSegmentState';
+import type { EditorSegmentStore } from './editorSegmentStore';
+import type { SegmentOperation } from './useSegmentPersistence';
 
-interface UseSegmentConfirmationParams {
-  segments: Segment[];
-  setSegments: SetSegmentsWithChangeHint;
-  setActiveSegmentId: Dispatch<SetStateAction<string | null>>;
-  setSegmentSaveError: (segmentId: string, message: string) => void;
-  clearSegmentSaveError: (segmentId: string) => void;
-  onConfirmed: (data: SegmentsUpdatedEvent) => void;
+interface Params {
+  store: EditorSegmentStore;
+  flushPending: () => Promise<void>;
+  runCommit: <T>(id: string, task: (operation: SegmentOperation) => Promise<T>) => Promise<T>;
+  setSegmentSaveError: (id: string, message: string) => void;
+  clearSegmentSaveError: (id: string) => void;
+  onConfirmed: (event: SegmentsUpdatedEvent, accept: (id?: string) => boolean) => void;
 }
 
 export function useSegmentConfirmation({
-  segments,
-  setSegments,
-  setActiveSegmentId,
+  store,
+  flushPending,
+  runCommit,
   setSegmentSaveError,
   clearSegmentSaveError,
   onConfirmed,
-}: UseSegmentConfirmationParams): { confirmSegment: (segmentId: string) => Promise<void> } {
-  // Read frequently-changing inputs through a ref so confirmSegment keeps a
-  // stable identity (it is forwarded to every EditorRow as onConfirm).
-  const workflowInputsRef = useRef({
-    segments,
-  });
-  useLayoutEffect(() => {
-    workflowInputsRef.current = {
-      segments,
-    };
-  }, [segments]);
-
+}: Params) {
+  const running = useRef(new Set<string>());
   const confirmSegment = useCallback(
-    async (segmentId: string) => {
-      const { segments } = workflowInputsRef.current;
-      const segment = segments.find((item) => item.segmentId === segmentId);
-      if (!segment) return;
-      const previousStatus = segment.status;
-      setSegments(
-        (prev) =>
-          prev.map((item) =>
-            item.segmentId === segmentId
-              ? {
-                  ...item,
-                  status: 'confirmed',
-                }
-              : item,
-          ),
-        { orderChanged: false, changedSegmentIds: [segmentId] },
-      );
-      clearSegmentSaveError(segmentId);
-
+    async (id: string): Promise<boolean> => {
+      if (running.current.has(id)) return false;
+      running.current.add(id);
+      const order = store.getOrderIds();
       try {
-        const result = await apiClient.updateSegment(segmentId, segment.targetTokens, 'confirmed');
-        onConfirmed({
-          ...result,
-          segmentId,
-          targetTokens: segment.targetTokens,
-          status: 'confirmed',
+        // Confirmation may propagate to repeats, so finish all earlier local drafts first.
+        await flushPending();
+        if (store.getOrderIds() !== order) return false;
+        const segment = store.getSegment(id);
+        if (!segment) return false;
+        return await runCommit(id, async (operation) => {
+          store.updateSegment(id, (current) => ({ ...current, status: 'confirmed' }));
+          clearSegmentSaveError(id);
+          try {
+            const result = await apiClient.updateSegment(
+              id,
+              segment.targetTokens,
+              'confirmed',
+              operation.clientRequestId,
+            );
+            onConfirmed(
+              { ...result, segmentId: id, targetTokens: segment.targetTokens, status: 'confirmed' },
+              operation.isCurrent,
+            );
+            return operation.isCurrent();
+          } catch (error) {
+            if (operation.isCurrent()) {
+              store.updateSegment(id, (current) => ({ ...current, status: segment.status }));
+              setSegmentSaveError(
+                id,
+                `保存失败：${error instanceof Error ? error.message : String(error)}`,
+              );
+            }
+            return false;
+          }
         });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        setSegments(
-          (prev) =>
-            prev.map((item) =>
-              item.segmentId === segmentId
-                ? {
-                    ...item,
-                    status: previousStatus,
-                  }
-                : item,
-            ),
-          { orderChanged: false, changedSegmentIds: [segmentId] },
-        );
-        setSegmentSaveError(segmentId, `保存失败：${message}`);
-        return;
-      }
-
-      const currentIndex = segments.findIndex((item) => item.segmentId === segmentId);
-      if (currentIndex < segments.length - 1) {
-        setActiveSegmentId(segments[currentIndex + 1].segmentId);
+      } catch {
+        // The draft persistor owns visible flush failures and keeps the draft retryable.
+        return false;
+      } finally {
+        running.current.delete(id);
       }
     },
-    [clearSegmentSaveError, onConfirmed, setActiveSegmentId, setSegmentSaveError, setSegments],
+    [store, flushPending, runCommit, clearSegmentSaveError, setSegmentSaveError, onConfirmed],
   );
-
-  return {
-    confirmSegment,
-  };
+  return { confirmSegment };
 }

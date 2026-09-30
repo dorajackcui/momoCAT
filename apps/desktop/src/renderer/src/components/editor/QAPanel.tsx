@@ -1,7 +1,7 @@
 import { useId, useMemo, useState } from 'react';
-import type { Segment } from '@cat/core/models';
+import type { EditorSegmentStore } from '../../hooks/editor/editorSegmentStore';
 import { qaGroupForRule, type FileQaIssueRecord } from '@cat/core/project';
-import { serializeTokensToDisplayText } from '@cat/core/text';
+import { QAResultRow } from './QAResultRow';
 import { Button, Icon, IconButton } from '../ui';
 import { QAVirtualList } from './QAVirtualList';
 import { QAReferenceSummary } from './QAReferenceSummary';
@@ -13,7 +13,7 @@ export interface QAPanelProps {
   checked: boolean;
   stale: boolean;
   hasResults?: boolean;
-  getSegment: (id: string) => Segment | undefined;
+  segmentStore: Pick<EditorSegmentStore, 'getSegment' | 'subscribeSegment'>;
   onRun: () => void;
   onFilter: (ids: string[], label: string) => void;
   onLocate: (id: string) => void;
@@ -68,22 +68,13 @@ const rowIds = (issues: FileQaIssueRecord[]) => [
 ];
 const rowCount = (count: number) => `${count} ${count === 1 ? 'row' : 'rows'}`;
 
-function rowPreview(issues: FileQaIssueRecord[], segment?: Segment): string {
-  const issue = issues[0];
-  if (!issue.groupId || !segment)
-    return [...new Set(issues.map((item) => item.message))].join('; ');
-  const source = issue.ruleId === 'target-consistency';
-  const text = serializeTokensToDisplayText(source ? segment.sourceTokens : segment.targetTokens);
-  return text.trim() ? text : source ? '[Empty source]' : '[Empty target]';
-}
-
 export function QAPanel({
   issues,
   running,
   checked,
   stale,
   hasResults = issues.length > 0,
-  getSegment,
+  segmentStore,
   onRun,
   onFilter,
   onLocate,
@@ -126,7 +117,7 @@ export function QAPanel({
           categories={categories}
           collapsed={collapsed}
           onToggle={toggleCategory}
-          getSegment={getSegment}
+          segmentStore={segmentStore}
           onFilter={onFilter}
           onLocate={onLocate}
         />
@@ -209,28 +200,19 @@ export function QAPanel({
                         onLocate={onLocate}
                       />
                       <ul className="space-y-1 pl-2">
-                        {[...group.rows.entries()].map(([segmentId, rowIssues]) => {
-                          const preview = rowPreview(rowIssues, getSegment(segmentId));
-                          return (
-                            <li key={segmentId} className="text-xs text-text-muted">
-                              <Button
-                                variant="link"
-                                tone="inherit"
-                                className="w-full justify-start gap-2 text-left"
-                                title={preview}
-                                onClick={() => {
-                                  onFilter(ids, label);
-                                  onLocate(segmentId);
-                                }}
-                              >
-                                <span className="shrink-0 py-1 text-brand">
-                                  Row {rowIssues[0].row}
-                                </span>
-                                <span className="min-w-0 truncate">{preview}</span>
-                              </Button>
-                            </li>
-                          );
-                        })}
+                        {[...group.rows.entries()].map(([segmentId, rowIssues]) => (
+                          <li key={segmentId} className="text-xs text-text-muted">
+                            <QAResultRow
+                              segmentId={segmentId}
+                              issues={rowIssues}
+                              segmentStore={segmentStore}
+                              onLocate={() => {
+                                onFilter(ids, label);
+                                onLocate(segmentId);
+                              }}
+                            />
+                          </li>
+                        ))}
                       </ul>
                     </div>
                   );

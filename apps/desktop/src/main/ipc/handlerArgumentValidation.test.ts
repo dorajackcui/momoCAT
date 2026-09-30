@@ -124,6 +124,7 @@ const requests: Array<{ channel: string; args: unknown[] }> = [
     channel: ai.testConnection,
     args: [{ name: 'Connection', baseUrl: 'https://example.test', apiKey: 'example-key' }],
   },
+  { channel: ai.refreshConnection, args: ['connection-1'] },
   { channel: ai.deleteConnection, args: ['connection-1'] },
   {
     channel: ai.addProvider,
@@ -220,6 +221,8 @@ describe('IPC argument boundaries', () => {
     [ai.translateFile, [NaN, {}]],
     [ai.translateFile, [1, []]],
     [ai.translateFile, [1, { mode: 'unknown' }]],
+    [ai.translateFile, [1, { mode: 'dialogue' }]],
+    [project.create, ['Project', 'en', 'zh', 'review']],
     [ai.translateFile, [1, { targetScope: null }]],
     [ai.translateFile, [1, { targetBaseline: false }]],
     [ai.cancelFileJob, ['']],
@@ -241,7 +244,7 @@ describe('IPC argument boundaries', () => {
 describe('valid IPC payload compatibility', () => {
   it.each([
     [project.create, 'createProject', ['Project', 'en', 'zh'], ['Project', 'en', 'zh', undefined]],
-    [project.create, 'createProject', ['Project', 'en', 'zh', 'review']],
+    [project.create, 'createProject', ['Project', 'en', 'zh', 'custom']],
     [project.create, 'createProject', ['Project', 'en', 'zh', 'custom']],
     [project.updateAISettings, 'updateProjectAISettings', [1, null, null]],
     [project.updatePrompt, 'updateProjectPrompt', [1, '']],
@@ -283,6 +286,7 @@ describe('valid IPC payload compatibility', () => {
       'addAIProvider',
       [{ name: 'Provider', connectionId: 'connection-1', model: 'model' }],
     ],
+    [ai.refreshConnection, 'refreshAIConnection', ['connection-1']],
     [ai.deleteConnection, 'deleteAIConnection', ['connection-1']],
     [ai.deleteProvider, 'deleteAIProvider', ['provider-1']],
     [ai.setProxySettings, 'setProxySettings', [{ mode: 'system' }]],

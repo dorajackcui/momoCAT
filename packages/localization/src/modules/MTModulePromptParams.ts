@@ -4,23 +4,7 @@ import { serializeTokensToEditorText } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { TBArtifact, TMArtifact } from '../artifacts';
 import { resolveTagPolicy } from '../tagPolicy';
-import type { ComposeBatchPromptInput, ComposePromptInput } from './MTModuleTypes';
-
-export interface PromptParams {
-  projectPrompt: string;
-  projectType: ProjectType;
-  sourceText: string;
-  sourceTagPreservedText: string;
-  context: string;
-  currentTranslationPayload?: string;
-  refinementInstruction?: string;
-  references: {
-    tmReference?: TMArtifact['selectedReferences']['tmReferences'][number];
-    tmReferences?: TMArtifact['selectedReferences']['tmReferences'];
-    concordanceReferences?: TMArtifact['selectedReferences']['concordanceReferences'];
-    tbReferences?: TBArtifact['selectedReferences'];
-  };
-}
+import type { ComposeBatchPromptInput } from './MTModuleTypes';
 
 export interface BatchPromptParams {
   projectPrompt: string;
@@ -33,40 +17,6 @@ export interface BatchPromptParams {
     concordanceReferences?: TMArtifact['selectedReferences']['concordanceReferences'];
     tbReferences?: TBArtifact['selectedReferences'];
   }>;
-}
-
-export function buildPromptParams(input: ComposePromptInput): PromptParams {
-  const sourceText = serializeTokensToDisplayText(input.segment.sourceTokens);
-  const sourceTagPreservedText = serializeSourcePayload(
-    input.segment.sourceTokens,
-    input.tagPolicy,
-  );
-  const context =
-    input.context !== undefined
-      ? input.context.trim()
-      : input.segment.meta?.context
-        ? String(input.segment.meta.context).trim()
-        : '';
-  const tmReferences = input.tm.selectedReferences.tmReferences;
-  const concordanceReferences = input.tm.selectedReferences.concordanceReferences;
-  const tbReferences = input.tb.selectedReferences;
-
-  return {
-    projectPrompt:
-      input.projectPromptOverride ?? input.mtOptions?.systemPrompt ?? input.project.aiPrompt ?? '',
-    projectType: normalizeProjectType(input.project.projectType),
-    sourceText,
-    sourceTagPreservedText,
-    context,
-    currentTranslationPayload: input.currentTranslationPayload,
-    refinementInstruction: input.refinementInstruction,
-    references: {
-      tmReference: tmReferences[0],
-      tmReferences: tmReferences.length > 0 ? tmReferences : undefined,
-      concordanceReferences: concordanceReferences.length > 0 ? concordanceReferences : undefined,
-      tbReferences: tbReferences.length > 0 ? tbReferences : undefined,
-    },
-  };
 }
 
 export function buildBatchPromptParams(input: ComposeBatchPromptInput): BatchPromptParams {

@@ -42,7 +42,6 @@ export type FileTranslationJobRunnerFactory = (
 
 export interface TranslateSpreadsheetFileJobOptions {
   taskExecutor: TranslationTaskExecutor;
-  defaultMaxConcurrency?: number;
   runnerFactory?: FileTranslationJobRunnerFactory;
   runtimeTm?: TranslationJobRunnerDependencies['runtimeTm'];
   auditSink?: TranslationJobRunnerDependencies['auditSink'];
@@ -198,7 +197,7 @@ function computeFileTranslationResumeFingerprint(input: TranslateFileInput): str
   return hashCanonicalPayload([
     ['projectId', String(input.projectId)],
     ['targetBaseline', targetBaseline],
-    ['mode', input.options?.mode ?? 'standard'],
+    ['mode', 'standard'],
     ['requestMode', resolveFileTranslationRequestMode(input.options?.requestMode)],
     ['tagPolicy', tagPolicyFingerprintValue(input.options?.tagPolicy)],
     ['providerOverride', input.options?.providerOverride],
@@ -214,9 +213,7 @@ function computeFileTranslationResumeFingerprint(input: TranslateFileInput): str
 function hashCanonicalPayload(entries: Array<[string, string | undefined]>): string {
   const payload = entries.filter((entry): entry is [string, string] => entry[1] !== undefined);
 
-  return createHash('sha256')
-    .update(JSON.stringify(payload))
-    .digest('hex');
+  return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 }
 
 function normalizeNumberOption(value: number | undefined): string | undefined {
@@ -232,7 +229,7 @@ function resolveFileTranslationRequestMode(
 function buildFileTranslationOptions(
   options: TranslateUnitsOptions | undefined,
 ): TranslateUnitsOptions {
-  const { targetScope: _legacyTargetScope, ...restOptions } = options ?? {};
+  const restOptions = options ?? {};
 
   return {
     ...restOptions,
@@ -288,9 +285,7 @@ function unitResultToTranslateUnitResult(result: UnitResult): TranslateUnitResul
     source: result.source,
     target: result.target ?? '',
     status:
-      result.status === 'translated' || result.status === 'reused'
-        ? result.status
-        : 'skipped',
+      result.status === 'translated' || result.status === 'reused' ? result.status : 'skipped',
     references: result.references,
     metadata: result.metadata,
   };

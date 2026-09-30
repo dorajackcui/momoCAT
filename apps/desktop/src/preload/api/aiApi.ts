@@ -6,6 +6,7 @@ type AIApiKeys =
   | 'getAISettings'
   | 'listAIConnections'
   | 'testAIConnection'
+  | 'refreshAIConnection'
   | 'deleteAIConnection'
   | 'listAIProviders'
   | 'addAIProvider'
@@ -31,6 +32,10 @@ export function createAIApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<AIApi
     testAIConnection: (input) =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.testConnection, input) as ReturnType<
         DesktopApi['testAIConnection']
+      >,
+    refreshAIConnection: (connectionId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.ai.refreshConnection, connectionId) as ReturnType<
+        DesktopApi['refreshAIConnection']
       >,
     deleteAIConnection: (connectionId) =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.deleteConnection, connectionId) as ReturnType<
@@ -64,14 +69,19 @@ export function createAIApi(ipcRenderer: IpcRendererLike): DesktopApiSlice<AIApi
       ipcRenderer.invoke(IPC_CHANNELS.ai.setSourceTerminologyPromptSettings, input) as ReturnType<
         DesktopApi['setSourceTerminologyPromptSettings']
       >,
-    aiTranslateSegment: (segmentId) =>
-      ipcRenderer.invoke(IPC_CHANNELS.ai.translateSegment, segmentId) as ReturnType<
-        DesktopApi['aiTranslateSegment']
-      >,
-    aiRefineSegment: (segmentId, instruction) =>
-      ipcRenderer.invoke(IPC_CHANNELS.ai.refineSegment, segmentId, instruction) as ReturnType<
-        DesktopApi['aiRefineSegment']
-      >,
+    aiTranslateSegment: (segmentId, clientRequestId) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.ai.translateSegment,
+        segmentId,
+        ...(clientRequestId ? [clientRequestId] : []),
+      ) as ReturnType<DesktopApi['aiTranslateSegment']>,
+    aiRefineSegment: (segmentId, instruction, clientRequestId) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.ai.refineSegment,
+        segmentId,
+        instruction,
+        ...(clientRequestId ? [clientRequestId] : []),
+      ) as ReturnType<DesktopApi['aiRefineSegment']>,
     aiTranslateFile: (fileId, options) =>
       ipcRenderer.invoke(IPC_CHANNELS.ai.translateFile, fileId, options) as ReturnType<
         DesktopApi['aiTranslateFile']

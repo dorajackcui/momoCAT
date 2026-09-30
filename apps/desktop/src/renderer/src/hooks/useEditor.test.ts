@@ -5,13 +5,10 @@ vi.mock('../services/apiClient', () => ({
   apiClient: {},
 }));
 
-import {
-  applyAISegmentTranslateResultToStore,
-  createSegmentPersistor,
-  useEditor,
-} from './useEditor';
+import { useEditor } from './useEditor';
+import { createSegmentPersistor } from './editor/useSegmentPersistence';
 import { createEditorSegmentStore } from './editor/editorSegmentStore';
-import { resolveSegmentStateUpdate } from './editor/useSegmentPersistence';
+import { applyAISegmentTranslateResultToStore } from './editor/useSegmentAI';
 
 function createSegment(segmentId: string, targetText: string): Segment {
   return {
@@ -33,6 +30,93 @@ function createSegment(segmentId: string, targetText: string): Segment {
 describe('createSegmentPersistor', () => {
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('flushes edits arriving during an awaited save before an explicit action proceeds', async () => {
+    let finish!: () => void;
+    const firstSave = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const updateSegment = vi.fn().mockReturnValueOnce(firstSave).mockResolvedValue(undefined);
+    const persistor = createSegmentPersistor({
+      updateSegment,
+      setSegmentSaveError: vi.fn(),
+      clearSegmentSaveError: vi.fn(),
+    });
+    const edit = (text: string) =>
+      persistor.queueSegmentUpdate({
+        segmentId: 'a',
+        targetTokens: [{ type: 'text', content: text }],
+        status: 'draft',
+      });
+    edit('first');
+    const flush = persistor.flushAll();
+    await Promise.resolve();
+    edit('latest');
+    finish();
+    await flush;
+    expect(updateSegment.mock.calls.map((call) => call[1][0].content)).toEqual(['first', 'latest']);
+    expect(persistor.shouldDelayRemoteUpdate('a')).toBe(false);
+  });
+
+  it('rejects very old owned echoes after many saves and file-scope resets', async () => {
+    const persistor = createSegmentPersistor({
+      updateSegment: vi.fn().mockResolvedValue(undefined),
+      setSegmentSaveError: vi.fn(),
+      clearSegmentSaveError: vi.fn(),
+    });
+    const operation = persistor.beginOperation('a');
+    const independent = persistor.beginOperation('b');
+    expect(independent.clientRequestId).not.toBe(operation.clientRequestId);
+    expect(operation.isCurrent()).toBe(true);
+    for (let index = 0; index < 40; index++) {
+      persistor.queueSegmentUpdate({
+        segmentId: 'a',
+        targetTokens: [{ type: 'text', content: String(index) }],
+        status: 'draft',
+      });
+      await persistor.flushAll();
+    }
+    expect(persistor.isRemoteUpdateStale('a', operation.clientRequestId)).toBe(true);
+    persistor.clear();
+    expect(persistor.isRemoteUpdateStale('a', operation.clientRequestId)).toBe(true);
+    expect(persistor.isRemoteUpdateStale('a', 'another-editor-request')).toBe(false);
+    expect(operation.isCurrent()).toBe(false);
+  });
+
+  it('serializes newer drafts after confirmation and invalidates its result immediately on input', async () => {
+    vi.useFakeTimers();
+    const updateSegment = vi.fn().mockResolvedValue(undefined);
+    const persistor = createSegmentPersistor({
+      updateSegment,
+      setSegmentSaveError: vi.fn(),
+      clearSegmentSaveError: vi.fn(),
+    });
+    let finish!: () => void;
+    const response = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    let operation!: ReturnType<typeof persistor.beginOperation>;
+    const confirming = persistor.runCommit('a', async (op) => {
+      operation = op;
+      await response;
+    });
+    await Promise.resolve();
+    expect(operation.isCurrent()).toBe(true);
+    persistor.queueSegmentUpdate({
+      segmentId: 'a',
+      targetTokens: [{ type: 'text', content: 'new draft' }],
+      status: 'draft',
+    });
+    expect(operation.isCurrent()).toBe(false);
+    expect(persistor.isRemoteUpdateStale('a', operation.clientRequestId)).toBe(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(updateSegment).not.toHaveBeenCalled();
+    const flush = persistor.flushAll();
+    finish();
+    await Promise.all([confirming, flush]);
+    expect(updateSegment).toHaveBeenCalledOnce();
+    expect(updateSegment.mock.calls[0][1]).toEqual([{ type: 'text', content: 'new draft' }]);
   });
 
   it('debounces consecutive updates and persists only the latest payload', async () => {
@@ -491,45 +575,5 @@ describe('createSegmentPersistor', () => {
   it('keeps helper segment builder valid', () => {
     const segment = createSegment('seg-helper', 'value');
     expect(segment.segmentId).toBe('seg-helper');
-  });
-});
-
-describe('resolveSegmentStateUpdate', () => {
-  it('composes queued functional updates before building the next optimistic edit', () => {
-    const first = createSegment('seg-first', '');
-    const aiTarget = createSegment('seg-ai', '');
-    const current = [first, aiTarget];
-
-    const afterAI = resolveSegmentStateUpdate(current, (prev) =>
-      prev.map((segment) =>
-        segment.segmentId === 'seg-ai'
-          ? {
-              ...segment,
-              targetTokens: [{ type: 'text', content: 'AI target' }],
-              status: 'draft' as const,
-            }
-          : segment,
-      ),
-    );
-    const afterEdit = resolveSegmentStateUpdate(afterAI, (prev) =>
-      prev.map((segment) =>
-        segment.segmentId === 'seg-first'
-          ? {
-              ...segment,
-              targetTokens: [{ type: 'text', content: 'Manual edit' }],
-              status: 'draft' as const,
-            }
-          : segment,
-      ),
-    );
-
-    expect(afterEdit.find((segment) => segment.segmentId === 'seg-first')).toMatchObject({
-      targetTokens: [{ type: 'text', content: 'Manual edit' }],
-      status: 'draft',
-    });
-    expect(afterEdit.find((segment) => segment.segmentId === 'seg-ai')).toMatchObject({
-      targetTokens: [{ type: 'text', content: 'AI target' }],
-      status: 'draft',
-    });
   });
 });

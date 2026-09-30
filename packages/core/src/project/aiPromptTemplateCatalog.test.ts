@@ -58,12 +58,7 @@ describe("AI prompt template catalog generator", () => {
     const generatedSource = renderGeneratedCatalogSource(catalog);
 
     expect(catalog.translation.systemBaseRules).toContain("{{srcLang}}");
-    expect(catalog.dialogue.segmentIndexLine).toContain("{{id}}");
-    expect(catalog.dialogue.jsonContractSchema).toBe(
-      '{"translations":[{"id":"<segment-id>","text":"<translated-text>"}]}',
-    );
     expect(generatedSource).toContain("Context: {{context}}");
-    expect(generatedSource).toContain('"jsonContractSchema":');
   });
 
   it("keeps the generated catalog in sync with markdown sources", () => {

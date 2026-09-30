@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Segment } from '@cat/core/models';
 import type { FileQaIssueRecord } from '@cat/core/project';
+import { createEditorSegmentStore } from '../../hooks/editor/editorSegmentStore';
 import { QAPanel, type QAPanelProps } from './QAPanel';
 
 function segment(source: string, target: string): Segment {
@@ -26,7 +27,7 @@ function props(issues: FileQaIssueRecord[], row = segment('Open', '开启')): QA
     running: false,
     checked: true,
     stale: false,
-    getSegment: () => row,
+    segmentStore: createEditorSegmentStore([row]),
     onRun: vi.fn(),
     onFilter: vi.fn(),
     onLocate: vi.fn(),
@@ -84,7 +85,13 @@ describe('QA result list', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Row 8 开启' }));
     expect(input.onFilter).toHaveBeenCalledWith(['a'], 'Terminology › Open → 打开');
     expect(input.onLocate).toHaveBeenCalledWith('a');
-    rerender(<QAPanel {...input} stale getSegment={() => segment('Open', '打开')} />);
+    act(() =>
+      (input.segmentStore as ReturnType<typeof createEditorSegmentStore>).updateSegment('a', () =>
+        segment('Open', '打开'),
+      ),
+    );
+    expect(screen.getByRole('button', { name: 'Row 8 打开' })).toBeVisible();
+    rerender(<QAPanel {...input} stale />);
     expect(screen.getByRole('button', { name: 'Row 8 打开' })).toHaveAttribute('title', '打开');
     expect(screen.getByText('Changed · Recheck needed')).toBeInTheDocument();
   });

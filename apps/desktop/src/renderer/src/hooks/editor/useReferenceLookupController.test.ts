@@ -276,10 +276,13 @@ describe('createReferenceLookupScheduler', () => {
     });
 
     expect(getMatches).toHaveBeenCalledTimes(2);
-    expect(setResult).not.toHaveBeenCalledWith({
-      matches: [{ id: 'tm-a-stale' }],
-      terms: [],
-    }, false);
+    expect(setResult).not.toHaveBeenCalledWith(
+      {
+        matches: [{ id: 'tm-a-stale' }],
+        terms: [],
+      },
+      false,
+    );
   });
 
   it('invalidates cached current results and refetches when reference data changes', async () => {
@@ -302,19 +305,25 @@ describe('createReferenceLookupScheduler', () => {
       segment,
     });
     await vi.advanceTimersByTimeAsync(350);
-    expect(setResult).toHaveBeenLastCalledWith({
-      matches: [{ id: 'tm-first' }],
-      terms: [],
-    }, false);
+    expect(setResult).toHaveBeenLastCalledWith(
+      {
+        matches: [{ id: 'tm-first' }],
+        terms: [],
+      },
+      false,
+    );
 
     scheduler.invalidate(7);
     await vi.advanceTimersByTimeAsync(350);
 
     expect(getMatches).toHaveBeenCalledTimes(2);
-    expect(setResult).toHaveBeenLastCalledWith({
-      matches: [{ id: 'tm-second' }],
-      terms: [],
-    }, false);
+    expect(setResult).toHaveBeenLastCalledWith(
+      {
+        matches: [{ id: 'tm-second' }],
+        terms: [],
+      },
+      false,
+    );
   });
 
   it('ignores unrelated project invalidation for the current in-flight lookup', async () => {
@@ -374,17 +383,23 @@ describe('createReferenceLookupScheduler', () => {
     await vi.waitFor(() => {
       expect(getMatches).toHaveBeenCalledTimes(2);
     });
-    expect(setResult).not.toHaveBeenCalledWith({
-      matches: [{ id: 'tm-stale' }],
-      terms: [],
-    }, false);
+    expect(setResult).not.toHaveBeenCalledWith(
+      {
+        matches: [{ id: 'tm-stale' }],
+        terms: [],
+      },
+      false,
+    );
 
     second.resolve([{ id: 'tm-fresh' }] as TMMatch[]);
     await vi.waitFor(() => {
-      expect(setResult).toHaveBeenLastCalledWith({
-        matches: [{ id: 'tm-fresh' }],
-        terms: [],
-      }, false);
+      expect(setResult).toHaveBeenLastCalledWith(
+        {
+          matches: [{ id: 'tm-fresh' }],
+          terms: [],
+        },
+        false,
+      );
     });
   });
 
@@ -426,14 +441,20 @@ describe('createReferenceLookupScheduler', () => {
 
     b.resolve([{ id: 'tm-b-fresh' }] as TMMatch[]);
     await vi.advanceTimersByTimeAsync(0);
-    expect(setResult).toHaveBeenLastCalledWith({
-      matches: [{ id: 'tm-b-fresh' }],
-      terms: [],
-    }, false);
-    expect(setResult).not.toHaveBeenCalledWith({
-      matches: [{ id: 'tm-a-stale' }],
-      terms: [],
-    }, false);
+    expect(setResult).toHaveBeenLastCalledWith(
+      {
+        matches: [{ id: 'tm-b-fresh' }],
+        terms: [],
+      },
+      false,
+    );
+    expect(setResult).not.toHaveBeenCalledWith(
+      {
+        matches: [{ id: 'tm-a-stale' }],
+        terms: [],
+      },
+      false,
+    );
     expect(getMatches).toHaveBeenCalledTimes(2);
 
     await vi.advanceTimersByTimeAsync(350);
@@ -441,9 +462,9 @@ describe('createReferenceLookupScheduler', () => {
   });
 
   it('debounces rapid active changes and only fetches the latest segment', async () => {
-    const getMatches = vi.fn(async (_projectId, segment: Segment) => [
-      { id: `tm-${segment.segmentId}` },
-    ] as TMMatch[]);
+    const getMatches = vi.fn(
+      async (_projectId, segment: Segment) => [{ id: `tm-${segment.segmentId}` }] as TMMatch[],
+    );
     const getTermMatches = vi.fn(async () => [] as TBMatch[]);
     const scheduler = createReferenceLookupScheduler({
       fetchers: { getMatches, getTermMatches },
@@ -587,7 +608,10 @@ describe('createReferenceLookupScheduler', () => {
     // The stuck prefetch settling later must not disturb anything.
     prefetchTm.resolve([{ id: 'tm-prefetched' }] as TMMatch[]);
     await vi.runAllTimersAsync();
-    expect(setResult).toHaveBeenLastCalledWith({ matches: [{ id: 'tm-active' }], terms: [] }, false);
+    expect(setResult).toHaveBeenLastCalledWith(
+      { matches: [{ id: 'tm-active' }], terms: [] },
+      false,
+    );
   });
 
   it('publishes an in-flight prefetch result when it wins the race against the active channel', async () => {
@@ -693,4 +717,24 @@ describe('createReferenceLookupScheduler', () => {
       );
     });
   });
+});
+
+it('bounds completed references while retaining recently used results', async () => {
+  const getMatches = vi.fn(async () => []),
+    getTermMatches = vi.fn(async () => []);
+  const loader = createReferenceLookupControllerLoader(
+    { getMatches, getTermMatches },
+    undefined,
+    2,
+  );
+  const a = createSegment('a', 'a'),
+    b = createSegment('b', 'b'),
+    c = createSegment('c', 'c');
+  await loader.load({ projectId: 1, segment: a });
+  await loader.load({ projectId: 1, segment: b });
+  expect(loader.getCached(1, a)).toBeDefined();
+  await loader.load({ projectId: 1, segment: c });
+  expect(loader.getCached(1, a)).toBeDefined();
+  expect(loader.getCached(1, b)).toBeUndefined();
+  expect(loader.getCached(1, c)).toBeDefined();
 });

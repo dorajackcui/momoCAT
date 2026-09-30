@@ -2,6 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Segment } from '@cat/core/models';
+import { createEditorSegmentStore } from './editor/editorSegmentStore';
 import { useEditorFilters } from './useEditorFilters';
 
 const statuses = ['empty', 'draft', 'confirmed'] as const;
@@ -33,10 +34,11 @@ const segments = statuses.flatMap((status, group) =>
 );
 
 function setup() {
+  const segmentStore = createEditorSegmentStore(segments);
   return renderHook(() =>
     useEditorFilters({
       fileId: 1,
-      segments,
+      segmentStore,
       segmentSaveErrors: { 'confirmed-first': 'Save failed' },
       activeSegmentId: null,
       setActiveSegmentId: vi.fn(),

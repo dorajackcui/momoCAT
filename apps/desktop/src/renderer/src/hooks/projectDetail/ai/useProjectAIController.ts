@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Project, ProjectAIModel, ProjectType } from '@cat/core/project';
-import type {
-  AIBatchMode,
-  AIBatchTargetBaseline,
-  AIProviderSummary,
-} from '../../../../../shared/ipc';
+import type { AIBatchTargetBaseline, AIProviderSummary } from '../../../../../shared/ipc';
 import { apiClient } from '../../../services/apiClient';
 import { AI_PROVIDERS_CHANGED_EVENT } from '../../../services/aiProviderEvents';
 import { feedbackService } from '../../../services/feedbackService';
@@ -23,7 +19,6 @@ import type { ProjectAIController, StartAITranslateFileOptions, UseProjectAIPara
 import { useProjectSavedPrompts } from './useProjectSavedPrompts';
 
 export interface ResolvedAITranslateStartConfig {
-  effectiveMode: AIBatchMode;
   effectiveTargetBaseline: AIBatchTargetBaseline;
   actionLabel: string;
   targetLabel: string;
@@ -34,21 +29,10 @@ export function resolveAITranslateStartConfig(params: {
   options: StartAITranslateFileOptions;
 }): ResolvedAITranslateStartConfig {
   const projectType = params.projectType || 'translation';
-  const effectiveMode: AIBatchMode =
-    projectType === 'translation' ? params.options.mode || 'default' : 'default';
-  const effectiveTargetBaseline: AIBatchTargetBaseline =
-    projectType === 'translation' ? resolveTargetBaseline(params.options) : 'use-current-targets';
-  const actionLabel =
-    projectType === 'review'
-      ? 'review'
-      : projectType === 'custom'
-        ? 'processing'
-        : effectiveMode === 'dialogue'
-          ? 'dialogue translation'
-          : 'translation';
+  const effectiveTargetBaseline = params.options.targetBaseline ?? 'use-current-targets';
+  const actionLabel = projectType === 'custom' ? 'processing' : 'translation';
 
   return {
-    effectiveMode,
     effectiveTargetBaseline,
     actionLabel,
     targetLabel: projectType === 'custom' ? 'output' : 'target',
@@ -64,16 +48,6 @@ export function buildAIStartConfirmMessage(
       ? `ignore existing non-confirmed ${config.targetLabel} segments and regenerate them`
       : `use current ${config.targetLabel} segments and fill blanks`;
   return `Run AI ${config.actionLabel} for "${fileName}"? This will ${baselineLabel}.`;
-}
-
-function resolveTargetBaseline(options: StartAITranslateFileOptions): AIBatchTargetBaseline {
-  if (options.targetBaseline) {
-    return options.targetBaseline;
-  }
-
-  return options.targetScope === 'overwrite-non-confirmed'
-    ? 'ignore-current-targets'
-    : 'use-current-targets';
 }
 
 export function useProjectAI({
@@ -285,18 +259,12 @@ export function useProjectAI({
   }, [project, providerActionBlockMessage, testContext, testSource]);
 
   const startAITranslateFile = useCallback(
-    async (
-      fileId: number,
-      fileName: string,
-      options: AIBatchMode | StartAITranslateFileOptions = 'default',
-    ) => {
-      const normalizedOptions: StartAITranslateFileOptions =
-        typeof options === 'string' ? { mode: options } : options;
+    async (fileId: number, fileName: string, options: StartAITranslateFileOptions = {}) => {
       const config = resolveAITranslateStartConfig({
         projectType: project?.projectType,
-        options: normalizedOptions,
+        options,
       });
-      const shouldConfirm = normalizedOptions.confirm !== false;
+      const shouldConfirm = options.confirm !== false;
       if (providerActionBlockMessage) {
         feedbackService.info(providerActionBlockMessage);
         return;
@@ -311,7 +279,6 @@ export function useProjectAI({
 
       try {
         const jobId = await apiClient.aiTranslateFile(fileId, {
-          mode: config.effectiveMode,
           targetBaseline: config.effectiveTargetBaseline,
         });
         fileJobTracker.trackFileJobStart(fileId, jobId);

@@ -22,7 +22,7 @@ import {
   AI_PROMPT_DEBUG_ENV,
   AI_PROMPT_DEBUG_FILE_ENV,
   isAIPromptDebugEnabled,
-} from './services/modules/ai/promptDebug';
+} from '@cat/localization';
 import {
   AI_BATCH_DEBUG_ENV,
   AI_BATCH_DEBUG_FILE_ENV,

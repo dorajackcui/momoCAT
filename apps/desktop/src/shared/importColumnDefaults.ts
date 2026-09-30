@@ -1,4 +1,3 @@
-import type { ProjectType } from '@cat/core/project';
 import type { SpreadsheetPreviewData } from './ipc';
 
 const DEFAULT_CONTEXT_HEADER = 'context';
@@ -6,22 +5,18 @@ const DEFAULT_CONTEXT_HEADER = 'context';
 interface ResolveDefaultContextColumnInput {
   hasHeader: boolean;
   previewData: SpreadsheetPreviewData;
-  projectType: ProjectType;
-  sourceCol: number;
 }
 
 export function resolveDefaultContextColumn({
   hasHeader,
   previewData,
-  projectType,
-  sourceCol,
 }: ResolveDefaultContextColumnInput): number | undefined {
   const headerContextCol = hasHeader
     ? findHeaderColumn(previewData[0] ?? [], DEFAULT_CONTEXT_HEADER)
     : undefined;
   if (headerContextCol !== undefined) return headerContextCol;
 
-  return projectType === 'review' ? sourceCol : undefined;
+  return undefined;
 }
 
 export function findHeaderColumn(

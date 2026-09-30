@@ -100,6 +100,45 @@ describe('selected segment actions', () => {
     );
   });
 
+  it('pastes snapshotted target rows atomically, preserving line breaks and empty targets', async () => {
+    const hook = setup();
+    const ids = ['c', 'a'];
+    const texts = ['New\n<b>target</b>', ''];
+    let finish!: () => void;
+    hook.flush.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    let pending!: Promise<void>;
+    act(() => {
+      pending = hook.result.current.pasteSelectedSegments(ids, texts);
+    });
+    ids.reverse();
+    texts[0] = 'changed';
+    await act(async () => {
+      finish();
+      await pending;
+    });
+    expect(apiClient.updateSelectedSegments).toHaveBeenCalledWith(1, [
+      {
+        segmentId: 'c',
+        targetTokens: parseDisplayTextToTokens('New\n<b>target</b>'),
+        status: 'draft',
+      },
+      { segmentId: 'a', targetTokens: [], status: 'empty' },
+    ]);
+    expect(hook.applyUpdates).toHaveBeenCalledOnce();
+  });
+
+  it('rejects mismatched paste rows before saving or writing', async () => {
+    const hook = setup();
+    await act(async () => hook.result.current.pasteSelectedSegments(['a', 'c'], ['one']));
+    expect(hook.flush).not.toHaveBeenCalled();
+    expect(apiClient.updateSelectedSegments).not.toHaveBeenCalled();
+  });
+
   it('confirms every selected row without requesting QA', async () => {
     const hook = setup();
     hook.getSegments()[1].targetTokens = [{ type: 'text', content: 'Missing tags' }];

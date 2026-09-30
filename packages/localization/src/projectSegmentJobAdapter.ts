@@ -68,7 +68,7 @@ export function prepareProjectSegmentTranslationJob(
 ): PreparedProjectSegmentTranslationJob {
   const requestMode: LocalizationRequestMode = input.options?.requestMode ?? 'window-partial';
   const targetBaseline = resolveTargetBaseline(input.options);
-  const { targetScope: _legacyTargetScope, ...restOptions } = input.options ?? {};
+  const restOptions = input.options ?? {};
   const translationOptions: TranslateUnitsOptions = {
     ...restOptions,
     targetBaseline,
@@ -185,7 +185,7 @@ function computeProjectSegmentResumeFingerprint(
     ['projectId', String(input.projectId)],
     ['documentId', input.documentId],
     ['targetBaseline', resolveTargetBaseline(input.options)],
-    ['mode', input.options?.mode ?? 'standard'],
+    ['mode', 'standard'],
     ['requestMode', requestMode],
     ['tagPolicy', tagPolicyFingerprintValue(input.options?.tagPolicy)],
     ['providerOverride', input.options?.providerOverride],
@@ -254,9 +254,7 @@ function unitResultToTranslateUnitResult(result: UnitResult): TranslateUnitResul
     source: result.source,
     target: result.target ?? '',
     status:
-      result.status === 'translated' || result.status === 'reused'
-        ? result.status
-        : 'skipped',
+      result.status === 'translated' || result.status === 'reused' ? result.status : 'skipped',
     references: result.references,
     metadata: result.metadata,
   };

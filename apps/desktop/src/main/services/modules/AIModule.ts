@@ -28,10 +28,10 @@ import {
   type TestAIConnectionInput,
 } from './ai/AIProviderCatalogService';
 import { AISettingsService } from './ai/AISettingsService';
-import { AITextTranslator } from './ai/AITextTranslator';
+import { AITextTranslator } from '@cat/localization';
 import { AITranslationOrchestrator } from './ai/AITranslationOrchestrator';
 import { SegmentPagingIterator } from './ai/SegmentPagingIterator';
-import type { PromptReferenceResolvers } from './ai/types';
+import type { PromptReferenceResolvers } from '@cat/localization';
 
 export class AIModule {
   private static readonly SEGMENT_PAGE_SIZE = 1000;
@@ -70,7 +70,6 @@ export class AIModule {
       projectRepo,
       segmentRepo,
       segmentService,
-      transport,
       aiRuntimeConfigProvider,
       this.providerCatalogService,
       textTranslator,
@@ -95,6 +94,10 @@ export class AIModule {
 
   public async testAIConnection(input: TestAIConnectionInput): Promise<AITestConnectionResult> {
     return this.providerCatalogService.testConnection(input);
+  }
+
+  public async refreshAIConnection(connectionId: string): Promise<AITestConnectionResult> {
+    return this.providerCatalogService.refreshConnection(connectionId);
   }
 
   public async addAIProvider(input: AddAIProviderInput): Promise<AIProviderSummary> {
@@ -148,6 +151,7 @@ export class AIModule {
     segmentId: string,
     options?: {
       model?: string;
+      clientRequestId?: string;
     },
   ) {
     return this.translationOrchestrator.aiTranslateSegment(segmentId, options);
@@ -158,6 +162,7 @@ export class AIModule {
     instruction: string,
     options?: {
       model?: string;
+      clientRequestId?: string;
     },
   ) {
     return this.translationOrchestrator.aiRefineSegment(segmentId, instruction, options);

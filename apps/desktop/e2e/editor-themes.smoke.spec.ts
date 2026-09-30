@@ -374,14 +374,14 @@ test('coordinates complete palettes across CAT and portals while preserving edit
   }
 });
 
-test('offers editor appearance in review projects without batch actions', async () => {
+test('offers editor appearance and shared batch options in custom projects', async () => {
   const session = await createEditorSmokeSession();
   try {
     const { page, tempDir } = session;
     await page.evaluate(
       async (fixturePath) => {
         const api = (window as unknown as { api: DesktopApi }).api;
-        const project = await api.createProject('Theme review fixture', 'en', 'zh', 'review');
+        const project = await api.createProject('Theme custom fixture', 'en', 'zh', 'custom');
         await api.addFileToProject(project.id!, fixturePath, {
           hasHeader: true,
           sourceCol: 0,
@@ -391,9 +391,12 @@ test('offers editor appearance in review projects without batch actions', async 
       join(tempDir, 'cm6-smoke-fixture.xlsx'),
     );
     await page.reload();
-    await page.getByRole('button', { name: 'Theme review fixture', exact: true }).click();
+    await page.getByRole('button', { name: 'Theme custom fixture', exact: true }).click();
     await page.getByText('cm6-smoke-fixture.xlsx', { exact: true }).click();
-    await expect(page.getByRole('button', { name: 'AI batch translate' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'AI batch process' }).click();
+    await expect(page.getByRole('dialog', { name: 'AI Process Options' })).toBeVisible();
+    await expect(page.getByLabel('Output Baseline')).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(
       page
         .getByRole('group', { name: 'Display settings' })

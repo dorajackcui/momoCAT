@@ -8,7 +8,7 @@ import {
 } from '@cat/core/project';
 import type { Token } from '@cat/core/models';
 import { parseEditorTextToTokens, type TagPolicy } from '@cat/core/tag';
-import type { AITransport, ReasoningEffort } from '../../ports';
+import type { AITransport, ReasoningEffort } from '../ports';
 import { logAIPromptDebug } from './promptDebug';
 
 export interface TranslateDebugMeta {

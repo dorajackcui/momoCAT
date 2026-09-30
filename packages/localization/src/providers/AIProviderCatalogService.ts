@@ -131,6 +131,22 @@ export class AIProviderCatalogService {
     }
   }
 
+  public async refreshConnection(connectionId: string): Promise<AITestConnectionResult> {
+    const connection = this.storage.readConnections().find((item) => item.id === connectionId);
+    if (!connection) return { ok: false, error: 'AI provider connection is missing.' };
+
+    const apiKey = this.storage.getConnectionApiKey(connection.id);
+    if (!apiKey)
+      return { ok: false, error: `API key is missing for connection "${connection.name}".` };
+
+    return this.testConnection({
+      connectionId: connection.id,
+      name: connection.name,
+      baseUrl: connection.baseUrl,
+      apiKey,
+    });
+  }
+
   public listProviders(): AIProviderSummary[] {
     return [...this.readConfiguredProviderSummaries(), ...this.readLegacyProviderSummaries()];
   }

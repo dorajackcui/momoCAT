@@ -1,18 +1,17 @@
 import { appendFile } from 'fs/promises';
-import type { ReasoningEffort } from '../../ports';
+import type { ReasoningEffort } from '../ports';
 
 export const AI_PROMPT_DEBUG_ENV = 'CAT_AI_DEBUG_PROMPTS';
 export const AI_PROMPT_DEBUG_FILE_ENV = 'CAT_AI_DEBUG_PROMPTS_FILE';
 
 interface PromptDebugLogParams {
-  flow: 'segment' | 'refine' | 'test' | 'dialogue';
+  flow: 'segment' | 'refine' | 'test';
   model: string;
   reasoningEffort?: ReasoningEffort;
   systemPrompt: string;
   userPrompt: string;
   attempt?: number;
   segmentId?: string;
-  segmentIds?: string[];
 }
 
 function isTruthyFlag(value: string | undefined): boolean {
@@ -40,7 +39,6 @@ function buildPromptDebugBlock(params: PromptDebugLogParams): string {
     params.reasoningEffort ? `reasoning=${params.reasoningEffort}` : null,
     typeof params.attempt === 'number' ? `attempt=${params.attempt}` : null,
     params.segmentId ? `segmentId=${params.segmentId}` : null,
-    params.segmentIds?.length ? `segmentIds=${params.segmentIds.join(',')}` : null,
   ].filter((value): value is string => Boolean(value));
 
   return [
@@ -66,7 +64,6 @@ export function logAIPromptDebug(params: PromptDebugLogParams): void {
     params.reasoningEffort ? `reasoning=${params.reasoningEffort}` : null,
     typeof params.attempt === 'number' ? `attempt=${params.attempt}` : null,
     params.segmentId ? `segmentId=${params.segmentId}` : null,
-    params.segmentIds?.length ? `segmentIds=${params.segmentIds.join(',')}` : null,
   ].filter((value): value is string => Boolean(value));
 
   console.log(`[AIPromptDebug] ${details.join(' ')}`);

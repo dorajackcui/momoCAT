@@ -69,6 +69,7 @@ const apiClientMock = vi.hoisted(() => ({
   setSourceTerminologyPromptSettings: vi.fn(),
   listAIConnections: vi.fn(),
   testAIConnection: vi.fn(),
+  refreshAIConnection: vi.fn(),
   deleteAIConnection: vi.fn(),
   listAIProviders: vi.fn(),
   addAIProvider: vi.fn(),
@@ -126,6 +127,7 @@ describe('SettingsPage', () => {
       models: connection.discoveredModels,
       endpoint: 'https://api.openai.com/v1/models',
     });
+    apiClientMock.refreshAIConnection.mockResolvedValue({ ok: true, connection });
     apiClientMock.deleteAIConnection.mockResolvedValue(undefined);
     apiClientMock.listAIProviders.mockResolvedValue([]);
     apiClientMock.addAIProvider.mockResolvedValue(provider);
@@ -389,7 +391,7 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Read only')).toBeInTheDocument();
   });
 
-  it('creates a provider from another model on a saved connection without retesting credentials', async () => {
+  it('creates a provider from another model on a saved connection after refreshing with stored credentials', async () => {
     apiClientMock.listAIConnections.mockResolvedValue([connection]);
     apiClientMock.listAIProviders.mockResolvedValue([provider]);
     apiClientMock.addAIProvider.mockResolvedValue({
@@ -409,7 +411,9 @@ describe('SettingsPage', () => {
 
     expect(screen.getByLabelText('Model')).toHaveValue('gpt-demo-mini');
     expect(screen.getByLabelText('Provider name')).toHaveValue('OpenAI / gpt-demo-mini');
-    expect(screen.getByRole('button', { name: 'Enter key to retest' })).toBeDisabled();
+    await screen.findByText('Models refreshed: 2 models discovered.');
+    expect(apiClientMock.refreshAIConnection).toHaveBeenCalledWith(connection.id);
+    expect(screen.getByRole('button', { name: 'Refresh models' })).not.toBeDisabled();
     expect(apiClientMock.testAIConnection).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByText('Add provider'));
@@ -422,6 +426,62 @@ describe('SettingsPage', () => {
       }),
     );
   });
+
+  it('waits for fresh models and applies proxy settings before refreshing a saved connection', async () => {
+    apiClientMock.listAIConnections.mockResolvedValue([{ ...connection, discoveredModels: [] }]);
+    let finish!: (value: unknown) => void;
+    apiClientMock.refreshAIConnection.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(
+      <SettingsPage updates={{ statusMessage: '', isBusy: false, checkForUpdates: vi.fn() }} />,
+    );
+    await waitForConnectionsTabReady();
+    fireEvent.click(screen.getByRole('button', { name: 'Use connection' }));
+    await waitFor(() =>
+      expect(apiClientMock.refreshAIConnection).toHaveBeenCalledWith(connection.id),
+    );
+    expect(apiClientMock.setProxySettings.mock.invocationCallOrder[0]).toBeLessThan(
+      apiClientMock.refreshAIConnection.mock.invocationCallOrder[0],
+    );
+    for (const label of ['API key', 'API base URL', 'Connection name', 'Model']) {
+      expect(screen.getByLabelText(label)).toBeDisabled();
+    }
+    expect(screen.getByText('Add provider')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Use connection' })).toBeDisabled();
+    finish({ ok: true, connection: { ...connection, discoveredModels: ['gpt-new'] } });
+    await screen.findByText('Models refreshed: 1 models discovered.');
+    expect(screen.getByLabelText('Model')).toHaveValue('gpt-new');
+    expect(screen.getByLabelText('Provider name')).toHaveValue('OpenAI / gpt-new');
+    expect(screen.getByLabelText('API key')).toHaveValue('');
+    expect(screen.getByText('1 model')).toBeInTheDocument();
+    expect(screen.getByText('Add provider')).not.toBeDisabled();
+  });
+
+  it.each(['result', 'rejection'])(
+    'keeps saved models on refresh %s failure and supports retry',
+    async (failure) => {
+      apiClientMock.listAIConnections.mockResolvedValue([connection]);
+      if (failure === 'result')
+        apiClientMock.refreshAIConnection.mockResolvedValueOnce({ ok: false, error: 'Offline' });
+      else apiClientMock.refreshAIConnection.mockRejectedValueOnce(new Error('Offline'));
+      render(
+        <SettingsPage updates={{ statusMessage: '', isBusy: false, checkForUpdates: vi.fn() }} />,
+      );
+      await waitForConnectionsTabReady();
+      fireEvent.click(screen.getByRole('button', { name: 'Use connection' }));
+      await screen.findByText(/Model refresh failed: Offline/);
+      expect(screen.getByLabelText('Model')).toHaveValue('gpt-demo');
+      expect(screen.getByText('Add provider')).not.toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh models' }));
+      await screen.findByText('Models refreshed: 2 models discovered.');
+      expect(apiClientMock.refreshAIConnection).toHaveBeenCalledTimes(2);
+      expect(apiClientMock.testAIConnection).not.toHaveBeenCalled();
+    },
+  );
 
   it('deletes connections and providers from their rows', async () => {
     apiClientMock.listAIConnections.mockResolvedValue([connection]);

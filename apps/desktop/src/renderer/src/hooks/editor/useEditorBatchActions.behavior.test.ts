@@ -3,6 +3,7 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Segment } from '@cat/core/models';
 import { useEditorBatchActions } from './useEditorBatchActions';
+import { createEditorSegmentStore } from './editorSegmentStore';
 import { useEditorFilters } from '../useEditorFilters';
 import { createAIFileJobTracker } from '../aiFileJobs';
 import { apiClient } from '../../services/apiClient';
@@ -31,7 +32,6 @@ function setup(initialIds: string[] | null) {
         supportsBatchActions: true,
         getFilteredSegmentIds,
         flushPendingSegmentUpdates: flush,
-        reloadEditorData: vi.fn(),
         aiFileJobTracker: tracker,
       }),
     { initialProps: { fileId: 1 } },
@@ -111,10 +111,11 @@ describe('editor filtered AI translation', () => {
       status: 'empty',
       meta: { context },
     })) as Segment[];
+    const segmentStore = createEditorSegmentStore(segments);
     const { result } = renderHook(() =>
       useEditorFilters({
         fileId: 1,
-        segments,
+        segmentStore,
         segmentSaveErrors: {},
         activeSegmentId: null,
         setActiveSegmentId: vi.fn(),
@@ -137,20 +138,21 @@ describe('editor filtered AI translation', () => {
       targetTokens: [],
       status: 'empty',
     } as Segment;
-    const { result, rerender } = renderHook(
-      ({ segments }) =>
-        useEditorFilters({
-          fileId: 1,
-          segments,
-          segmentSaveErrors: {},
-          activeSegmentId: null,
-          setActiveSegmentId: vi.fn(),
-        }),
-      { initialProps: { segments: [segment] } },
+    const segmentStore = createEditorSegmentStore([segment]);
+    const { result } = renderHook(() =>
+      useEditorFilters({
+        fileId: 1,
+        segmentStore,
+        segmentSaveErrors: {},
+        activeSegmentId: null,
+        setActiveSegmentId: vi.fn(),
+      }),
     );
     act(() => result.current.toggleStatusFilter('empty'));
-    rerender({ segments: [{ ...segment, status: 'draft' }] });
-    expect(result.current.filteredSegments).toHaveLength(1);
+    act(() =>
+      segmentStore.updateSegment(segment.segmentId, (row) => ({ ...row, status: 'draft' })),
+    );
+    expect(result.current.visibleRows).toHaveLength(1);
     expect(result.current.getFilteredSegmentIds()).toEqual(['s10']);
   });
 });

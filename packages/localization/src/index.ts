@@ -106,7 +106,6 @@ export type {
   SourceTerminologyPrecheckSpreadsheetRow,
   SourceTerminologySummarySpreadsheetRow,
 } from './modules/sourceTerminologyPrecheckSpreadsheet';
-export { translateSpreadsheetFile } from './spreadsheetFileAdapter';
 export {
   inferFileTranslationJobSidecarPaths,
   prepareFileTranslationJob,
@@ -130,7 +129,6 @@ export type {
   TranslateProjectSegmentsJobInput,
   TranslateProjectSegmentsJobOptions,
 } from './projectSegmentJobAdapter';
-export { resolveBatchTargetScope } from './translationTargetScope';
 export { normalizeTargetForBaseline, resolveTargetBaseline } from './targetBaseline';
 export type { TargetBaselineOptions } from './targetBaseline';
 export type * from './ports';
@@ -184,18 +182,14 @@ export {
 export { MTModule } from './modules/MTModule';
 export type {
   ComposeBatchPromptInput,
-  ComposePromptInput,
   MTBatchCurrentUnitInput,
   MTBatchTranslateResult,
   MTBatchUnitResult,
   MTModuleDependencies,
-  MTTranslateResult,
   PreparedBatchPromptInput,
-  PreparedPromptInput,
   PromptMTConfig,
   ResolvedMTConfig,
   TranslatePreparedBatchPromptInput,
-  TranslatePreparedPromptInput,
 } from './modules/MTModule';
 export { runTranslateFileCommand } from './cli/translateFileCommand';
 export type { TranslateFileCommandConfig } from './cli/translateFileCommand';
@@ -214,3 +208,18 @@ export type {
   InspectProviderSummary,
 } from './cli/inspectProjectsCommand';
 export { runProjectSegmentQA } from './qa/runProjectSegmentQA';
+
+export { AITextTranslator } from './modules/AITextTranslator';
+export type { TranslateDebugMeta, TranslateSegmentParams } from './modules/AITextTranslator';
+export {
+  AI_PROMPT_DEBUG_ENV,
+  AI_PROMPT_DEBUG_FILE_ENV,
+  isAIPromptDebugEnabled,
+} from './modules/promptDebug';
+export { translateProjectSegment, testProjectText } from './modules/segmentTranslation';
+export type { SegmentTranslationDependencies } from './modules/segmentTranslation';
+export { resolveTranslationPromptReferences } from './modules/promptReferences';
+export type {
+  PromptReferenceResolvers,
+  TranslationPromptReferences,
+} from './modules/promptReferences';

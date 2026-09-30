@@ -40,27 +40,21 @@ describe('promptDebug', () => {
 
     process.env[AI_PROMPT_DEBUG_ENV] = 'on';
     logAIPromptDebug({
-      flow: 'dialogue',
+      flow: 'segment',
       model: 'gpt-5.4-mini',
       systemPrompt: 'system prompt body',
       userPrompt: 'user prompt body',
       attempt: 2,
-      segmentIds: ['seg-1', 'seg-2'],
+      segmentId: 'seg-1',
     });
 
     expect(logSpy).toHaveBeenCalledTimes(3);
     expect(logSpy).toHaveBeenNthCalledWith(
       1,
-      '[AIPromptDebug] flow=dialogue model=gpt-5.4-mini attempt=2 segmentIds=seg-1,seg-2',
+      '[AIPromptDebug] flow=segment model=gpt-5.4-mini attempt=2 segmentId=seg-1',
     );
-    expect(logSpy).toHaveBeenNthCalledWith(
-      2,
-      '[AIPromptDebug][systemPrompt]\nsystem prompt body',
-    );
-    expect(logSpy).toHaveBeenNthCalledWith(
-      3,
-      '[AIPromptDebug][userPrompt]\nuser prompt body',
-    );
+    expect(logSpy).toHaveBeenNthCalledWith(2, '[AIPromptDebug][systemPrompt]\nsystem prompt body');
+    expect(logSpy).toHaveBeenNthCalledWith(3, '[AIPromptDebug][userPrompt]\nuser prompt body');
   });
 
   it('appends prompts to a UTF-8 debug file when configured', async () => {

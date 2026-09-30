@@ -16,7 +16,7 @@ apps/desktop ───────> @cat/localization
 apps/desktop ───────> @cat/cloud-contracts <────── apps/cloud-api
 ```
 
-The CLI is deliberately thin. The desktop is a richer application host and currently consumes all three shared packages directly. Shared headless behavior belongs in `@cat/localization`; desktop-only UI and lifecycle behavior belongs under `apps/desktop`.
+CLI and Desktop are application hosts. Shared headless behavior belongs in `@cat/localization`; desktop UI and lifecycle behavior belongs under `apps/desktop`, which consumes all three shared packages directly.
 
 `apps/cloud-api` owns Better Auth login, account authorization, project revisions with conditional commits, and private D1 storage. The experiment stores immutable file/snapshot chunks through [D1BlobStore](../apps/cloud-api/src/D1BlobStore.ts), keeping the client protocol independent of that storage choice. It does not run native SQLite or TM/TB matching. `packages/cloud-contracts` owns the bounded cloud transport format. Local projects do not depend on a cloud account or a network connection.
 
@@ -39,7 +39,7 @@ renderer -> typed preload API -> IPC handlers -> services/modules -> adapters/sh
 - Adapters translate desktop service ports to `CATDatabase` and other infrastructure.
 - Workers handle expensive import, sync, and reference work without blocking the Electron main thread.
 
-Desktop file translation has both legacy single-unit workflows and adapters over the shared localization engine. Keep the boundary explicit when moving behavior; do not silently give the desktop a second implementation of a shared request contract.
+Desktop adapters load editor state, serialize operations, persist results, and publish events. They delegate single-segment translation/refinement and batch execution to `@cat/localization`; project behavior and request contracts belong to [Localization](LOCALIZATION.md#mt-request-planning).
 
 [Desktop](DESKTOP.md) owns editor persistence, UI/event coordination, and the code/test map for changing these boundaries.
 
@@ -59,6 +59,7 @@ It must not import `@cat/db`, `@cat/core`, or desktop internals directly. This r
 The shared orchestration layer owns:
 
 - external file adapters and transient units;
+- single-segment translation/refinement and prompt testing;
 - inspect and reference-export workflows;
 - request-mode planning and resumable jobs;
 - checkpoints, events, snapshots, audit records, and optional artifacts;

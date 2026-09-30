@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { Segment } from '@cat/core/models';
 import { evaluateDocumentQa } from '@cat/core/qa';
 import { normalizeQASettings } from '@cat/core/project';
 import { createEditorSegmentStore } from './editorSegmentStore';
-import { createSegmentChangeHint } from './editorSegmentState';
 import { useEditorQA } from './useEditorQA';
 
 const segment: Segment = {
@@ -30,28 +29,22 @@ describe('QA completion while the editor remains interactive', () => {
         savedResult === 'findings'
           ? [{ ruleId: 'number', severity: 'info' as const, message: 'Saved finding' }]
           : [];
-      let revision = 0;
-      const { result, rerender } = renderHook(
-        ({ fileId }) =>
-          useEditorQA(fileId, store, createSegmentChangeHint(undefined, revision), vi.fn()),
-        { initialProps: { fileId: 1 } },
-      );
+      const { result, rerender } = renderHook(({ fileId }) => useEditorQA(fileId, store), {
+        initialProps: { fileId: 1 },
+      });
       expect(result.current.hasResults).toBe(false);
       store.replaceAll([{ ...segment, qaIssues }]);
-      revision++;
       rerender({ fileId: 1 });
       expect(result.current.hasResults).toBe(true);
       expect(result.current.checked).toBe(false);
       expect(result.current.stale).toBe(false);
       store.updateSegment('a', (row) => ({ ...row, status: 'confirmed' }));
-      revision++;
       rerender({ fileId: 1 });
       expect(result.current.stale).toBe(false);
       store.updateSegment('a', (row) => ({
         ...row,
         targetTokens: [{ type: 'text', content: 'Count 1' }],
       }));
-      revision++;
       rerender({ fileId: 1 });
       expect(result.current.checked).toBe(false);
       expect(result.current.stale).toBe(true);
@@ -62,7 +55,6 @@ describe('QA completion while the editor remains interactive', () => {
       expect(result.current.stale).toBe(false);
       expect(result.current.issues).toEqual([]);
       store.replaceAll([{ ...segment, fileId: 2 }]);
-      revision++;
       rerender({ fileId: 2 });
       expect(result.current.checked).toBe(false);
       expect(result.current.hasResults).toBe(false);
@@ -72,9 +64,7 @@ describe('QA completion while the editor remains interactive', () => {
 
   it('discards a result when resources change during a run even with no previous findings', () => {
     const store = createEditorSegmentStore([segment]);
-    const { result } = renderHook(() =>
-      useEditorQA(1, store, createSegmentChangeHint(undefined, 0), vi.fn()),
-    );
+    const { result } = renderHook(() => useEditorQA(1, store));
     act(() => result.current.startRun());
     store.invalidateQA();
     act(() => result.current.acceptReport(evaluateDocumentQa([segment])));
@@ -85,21 +75,12 @@ describe('QA completion while the editor remains interactive', () => {
   it('goes stale on content edit but keeps document findings visible until recheck', () => {
     const store = createEditorSegmentStore([segment, { ...segment, segmentId: 'b' }]);
     const options = { settings: normalizeQASettings({ enabledRuleIds: ['number'] }) };
-    let revision = 0;
-    const { result, rerender } = renderHook(() =>
-      useEditorQA(
-        1,
-        store,
-        createSegmentChangeHint({ orderChanged: false, changedSegmentIds: ['a', 'b'] }, revision),
-        vi.fn(),
-      ),
-    );
+    const { result, rerender } = renderHook(() => useEditorQA(1, store));
     act(() => result.current.startRun());
     act(() => result.current.acceptReport(evaluateDocumentQa(store.getSegments(), options)));
     const issues = result.current.issues;
     const otherRowIssues = store.getSegment('b')?.qaIssues;
     store.updateSegment('a', (row) => ({ ...row, status: 'confirmed' }));
-    revision++;
     rerender();
     expect(result.current.stale).toBe(false);
     expect(result.current.issues).toEqual(issues);
@@ -107,7 +88,6 @@ describe('QA completion while the editor remains interactive', () => {
       ...row,
       targetTokens: [{ type: 'text', content: 'Count 1' }],
     }));
-    revision++;
     rerender();
     expect(result.current.stale).toBe(true);
     expect(result.current.issues).toEqual(issues);
@@ -116,7 +96,6 @@ describe('QA completion while the editor remains interactive', () => {
       ...row,
       qaIssues: [{ ruleId: 'instant', message: 'Instant result', severity: 'info' }],
     }));
-    revision++;
     rerender();
     expect(result.current.issues.map((issue) => issue.ruleId)).toEqual(['instant', 'number']);
     act(() => result.current.startRun());
@@ -127,10 +106,7 @@ describe('QA completion while the editor remains interactive', () => {
   });
   it.each(['unchanged', 'edited', 'server-stale'] as const)('%s content', (mode) => {
     const store = createEditorSegmentStore([segment]);
-    const publish = vi.fn();
-    const { result } = renderHook(() =>
-      useEditorQA(1, store, createSegmentChangeHint(undefined, 0), publish),
-    );
+    const { result } = renderHook(() => useEditorQA(1, store));
     act(() => result.current.startRun());
     const report = evaluateDocumentQa([segment], {
       settings: normalizeQASettings({ enabledRuleIds: ['number'] }),
@@ -144,7 +120,6 @@ describe('QA completion while the editor remains interactive', () => {
     act(() => result.current.acceptReport(report));
     expect(result.current.stale).toBe(mode !== 'unchanged');
     expect(result.current.issues).toHaveLength(mode === 'unchanged' ? 1 : 0);
-    expect(publish).toHaveBeenCalledTimes(mode === 'unchanged' ? 1 : 0);
     expect(store.getSegment('a')?.targetTokens[0].content).toBe(
       mode === 'edited' ? 'Retained edit' : 'Count 2',
     );

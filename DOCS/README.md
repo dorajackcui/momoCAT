@@ -19,21 +19,21 @@ Follow [AGENTS.md](../AGENTS.md), then use the task map below to read the releva
 
 ## Common task map
 
-| Task surface                            | Primary code home                                                                                                     |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Renderer/editor state and behavior      | [Desktop ownership and tests](DESKTOP.md#ownership-and-tests)                                                         |
-| Project/global settings and shared UI   | [Settings](DESKTOP.md#project-and-global-settings), [UI foundation](DESKTOP.md#ui-foundation)                         |
-| Desktop IPC and typed bridge            | [Desktop boundary changes](DESKTOP.md#changing-a-desktop-boundary)                                                    |
-| Project file import/export/inspect      | [Desktop files and background jobs](DESKTOP.md#files-and-background-jobs)                                             |
-| AI/provider and file translation        | [`modules/ai`](../apps/desktop/src/main/services/modules/ai), [`packages/localization`](../packages/localization/src) |
-| QA checks and QAtools comparison        | [QA entrypoints](LOCALIZATION.md#qa-entrypoints), [QAtools comparison](LOCALIZATION.md#qatools-comparison)            |
-| QA retention, invalidation, and display | [Result lifecycle](LOCALIZATION.md#qa-result-lifecycle), [QA panel](DESKTOP.md#qa-panel-and-feedback)                 |
-| TM/TB matching and resource lifecycle   | [`LOCALIZATION.md`](LOCALIZATION.md) and its entrypoint table                                                         |
-| SQLite/schema/repositories              | [`DATA_MODEL.md`](DATA_MODEL.md) and [`packages/db/src`](../packages/db/src)                                          |
-| CLI parsing and operation               | [`CLI.md`](CLI.md), [`apps/cli/src`](../apps/cli/src)                                                                 |
-| TM/TB/AI flow diagnosis and CLI smoke   | [`DEVELOPMENT.md`](DEVELOPMENT.md#diagnostic-playbooks)                                                               |
-| Repository scripts and generators       | [`DEVELOPMENT.md`](DEVELOPMENT.md#script-ownership-and-maintenance)                                                   |
-| Build, packaging, and updates           | [`DEVELOPMENT.md`](DEVELOPMENT.md), [`scripts/pack-platform.mjs`](../scripts/pack-platform.mjs)                       |
+| Task surface                            | Primary code home                                                                                          |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Renderer/editor state and behavior      | [Desktop ownership and tests](DESKTOP.md#ownership-and-tests)                                              |
+| Project/global settings and shared UI   | [Settings](DESKTOP.md#project-and-global-settings), [UI foundation](DESKTOP.md#ui-foundation)              |
+| Desktop IPC and typed bridge            | [Desktop boundary changes](DESKTOP.md#changing-a-desktop-boundary)                                         |
+| Project file import/export/inspect      | [Desktop files and background jobs](DESKTOP.md#files-and-background-jobs)                                  |
+| AI/provider and file translation        | [Localization entrypoints](LOCALIZATION.md#key-entrypoints)                                                |
+| QA checks and QAtools comparison        | [QA entrypoints](LOCALIZATION.md#qa-entrypoints), [QAtools comparison](LOCALIZATION.md#qatools-comparison) |
+| QA retention, invalidation, and display | [Result lifecycle](LOCALIZATION.md#qa-result-lifecycle), [QA panel](DESKTOP.md#qa-panel-and-feedback)      |
+| TM/TB matching and resource lifecycle   | [`LOCALIZATION.md`](LOCALIZATION.md) and its entrypoint table                                              |
+| SQLite/schema/repositories              | [`DATA_MODEL.md`](DATA_MODEL.md) and [`packages/db/src`](../packages/db/src)                               |
+| CLI parsing and operation               | [`CLI.md`](CLI.md), [`apps/cli/src`](../apps/cli/src)                                                      |
+| TM/TB/AI flow diagnosis and CLI smoke   | [`DEVELOPMENT.md`](DEVELOPMENT.md#diagnostic-playbooks)                                                    |
+| Repository scripts and generators       | [`DEVELOPMENT.md`](DEVELOPMENT.md#script-ownership-and-maintenance)                                        |
+| Build, packaging, and updates           | [`DEVELOPMENT.md`](DEVELOPMENT.md), [`scripts/pack-platform.mjs`](../scripts/pack-platform.mjs)            |
 
 The root [README](../README.md) is the product entrypoint. Package-specific READMEs contain short build/usage pointers; the topic document owns operational defaults and detailed contracts. Use the [validation matrix](DEVELOPMENT.md#validation-strategy) to choose commands, and the owning topic's code/test links to select the focused cases.
 

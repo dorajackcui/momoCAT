@@ -1,10 +1,9 @@
 import path from 'path';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type { Segment, TBMatch } from '@cat/core/models';
-import type { ProjectType } from '@cat/core/project';
 import { CATDatabase } from '../../../../../packages/db/src';
 import { findHeaderColumn, resolveDefaultContextColumn } from '../../shared/importColumnDefaults';
-import type { AIBatchMode, AIBatchTargetScope, ImportOptions } from '../../shared/ipc';
+import type { AIBatchTargetBaseline, ImportOptions } from '../../shared/ipc';
 import { ProjectService } from '../services/ProjectService';
 import type { AIRuntimeConfigProvider, AITransport, SpreadsheetGateway } from '../services/ports';
 import type { TMMatch } from '../services/TMService';
@@ -23,9 +22,8 @@ interface AIFileFlowStartEvent {
   projectName: string;
   fileId: number;
   fileName: string;
-  mode?: AIBatchMode;
   model?: string;
-  targetScope?: AIBatchTargetScope;
+  targetBaseline?: AIBatchTargetBaseline;
 }
 
 interface AIFileFlowImportedFileEvent {
@@ -104,8 +102,7 @@ export interface RunAIFileFlowTraceOptions {
   importOptions?: ImportOptions;
   projectsDir?: string;
   model?: string;
-  mode?: AIBatchMode;
-  targetScope?: AIBatchTargetScope;
+  targetBaseline?: AIBatchTargetBaseline;
   previewLimit?: number;
   emit?: (event: AIFileFlowEvent) => void;
   db?: CATDatabase;
@@ -144,12 +141,7 @@ export async function runAIFileFlowTrace(
     );
 
     const project = resolveProject(projectService, options);
-    const file = await resolveFile(
-      projectService,
-      project.id,
-      project.projectType ?? 'translation',
-      options,
-    );
+    const file = await resolveFile(projectService, project.id, options);
 
     emit(options, {
       event: 'ai_file_flow_start',
@@ -157,9 +149,8 @@ export async function runAIFileFlowTrace(
       projectName: project.name,
       fileId: file.id,
       fileName: file.name,
-      mode: options.mode,
       model: options.model,
-      targetScope: options.targetScope,
+      targetBaseline: options.targetBaseline,
     });
 
     const [mountedTMs, mountedTBs] = await Promise.all([
@@ -188,8 +179,7 @@ export async function runAIFileFlowTrace(
 
     const translation = await projectService.aiTranslateFile(file.id, {
       model: options.model,
-      mode: options.mode,
-      targetScope: options.targetScope,
+      targetBaseline: options.targetBaseline,
       onProgress: (progress) =>
         emit(options, {
           event: 'ai_file_flow_progress',
@@ -239,7 +229,6 @@ function resolveProject(projectService: ProjectService, options: RunAIFileFlowTr
 async function resolveFile(
   projectService: ProjectService,
   projectId: number,
-  projectType: ProjectType,
   options: RunAIFileFlowTraceOptions,
 ) {
   if (options.fileId !== undefined) {
@@ -260,12 +249,7 @@ async function resolveFile(
     throw new Error('Missing file id or file path.');
   }
 
-  const importOptions = await resolveImportOptions(
-    projectService,
-    filePath,
-    projectType,
-    options.importOptions,
-  );
+  const importOptions = await resolveImportOptions(projectService, filePath, options.importOptions);
   const file = await projectService.addFileToProject(projectId, filePath, importOptions);
   emit(options, {
     event: 'ai_file_flow_imported_file',
@@ -281,7 +265,6 @@ async function resolveFile(
 async function resolveImportOptions(
   projectService: ProjectService,
   filePath: string,
-  projectType: ProjectType,
   importOptions: ImportOptions | undefined,
 ): Promise<ImportOptions> {
   if (importOptions) {
@@ -305,8 +288,6 @@ async function resolveImportOptions(
   const contextCol = resolveDefaultContextColumn({
     hasHeader: true,
     previewData: preview,
-    projectType,
-    sourceCol,
   });
   const resolvedOptions: ImportOptions = {
     ...DEFAULT_IMPORT_OPTIONS,

@@ -37,6 +37,15 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
 
   registerHandle(
     { ipcMain, projectService, jobManager },
+    IPC_CHANNELS.ai.refreshConnection,
+    (_event, ...args) => {
+      const connectionId = readArgument(args[0], 'connectionId', isNonEmptyString);
+      return projectService.refreshAIConnection(connectionId);
+    },
+  );
+
+  registerHandle(
+    { ipcMain, projectService, jobManager },
     IPC_CHANNELS.ai.deleteConnection,
     (_event, ...args) => {
       const connectionId = readArgument(args[0], 'connectionId', isNonEmptyString);
@@ -103,7 +112,10 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     IPC_CHANNELS.ai.translateSegment,
     (_event, ...args) => {
       const segmentId = readArgument(args[0], 'segmentId', isNonEmptyString);
-      return projectService.aiTranslateSegment(segmentId);
+      const clientRequestId = readOptionalArgument(args[1], 'clientRequestId', isNonEmptyString);
+      return clientRequestId
+        ? projectService.aiTranslateSegment(segmentId, { clientRequestId })
+        : projectService.aiTranslateSegment(segmentId);
     },
   );
 
@@ -113,7 +125,10 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
     (_event, ...args) => {
       const segmentId = readArgument(args[0], 'segmentId', isNonEmptyString);
       const instruction = readArgument(args[1], 'instruction', isString);
-      return projectService.aiRefineSegment(segmentId, instruction);
+      const clientRequestId = readOptionalArgument(args[2], 'clientRequestId', isNonEmptyString);
+      return clientRequestId
+        ? projectService.aiRefineSegment(segmentId, instruction, { clientRequestId })
+        : projectService.aiRefineSegment(segmentId, instruction);
     },
   );
 
@@ -129,8 +144,6 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
 
       projectService
         .aiTranslateFile(fileId, {
-          mode: options?.mode,
-          targetScope: options?.targetScope,
           targetBaseline: options?.targetBaseline,
           segmentIds: options?.segmentIds,
           cancellationToken,

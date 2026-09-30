@@ -50,7 +50,6 @@ interface ProjectFileCardProps {
   onRunFileQA: (fileId: number, fileName: string) => Promise<void>;
   onRequestAITranslate: (file: ProjectFileRecord) => void;
   supportsTMWorkflow: boolean;
-  isReviewProject: boolean;
   isCustomProject: boolean;
 }
 
@@ -67,7 +66,6 @@ function ProjectFileCard({
   onRunFileQA,
   onRequestAITranslate,
   supportsTMWorkflow,
-  isReviewProject,
   isCustomProject,
 }: ProjectFileCardProps) {
   const extensionIndex = file.name.lastIndexOf('.');
@@ -206,11 +204,9 @@ function ProjectFileCard({
               ? jobStopping
                 ? 'Stopping...'
                 : 'Stop'
-              : isReviewProject
-                ? 'AI Review'
-                : isCustomProject
-                  ? 'AI Process'
-                  : 'AI Translate'}
+              : isCustomProject
+                ? 'AI Process'
+                : 'AI Translate'}
           </Button>
         )}
         {supportsTMWorkflow && (
@@ -288,7 +284,6 @@ export function ProjectFilesPane({
   onOpenAISettings,
 }: ProjectFilesPaneProps) {
   const [aiTranslateFile, setAiTranslateFile] = useState<{ id: number; name: string } | null>(null);
-  const isReviewProject = projectType === 'review';
   const isCustomProject = projectType === 'custom';
   const supportsTMWorkflow = projectType === 'translation';
   const handleRequestAITranslate = useCallback((file: ProjectFileRecord) => {
@@ -309,6 +304,7 @@ export function ProjectFilesPane({
       )}
       {aiTranslateFile && (
         <ProjectAITranslateModal
+          projectType={projectType}
           open={true}
           fileName={aiTranslateFile.name}
           onClose={() => setAiTranslateFile(null)}
@@ -350,7 +346,6 @@ export function ProjectFilesPane({
               onRunFileQA={onRunFileQA}
               onRequestAITranslate={handleRequestAITranslate}
               supportsTMWorkflow={supportsTMWorkflow}
-              isReviewProject={isReviewProject}
               isCustomProject={isCustomProject}
             />
           ))}

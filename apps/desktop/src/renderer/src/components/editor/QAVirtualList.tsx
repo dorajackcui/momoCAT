@@ -1,12 +1,12 @@
 import { useMemo, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { FileQaIssueRecord } from '@cat/core/project';
-import { serializeTokensToDisplayText } from '@cat/core/text';
+import { QAResultRow } from './QAResultRow';
 import type { QAPanelProps, groupQaIssues } from './QAPanel';
 import { Button, Icon, IconButton } from '../ui';
 import { QAReferenceSummary } from './QAReferenceSummary';
 
-interface Props extends Pick<QAPanelProps, 'getSegment' | 'onFilter' | 'onLocate'> {
+interface Props extends Pick<QAPanelProps, 'segmentStore' | 'onFilter' | 'onLocate'> {
   categories: ReturnType<typeof groupQaIssues>;
   collapsed: ReadonlySet<string>;
   onToggle: (id: string) => void;
@@ -36,7 +36,7 @@ export function QAVirtualList({
   categories,
   collapsed,
   onToggle,
-  getSegment,
+  segmentStore,
   onFilter,
   onLocate,
 }: Props) {
@@ -165,41 +165,17 @@ export function QAVirtualList({
                   onLocate={onLocate}
                 />
               ) : (
-                (() => {
-                  const issue = entry.issues[0];
-                  const segment = getSegment(entry.segmentId);
-                  const source = issue.ruleId === 'target-consistency';
-                  const text = segment
-                    ? serializeTokensToDisplayText(
-                        source ? segment.sourceTokens : segment.targetTokens,
-                      )
-                    : '';
-                  const preview =
-                    issue.groupId && segment
-                      ? text.trim()
-                        ? text
-                        : source
-                          ? '[Empty source]'
-                          : '[Empty target]'
-                      : [...new Set(entry.issues.map((row) => row.message))].join('; ');
-                  return (
-                    <div className="pl-2 pr-2 text-xs text-text-muted">
-                      <Button
-                        variant="link"
-                        tone="inherit"
-                        className="w-full justify-start gap-2 text-left"
-                        title={preview}
-                        onClick={() => {
-                          onFilter(entry.ids, entry.filterLabel);
-                          onLocate(entry.segmentId);
-                        }}
-                      >
-                        <span className="shrink-0 py-1 text-brand">Row {issue.row}</span>
-                        <span className="min-w-0 truncate">{preview}</span>
-                      </Button>
-                    </div>
-                  );
-                })()
+                <div className="pl-2 pr-2 text-xs text-text-muted">
+                  <QAResultRow
+                    segmentId={entry.segmentId}
+                    issues={entry.issues}
+                    segmentStore={segmentStore}
+                    onLocate={() => {
+                      onFilter(entry.ids, entry.filterLabel);
+                      onLocate(entry.segmentId);
+                    }}
+                  />
+                </div>
               )}
             </div>
           );

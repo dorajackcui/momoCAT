@@ -56,10 +56,8 @@ type AITranslationOptionsShape = Omit<AITranslateFileOptions, 'segmentIds'> & {
 function isAITranslationOptionsShape(value: unknown): value is AITranslationOptionsShape {
   return (
     isRecord(value) &&
-    (value.mode === undefined || value.mode === 'default' || value.mode === 'dialogue') &&
-    (value.targetScope === undefined ||
-      value.targetScope === 'blank-only' ||
-      value.targetScope === 'overwrite-non-confirmed') &&
+    value.mode === undefined &&
+    value.targetScope === undefined &&
     (value.targetBaseline === undefined ||
       value.targetBaseline === 'use-current-targets' ||
       value.targetBaseline === 'ignore-current-targets')

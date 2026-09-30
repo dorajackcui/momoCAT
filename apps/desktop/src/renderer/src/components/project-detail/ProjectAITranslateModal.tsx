@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ProjectType } from '@cat/core/project';
 import type { AIBatchTargetBaseline } from '../../../../shared/ipc';
 import { Button, Modal, Select } from '../ui';
 
@@ -9,6 +10,7 @@ export interface ProjectAITranslateSubmit {
 
 interface ProjectAITranslateModalProps {
   open: boolean;
+  projectType?: ProjectType;
   fileName: string | null;
   filteredSegmentCount?: number;
   totalSegmentCount?: number;
@@ -22,12 +24,17 @@ function formatSegmentCount(count: number): string {
 
 export function ProjectAITranslateModal({
   open,
+  projectType = 'translation',
   fileName,
   filteredSegmentCount,
   totalSegmentCount,
   onClose,
   onConfirm,
 }: ProjectAITranslateModalProps) {
+  const isCustom = projectType === 'custom';
+  const action = isCustom ? 'Process' : 'Translate';
+  const noun = isCustom ? 'processing' : 'translation';
+  const output = isCustom ? 'Outputs' : 'Targets';
   const [targetBaseline, setTargetBaseline] =
     useState<AIBatchTargetBaseline>('use-current-targets');
   const [scope, setScope] = useState<'file' | 'filtered'>(
@@ -41,7 +48,7 @@ export function ProjectAITranslateModal({
       open={open}
       onClose={onClose}
       size="md"
-      title="AI Translate Options"
+      title={`AI ${action} Options`}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -52,21 +59,23 @@ export function ProjectAITranslateModal({
             disabled={selectedCount === 0}
             onClick={() => onConfirm({ targetBaseline, ...(hasFilteredScope ? { scope } : {}) })}
           >
-            Start AI Translate
+            Start AI {action}
           </Button>
         </>
       }
     >
       <p className="text-xs text-text-muted">
-        Configure AI translation for file: <span className="font-semibold">{fileName || '-'}</span>
+        Configure AI {noun} for file: <span className="font-semibold">{fileName || '-'}</span>
       </p>
 
       <div className="space-y-3 mt-4">
         {hasFilteredScope ? (
           <label className="block space-y-1">
-            <span className="text-xs font-medium text-text-muted">Translation Scope</span>
+            <span className="text-xs font-medium text-text-muted">
+              {isCustom ? 'Processing Scope' : 'Translation Scope'}
+            </span>
             <Select
-              aria-label="Translation Scope"
+              aria-label={isCustom ? 'Processing Scope' : 'Translation Scope'}
               value={scope}
               onChange={(event) => setScope(event.target.value as 'file' | 'filtered')}
             >
@@ -93,17 +102,21 @@ export function ProjectAITranslateModal({
           </p>
         )}
         {selectedCount === 0 && (
-          <p className="text-xs text-text-muted">No segments to translate in this scope.</p>
+          <p className="text-xs text-text-muted">
+            No segments to {isCustom ? 'process' : 'translate'} in this scope.
+          </p>
         )}
         <label className="block space-y-1">
-          <span className="text-xs font-medium text-text-muted">Target Baseline</span>
+          <span className="text-xs font-medium text-text-muted">
+            {isCustom ? 'Output Baseline' : 'Target Baseline'}
+          </span>
           <Select
-            aria-label="Target Baseline"
+            aria-label={isCustom ? 'Output Baseline' : 'Target Baseline'}
             value={targetBaseline}
             onChange={(event) => setTargetBaseline(event.target.value as AIBatchTargetBaseline)}
           >
-            <option value="use-current-targets">Use Current Targets</option>
-            <option value="ignore-current-targets">Ignore Current Targets</option>
+            <option value="use-current-targets">Use Current {output}</option>
+            <option value="ignore-current-targets">Ignore Current {output}</option>
           </Select>
         </label>
       </div>

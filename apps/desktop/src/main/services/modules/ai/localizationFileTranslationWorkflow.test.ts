@@ -59,13 +59,28 @@ function configureProvider(db: CATDatabase, projectId: number) {
 }
 
 describe('filtered localization file translation', () => {
-  it.each(['use-current-targets', 'ignore-current-targets'] as const)(
-    'builds windows from non-adjacent selected rows, retaining IDs and %s',
-    async (targetBaseline) => {
+  it.each(
+    ['translation', 'custom'].flatMap((projectType) =>
+      (['use-current-targets', 'ignore-current-targets'] as const).map((targetBaseline) => ({
+        projectType,
+        targetBaseline,
+      })),
+    ),
+  )(
+    'builds $projectType windows from selected rows with $targetBaseline',
+    async ({ projectType, targetBaseline }) => {
       const db = new CATDatabase(':memory:');
       try {
-        const projectId = db.createProject('Names', 'en', 'fr');
+        const projectId = db.createProject(
+          'Names',
+          'en',
+          'fr',
+          projectType as 'translation' | 'custom',
+        );
         configureProvider(db, projectId);
+        if (projectType === 'custom') db.updateProjectPrompt(projectId, 'Classify each input.');
+        const mountedTM = vi.spyOn(db, 'getProjectMountedTMs');
+        const mountedTB = vi.spyOn(db, 'getProjectMountedTermBases');
         const selected = [
           segment('s10', 9),
           segment('s30', 29, 'Existing name'),
@@ -82,42 +97,65 @@ describe('filtered localization file translation', () => {
           ]),
         ];
         const prompts: string[] = [];
-        const createResponse = vi.fn(async (request: { userPrompt: string }) => {
-          prompts.push(request.userPrompt);
-          const ids = [...request.userPrompt.matchAll(/^id: (.+)$/gm)].map((match) => match[1]);
-          return {
-            content: JSON.stringify({
-              translations: ids
-                .map((id, index) => ({
-                  id,
-                  text: `Translated-${prompts.length}-${index}`,
-                }))
-                .reverse(),
-            }),
-            status: 200,
-            endpoint: '/mock',
-          };
-        });
+        const createResponse = vi.fn(
+          async (request: { systemPrompt: string; userPrompt: string }) => {
+            prompts.push(request.userPrompt);
+            const ids = [...request.userPrompt.matchAll(/^id: (.+)$/gm)].map((match) => match[1]);
+            return {
+              content: JSON.stringify({
+                translations: ids
+                  .map((id, index) => ({
+                    id,
+                    text: `Translated-${prompts.length}-${index}`,
+                  }))
+                  .reverse(),
+              }),
+              status: 200,
+              endpoint: '/mock',
+            };
+          },
+        );
         const engine = new LocalizationEngine(db, {
           dbPath: ':memory:',
           aiTransport: { createResponse, testConnection: vi.fn() },
           aiRuntimeConfigProvider: { getModelConfig: async () => ({ reasoningEffort: 'medium' }) },
         });
+        const translateJob = vi.spyOn(engine, 'translateProjectSegments');
         const updateSegment = vi.fn().mockResolvedValue(undefined);
         const onProgress = vi.fn();
-        const result = await runLocalizationFileTranslation({
-          fileId: 1,
-          fileName: 'names.xlsx',
-          project: db.getProject(projectId)!,
-          // Deliberately reverse and duplicate IDs; file order defines the context sequence.
+        const orchestrator = new AITranslationOrchestrator(
+          {
+            getFile: () => ({
+              id: 1,
+              name: 'names.xlsx',
+              projectId,
+              importOptions: { tagPolicy: 'none' },
+            }),
+            getProject: () => db.getProject(projectId),
+          } as never,
+          {} as never,
+          { updateSegment } as never,
+          {} as never,
+          {} as never,
+          {} as never,
+          { iterateFileSegments: () => all.values() } as never,
+          {},
+          engine,
+        );
+        const result = await orchestrator.aiTranslateFile(1, {
           segmentIds: [...selected.map((row) => row.segmentId).reverse(), 's10'],
           targetBaseline,
-          tagPolicy: 'none',
-          localizationEngine: engine,
-          segmentPagingIterator: { iterateFileSegments: () => all.values() } as never,
-          segmentService: { updateSegment } as never,
           onProgress,
         });
+        if (projectType === 'custom') {
+          expect(mountedTM).not.toHaveBeenCalled();
+          expect(mountedTB).not.toHaveBeenCalled();
+          expect((await translateJob.mock.results[0].value).runtimeTm).toBeUndefined();
+          const system = createResponse.mock.calls[0][0].systemPrompt;
+          expect(system).toContain('Classify each input.');
+          expect(system).toContain('Return strict JSON only.');
+          expect(system).not.toContain('Output in fr ONLY');
+        }
         const overwrite = targetBaseline === 'ignore-current-targets';
         expect(result).toEqual({
           translated: overwrite ? 5 : 4,
@@ -203,30 +241,62 @@ describe('filtered localization file translation', () => {
     expect(updateSegment).not.toHaveBeenCalled();
   });
 
-  it.each(['dialogue', 'review', 'legacy'])(
-    'rejects filtered scope on the unsupported %s route',
-    async (route) => {
-      const orchestrator = new AITranslationOrchestrator(
-        {
-          getFile: () => ({ projectId: 1 }),
-          getProject: () => ({ projectType: route === 'review' ? 'review' : 'translation' }),
-        } as never,
-        {} as never,
-        {} as never,
-        {} as never,
-        {} as never,
-        {} as never,
-        {} as never,
-        {} as never,
-        {},
-        route === 'legacy' ? undefined : { translateProjectSegments: vi.fn() },
-      );
-      await expect(
-        orchestrator.aiTranslateFile(1, {
-          segmentIds: ['s10'],
-          mode: route === 'dialogue' ? 'dialogue' : 'default',
-        }),
-      ).rejects.toThrow('requires the window translation workflow');
+  it('fails explicitly when the shared engine is missing instead of using a fallback', async () => {
+    const orchestrator = new AITranslationOrchestrator(
+      { getFile: () => ({ projectId: 1 }), getProject: () => ({ projectType: 'custom' }) } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    await expect(orchestrator.aiTranslateFile(1)).rejects.toThrow(
+      'requires the shared localization engine',
+    );
+  });
+});
+
+describe('Custom shared job execution', () => {
+  it.each([false, true])(
+    'uses shared response retries and cancellation (cancel=%s)',
+    async (cancel) => {
+      const db = new CATDatabase(':memory:');
+      try {
+        const projectId = db.createProject('Processing', 'en', 'fr', 'custom');
+        configureProvider(db, projectId);
+        let cancelled = false;
+        const createResponse = vi.fn(async (request: { userPrompt: string }) => {
+          if (createResponse.mock.calls.length === 1)
+            return { content: 'invalid JSON', status: 200, endpoint: '/mock' };
+          const ids = [...request.userPrompt.matchAll(/^id: (.+)$/gm)].map((match) => match[1]);
+          if (cancel) cancelled = true;
+          return {
+            content: JSON.stringify({ translations: ids.map((id) => ({ id, text: 'Label' })) }),
+            status: 200,
+            endpoint: '/mock',
+          };
+        });
+        const engine = new LocalizationEngine(db, {
+          dbPath: ':memory:',
+          aiTransport: { createResponse, testConnection: vi.fn() },
+        });
+        const result = await engine.translateProjectSegments({
+          projectId,
+          documentId: 'file',
+          units: Array.from({ length: 6 }, (_, i) => ({ id: String(i), source: 'Same input' })),
+          job: { maxAttempts: 2 },
+          cancellationToken: { isCancellationRequested: () => cancelled },
+        });
+        expect(createResponse).toHaveBeenCalledTimes(cancel ? 2 : 3);
+        expect(result.runtimeTm).toBeUndefined();
+        if (!cancel) {
+          expect(result.summary).toMatchObject({ translated: 6, failed: 0 });
+          expect(result.results.every((row) => row.target === 'Label')).toBe(true);
+        }
+      } finally {
+        db.close();
+      }
     },
   );
 });

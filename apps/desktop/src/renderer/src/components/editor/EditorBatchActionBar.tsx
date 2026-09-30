@@ -3,6 +3,7 @@ import { ControlGroup, Icon, IconButton } from '../ui';
 
 export interface EditorBatchActionBarProps {
   visible: boolean;
+  custom?: boolean;
   canRunActions: boolean;
   isBatchAITranslating: boolean;
   isBatchAIStopping?: boolean;
@@ -27,6 +28,7 @@ function LoadingIcon(): JSX.Element {
 
 export function EditorBatchActionBar({
   visible,
+  custom = false,
   canRunActions,
   isBatchAITranslating,
   isBatchAIStopping = false,
@@ -36,22 +38,31 @@ export function EditorBatchActionBar({
   onRunBatchQA,
 }: EditorBatchActionBarProps): JSX.Element | null {
   if (!visible) return null;
+  const operation = custom ? 'processing' : 'translation';
 
   return (
-    <ControlGroup label="Translation tools" variant="plain">
+    <ControlGroup label={custom ? 'Processing tools' : 'Translation tools'} variant="plain">
       <IconButton
         tone={isBatchAITranslating ? 'danger' : 'brand'}
         size="sm"
         type="button"
         onClick={isBatchAITranslating ? onCancelBatchAITranslate : onOpenBatchAIModal}
         disabled={isBatchAIStopping || !canRunActions}
-        aria-label={isBatchAITranslating ? 'Stop AI translation' : 'AI batch translate'}
+        aria-label={
+          isBatchAITranslating
+            ? `Stop AI ${operation}`
+            : custom
+              ? 'AI batch process'
+              : 'AI batch translate'
+        }
         title={
           isBatchAITranslating
             ? isBatchAIStopping
-              ? 'Stopping AI translation...'
-              : 'Stop AI translation'
-            : 'AI Batch Translate'
+              ? `Stopping AI ${operation}...`
+              : `Stop AI ${operation}`
+            : custom
+              ? 'AI Batch Process'
+              : 'AI Batch Translate'
         }
       >
         {isBatchAITranslating ? (

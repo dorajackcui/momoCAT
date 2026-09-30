@@ -24,6 +24,7 @@ import type { EditorStatusFilter, EditorTargetSearchScope } from '../editorFilte
 interface EditorFilterBarProps {
   selectionActions?: EditorSelectionActionsProps;
   supportsBatchActions: boolean;
+  customProject?: boolean;
   canRunActions: boolean;
   isBatchAITranslating: boolean;
   isBatchAIStopping?: boolean;
@@ -71,6 +72,7 @@ interface EditorFilterBarProps {
 const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
   selectionActions,
   supportsBatchActions,
+  customProject,
   canRunActions,
   isBatchAITranslating,
   isBatchAIStopping,
@@ -123,6 +125,7 @@ const EditorFilterBarComponent: React.FC<EditorFilterBarProps> = ({
       <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-4 py-1.5">
         <EditorBatchActionBar
           visible={supportsBatchActions}
+          custom={customProject}
           canRunActions={canRunActions}
           isBatchAITranslating={isBatchAITranslating}
           isBatchAIStopping={isBatchAIStopping}

@@ -67,5 +67,11 @@ export function useEditorSelection(fileId: number, visibleIds: string[], activeI
     setSelection({ fileId, ids: new Set(visibleIds), anchor: visibleIds[0] ?? null });
   }, [fileId, visibleIds]);
 
-  return { selectedIds, selectSingle, selectSegment, selectAll };
+  return {
+    selectedIds,
+    isRowSelection: selection.fileId === fileId && selection.ids !== null,
+    selectSingle,
+    selectSegment,
+    selectAll,
+  };
 }

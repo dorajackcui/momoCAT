@@ -15,7 +15,7 @@ function normalizeEditorText(
 }
 
 export function buildSearchableEditorSegments(
-  segments: Segment[],
+  segments: readonly Segment[],
   segmentSaveErrors: Record<string, string>,
 ): SearchableEditorSegment[] {
   const repeatedSourceHashes = collectRepeatedSourceHashes(segments);
@@ -30,7 +30,7 @@ export function buildSearchableEditorSegments(
   });
 }
 
-function collectRepeatedSourceHashes(segments: Segment[]): Set<string> {
+function collectRepeatedSourceHashes(segments: readonly Segment[]): Set<string> {
   const seenSourceHashes = new Set<string>();
   const repeatedSourceHashes = new Set<string>();
   for (const segment of segments) {
@@ -80,7 +80,7 @@ function buildSearchableEditorSegment(
 }
 
 export function buildSearchableEditorSegmentsWithWeakCache(params: {
-  segments: Segment[];
+  segments: readonly Segment[];
   segmentSaveErrors: Record<string, string>;
   cache: WeakMap<Segment, SearchableEditorSegment>;
 }): SearchableEditorSegment[] {
@@ -124,168 +124,4 @@ export function buildSearchableEditorSegmentsWithWeakCache(params: {
     cache.set(segment, nextSearchable);
     return nextSearchable;
   });
-}
-
-export function buildSearchableEditorSegmentsIncrementally(params: {
-  segments: Segment[];
-  segmentSaveErrors: Record<string, string>;
-  cache: WeakMap<Segment, SearchableEditorSegment>;
-  previous: SearchableEditorSegment[] | null;
-  changedSegmentIds?: ReadonlySet<string>;
-  segmentIndexById?: ReadonlyMap<string, number>;
-  orderChanged?: boolean;
-}): SearchableEditorSegment[] {
-  const {
-    segments,
-    segmentSaveErrors,
-    cache,
-    previous,
-    changedSegmentIds,
-    segmentIndexById,
-    orderChanged = true,
-  } = params;
-
-  if (
-    !previous ||
-    orderChanged ||
-    !changedSegmentIds ||
-    !segmentIndexById ||
-    previous.length !== segments.length
-  ) {
-    return buildSearchableEditorSegmentsWithWeakCache({ segments, segmentSaveErrors, cache });
-  }
-
-  if (changedSegmentIds.size === 0) {
-    return previous;
-  }
-
-  let next: SearchableEditorSegment[] | null = null;
-
-  for (const segmentId of changedSegmentIds) {
-    const index = segmentIndexById.get(segmentId);
-    if (index === undefined || index < 0 || index >= segments.length) {
-      return buildSearchableEditorSegmentsWithWeakCache({ segments, segmentSaveErrors, cache });
-    }
-
-    const segment = segments[index];
-    if (!segment || segment.segmentId !== segmentId) {
-      return buildSearchableEditorSegmentsWithWeakCache({ segments, segmentSaveErrors, cache });
-    }
-
-    const cached = cache.get(segment);
-    const hasSaveError = Boolean(segmentSaveErrors[segment.segmentId]);
-    const repeatedSourceRole = previous[index]?.repeatedSourceRole;
-    const nextSearchable =
-      cached &&
-      cached.originalIndex === index &&
-      cached.hasSaveError === hasSaveError &&
-      cached.repeatedSourceRole === repeatedSourceRole
-        ? cached
-        : buildSearchableEditorSegment(segment, index, segmentSaveErrors, repeatedSourceRole);
-
-    if (nextSearchable !== previous[index]) {
-      if (next === null) {
-        next = previous.slice();
-      }
-      next[index] = nextSearchable;
-    }
-    cache.set(segment, nextSearchable);
-  }
-
-  return next ?? previous;
-}
-
-interface ResolveEditorSearchableListParams {
-  segments: Segment[];
-  segmentSaveErrors: Record<string, string>;
-  changedSegmentIds?: ReadonlySet<string>;
-  segmentIndexById?: ReadonlyMap<string, number>;
-  orderChanged: boolean;
-  contentIndependent: boolean;
-}
-
-export interface EditorSearchableListCache {
-  resolve(params: ResolveEditorSearchableListParams): SearchableEditorSegment[];
-}
-
-export function createEditorSearchableListCache(): EditorSearchableListCache {
-  const itemCache = new WeakMap<Segment, SearchableEditorSegment>();
-  let previous: SearchableEditorSegment[] | null = null;
-  let previousSegmentSaveErrors: Record<string, string> | null = null;
-  let contentDirty = false;
-
-  return {
-    resolve: (params) => {
-      const saveErrorsChanged = previousSegmentSaveErrors !== params.segmentSaveErrors;
-
-      if (
-        params.contentIndependent &&
-        previous &&
-        !params.orderChanged &&
-        previous.length === params.segments.length
-      ) {
-        if (saveErrorsChanged || (params.changedSegmentIds?.size ?? 0) > 0) {
-          contentDirty = true;
-        }
-        previousSegmentSaveErrors = params.segmentSaveErrors;
-        return previous;
-      }
-
-      const requiresFullRefresh = contentDirty || saveErrorsChanged;
-      previous = buildSearchableEditorSegmentsIncrementally({
-        segments: params.segments,
-        segmentSaveErrors: params.segmentSaveErrors,
-        cache: itemCache,
-        previous,
-        changedSegmentIds: requiresFullRefresh ? undefined : params.changedSegmentIds,
-        segmentIndexById: params.segmentIndexById,
-        orderChanged: requiresFullRefresh ? true : params.orderChanged,
-      });
-      contentDirty = false;
-      previousSegmentSaveErrors = params.segmentSaveErrors;
-      return previous;
-    },
-  };
-}
-
-export function resolveActiveSegmentIdForFilteredList(params: {
-  activeSegmentId: string | null;
-  segments: Segment[];
-  filteredSegments: SearchableEditorSegment[];
-  segmentIndexById?: ReadonlyMap<string, number>;
-}): string | null {
-  const { activeSegmentId, segments, filteredSegments, segmentIndexById } = params;
-  if (filteredSegments.length === 0) return null;
-
-  const fallbackId = filteredSegments[0].segment.segmentId;
-  if (!activeSegmentId) return fallbackId;
-
-  const indexedActiveSegment =
-    segmentIndexById === undefined ? undefined : segmentIndexById.get(activeSegmentId);
-  const activeStillExists =
-    indexedActiveSegment !== undefined
-      ? segments[indexedActiveSegment]?.segmentId === activeSegmentId
-      : segments.some((segment) => segment.segmentId === activeSegmentId);
-  if (!activeStillExists) return fallbackId;
-
-  return activeSegmentId;
-}
-
-export function resolveActiveFilteredSegmentIndex(params: {
-  activeSegmentId: string | null;
-  filteredSegments: SearchableEditorSegment[];
-  segmentIndexById?: ReadonlyMap<string, number>;
-  canUseSegmentIndex: boolean;
-}): number {
-  const { activeSegmentId, filteredSegments, segmentIndexById, canUseSegmentIndex } = params;
-  if (!activeSegmentId) return -1;
-
-  if (canUseSegmentIndex && segmentIndexById) {
-    const indexed = segmentIndexById.get(activeSegmentId);
-    if (indexed !== undefined && filteredSegments[indexed]?.segment.segmentId === activeSegmentId) {
-      return indexed;
-    }
-  }
-
-  return filteredSegments.findIndex((item) => item.segment.segmentId === activeSegmentId);
 }

@@ -56,13 +56,17 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
         <div className="flex justify-end">
           <Button
             variant="secondary"
-            onClick={() => void controller.testConnection()}
-            disabled={busy || controller.savedConnectionReuseActive}
+            onClick={() =>
+              void (controller.savedConnectionReuseActive && controller.testedConnection
+                ? controller.useConnection(controller.testedConnection)
+                : controller.testConnection())
+            }
+            disabled={busy}
           >
             {controller.testingProvider
               ? 'Testing...'
               : controller.savedConnectionReuseActive
-                ? 'Enter key to retest'
+                ? 'Refresh models'
                 : 'Test connection'}
           </Button>
         </div>
@@ -146,8 +150,8 @@ export function AIConnectionsTab({ controller, busy }: AIConnectionsTabProps) {
                   <div className="ml-auto flex shrink-0 items-center gap-2">
                     <Button
                       variant="secondary"
-                      onClick={() => controller.useConnection(connectionItem)}
-                      disabled={busy || connectionItem.discoveredModels.length === 0}
+                      onClick={() => void controller.useConnection(connectionItem)}
+                      disabled={busy}
                       size="sm"
                     >
                       Use connection

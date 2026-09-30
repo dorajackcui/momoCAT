@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { Segment, TBMatch } from '@cat/core/models';
+import type { EditorSegmentStore } from './editorSegmentStore';
 import type { ReferenceDataChangedEvent, TMMatch } from '../../../../shared/ipc';
 
 export const REFERENCE_LOOKUP_DEBOUNCE_MS = 150;
@@ -17,9 +18,9 @@ export interface ReferenceLookupResult {
 export interface UseReferenceLookupControllerParams {
   enabled: boolean;
   activeSegmentId: string | null;
-  activeSegmentSourceHash: string | null;
   projectId: number | null;
-  segments: readonly Segment[];
+  segmentStore: EditorSegmentStore;
+  visibleIds: readonly string[];
   subscribeToReferenceDataChanged?: (
     callback: (event: ReferenceDataChangedEvent) => void,
   ) => () => void;
@@ -77,12 +78,21 @@ function subscribeToDefaultReferenceDataChanged(
 export function createReferenceLookupControllerLoader(
   fetchers: ReferenceLookupFetchers,
   prefetchFetchers: ReferenceLookupFetchers = fetchers,
+  cacheLimit = 200,
 ) {
   const completed = new Map<string, ReferenceLookupResult>();
   interface InFlightEntry {
     promise: Promise<ReferenceLookupResult>;
     prefetch: boolean;
   }
+  const getCompleted = (key: string) => {
+    const result = completed.get(key);
+    if (result) {
+      completed.delete(key);
+      completed.set(key, result);
+    }
+    return result;
+  };
   const inFlight = new Map<string, InFlightEntry>();
   const projectVersions = new Map<number, number>();
   const keyVersions = new Map<string, number>();
@@ -124,7 +134,7 @@ export function createReferenceLookupControllerLoader(
       inFlight.delete(key);
     },
     getCached(projectId: number, segment: Segment): ReferenceLookupResult | undefined {
-      return completed.get(getReferenceLookupCacheKey(projectId, segment));
+      return getCompleted(getReferenceLookupCacheKey(projectId, segment));
     },
     load(params: {
       projectId: number;
@@ -132,7 +142,7 @@ export function createReferenceLookupControllerLoader(
       prefetch?: boolean;
     }): Promise<ReferenceLookupResult> {
       const key = getReferenceLookupCacheKey(params.projectId, params.segment);
-      const cached = completed.get(key);
+      const cached = getCompleted(key);
       if (cached) return Promise.resolve(cached);
 
       const prefetch = Boolean(params.prefetch);
@@ -173,6 +183,8 @@ export function createReferenceLookupControllerLoader(
           termsResult.status === 'fulfilled'
         ) {
           completed.set(key, result);
+          while (completed.size > Math.max(1, cacheLimit))
+            completed.delete(completed.keys().next().value!);
         }
         return result;
       })();
@@ -367,14 +379,16 @@ export function createReferenceLookupScheduler(options: ReferenceLookupScheduler
 export function useReferenceLookupController({
   enabled,
   activeSegmentId,
-  activeSegmentSourceHash,
   projectId,
-  segments,
+  segmentStore,
+  visibleIds,
   subscribeToReferenceDataChanged = subscribeToDefaultReferenceDataChanged,
   fetchers = defaultReferenceLookupFetchers,
   // When callers override fetchers (e.g. tests) without supplying prefetch
   // fetchers, prefetch must not fall through to the real IPC bridge.
-  prefetchFetchers = fetchers === defaultReferenceLookupFetchers ? defaultPrefetchFetchers : fetchers,
+  prefetchFetchers = fetchers === defaultReferenceLookupFetchers
+    ? defaultPrefetchFetchers
+    : fetchers,
 }: UseReferenceLookupControllerParams): {
   activeMatches: TMMatch[];
   activeTerms: TBMatch[];
@@ -383,12 +397,19 @@ export function useReferenceLookupController({
   const [activeMatches, setActiveMatches] = useState<TMMatch[]>([]);
   const [activeTerms, setActiveTerms] = useState<TBMatch[]>([]);
   const [referenceLoading, setReferenceLoading] = useState(false);
-  const segmentsRef = useRef(segments);
+  const subscribeSource = useCallback(
+    (listener: () => void) =>
+      activeSegmentId ? segmentStore.subscribeSegment(activeSegmentId, listener) : () => {},
+    [segmentStore, activeSegmentId],
+  );
+  const activeSegmentSourceHash = useSyncExternalStore(subscribeSource, () =>
+    activeSegmentId ? (segmentStore.getSegment(activeSegmentId)?.srcHash ?? null) : null,
+  );
+  const visibleIndex = useMemo(
+    () => new Map(visibleIds.map((id, index) => [id, index])),
+    [visibleIds],
+  );
   const schedulerRef = useRef<ReturnType<typeof createReferenceLookupScheduler> | null>(null);
-
-  useEffect(() => {
-    segmentsRef.current = segments;
-  }, [segments]);
 
   if (!schedulerRef.current) {
     schedulerRef.current = createReferenceLookupScheduler({
@@ -405,10 +426,10 @@ export function useReferenceLookupController({
 
   useEffect(() => {
     const activeSegment = activeSegmentId
-      ? segmentsRef.current.find((item) => item.segmentId === activeSegmentId) ?? null
+      ? (segmentStore.getSegment(activeSegmentId) ?? null)
       : null;
     schedulerRef.current?.update({ enabled, projectId, segment: activeSegment });
-  }, [enabled, projectId, activeSegmentId, activeSegmentSourceHash]);
+  }, [enabled, projectId, activeSegmentId, activeSegmentSourceHash, segmentStore]);
 
   useEffect(() => {
     const unsubscribe = subscribeToReferenceDataChanged((event) => {
@@ -419,16 +440,25 @@ export function useReferenceLookupController({
 
   useEffect(() => {
     if (!enabled || projectId === null || !activeSegmentId) return;
-    const segs = segmentsRef.current;
-    const idx = segs.findIndex((s) => s.segmentId === activeSegmentId);
-    if (idx === -1) return;
-    const neighbors: Segment[] = [];
-    if (idx > 0) neighbors.push(segs[idx - 1]);
-    if (idx < segs.length - 1) neighbors.push(segs[idx + 1]);
+    const idx = visibleIndex.get(activeSegmentId);
+    if (idx === undefined) return;
+    const neighbors = [visibleIds[idx - 1], visibleIds[idx + 1]].flatMap((id) => {
+      const segment = id ? segmentStore.getSegment(id) : undefined;
+      return segment ? [segment] : [];
+    });
     if (neighbors.length > 0) {
       schedulerRef.current?.prefetch(projectId, neighbors);
     }
-  }, [activeMatches, activeTerms]);
+  }, [
+    enabled,
+    projectId,
+    activeSegmentId,
+    visibleIds,
+    visibleIndex,
+    segmentStore,
+    activeMatches,
+    activeTerms,
+  ]);
 
   useEffect(() => () => schedulerRef.current?.dispose(), []);
 

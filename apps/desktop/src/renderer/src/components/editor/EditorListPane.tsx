@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { SearchableEditorSegment } from '../editorFilterUtils';
+import type { EditorViewRow } from '../../hooks/editor/editorView';
 import { EditorRow } from '../EditorRow';
 import type { EditorMatchMode } from '../editorFilterUtils';
 import type { EditorSegmentStore } from '../../hooks/editor/editorSegmentStore';
@@ -13,7 +13,7 @@ import {
 interface EditorListPaneProps {
   scrollElement: HTMLDivElement | null;
   virtualized: boolean;
-  filteredSegments: SearchableEditorSegment[];
+  visibleRows: EditorViewRow[];
   segmentStore: EditorSegmentStore;
   activeFilteredIndex: number;
   activeSegmentId: string | null;
@@ -81,7 +81,7 @@ const StoreBackedEditorRow = React.memo(function StoreBackedEditorRow({
 const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
   scrollElement,
   virtualized,
-  filteredSegments,
+  visibleRows,
   segmentStore,
   activeFilteredIndex,
   activeSegmentId,
@@ -115,26 +115,22 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
     [],
   );
   const renderRow = useCallback(
-    (item: SearchableEditorSegment, displayIndex: number) => (
+    (item: EditorViewRow, displayIndex: number) => (
       <StoreBackedEditorRow
-        key={item.segment.segmentId}
-        segmentId={item.segment.segmentId}
+        key={item.segmentId}
+        segmentId={item.segmentId}
         originalIndex={item.originalIndex}
         segmentStore={segmentStore}
         repeatedSourceRole={item.repeatedSourceRole}
-        isActive={item.segment.segmentId === activeSegmentId}
-        isSelected={selectedSegmentIds?.has(item.segment.segmentId)}
-        selectionStart={
-          !selectedSegmentIds?.has(filteredSegments[displayIndex - 1]?.segment.segmentId)
-        }
-        selectionEnd={
-          !selectedSegmentIds?.has(filteredSegments[displayIndex + 1]?.segment.segmentId)
-        }
+        isActive={item.segmentId === activeSegmentId}
+        isSelected={selectedSegmentIds?.has(item.segmentId)}
+        selectionStart={!selectedSegmentIds?.has(visibleRows[displayIndex - 1]?.segmentId)}
+        selectionEnd={!selectedSegmentIds?.has(visibleRows[displayIndex + 1]?.segmentId)}
         onSelectSegment={onSelectSegment}
         isAlternate={displayIndex % 2 === 1}
         disableAutoFocus={
-          (isSearchInputFocused && manualActivationSegmentId !== item.segment.segmentId) ||
-          suppressAutoFocusSegmentId === item.segment.segmentId
+          (isSearchInputFocused && manualActivationSegmentId !== item.segmentId) ||
+          suppressAutoFocusSegmentId === item.segmentId
         }
         onActivate={onRowActivate}
         onAutoFocus={onRowAutoFocus}
@@ -145,9 +141,9 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
         onAITranslate={onAITranslate}
         onAIRefine={onAIRefine}
         onConfirm={onConfirm}
-        isAITranslating={Boolean(aiTranslatingSegmentIds[item.segment.segmentId])}
-        isAIRefining={Boolean(aiTranslatingSegmentIds[item.segment.segmentId])}
-        saveError={segmentSaveErrors[item.segment.segmentId]}
+        isAITranslating={Boolean(aiTranslatingSegmentIds[item.segmentId])}
+        isAIRefining={Boolean(aiTranslatingSegmentIds[item.segmentId])}
+        saveError={segmentSaveErrors[item.segmentId]}
         sourceHighlightQuery={sourceHighlightQuery}
         targetHighlightQuery={targetHighlightQuery}
         contextHighlightQuery={contextHighlightQuery}
@@ -157,7 +153,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
     ),
     [
       activeSegmentId,
-      filteredSegments,
+      visibleRows,
       selectedSegmentIds,
       onSelectSegment,
       aiTranslatingSegmentIds,
@@ -185,13 +181,13 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
-    count: filteredSegments.length,
+    count: visibleRows.length,
     estimateSize: () => ESTIMATED_EDITOR_ROW_HEIGHT,
     // Rounded heights let the next row cover a fractional part of the bottom border.
     measureElement: (element, entry) =>
       entry?.borderBoxSize?.[0]?.blockSize ?? element.getBoundingClientRect().height,
     getScrollElement: () => scrollElement,
-    getItemKey: (index) => filteredSegments[index]?.segment.segmentId ?? index,
+    getItemKey: (index) => visibleRows[index]?.segmentId ?? index,
     initialRect: initialVirtualizerRect,
     overscan: 8,
   });
@@ -218,7 +214,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
 
   return (
     <>
-      {virtualized && filteredSegments.length > 0 ? (
+      {virtualized && visibleRows.length > 0 ? (
         <div
           className="relative w-full"
           style={{
@@ -226,7 +222,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
           }}
         >
           {virtualizer.getVirtualItems().map((virtualItem) => {
-            const item = filteredSegments[virtualItem.index];
+            const item = visibleRows[virtualItem.index];
             if (!item) return null;
             return (
               <div
@@ -236,7 +232,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
                 className="absolute left-0 top-0 w-full"
                 style={{
                   transform: `translateY(${virtualItem.start}px)`,
-                  zIndex: item.segment.segmentId === activeSegmentId ? 1 : undefined,
+                  zIndex: item.segmentId === activeSegmentId ? 1 : undefined,
                 }}
               >
                 {renderRow(item, virtualItem.index)}
@@ -245,10 +241,10 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
           })}
         </div>
       ) : (
-        filteredSegments.map((item, index) => renderRow(item, index))
+        visibleRows.map((item, index) => renderRow(item, index))
       )}
 
-      {filteredSegments.length === 0 && (
+      {visibleRows.length === 0 && (
         <div className="px-8 py-10 text-center text-sm text-text-faint">
           No segments match current filters.
         </div>

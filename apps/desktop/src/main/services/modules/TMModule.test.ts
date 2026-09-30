@@ -95,7 +95,7 @@ function createCommitHarness(
   options: {
     tmType?: 'working' | 'main';
     permission?: string;
-    projectType?: 'translation' | 'review' | 'custom';
+    projectType?: 'translation' | 'custom';
   } = {},
 ) {
   const tmType = options.tmType ?? 'main';
@@ -384,19 +384,6 @@ describe('TMModule.commitFileToTM', () => {
 
     await expect(module.commitFileToTM('tm-working', 1)).rejects.toThrow(
       "Target TM is not this file project's writable Working TM",
-    );
-    expect(tmRepo.upsertTMEntryBySrcHash).not.toHaveBeenCalled();
-  });
-
-  it('does not allow review projects to commit to Working TM', async () => {
-    const segment = createSegment('seg-confirmed', 'hash-confirmed', 'confirmed', 'target');
-    const { module, tmRepo } = createCommitHarness([segment], {
-      tmType: 'working',
-      projectType: 'review',
-    });
-
-    await expect(module.commitFileToTM('tm-working', 1)).rejects.toThrow(
-      'Only translation projects can commit to Working TM',
     );
     expect(tmRepo.upsertTMEntryBySrcHash).not.toHaveBeenCalled();
   });

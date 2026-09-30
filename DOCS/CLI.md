@@ -142,7 +142,7 @@ Common controls:
 | `--artifacts <path>`                                                | Opt in to full prompt/TM/TB diagnostic JSONL.                       |
 | `--audit <path>`                                                    | Opt in to lightweight flow audit JSONL.                             |
 
-`--target-scope` is not a file-translation option. It belongs to the legacy single-unit API; file jobs use `--target-baseline`.
+File jobs use `--target-baseline` for both Translation and Custom projects. Request planning and execution are shared with Desktop.
 
 Use `--tag-policy none` when strings such as `{1}`, `<name>`, or `%s` are business text rather than CAT-managed tags. The default policy recognizes marker-like content and protects it through MT.
 

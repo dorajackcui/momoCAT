@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_PROJECT_AI_MODEL,
-  buildAIDialoguePromptBundle,
-  buildAIDialogueUserPrompt,
   buildAISystemPrompt,
   buildAITextPromptBundle,
   buildAIUserPrompt,
@@ -54,19 +52,6 @@ describe("Project AI Prompt Templates", () => {
     );
   });
 
-  it("builds default review system prompt when no custom prompt is provided", () => {
-    const prompt = buildAISystemPrompt("review", {
-      srcLang: "en",
-      tgtLang: "zh",
-      projectPrompt: "",
-    });
-
-    expect(prompt).toContain("You are a professional reviewer.");
-    expect(prompt).toContain(
-      "Review and improve the provided zh text, using en as source language.",
-    );
-  });
-
   it("builds default custom system prompt when no custom prompt is provided", () => {
     const prompt = buildAISystemPrompt("custom", {
       srcLang: "en",
@@ -78,16 +63,11 @@ describe("Project AI Prompt Templates", () => {
     expect(prompt).toContain("Follow the user-provided instruction exactly.");
   });
 
-  it("keeps translation and review prompt extension semantics, and custom override semantics", () => {
+  it("keeps translation prompt extension semantics, and custom override semantics", () => {
     const translationPrompt = buildAISystemPrompt("translation", {
       srcLang: "en",
       tgtLang: "zh",
       projectPrompt: "Use concise style.",
-    });
-    const reviewPrompt = buildAISystemPrompt("review", {
-      srcLang: "en",
-      tgtLang: "zh",
-      projectPrompt: "Fix terminology only.",
     });
     const customPrompt = buildAISystemPrompt("custom", {
       srcLang: "en",
@@ -97,10 +77,6 @@ describe("Project AI Prompt Templates", () => {
 
     expect(translationPrompt).toContain("Use concise style.");
     expect(translationPrompt).toContain("From en to zh. Output in zh ONLY.");
-    expect(reviewPrompt).toContain(
-      "Original text language: en. Translation text language: zh.",
-    );
-    expect(reviewPrompt).toContain("Fix terminology only.");
     expect(customPrompt).toBe("Classify sentiment as positive/negative.");
   });
 
@@ -303,21 +279,6 @@ describe("Project AI Prompt Templates", () => {
     expect(prompt).not.toContain("Refinement Instruction:");
   });
 
-  it("builds review user prompt with validation feedback", () => {
-    const prompt = buildAIUserPrompt("review", {
-      srcLang: "en",
-      sourcePayload: "Translated text",
-      hasProtectedMarkers: false,
-      context: "",
-      validationFeedback: "Missing marker {1}",
-    });
-
-    expect(prompt).toContain("Source (en):");
-    expect(prompt).toContain("Context:");
-    expect(prompt).toContain("Validation feedback from previous attempt:");
-    expect(prompt).toContain("Missing marker {1}");
-  });
-
   it("builds custom user prompt with input header", () => {
     const prompt = buildAIUserPrompt("custom", {
       srcLang: "en",
@@ -340,130 +301,6 @@ describe("Project AI Prompt Templates", () => {
 
     expect(prompt).toContain("Input:");
     expect(prompt).not.toContain("Context:");
-  });
-
-  it("builds dialogue translation user prompt with previous group and json contract", () => {
-    const prompt = buildAIDialogueUserPrompt({
-      srcLang: "en",
-      tgtLang: "zh",
-      segments: [
-        {
-          id: "seg-1",
-          speaker: "Alice",
-          sourcePayload: "Hello there",
-        },
-        {
-          id: "seg-2",
-          speaker: "Alice",
-          sourcePayload: "How are you?",
-        },
-      ],
-      previousGroup: {
-        speaker: "Bob",
-        sourceText: "Good morning",
-        targetText: "Good morning target",
-      },
-    });
-
-    expect(prompt).toContain("Return strict JSON only");
-    expect(prompt).toContain(
-      '{"translations":[{"id":"<segment-id>","text":"<translated-text>"}]}',
-    );
-    expect(prompt).toContain("id: seg-1");
-    expect(prompt).toContain("speaker: Alice");
-    expect(prompt).toContain("Previous Dialogue Group (for consistency):");
-    expect(prompt).toContain("speaker: Bob");
-    expect(prompt).toContain("target:");
-    expect(prompt).toContain("Good morning target");
-  });
-
-  it("renders dialogue concordance suggestions separately from TM similarity references", () => {
-    const prompt = buildAIDialogueUserPrompt({
-      srcLang: "zh-CN",
-      tgtLang: "fr-FR",
-      segments: [
-        {
-          id: "seg-1",
-          speaker: "Narrator",
-          sourcePayload: "麦浪农场",
-          concordanceReferences: [
-            {
-              tmName: "Main TM",
-              matchedSourceText: "麦浪农场",
-              sourceText:
-                "据说，叫“麦浪农场”这个名字，是为了纪念一位艺术家在这里画下名作《麦与浪》。",
-              targetText:
-                'On dit que le nom "Ferme des vagues de ble" rend hommage a une oeuvre peinte ici.',
-            },
-          ],
-        },
-      ],
-    });
-
-    expect(prompt).toContain("Concordance Suggestions:");
-    expect(prompt).toContain("Match: 麦浪农场 | TM: Main TM");
-    expect(prompt).not.toContain("Similarity: 73%");
-  });
-
-  it("omits dialogue concordance suggestions when prompt TM and TB references together exceed 15", () => {
-    const prompt = buildAIDialogueUserPrompt({
-      srcLang: "en",
-      tgtLang: "zh",
-      segments: [
-        {
-          id: "seg-1",
-          speaker: "Narrator",
-          sourcePayload: "alpha",
-          tmReferences: Array.from({ length: 2 }, (_, index) => ({
-            similarity: 100 - index,
-            tmName: `TM ${index + 1}`,
-            sourceText: `source ${index + 1}`,
-            targetText: `target ${index + 1}`,
-          })),
-          tbReferences: Array.from({ length: 8 }, (_, index) => ({
-            srcTerm: `term ${index + 1}`,
-            tgtTerm: `term target ${index + 1}`,
-          })),
-          concordanceReferences: [
-            {
-              tmName: "Main TM",
-              matchedSourceText: "alpha",
-              sourceText: "alpha beta",
-              targetText: "alpha target beta target",
-            },
-          ],
-        },
-        {
-          id: "seg-2",
-          speaker: "Narrator",
-          sourcePayload: "beta",
-          tmReference: {
-            similarity: 91,
-            tmName: "TM 3",
-            sourceText: "source 3",
-            targetText: "target 3",
-          },
-          tbReferences: Array.from({ length: 5 }, (_, index) => ({
-            srcTerm: `other term ${index + 1}`,
-            tgtTerm: `other target ${index + 1}`,
-          })),
-          concordanceReferences: [
-            {
-              tmName: "Main TM",
-              matchedSourceText: "beta",
-              sourceText: "beta gamma",
-              targetText: "beta target gamma target",
-            },
-          ],
-        },
-      ],
-    });
-
-    expect(prompt).toContain("TM References (top matches):");
-    expect(prompt).toContain("Terminology References (hit terms):");
-    expect(prompt).not.toContain("Concordance Suggestions:");
-    expect(prompt).not.toContain("Match: alpha | TM: Main TM");
-    expect(prompt).not.toContain("Match: beta | TM: Main TM");
   });
 
   it("builds text prompt bundles from the same canonical rules as legacy builders", () => {
@@ -600,37 +437,6 @@ describe("Project AI Prompt Templates", () => {
     );
   });
 
-  it("includes repair context in review text prompt bundles", () => {
-    const bundle = buildAITextPromptBundle("review", {
-      srcLang: "en",
-      tgtLang: "fr",
-      projectPrompt: "",
-      sourceText: "Save {1}",
-      currentTranslationPayload: "Enregistrer",
-      refinementInstruction: "Repair only the marker mismatch.",
-      validationFeedback: "Missing marker {1}",
-    });
-
-    expect(bundle.userPrompt).toContain("Current Translation:");
-    expect(bundle.userPrompt).toContain("Enregistrer");
-    expect(bundle.userPrompt).toContain("Refinement Instruction:");
-    expect(bundle.userPrompt).toContain("Repair only the marker mismatch.");
-    expect(bundle.userPrompt).toContain(
-      "Validation feedback from previous attempt:",
-    );
-    expect(bundle.userPrompt).toContain("Missing marker {1}");
-    expect(bundle.sections.currentTranslationBlock).toContain(
-      "Current Translation:",
-    );
-    expect(bundle.sections.currentTranslationBlock).toContain("Enregistrer");
-    expect(bundle.sections.currentTranslationBlock).toContain(
-      "Refinement Instruction:",
-    );
-    expect(bundle.sections.currentTranslationBlock).toContain(
-      "Repair only the marker mismatch.",
-    );
-  });
-
   it("includes repair instruction for empty current translation in translation text prompt bundles", () => {
     const bundle = buildAITextPromptBundle("translation", {
       srcLang: "en",
@@ -699,14 +505,7 @@ describe("Project AI Prompt Templates", () => {
     expect(bundle.userPrompt).not.toContain("Concordance Suggestions:");
   });
 
-  it("builds review and custom text prompt bundles with empty reference sections", () => {
-    const reviewBundle = buildAITextPromptBundle("review", {
-      srcLang: "en",
-      tgtLang: "zh",
-      projectPrompt: "",
-      sourceText: "Translated text",
-      validationFeedback: "Missing marker {1}",
-    });
+  it("builds custom text prompt bundles with empty reference sections", () => {
     const customBundle = buildAITextPromptBundle("custom", {
       srcLang: "en",
       tgtLang: "zh",
@@ -715,10 +514,7 @@ describe("Project AI Prompt Templates", () => {
       context: "Context text",
     });
 
-    expect(reviewBundle.userPrompt).toContain("Source (en):");
     expect(customBundle.userPrompt).toContain("Input:");
-    expect(reviewBundle.sections.tmPromptBlock).toBe("");
-    expect(reviewBundle.sections.tbPromptBlock).toBe("");
     expect(customBundle.sections.tmPromptBlock).toBe("");
     expect(customBundle.sections.tbPromptBlock).toBe("");
   });
@@ -737,37 +533,5 @@ describe("Project AI Prompt Templates", () => {
     expect(bundle.sourcePayload).toBe("Process this text");
     expect(bundle.userPrompt).toContain("Input:");
     expect(bundle.userPrompt).toContain("Process this text");
-  });
-
-  it("builds dialogue prompt bundles from the same canonical rules as legacy builders", () => {
-    const params = {
-      srcLang: "en",
-      tgtLang: "zh",
-      projectPrompt: "Keep speaker tone stable.",
-      segments: [
-        {
-          id: "seg-1",
-          speaker: "Alice",
-          sourcePayload: "Hello there",
-        },
-      ],
-      previousGroup: {
-        speaker: "Bob",
-        sourceText: "Good morning",
-        targetText: "Good morning target",
-      },
-      validationFeedback: "Return strict JSON only.",
-    };
-
-    const bundle = buildAIDialoguePromptBundle(params);
-
-    expect(bundle.systemPrompt).toBe(
-      buildAISystemPrompt("translation", {
-        srcLang: "en",
-        tgtLang: "zh",
-        projectPrompt: "Keep speaker tone stable.",
-      }),
-    );
-    expect(bundle.userPrompt).toBe(buildAIDialogueUserPrompt(params));
   });
 });

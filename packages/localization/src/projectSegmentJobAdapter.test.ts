@@ -29,7 +29,7 @@ describe('projectSegmentJobAdapter', () => {
     ]);
   });
 
-  it('maps legacy overwrite target scope to ignore-current-targets before planning', () => {
+  it('normalizes the overwrite baseline before planning', () => {
     const prepared = prepareProjectSegmentTranslationJob({
       projectId: 7,
       documentId: 'file-1:demo.xlsx',
@@ -38,7 +38,7 @@ describe('projectSegmentJobAdapter', () => {
         { id: 's2', source: 'Two', target: 'Deux' },
         { id: 's3', source: 'Three', target: 'Trois', locked: true },
       ],
-      options: { targetScope: 'overwrite-non-confirmed', batchSize: 3 },
+      options: { targetBaseline: 'ignore-current-targets', batchSize: 3 },
     });
 
     expect(prepared.job.translationOptions?.targetBaseline).toBe('ignore-current-targets');
@@ -108,7 +108,7 @@ describe('projectSegmentJobAdapter', () => {
         projectId: 7,
         documentId: 'file-1:demo.xlsx',
         units: [{ id: 's1', source: 'One', target: '' }],
-        options: { targetScope: 'blank-only' },
+        options: { targetBaseline: 'use-current-targets' },
       },
       {
         taskExecutor: async (task, context) => ({

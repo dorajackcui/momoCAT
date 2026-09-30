@@ -21,23 +21,33 @@ export const ConcordancePanel: React.FC<ConcordancePanelProps> = ({
   const [results, setResults] = useState<TMConcordanceEntry[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchVersion = useRef(0);
+  useEffect(
+    () => () => {
+      searchVersion.current += 1;
+    },
+    [projectId],
+  );
 
   const runSearch = useCallback(
     async (rawQuery: string) => {
+      const request = ++searchVersion.current;
+      const isCurrent = () => request === searchVersion.current;
       const trimmedQuery = rawQuery.trim();
       if (!trimmedQuery) {
         setResults([]);
+        setIsSearching(false);
         return;
       }
 
       setIsSearching(true);
       try {
         const data = await apiClient.searchConcordance(projectId, trimmedQuery);
-        setResults(data);
+        if (isCurrent()) setResults(data);
       } catch (error) {
-        console.error('Search failed:', error);
+        if (isCurrent()) console.error('Search failed:', error);
       } finally {
-        setIsSearching(false);
+        if (isCurrent()) setIsSearching(false);
       }
     },
     [projectId],

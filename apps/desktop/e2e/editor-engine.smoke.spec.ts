@@ -481,6 +481,8 @@ test.describe('CodeMirror editor engine smoke', () => {
       await expect.poll(() => rowLocator.count()).toBe(1);
       await expect(page.locator('.cm-target-highlight').first()).toBeVisible();
       await targetFilter.fill('');
+      // Confirmation follows the displayed view; wait for the search debounce to clear it.
+      await expect(rowLocator).toHaveCount(3);
 
       const insertAllTagsShortcut =
         process.platform === 'darwin' ? 'Meta+Shift+0' : 'Control+Shift+0';

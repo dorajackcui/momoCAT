@@ -1,7 +1,26 @@
+import type {
+  PromptConcordanceReference,
+  PromptTBReference,
+  PromptTMReference,
+} from '@cat/core/project';
+import type { TBService } from '../services/TBService';
+import type { TMService } from '../services/TMService';
+
+export interface PromptReferenceResolvers {
+  tmService?: Pick<TMService, 'findMatches'>;
+  tbService?: Pick<TBService, 'findMatches'>;
+}
+
+export interface TranslationPromptReferences {
+  tmReference?: PromptTMReference;
+  tmReferences?: PromptTMReference[];
+  concordanceReferences?: PromptConcordanceReference[];
+  tbReferences?: PromptTBReference[];
+}
+
 import type { Segment } from '@cat/core/models';
-import { buildTMPromptReferences } from '@cat/localization/modules/TMModule';
-import { buildTBPromptReferences } from '@cat/localization/modules/TBModule';
-import type { PromptReferenceResolvers, TranslationPromptReferences } from './types';
+import { buildTMPromptReferences } from './TMModule';
+import { buildTBPromptReferences } from './TBModule';
 
 interface ResolveTranslationPromptReferencesParams {
   projectId: number;

@@ -25,6 +25,23 @@ describe('createDesktopApi smoke', () => {
     unsubscribe();
     expect(removeListener).toHaveBeenCalledWith('cloud-close-requested', on.mock.calls[0][1]);
   });
+  it('preserves single-segment AI operation identities across preload', async () => {
+    const invoke = vi.fn().mockResolvedValue(undefined);
+    const api = createDesktopApi({ invoke } as unknown as IpcRendererLike);
+    await api.aiTranslateSegment('s1', 'translate-request');
+    await api.aiRefineSegment('s2', 'Make concise', 'refine-request');
+    expect(invoke).toHaveBeenCalledWith(
+      IPC_CHANNELS.ai.translateSegment,
+      's1',
+      'translate-request',
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      IPC_CHANNELS.ai.refineSegment,
+      's2',
+      'Make concise',
+      'refine-request',
+    );
+  });
   it('forwards selected segment updates through the typed bridge', async () => {
     const invoke = vi.fn().mockResolvedValue([]);
     const api = createDesktopApi({ invoke } as unknown as IpcRendererLike);
@@ -77,6 +94,7 @@ describe('createDesktopApi smoke', () => {
       connectionId: 'connection:demo',
       model: 'gpt-demo',
     });
+    await api.refreshAIConnection('connection:demo');
     await api.deleteAIConnection('connection:demo');
     await api.deleteAIProvider('custom:demo');
     await api.getProxySettings();
@@ -130,6 +148,7 @@ describe('createDesktopApi smoke', () => {
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.getSettings);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.listConnections);
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.listProviders);
+    expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.refreshConnection, 'connection:demo');
     expect(invoke).toHaveBeenCalledWith(IPC_CHANNELS.ai.testConnection, {
       name: 'OpenAI',
       baseUrl: 'https://api.openai.com/v1',

@@ -51,7 +51,6 @@ import {
 } from './LocalizationInspectorRows';
 import type {
   LocalizationEngineOptions,
-  LocalizationMode,
   LocalizationRequestMode,
   TranslateFileInput,
 } from './types';
@@ -78,7 +77,7 @@ export interface LocalizationInspectorOptions extends LocalizationEngineOptions 
   aiRuntimeConfigProvider?: AIRuntimeConfigProvider;
   tmModule?: TMModule;
   tbModule?: TBModule;
-  mtModule?: Pick<MTModule, 'composePrompt' | 'composeBatchPrompt'>;
+  mtModule?: Pick<MTModule, 'composeBatchPrompt'>;
 }
 
 type ProjectRecord = NonNullable<ReturnType<SqliteProjectRepository['getProject']>>;
@@ -87,7 +86,7 @@ export class LocalizationInspector {
   private readonly projectRepo: SqliteProjectRepository;
   private readonly tmModule: TMModule;
   private readonly tbModule: TBModule;
-  private readonly mtModule: Pick<MTModule, 'composePrompt' | 'composeBatchPrompt'>;
+  private readonly mtModule: Pick<MTModule, 'composeBatchPrompt'>;
   private readonly options: LocalizationInspectorOptions;
 
   constructor(db: CATDatabase, options: LocalizationInspectorOptions) {
@@ -131,11 +130,6 @@ export class LocalizationInspector {
       throw new Error(`Project not found: ${input.projectId}`);
     }
 
-    const mode = this.resolveMode(input.options?.mode);
-    if (mode === 'dialogue') {
-      throw new Error('Dialogue mode is not supported for external localization inspection.');
-    }
-
     const unitLimit = validatePositiveInteger(input.unitLimit, 'unitLimit');
     const maxCellChars =
       validatePositiveInteger(input.maxCellChars, 'maxCellChars') ?? DEFAULT_MAX_CELL_CHARS;
@@ -143,7 +137,6 @@ export class LocalizationInspector {
     const jsonOutputPath = input.jsonOutputPath ?? inferJsonOutputPath(input.outputPath);
     const targetBaseline = resolveTargetBaseline({
       targetBaseline: input.options?.targetBaseline,
-      targetScope: input.options?.targetScope ?? this.options.defaultTargetScope,
     });
     const tagPolicy = resolveTagPolicy(input.options?.tagPolicy);
     const sourceRows = parsed.artifact.rows.filter((row) => row.source.trim());
@@ -234,10 +227,6 @@ export class LocalizationInspector {
         error: units.filter((unit) => unit.status === 'error').length,
       },
     };
-  }
-
-  private resolveMode(mode?: LocalizationMode): LocalizationMode {
-    return mode ?? this.options.defaultMode ?? 'standard';
   }
 
   private resolveRequestMode(mode?: LocalizationRequestMode): LocalizationRequestMode {

@@ -135,6 +135,10 @@ test('selects all filtered drafts beyond the viewport without changing hidden re
       page.getByRole('button', { name: 'Confirm selected segments', exact: true }),
     ).toBeEnabled();
     expect(await page.locator('.editor-row').count()).toBeLessThan(40);
+    await page.keyboard.press(`${modifier}+c`);
+    const copied = await session.electronApp.evaluate(({ clipboard }) => clipboard.readText());
+    expect(copied.split('\n')).toHaveLength(40);
+    expect(copied.split('\n')[39]).toBe('Source 39\tDraft 78');
     await page.getByRole('button', { name: 'Confirm selected segments', exact: true }).click();
     await expect
       .poll(
@@ -164,3 +168,149 @@ test('selects all filtered drafts beyond the viewport without changing hidden re
     await closeEditorSmokeSession(session);
   }
 });
+
+test('copies bilingual rows and pastes targets while distinguishing cell and row line breaks', async () => {
+  const session = await createEditorSmokeSession([
+    ['Source one', 'Target one\ncontinued', ''],
+    ['Source two', '', ''],
+    ['Source three', 'Target three', ''],
+  ]);
+  try {
+    const { page, electronApp, fileId } = session;
+    const numbers = page.locator('.editor-row-number');
+    await numbers.nth(2).click();
+    await numbers.nth(0).click({ modifiers: [modifier] });
+    await expect(page.locator('.editor-row[data-selected="true"]')).toHaveCount(2);
+    await page.keyboard.press(`${modifier}+c`);
+    const copied = await electronApp.evaluate(({ clipboard }) => ({
+      text: clipboard.readText(),
+      html: clipboard.readHTML(),
+    }));
+    expect(copied.text).toBe('Source one\t"Target one\ncontinued"\nSource three\tTarget three');
+    expect(copied.html).toContain('Target one<br>continued');
+
+    // The same bilingual copy pastes only its Target column, in display order.
+    await page.getByRole('button', { name: 'Clear selected targets', exact: true }).click();
+    await expect.poll(async () => (await storedSegments(page, fileId))[0].targetTokens).toEqual([]);
+    await numbers.nth(0).focus();
+    await page.keyboard.press(`${modifier}+v`);
+    await expect
+      .poll(async () =>
+        (await storedSegments(page, fileId))[0].targetTokens.map((t) => t.content).join(''),
+      )
+      .toBe('Target one\ncontinued');
+    expect((await storedSegments(page, fileId))[1].targetTokens).toEqual([]);
+
+    await numbers.nth(0).click();
+    await numbers.nth(2).click({ modifiers: ['Shift'] });
+    await electronApp.evaluate(({ clipboard }) =>
+      clipboard.write({
+        text: '"New one\ncontinued"\n\nNew three',
+        html: '<table><tr><td>New one<br>continued</td></tr><tr><td></td></tr><tr><td>New three</td></tr></table>',
+      }),
+    );
+    await page.keyboard.press(`${modifier}+v`);
+    await expect
+      .poll(async () =>
+        (await storedSegments(page, fileId)).map((s) =>
+          s.targetTokens.map((t) => t.content).join(''),
+        ),
+      )
+      .toEqual(['New one\ncontinued', '', 'New three']);
+    expect((await storedSegments(page, fileId)).map((s) => s.status)).toEqual([
+      'draft',
+      'empty',
+      'draft',
+    ]);
+
+    await electronApp.evaluate(({ clipboard }) => clipboard.writeText('source\ttoo short'));
+    await page.keyboard.press(`${modifier}+v`);
+    await expect(page.getByText(/Row count does not match \(1 copied, 3 selected\)/)).toBeVisible();
+    expect((await storedSegments(page, fileId))[2].targetTokens[0].content).toBe('New three');
+
+    await electronApp.evaluate(({ clipboard }) => clipboard.writeText('First\nSecond\nThird'));
+    await page.keyboard.press(`${modifier}+v`);
+    await expect(page.getByRole('dialog', { name: 'Paste text' })).toBeVisible();
+    await page.getByRole('button', { name: 'Paste as 3 segments' }).click();
+    await expect
+      .poll(async () =>
+        (await storedSegments(page, fileId)).map((s) =>
+          s.targetTokens.map((t) => t.content).join(''),
+        ),
+      )
+      .toEqual(['First', 'Second', 'Third']);
+
+    // Keyboard focus can enter the target while the row multi-selection remains.
+    const focusedTarget = page.locator('.cm-content');
+    await focusedTarget.focus();
+    await expect(page.locator('.editor-row[data-selected="true"]')).toHaveCount(3);
+    await focusedTarget.press(`${modifier}+a`);
+    await electronApp.evaluate(({ clipboard }) => clipboard.writeText('Keyboard\nediting'));
+    await focusedTarget.press(`${modifier}+v`);
+    await expect(page.getByRole('dialog', { name: 'Paste text' })).toHaveCount(0);
+    await numbers.last().focus();
+    await expect
+      .poll(async () =>
+        (await storedSegments(page, fileId))[2].targetTokens.map((t) => t.content).join(''),
+      )
+      .toBe('Keyboard\nediting');
+    expect((await storedSegments(page, fileId))[0].targetTokens[0].content).toBe('First');
+
+    // Inside a target editor, native copy/paste continues to operate on text.
+    await page.locator('.editor-row').first().locator('.editor-target-cell').click();
+    const target = page.locator('.cm-content');
+    await target.press(`${modifier}+a`);
+    await target.press(`${modifier}+c`);
+    expect(await electronApp.evaluate(({ clipboard }) => clipboard.readText())).toBe('First');
+    await electronApp.evaluate(({ clipboard }) => clipboard.writeText('Inside\none segment'));
+    await target.press(`${modifier}+v`);
+    await expect(target).toHaveText('Insideone segment');
+    await expect(page.getByRole('dialog', { name: 'Paste text' })).toHaveCount(0);
+    await numbers.nth(0).click();
+    await expect
+      .poll(async () =>
+        (await storedSegments(page, fileId))[0].targetTokens.map((t) => t.content).join(''),
+      )
+      .toBe('Inside\none segment');
+  } finally {
+    await closeEditorSmokeSession(session);
+  }
+});
+
+for (const filter of ['source', 'status']) {
+  test(`confirmation advances within the ${filter} filter and stops at the last visible row`, async () => {
+    const session = await createEditorSmokeSession([
+      ['Keep first', 'First target', ''],
+      ['Hidden middle', '', ''],
+      ['Keep last', 'Last target', ''],
+    ]);
+    try {
+      const { page, fileId } = session;
+      if (filter === 'source') {
+        await page.getByPlaceholder('Filter source text').fill('Keep');
+      } else {
+        await page.getByRole('button', { name: 'Open filters', exact: true }).click();
+        await page.getByRole('button', { name: 'Draft', exact: true }).click();
+        await page.keyboard.press('Escape');
+      }
+      const rows = page.locator('.editor-row');
+      await expect(rows).toHaveCount(2);
+      await rows.first().locator('.editor-target-cell').click();
+      await page.locator('.cm-content').press(`${modifier}+Enter`);
+      const lastTarget = rows.filter({ hasText: 'Keep last' }).locator('.cm-content');
+      await expect(lastTarget).toBeFocused();
+      await expect
+        .poll(async () => (await storedSegments(page, fileId))[0].status)
+        .toBe('confirmed');
+      expect((await storedSegments(page, fileId))[1].status).toBe('empty');
+      await lastTarget.press(`${modifier}+Enter`);
+      await expect
+        .poll(async () => (await storedSegments(page, fileId))[2].status)
+        .toBe('confirmed');
+      await expect(lastTarget).toBeFocused();
+      await expect(rows).toHaveCount(2);
+    } finally {
+      await closeEditorSmokeSession(session);
+    }
+  });
+}

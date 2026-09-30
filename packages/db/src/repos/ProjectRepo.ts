@@ -79,6 +79,7 @@ export class ProjectRepo {
 
     return {
       ...rest,
+      ...readLegacyReviewProject(rest),
       aiModel: normalizeProjectAIModel(rest.aiModel),
       qaSettings,
     };
@@ -90,6 +91,9 @@ export class ProjectRepo {
     tgtLang: string,
     projectType: ProjectType = 'translation',
   ): number {
+    if (projectType !== 'translation' && projectType !== 'custom') {
+      throw new Error('Project type must be translation or custom.');
+    }
     console.log(`[DB] Creating project: ${name} (${srcLang} -> ${tgtLang}, ${projectType})`);
     const result = this.db
       .prepare(
@@ -123,7 +127,7 @@ export class ProjectRepo {
   public updateProjectPrompt(projectId: number, aiPrompt: string | null) {
     this.db
       .prepare(
-        "UPDATE projects SET aiPrompt = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?",
+        "UPDATE projects SET aiPrompt = ?, projectType = CASE WHEN projectType = 'review' THEN 'custom' ELSE projectType END, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?",
       )
       .run(aiPrompt, projectId);
   }
@@ -135,7 +139,7 @@ export class ProjectRepo {
   ) {
     this.db
       .prepare(
-        "UPDATE projects SET aiPrompt = ?, aiModel = ?, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?",
+        "UPDATE projects SET aiPrompt = ?, aiModel = ?, projectType = CASE WHEN projectType = 'review' THEN 'custom' ELSE projectType END, updatedAt = (strftime('%Y-%m-%dT%H:%M:%fZ','now')) WHERE id = ?",
       )
       .run(aiPrompt, normalizeProjectAIModel(aiModel), projectId);
   }
@@ -350,9 +354,9 @@ export class ProjectRepo {
           WHERE f.id = ?
         `,
       )
-      .get(fileId) as { projectType?: ProjectType } | undefined;
+      .get(fileId) as { projectType?: ProjectType | 'review' } | undefined;
 
-    return row?.projectType;
+    return row?.projectType === 'review' ? 'custom' : row?.projectType;
   }
 
   private toProjectFileRecord(row: FileWithSegmentStatsRow): ProjectFileRecord {
@@ -386,4 +390,29 @@ export class ProjectRepo {
       segmentStatusStats,
     };
   }
+}
+
+// Compatibility is confined to stored rows; Review is no longer a runtime project type.
+function readLegacyReviewProject(project: {
+  projectType?: string;
+  srcLang: string;
+  tgtLang: string;
+  aiPrompt?: string | null;
+}): Partial<Project> {
+  if (project.projectType !== 'review') return {};
+  const instruction = project.aiPrompt?.trim();
+  return {
+    projectType: 'custom',
+    aiPrompt: instruction
+      ? `Original text language: ${project.srcLang}. Translation text language: ${project.tgtLang}.\n${instruction}`
+      : [
+          'You are a professional reviewer.',
+          `Review and improve the provided ${project.tgtLang} text, using ${project.srcLang} as source language.`,
+          'The source can include protected markers such as {1>, <2}, {3}.',
+          'Never translate, remove, reorder, renumber, or rewrite protected markers.',
+          'Keep all tags, placeholders, and formatting exactly as they appear in the source.',
+          'Return only the reviewed text, without quotes or extra commentary.',
+          'If no edit is needed, returning the original text is allowed.',
+        ].join('\n'),
+  };
 }
