@@ -35,7 +35,9 @@ function syncPath(path: string, directory = false): void {
   // Windows does not expose directory fsync through Node. File flushes and
   // atomic renames still apply; native Windows validation remains required.
   if (directory && process.platform === 'win32') return;
-  const fd = openSync(path, 'r');
+  // Windows file flushes require write access. r+ preserves the existing bytes
+  // and fails if the file is absent; directories still need a read-only handle.
+  const fd = openSync(path, directory ? 'r' : 'r+');
   try {
     fsyncSync(fd);
   } finally {
