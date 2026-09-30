@@ -39,6 +39,9 @@ jobs:
       - name: Install native Windows dependencies
         run: npm ci
 
+      - name: Build shared package declarations
+        run: npm run build --workspace=packages/localization
+
       - name: Check desktop types
         run: npm run typecheck --workspace=apps/desktop
 
