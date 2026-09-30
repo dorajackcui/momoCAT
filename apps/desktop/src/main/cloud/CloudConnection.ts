@@ -65,10 +65,40 @@ export class CloudConnection {
       const saved = JSON.parse(await readFile(this.credentialsPath, 'utf8')) as {
         origin: string;
         token: string;
+        account?: CloudAccount;
       };
       if (saved.origin === this.baseURL)
         this.token = safeStorage.decryptString(Buffer.from(saved.token, 'base64'));
-      if (this.token) this.account = await this.json<CloudAccount>('/v1/me');
+      if (this.token) {
+        if (
+          saved.account &&
+          typeof saved.account.id === 'string' &&
+          /^[a-zA-Z0-9_-]+$/.test(saved.account.id) &&
+          typeof saved.account.name === 'string' &&
+          typeof saved.account.email === 'string'
+        )
+          this.account = saved.account;
+        try {
+          this.account = await this.json<CloudAccount>('/v1/me');
+          await writeFile(
+            `${this.credentialsPath}.tmp`,
+            JSON.stringify({ ...saved, account: this.account }),
+            { mode: 0o600 },
+          );
+          await rename(`${this.credentialsPath}.tmp`, this.credentialsPath);
+        } catch (error) {
+          if (
+            error instanceof CloudRequestError &&
+            (error.status === 401 || error.status === 403)
+          ) {
+            this.token = null;
+            this.account = null;
+            await rm(this.credentialsPath, { force: true });
+            await rm(`${this.credentialsPath}.tmp`, { force: true });
+          }
+          // Previously authenticated caches remain available during an outage.
+        }
+      }
     } catch {
       this.token = null;
       this.account = null;
@@ -171,6 +201,7 @@ export class CloudConnection {
         JSON.stringify({
           origin: this.baseURL,
           token: safeStorage.encryptString(this.token).toString('base64'),
+          account: this.account,
         }),
         { mode: 0o600 },
       );
@@ -185,11 +216,12 @@ export class CloudConnection {
   }
 
   async logout(): Promise<void> {
-    if (this.token) await this.json('/api/auth/sign-out', 'POST', {});
+    if (this.token) await this.json('/api/auth/sign-out', 'POST', {}).catch(() => {});
     this.token = null;
     this.account = null;
     this.login = undefined;
     await rm(this.credentialsPath, { force: true });
+    await rm(`${this.credentialsPath}.tmp`, { force: true });
   }
 
   async upload(bytes: Uint8Array): Promise<string[]> {

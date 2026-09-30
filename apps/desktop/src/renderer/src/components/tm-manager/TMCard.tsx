@@ -1,4 +1,4 @@
-import { IconButton } from '../ui';
+import { Icon, IconButton } from '../ui';
 import React from 'react';
 import type { TMWithStats } from '../../../../shared/ipc';
 import { AssetNameEditor } from '../AssetNameEditor';
@@ -6,6 +6,7 @@ import { fileBaseName, LinkedFileButton } from '../LinkedFileButton';
 
 interface TMCardProps {
   tm: TMWithStats;
+  cloud?: boolean;
   onPreview: (tmId: string) => void;
   onImport: (tmId: string) => void;
   onSync: (tm: TMWithStats) => void;
@@ -16,6 +17,7 @@ interface TMCardProps {
 
 export const TMCard: React.FC<TMCardProps> = ({
   tm,
+  cloud = false,
   onPreview,
   onImport,
   onSync,
@@ -33,6 +35,15 @@ export const TMCard: React.FC<TMCardProps> = ({
           onRename={(name) => onRename(tm.id, name)}
         />
         <div className="flex flex-wrap items-center gap-2 mt-1 break-words">
+          {cloud && (
+            <span
+              className="flex items-center gap-1 text-caption text-text-muted"
+              title="Cloud resource"
+            >
+              <Icon name="cloud" className="h-3 w-3" />
+              Cloud
+            </span>
+          )}
           <span className="text-caption font-semibold text-brand bg-brand-soft px-1.5 py-0.5 rounded-control uppercase tracking-wider">
             {tm.srcLang} → {tm.tgtLang}
           </span>
@@ -101,22 +112,24 @@ export const TMCard: React.FC<TMCardProps> = ({
             </svg>
           </IconButton>
         )}
-        <IconButton
-          size="sm"
-          tone="danger"
-          variant="ghost"
-          onClick={() => onDelete(tm.id)}
-          title="Delete TM"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-            />
-          </svg>
-        </IconButton>
+        {!cloud && (
+          <IconButton
+            size="sm"
+            tone="danger"
+            variant="ghost"
+            onClick={() => onDelete(tm.id)}
+            title="Delete TM"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+              />
+            </svg>
+          </IconButton>
+        )}
       </div>
     </div>
     <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-border/40">

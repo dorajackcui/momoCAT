@@ -3,6 +3,8 @@ export const MAX_BLOB_BYTES = 4 * 1024 * 1024;
 export const MAX_ACCOUNT_BYTES = 64 * 1024 * 1024;
 export const MAX_PROJECTS = 10;
 
+export * from './v2';
+
 export interface Manifest {
   protocol: 1;
   schema: 15;

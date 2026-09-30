@@ -45,6 +45,7 @@ export type AppUpdateService = {
 };
 
 export type AppUpdateServiceOptions = {
+  enabled?: boolean;
   appName: string;
   app: AppLike;
   dialog: DialogLike;
@@ -70,7 +71,7 @@ function updateVersionLabel(info: unknown): string {
 
 export function createAppUpdateService(options: AppUpdateServiceOptions): AppUpdateService {
   const { app, appName, dialog, isDev, logger, notifyStatus, updater } = options;
-  const enabled = !isDev && app.isPackaged;
+  const enabled = options.enabled !== false && !isDev && app.isPackaged;
   let manualCheckPending = false;
 
   function emitStatus(status: Parameters<NonNullable<typeof notifyStatus>>[0]) {
@@ -205,7 +206,10 @@ export function createAppUpdateService(options: AppUpdateServiceOptions): AppUpd
         }
         emitStatus({
           phase: 'not-available',
-          message: 'Update checks are available in installed builds.',
+          message:
+            options.enabled === false
+              ? 'Update checks are disabled for this build.'
+              : 'Update checks are available in installed builds.',
         });
         return;
       }

@@ -20,12 +20,13 @@ function formatCommand(command, args) {
 
 function usage() {
   console.log(`Usage:
-  node scripts/pack-platform.mjs --platform <win|mac> [--dry-run] [-- <electron-builder args>]
-  node scripts/pack-platform.mjs --platform=<win|mac> [--dry-run] [-- <electron-builder args>]`);
+  node scripts/pack-platform.mjs --platform <win|mac> [--flavor <local|cloud>] [--dry-run] [-- <electron-builder args>]
+  node scripts/pack-platform.mjs --platform=<win|mac> [--flavor=<local|cloud>] [--dry-run] [-- <electron-builder args>]`);
 }
 
 function parseArgs(argv) {
   let platform = '';
+  let flavor = 'local';
   let dryRun = false;
   let passThroughArgs = [];
 
@@ -46,6 +47,15 @@ function parseArgs(argv) {
       dryRun = true;
       continue;
     }
+    if (arg.startsWith('--flavor=')) {
+      flavor = arg.slice('--flavor='.length);
+      continue;
+    }
+    if (arg === '--flavor') {
+      flavor = parsedArgs[i + 1] || '';
+      i += 1;
+      continue;
+    }
     if (arg.startsWith('--platform=')) {
       platform = arg.split('=')[1] || '';
       continue;
@@ -62,7 +72,17 @@ function parseArgs(argv) {
     throw new Error('Missing --platform argument, expected "win" or "mac".');
   }
 
-  return { platform, dryRun, passThroughArgs };
+  if (flavor !== 'local' && flavor !== 'cloud') {
+    throw new Error(`Unsupported flavor "${flavor}", expected "local" or "cloud".`);
+  }
+  if (
+    flavor === 'cloud' &&
+    passThroughArgs.some((arg) => /^--?(?:config|publish|c|p)(?:[.=]|$)/.test(arg))
+  ) {
+    throw new Error('Cloud packaging owns its isolated config and cannot publish.');
+  }
+
+  return { platform, flavor, dryRun, passThroughArgs };
 }
 
 function expectedNodePlatform(platformArg) {
@@ -72,7 +92,7 @@ function expectedNodePlatform(platformArg) {
 }
 
 function main() {
-  const { platform, dryRun, passThroughArgs } = parseArgs(process.argv.slice(2));
+  const { platform, flavor, dryRun, passThroughArgs } = parseArgs(process.argv.slice(2));
   const expected = expectedNodePlatform(platform);
 
   if (process.platform !== expected) {
@@ -88,13 +108,17 @@ function main() {
     { command: npmCmd, args: ['run', 'pack', '--workspace=apps/desktop'] },
   ];
 
-  if (passThroughArgs.length > 0) {
+  if (flavor === 'cloud') {
+    commands[1].args.push('--', '--config', 'electron-builder.cloud.cjs', '--publish', 'never');
+    commands[1].args.push(...passThroughArgs);
+  } else if (passThroughArgs.length > 0) {
     commands[1].args.push('--', ...passThroughArgs);
   }
 
   if (dryRun) {
     for (const step of commands) {
-      console.log(`[dry-run] ${formatCommand(step.command, step.args)}`);
+      const prefix = flavor === 'cloud' ? 'MOMOCAT_BUILD_FLAVOR=cloud ' : '';
+      console.log(`[dry-run] ${prefix}${formatCommand(step.command, step.args)}`);
     }
     return;
   }
@@ -103,6 +127,7 @@ function main() {
     const result = spawnCommandSync(step.command, step.args, {
       cwd: repoRoot,
       stdio: 'inherit',
+      env: { ...process.env, MOMOCAT_BUILD_FLAVOR: flavor },
     });
 
     if (result.error) {

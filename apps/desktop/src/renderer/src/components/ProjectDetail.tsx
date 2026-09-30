@@ -1,6 +1,7 @@
 import { Tabs, TabsPanel, Button } from './ui';
 import { useEffect, useState } from 'react';
 import type { ProjectFileRecord, TMCommitScope } from '../../../shared/ipc';
+import type { CloudResourceKind, CloudResourceSummary } from '../../../shared/cloud';
 import { apiClient } from '../services/apiClient';
 import { feedbackService } from '../services/feedbackService';
 import type { AIFileJobTracker } from '../hooks/aiFileJobs';
@@ -24,6 +25,7 @@ import { getDefaultMountedCommitTarget } from './project-detail/ProjectCommitMod
 
 interface ProjectDetailProps {
   projectId: number;
+  cloud?: boolean;
   onBack: () => void;
   onOpenFile: (fileId: number) => void;
   aiFileJobTracker: AIFileJobTracker;
@@ -31,11 +33,29 @@ interface ProjectDetailProps {
 
 export function ProjectDetail({
   projectId,
+  cloud = false,
   onBack,
   onOpenFile,
   aiFileJobTracker,
 }: ProjectDetailProps) {
   const [activeTab, setActiveTab] = useState<ProjectDetailTab>('files');
+  const [localResources, setLocalResources] = useState<CloudResourceSummary[]>([]);
+  useEffect(() => {
+    setLocalResources([]);
+    if (!cloud || (activeTab !== 'tm' && activeTab !== 'tb')) return;
+    let active = true;
+    void window.api
+      .cloudListLocalResources(activeTab)
+      .then((resources) => {
+        if (active) setLocalResources(resources);
+      })
+      .catch(() => {
+        if (active) feedbackService.error('Could not load local resources.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [cloud, activeTab]);
   const [commitModalFile, setCommitModalFile] = useState<ProjectFileRecord | null>(null);
   const [commitTmId, setCommitTmId] = useState('');
   const [commitScope, setCommitScope] = useState<TMCommitScope>('confirmed-only');
@@ -157,6 +177,21 @@ export function ProjectDetail({
     } finally {
       setMatchModalFile(null);
       setMatchTmId('');
+    }
+  };
+
+  const handleCopyAndMount = async (kind: CloudResourceKind, id: string) => {
+    try {
+      await runMutation(async () => {
+        const resource = await window.api.cloudCopyResource(kind, id);
+        if (kind === 'tm') await apiClient.mountTMToProject(projectId, resource.id);
+        else await apiClient.mountTBToProject(projectId, resource.id);
+        await (kind === 'tm' ? loadTMData() : loadTBData());
+      });
+    } catch (error) {
+      feedbackService.error(
+        error instanceof Error ? error.message : 'Failed to create cloud copy.',
+      );
     }
   };
 
@@ -357,6 +392,12 @@ export function ProjectDetail({
             loadState={tmLoadState}
             onRetry={() => void loadTMData()}
             onMountTM={(tmId) => void handleMountTM(tmId)}
+            localResources={
+              cloud
+                ? localResources.filter((resource) => hasMatchingLanguagePair(resource, project))
+                : undefined
+            }
+            onCopyAndMount={(id) => void handleCopyAndMount('tm', id)}
             onUnmountTM={(tmId) => void handleUnmountTM(tmId)}
             onExportWorkingTM={(tm) => void workingTMActions?.export(tm)}
             onResetWorkingTM={(tm) => void workingTMActions?.reset(tm)}
@@ -367,6 +408,12 @@ export function ProjectDetail({
             mountedTBs={mountedTBs}
             allTBs={allTBs.filter((tb) => hasMatchingLanguagePair(tb, project))}
             onMountTB={(tbId) => void handleMountTB(tbId)}
+            localResources={
+              cloud
+                ? localResources.filter((resource) => hasMatchingLanguagePair(resource, project))
+                : undefined
+            }
+            onCopyAndMount={(id) => void handleCopyAndMount('tb', id)}
             onUnmountTB={(tbId) => void handleUnmountTB(tbId)}
           />
         )}

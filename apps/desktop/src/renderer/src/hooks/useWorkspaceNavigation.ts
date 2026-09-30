@@ -5,7 +5,7 @@ export type WorkspaceView = (
   | { kind: 'home' | 'tm' | 'tb' | 'settings' }
   | { kind: 'project'; projectId: number }
   | { kind: 'editor'; projectId: number; fileId: number }
-) & { cloudId?: string };
+) & { cloudId?: string; cloudResources?: boolean };
 
 export type WorkspaceNavigationGuard = () => Promise<boolean>;
 

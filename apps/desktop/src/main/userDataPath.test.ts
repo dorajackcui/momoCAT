@@ -3,6 +3,43 @@ import { describe, expect, it } from 'vitest';
 import { resolveDesktopUserDataPath } from './userDataPath';
 
 describe('resolveDesktopUserDataPath', () => {
+  it('isolates installed cloud data even if Electron has cached the local default', () => {
+    expect(
+      resolveDesktopUserDataPath({
+        appPath: join('installed', 'momoCAT Cloud'),
+        defaultUserDataPath: join('profile', 'simple-cat-tool'),
+        appDataPath: 'profile',
+        isDev: false,
+        buildFlavor: 'cloud',
+        env: {},
+      }),
+    ).toBe(join('profile', 'simple-cat-tool-cloud'));
+  });
+
+  it('uses a separate cloud development profile', () => {
+    expect(
+      resolveDesktopUserDataPath({
+        appPath: join('workspace', 'apps', 'desktop'),
+        defaultUserDataPath: join('profile', 'momoCAT'),
+        isDev: true,
+        buildFlavor: 'cloud',
+        env: {},
+      }),
+    ).toBe(join('workspace', '.cat_data-cloud'));
+  });
+
+  it('honors an explicit cloud test profile', () => {
+    expect(
+      resolveDesktopUserDataPath({
+        appPath: join('workspace', 'apps', 'desktop'),
+        defaultUserDataPath: join('profile', 'momoCAT'),
+        isDev: false,
+        buildFlavor: 'cloud',
+        env: { MOMOCAT_USER_DATA_DIR: join('fixtures', 'cloud') },
+      }),
+    ).toBe(resolve('fixtures', 'cloud'));
+  });
+
   it('keeps development data in the repository default directory', () => {
     expect(
       resolveDesktopUserDataPath({

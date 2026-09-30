@@ -341,8 +341,8 @@ export function WorkspaceSidebar({
         )}
       </nav>
       <nav className="workspace-resource-nav" aria-label="Resources">
-        {navItem('tm', view.cloudId ? 'Project translation memory' : 'Translation memory', 'tm')}
-        {navItem('tb', view.cloudId ? 'Project term bases' : 'Term bases', 'tb')}
+        {navItem('tm', 'Translation memory', 'tm')}
+        {navItem('tb', 'Term bases', 'tb')}
       </nav>
       <div className="workspace-settings-nav">{navItem('settings', 'Settings', 'settings')}</div>
       {disabled && (

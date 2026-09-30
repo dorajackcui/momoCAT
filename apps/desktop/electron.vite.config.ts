@@ -4,6 +4,11 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   main: {
+    define: {
+      __MOMOCAT_BUILD_FLAVOR__: JSON.stringify(
+        process.env.MOMOCAT_BUILD_FLAVOR === 'cloud' ? 'cloud' : 'local',
+      ),
+    },
     resolve: {
       alias: {
         '@cat/core': resolve('../../packages/core/src'),

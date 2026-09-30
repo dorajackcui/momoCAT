@@ -18,7 +18,7 @@ apps/desktop ───────> @cat/cloud-contracts <────── app
 
 CLI and Desktop are application hosts. Shared headless behavior belongs in `@cat/localization`; desktop UI and lifecycle behavior belongs under `apps/desktop`, which consumes all three shared packages directly.
 
-`apps/cloud-api` owns Better Auth login, account authorization, project revisions with conditional commits, and private D1 storage. The experiment stores immutable file/snapshot chunks through [D1BlobStore](../apps/cloud-api/src/D1BlobStore.ts), keeping the client protocol independent of that storage choice. It does not run native SQLite or TM/TB matching. `packages/cloud-contracts` owns the bounded cloud transport format. Local projects do not depend on a cloud account or a network connection.
+`apps/cloud-api` owns Better Auth login, account authorization, independent project and Main TM/TB revisions with conditional commits, and private D1 storage. The experiment stores immutable file/snapshot chunks through [D1BlobStore](../apps/cloud-api/src/D1BlobStore.ts), keeping the client protocol independent of that storage choice. It does not run native SQLite or TM/TB matching. `packages/cloud-contracts` owns the bounded cloud transport format. The desktop coordinates manual relay against an isolated account cache; Working TM stays inside the project snapshot. Local projects do not depend on a cloud account or a network connection.
 
 ## Workspace ownership
 

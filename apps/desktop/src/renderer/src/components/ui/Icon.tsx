@@ -3,6 +3,14 @@ import type { SVGProps } from 'react';
 // Shared Lucide shapes: https://lucide.dev
 // License and Feather attribution: renderer/public/licenses/LUCIDE.txt.
 const shapes = {
+  cloud: (
+    <path d="M20 16.2A4.5 4.5 0 0 0 18 7.5a6 6 0 0 0-11.4-1A5 5 0 0 0 7 16.5h11a4.5 4.5 0 0 0 2-.3Z" />
+  ),
+  'refresh-cw': (
+    <>
+      <path d="M3 11a9 9 0 0 1 15.5-6.5L21 7M21 3v4h-4M21 13a9 9 0 0 1-15.5 6.5L3 17M7 17H3v4" />
+    </>
+  ),
   check: <path d="M5 13l4 4L19 7" />,
   'chevron-down': <path d="m6 9 6 6 6-6" />,
   'shield-alert': (

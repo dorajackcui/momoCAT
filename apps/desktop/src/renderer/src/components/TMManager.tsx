@@ -37,7 +37,11 @@ const CREATE_SOURCE_OPTIONS: Array<{ value: CreateSource; label: string; hint: s
   { value: 'sync', label: 'Sync with Excel', hint: 'Mirror a linked local file' },
 ];
 
-export const TMManager: React.FC = () => {
+export const TMManager: React.FC<{
+  storage?: 'local' | 'cloud';
+  cloudAvailable?: boolean;
+  onStorageChange?: (storage: 'local' | 'cloud') => void;
+}> = ({ storage = 'local', cloudAvailable = false, onStorageChange }) => {
   const [tms, setTMs] = useState<TMWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -119,7 +123,7 @@ export const TMManager: React.FC = () => {
     }
 
     // A synced TM is unusable without its file binding, so link it right away.
-    if (createSource === 'sync') {
+    if (storage === 'local' && createSource === 'sync') {
       await handleStartLink(tmId);
     }
   };
@@ -343,9 +347,22 @@ export const TMManager: React.FC = () => {
             <h1 className="text-2xl font-semibold text-text">Translation memory</h1>
             <p className="text-sm text-text-muted mt-1">Manage your Main TMs</p>
           </div>
-          <Button variant="primary" onClick={() => setShowCreate(true)}>
-            Create Main TM
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            {onStorageChange && cloudAvailable && (
+              <ChoiceGroup
+                label="TM storage"
+                value={storage}
+                onValueChange={onStorageChange}
+                options={[
+                  { value: 'local', label: 'Local' },
+                  { value: 'cloud', label: 'Cloud' },
+                ]}
+              />
+            )}
+            <Button variant="primary" onClick={() => setShowCreate(true)}>
+              Create Main TM
+            </Button>
+          </div>
         </div>
 
         {importNotice && (
@@ -373,21 +390,23 @@ export const TMManager: React.FC = () => {
         {showCreate && (
           <div className="mb-8 p-6 surface-card animate-in fade-in slide-in-from-top-4">
             <h2 className="field-label !text-caption mb-4">Create New Main TM</h2>
-            <div className="mb-4">
-              <label className="field-label !text-caption">Type</label>
-              <ChoiceGroup
-                label="TM creation type"
-                variant="cards"
-                value={createSource}
-                onValueChange={setCreateSource}
-                options={CREATE_SOURCE_OPTIONS.map((option) => ({
-                  value: option.value,
-                  label: option.label,
-                  description: option.hint,
-                }))}
-                className="mt-1"
-              />
-            </div>
+            {storage === 'local' && (
+              <div className="mb-4">
+                <label className="field-label !text-caption">Type</label>
+                <ChoiceGroup
+                  label="TM creation type"
+                  variant="cards"
+                  value={createSource}
+                  onValueChange={setCreateSource}
+                  options={CREATE_SOURCE_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                    description: option.hint,
+                  }))}
+                  className="mt-1"
+                />
+              </div>
+            )}
             <form onSubmit={handleCreate} className="grid grid-cols-4 gap-4 items-end">
               <div className="col-span-2">
                 <label className="field-label !text-caption">TM Name</label>
@@ -442,6 +461,7 @@ export const TMManager: React.FC = () => {
               <TMCard
                 key={tm.id}
                 tm={tm}
+                cloud={storage === 'cloud'}
                 onPreview={(tmId) => void handleOpenPreview(tmId)}
                 onImport={(tmId) => void handleStartImport(tmId)}
                 onSync={(target) => void handleSyncNow(target)}

@@ -1,3 +1,4 @@
+import type { CloudResourceSummary } from '../../../../shared/cloud';
 import type { MountedTM, TMRecord } from '../../../../shared/ipc';
 import type { ProjectTMLoadState } from '../../hooks/projectDetail/useProjectDetailData';
 import { Button, Notice, Select } from '../ui';
@@ -12,6 +13,8 @@ interface ProjectTMPaneProps {
   allMainTMs: TMRecord[];
   loadState: ProjectTMLoadState;
   onRetry: () => void;
+  localResources?: CloudResourceSummary[];
+  onCopyAndMount?: (id: string) => void;
   onMountTM: (tmId: string) => void;
   onUnmountTM: (tmId: string) => void;
   onExportWorkingTM: (tm: MountedTM) => void;
@@ -25,6 +28,8 @@ export function ProjectTMPane({
   loadState,
   onRetry,
   onMountTM,
+  localResources,
+  onCopyAndMount,
   onUnmountTM,
   onExportWorkingTM,
   onResetWorkingTM,
@@ -107,7 +112,9 @@ export function ProjectTMPane({
             aria-label="Mount translation memory"
             className="w-auto max-w-full sm:max-w-xs"
             onChange={(event) => {
-              if (event.target.value) onMountTM(event.target.value);
+              const value = event.target.value;
+              if (value.startsWith('local:')) onCopyAndMount?.(value.slice(6));
+              else if (value) onMountTM(value);
             }}
             value=""
           >
@@ -121,6 +128,15 @@ export function ProjectTMPane({
                   {tm.name} ({tm.srcLang} → {tm.tgtLang})
                 </option>
               ))}
+            {!!localResources?.length && (
+              <optgroup label="Create cloud copy from local">
+                {localResources.map((resource) => (
+                  <option key={`local:${resource.id}`} value={`local:${resource.id}`}>
+                    {resource.name} ({resource.srcLang} → {resource.tgtLang}) · create cloud copy
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </Select>
         </ProjectSectionHeader>
         <p className="mb-3 text-xs text-text-muted">Read-only references.</p>

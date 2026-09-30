@@ -22,7 +22,27 @@ export function createCloudApi(ipc: IpcRendererLike): CloudApi {
       >,
     cloudOpenProject: (id, keepLocal) =>
       ipc.invoke(CLOUD_CHANNELS.cloudOpenProject, id, keepLocal) as Promise<number>,
-    cloudSync: () => ipc.invoke(CLOUD_CHANNELS.cloudSync) as Promise<void>,
+    cloudSync: (allProjects) =>
+      (allProjects === undefined
+        ? ipc.invoke(CLOUD_CHANNELS.cloudSync)
+        : ipc.invoke(CLOUD_CHANNELS.cloudSync, allProjects)) as ReturnType<CloudApi['cloudSync']>,
+    cloudCancelClose: () => ipc.invoke(CLOUD_CHANNELS.cloudCancelClose) as Promise<void>,
+    cloudOpenResources: (kind, keepLocal) =>
+      ipc.invoke(CLOUD_CHANNELS.cloudOpenResources, kind, keepLocal) as Promise<void>,
+    cloudLeaveContext: (keepLocal, closeWindow) =>
+      ipc.invoke(CLOUD_CHANNELS.cloudLeaveContext, keepLocal, closeWindow) as Promise<void>,
+    cloudListLocalResources: (kind) =>
+      ipc.invoke(CLOUD_CHANNELS.cloudListLocalResources, kind) as ReturnType<
+        CloudApi['cloudListLocalResources']
+      >,
+    cloudCopyResource: (kind, id) =>
+      ipc.invoke(CLOUD_CHANNELS.cloudCopyResource, kind, id) as ReturnType<
+        CloudApi['cloudCopyResource']
+      >,
+    cloudResolveConflict: () =>
+      ipc.invoke(CLOUD_CHANNELS.cloudResolveConflict) as ReturnType<
+        CloudApi['cloudResolveConflict']
+      >,
     cloudPull: () => ipc.invoke(CLOUD_CHANNELS.cloudPull) as Promise<number>,
     cloudCloseProject: (keepLocal, closeWindow) =>
       ipc.invoke(CLOUD_CHANNELS.cloudCloseProject, keepLocal, closeWindow) as Promise<void>,

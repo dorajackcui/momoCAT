@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createAppUpdateService } from './AppUpdateService';
 
-function createFixture(options: { isDev?: boolean; isPackaged?: boolean } = {}) {
+function createFixture(options: { isDev?: boolean; isPackaged?: boolean; enabled?: boolean } = {}) {
   const listeners = new Map<string, (...args: unknown[]) => void>();
   const updateStatus = vi.fn();
   const showMessageBox = vi.fn(async () => ({ response: 0 }));
@@ -21,6 +21,7 @@ function createFixture(options: { isDev?: boolean; isPackaged?: boolean } = {}) 
   };
 
   const service = createAppUpdateService({
+    enabled: options.enabled,
     appName: 'momoCAT',
     app: {
       isPackaged: options.isPackaged ?? true,
@@ -37,6 +38,24 @@ function createFixture(options: { isDev?: boolean; isPackaged?: boolean } = {}) 
 }
 
 describe('createAppUpdateService', () => {
+  it('never attaches or invokes the ordinary updater when a build disables updates', async () => {
+    const { service, updater, updateStatus, showMessageBox } = createFixture({ enabled: false });
+
+    await service.checkForUpdates();
+    await service.checkForUpdates({ notifyNoUpdate: true });
+
+    expect(service.enabled).toBe(false);
+    expect(updater.on).not.toHaveBeenCalled();
+    expect(updater.autoDownload).toBe(false);
+    expect(updater.checkForUpdates).not.toHaveBeenCalled();
+    expect(updater.quitAndInstall).not.toHaveBeenCalled();
+    expect(showMessageBox).not.toHaveBeenCalled();
+    expect(updateStatus).toHaveBeenCalledWith({
+      phase: 'not-available',
+      message: 'Update checks are disabled for this build.',
+    });
+  });
+
   it('skips update checks in development builds', async () => {
     const { service, updater } = createFixture({ isDev: true });
 

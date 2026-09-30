@@ -1,6 +1,6 @@
-import Database from "better-sqlite3";
-import { QaIssue, Segment, SegmentStatus, TBEntry, TMEntry, Token } from "@cat/core/models";
-import { Project, ProjectAIModel, ProjectQASettings, ProjectType } from "@cat/core/project";
+import Database from 'better-sqlite3';
+import { QaIssue, Segment, SegmentStatus, TBEntry, TMEntry, Token } from '@cat/core/models';
+import { Project, ProjectAIModel, ProjectQASettings, ProjectType } from '@cat/core/project';
 import {
   MountedTBRecord,
   MountedTMRecord,
@@ -17,20 +17,27 @@ import {
   TMSyncDiffSummary,
   TMSyncStagedRow,
   TMType,
-} from "./types";
+} from './types';
 
-import { ensureCurrentSchema } from "./currentSchema";
-import { ProjectRepo } from "./repos/ProjectRepo";
-import { SegmentRepo } from "./repos/SegmentRepo";
-import { registerSegmentStatusFunction } from "./repos/segmentStatus";
-import { SettingsRepo } from "./repos/SettingsRepo";
-import { TBRepo } from "./repos/TBRepo";
-import { TMRepo } from "./repos/TMRepo";
-export * from "./types";
-export { exportCloudProject, restoreCloudProject, CloudSnapshotOutbox } from './cloud/CloudProjectSnapshot';
+import { ensureCurrentSchema } from './currentSchema';
+import { ProjectRepo } from './repos/ProjectRepo';
+import { SegmentRepo } from './repos/SegmentRepo';
+import { registerSegmentStatusFunction } from './repos/segmentStatus';
+import { SettingsRepo } from './repos/SettingsRepo';
+import { TBRepo } from './repos/TBRepo';
+import { TMRepo } from './repos/TMRepo';
+export * from './types';
+export {
+  exportCloudProject,
+  restoreCloudProject,
+  CloudSnapshotOutbox,
+} from './cloud/CloudProjectSnapshot';
 export type { CloudProjectSnapshot } from './cloud/CloudProjectSnapshot';
-export { normalizeProjectFileName } from "./projectFileName";
-export { CURRENT_SCHEMA_VERSION, UnsupportedDatabaseSchemaError } from "./currentSchema";
+export { normalizeProjectFileName } from './projectFileName';
+export { CURRENT_SCHEMA_VERSION, UnsupportedDatabaseSchemaError } from './currentSchema';
+export * from './cloud/CloudAccountSnapshot';
+export { CloudAccountTracker } from './cloud/CloudAccountTracker';
+export type { CloudTrackedObject, CloudObjectKind } from './cloud/CloudAccountTracker';
 
 export interface CATDatabaseOptions {
   readonly?: boolean;
@@ -51,17 +58,17 @@ export class CATDatabase {
       readonly,
       fileMustExist: Boolean(options.fileMustExist),
     });
-    this.db.pragma("foreign_keys = ON");
+    this.db.pragma('foreign_keys = ON');
     // temp_store is per-connection and safe on readonly connections; keeping it
     // on avoids spilling FTS/ORDER BY temp b-trees to disk in the lookup worker.
-    this.db.pragma("temp_store = MEMORY");
+    this.db.pragma('temp_store = MEMORY');
     // Writers on other connections (main process vs. import/sync workers) hold
     // the lock only for small chunked transactions; wait instead of failing
     // with SQLITE_BUSY immediately.
-    this.db.pragma("busy_timeout = 5000");
+    this.db.pragma('busy_timeout = 5000');
     if (!readonly) {
-      this.db.pragma("journal_mode = WAL");
-      this.db.pragma("synchronous = NORMAL");
+      this.db.pragma('journal_mode = WAL');
+      this.db.pragma('synchronous = NORMAL');
     }
 
     ensureCurrentSchema(this.db, { allowSchemaMaintenance: !readonly });
@@ -80,13 +87,13 @@ export class CATDatabase {
     name: string,
     srcLang: string,
     tgtLang: string,
-    projectType: ProjectType = "translation",
+    projectType: ProjectType = 'translation',
   ): number {
     const projectId = this.projectRepo.createProject(name, srcLang, tgtLang, projectType);
 
-    if (projectType === "translation") {
-      const workingTmId = this.tmRepo.createTM(`${name} (Working TM)`, srcLang, tgtLang, "working");
-      this.tmRepo.mountTMToProject(projectId, workingTmId, 0, "readwrite");
+    if (projectType === 'translation') {
+      const workingTmId = this.tmRepo.createTM(`${name} (Working TM)`, srcLang, tgtLang, 'working');
+      this.tmRepo.mountTMToProject(projectId, workingTmId, 0, 'readwrite');
     }
 
     return projectId;
@@ -103,7 +110,7 @@ export class CATDatabase {
       const fileCount = this.projectRepo.countFilesByProject(project.id);
 
       const total = stats.reduce((sum, statusStat) => sum + statusStat.count, 0);
-      const confirmed = stats.find((statusStat) => statusStat.status === "confirmed")?.count || 0;
+      const confirmed = stats.find((statusStat) => statusStat.status === 'confirmed')?.count || 0;
       const progress = total === 0 ? 0 : Math.round((confirmed / total) * 100);
 
       return { ...project, progress, fileCount };
@@ -219,7 +226,7 @@ export class CATDatabase {
     return this.segmentRepo.getProjectStats(projectId);
   }
 
-  public runInTransaction<T>(fn: () => T, mode: "deferred" | "immediate" = "deferred"): T {
+  public runInTransaction<T>(fn: () => T, mode: 'deferred' | 'immediate' = 'deferred'): T {
     return this.segmentRepo.runInTransaction(fn, mode);
   }
 
@@ -425,7 +432,7 @@ export class CATDatabase {
     projectId: number,
     tmId: string,
     priority: number = 10,
-    permission: string = "read",
+    permission: string = 'read',
   ) {
     this.tmRepo.mountTMToProject(projectId, tmId, priority, permission);
   }

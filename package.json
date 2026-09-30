@@ -13,6 +13,8 @@
     "pack:win": "node scripts/pack-platform.mjs --platform=win",
     "release:win": "node scripts/pack-platform.mjs --platform=win -- --publish always",
     "pack:mac": "node scripts/pack-platform.mjs --platform=mac",
+    "pack:cloud:mac": "node scripts/pack-platform.mjs --platform=mac --flavor=cloud",
+    "pack:cloud:win": "node scripts/pack-platform.mjs --platform=win --flavor=cloud",
     "worktree:deps:link": "node scripts/worktree-link-deps.mjs",
     "worktree:deps:link:force": "node scripts/worktree-link-deps.mjs --force",
     "lint": "npm run lint --workspaces",

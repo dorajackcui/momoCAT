@@ -1,11 +1,11 @@
 import { BrowserWindow, type IpcMain } from 'electron';
 import { join } from 'node:path';
-import { mkdtemp, mkdir, rename, rm } from 'node:fs/promises';
-import { createHash, randomUUID } from 'node:crypto';
-import { CATDatabase, exportCloudProject } from '@cat/db';
+import { mkdirSync, copyFileSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { CATDatabase, cloneCloudProjectAsLocal, cloneLocalCloudResource } from '@cat/db';
 import type { AIRuntimeConfigService } from '@cat/localization';
-import type { CloudProject } from '@cat/cloud-contracts';
-import { CLOUD_CHANNELS } from '../../shared/cloud';
+import type { CloudProject, CloudProjectV2 } from '@cat/cloud-contracts';
+import { CLOUD_CHANNELS, type CloudResourceKind, type CloudSyncResult } from '../../shared/cloud';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import type { ReferenceDataChangedEvent } from '../../shared/ipc';
 import type { IpcMainLike } from '../ipc/types';
@@ -20,16 +20,21 @@ import { registerTBHandlers } from '../ipc/tbHandlers';
 import { registerAIHandlers } from '../ipc/aiHandlers';
 import { registerJobHandlers } from '../ipc/jobHandlers';
 import { subscribeToWorkingTMReferenceDataChanges } from '../referenceDataInvalidation';
-import { CloudConnection } from './CloudConnection';
-import { CloudProjectSession } from './CloudProjectSession';
+import { internalProjectFilePath } from '../services/modules/projectFileStorage';
+import { CloudConnection, CloudRequestError } from './CloudConnection';
+import { migrateLegacyCloudProject } from './CloudLegacyMigration';
+import { CloudAccountSession } from './CloudAccountSession';
 import { IpcContextRouter } from './IpcContextRouter';
 import { cloudReads, cloudWrites } from './cloudPolicy';
 
 interface WindowSession {
-  session: CloudProjectSession;
+  account: CloudAccountSession;
+  projectId?: number;
+  resourceKind?: CloudResourceKind;
   window: BrowserWindow;
   assertIdle: () => void;
   dispose: () => Promise<void>;
+  notify: (event: ReferenceDataChangedEvent) => void;
   busy: boolean;
 }
 interface Dependencies {
@@ -37,22 +42,29 @@ interface Dependencies {
   router: IpcContextRouter;
   userDataPath: string;
   localDb: CATDatabase;
+  localDbPath?: string;
+  localProjectsDir?: string;
   runtime: AIRuntimeConfigService;
   localJobs?: JobManager;
+  onCloseCancelled?: () => void;
+  windowTitle?: string;
 }
+const EXPERIMENT_CLOUD_URL = 'https://momocat-cloud-v1.dorajackcui.workers.dev';
 
 export class CloudWorkspace {
   private readonly connection: CloudConnection;
   private readonly windows = new Map<number, WindowSession>();
   private readonly opening = new Set<number>();
   private readonly localRunning = new Set<string>();
+  private account?: CloudAccountSession;
+  private accountOpening?: Promise<CloudAccountSession>;
   constructor(private readonly deps: Dependencies) {
     deps.localJobs?.on('progress', (job) => {
       if (job.status === 'running') this.localRunning.add(job.jobId);
       else this.localRunning.delete(job.jobId);
     });
     this.connection = new CloudConnection(
-      process.env.MOMOCAT_CLOUD_URL,
+      process.env.MOMOCAT_CLOUD_URL ?? EXPERIMENT_CLOUD_URL,
       join(deps.userDataPath, 'cloud', 'session.json'),
     );
   }
@@ -62,223 +74,342 @@ export class CloudWorkspace {
   get hasOpenProjects(): boolean {
     return this.windows.size > 0;
   }
-
+  private requireEntry(id: number): WindowSession {
+    const entry = this.windows.get(id);
+    if (!entry) throw new Error('Open a cloud project or cloud resources first');
+    return entry;
+  }
+  private window(event: { sender: { id: number } }): BrowserWindow {
+    const window = BrowserWindow.fromWebContents(event.sender as Electron.WebContents);
+    if (!window) throw new Error('Workspace window unavailable');
+    return window;
+  }
+  private kind(input: unknown): CloudResourceKind {
+    if (input !== 'tm' && input !== 'tb') throw new Error('Invalid resource type');
+    return input;
+  }
+  private id(input: unknown): string {
+    if (typeof input !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(input))
+      throw new Error('Invalid cloud id');
+    return input;
+  }
   async initialize(): Promise<void> {
-    const { ipcMain } = this.deps;
-    ipcMain.handle(CLOUD_CHANNELS.cloudStatus, (event) => ({
-      configured: !!this.connection.baseURL,
-      configurationError: this.connection.configurationError,
-      account: this.connection.account,
-      project: this.windows.get(event.sender.id)?.session.status(),
-    }));
-    ipcMain.handle(CLOUD_CHANNELS.cloudStartLogin, () => {
-      if (this.hasOpenProjects || this.opening.size)
-        throw new Error('Close cloud projects before changing accounts');
+    const ipc = this.deps.ipcMain;
+    ipc.handle(CLOUD_CHANNELS.cloudStatus, (event) => {
+      const entry = this.windows.get(event.sender.id);
+      return {
+        configured: !!this.connection.baseURL,
+        configurationError: this.connection.configurationError,
+        account: this.connection.account,
+        ...(entry
+          ? {
+              context: 'cloud',
+              resourceKind: entry.resourceKind,
+              ...entry.account.status(entry.projectId),
+            }
+          : {}),
+      };
+    });
+    ipc.handle('cloud-cancel-close', () => this.deps.onCloseCancelled?.());
+    ipc.handle(CLOUD_CHANNELS.cloudStartLogin, () => {
+      this.assertAccountChange();
       return this.connection.startLogin();
     });
-    ipcMain.handle(CLOUD_CHANNELS.cloudPollLogin, () => this.connection.pollLogin());
-    ipcMain.handle(CLOUD_CHANNELS.cloudLogout, () => {
-      if (this.hasOpenProjects || this.opening.size)
-        throw new Error('Close cloud projects before signing out');
-      return this.connection.logout();
+    ipc.handle(CLOUD_CHANNELS.cloudPollLogin, () => this.connection.pollLogin());
+    ipc.handle(CLOUD_CHANNELS.cloudLogout, async () => {
+      this.assertAccountChange();
+      await this.connection.logout();
+      this.account?.dispose();
+      this.account = undefined;
     });
-    ipcMain.handle(CLOUD_CHANNELS.cloudListProjects, () => this.connection.json('/v1/projects'));
-    ipcMain.handle(CLOUD_CHANNELS.cloudCreateProject, (_event, ...args: unknown[]) =>
+    ipc.handle(CLOUD_CHANNELS.cloudListProjects, () => this.listProjects());
+    ipc.handle(CLOUD_CHANNELS.cloudCreateProject, (_event, ...args: unknown[]) =>
       this.createProject(args),
     );
-    ipcMain.handle(CLOUD_CHANNELS.cloudOpenProject, (event, id: unknown, keepLocal: unknown) => {
-      if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(id))
-        throw new Error('Invalid project id');
-      const window = BrowserWindow.fromWebContents(event.sender);
-      if (!window) throw new Error('Workspace window unavailable');
-      return this.openProject(window, id, keepLocal === true);
-    });
-    ipcMain.handle(CLOUD_CHANNELS.cloudSync, async (event) => {
-      const entry = this.requireSession(event.sender.id);
-      entry.assertIdle();
-      await entry.session.sync();
-    });
-    ipcMain.handle(CLOUD_CHANNELS.cloudPull, (event) =>
-      this.pull(this.requireSession(event.sender.id)),
+    ipc.handle(CLOUD_CHANNELS.cloudOpenProject, (event, id: unknown) =>
+      this.openProject(this.window(event), this.id(id)),
     );
-    ipcMain.handle(
-      CLOUD_CHANNELS.cloudCloseProject,
-      async (event, keepLocal: unknown, closeWindow: unknown) => {
-        const entry = this.windows.get(event.sender.id);
-        if (!entry) return;
-        entry.assertIdle();
-        if (entry.session.status().pending && keepLocal !== true)
-          throw new Error('Save to cloud or confirm keeping changes on this device before closing');
-        await entry.dispose();
-        if (closeWindow === true) entry.window.close();
-      },
+    ipc.handle(CLOUD_CHANNELS.cloudOpenResources, (event, kind: unknown) =>
+      this.openResources(this.window(event), this.kind(kind)),
+    );
+    ipc.handle(CLOUD_CHANNELS.cloudSync, (event, allProjects: unknown) => {
+      if (allProjects !== undefined && typeof allProjects !== 'boolean')
+        throw new Error('Invalid synchronization scope');
+      return this.synchronize(this.requireEntry(event.sender.id), allProjects === true);
+    });
+    ipc.handle(CLOUD_CHANNELS.cloudPull, async (event) => {
+      const entry = this.requireEntry(event.sender.id);
+      if (entry.account.hasPending(entry.projectId))
+        throw new Error('Local changes must be preserved before getting the cloud version');
+      await this.synchronize(entry);
+      return entry.projectId;
+    });
+    const leave = async (
+      event: { sender: { id: number } },
+      keepLocal: unknown,
+      closeWindow: unknown,
+    ) => {
+      const entry = this.windows.get(event.sender.id);
+      if (!entry) return;
+      entry.assertIdle();
+      if (entry.account.hasPending(entry.projectId, true) && keepLocal !== true)
+        throw new Error('Confirm keeping changes on this device first');
+      await entry.dispose();
+      if (closeWindow === true)
+        setTimeout(() => {
+          if (!entry.window.isDestroyed()) entry.window.close();
+        }, 0);
+    };
+    ipc.handle(CLOUD_CHANNELS.cloudCloseProject, leave);
+    ipc.handle(CLOUD_CHANNELS.cloudLeaveContext, leave);
+    ipc.handle(CLOUD_CHANNELS.cloudListLocalResources, (_event, kind: unknown) => {
+      const type = this.kind(kind);
+      return type === 'tm' ? this.deps.localDb.listTMs('main') : this.deps.localDb.listTermBases();
+    });
+    ipc.handle(CLOUD_CHANNELS.cloudCopyResource, async (event, kind: unknown, id: unknown) => {
+      const entry = this.requireEntry(event.sender.id);
+      this.assertAccountIdle();
+      if (this.localRunning.size) throw new Error('Wait for local operations to finish');
+      const type = this.kind(kind);
+      const copied = entry.account.copyResource(this.localDbPath, type, this.id(id));
+      return type === 'tm' ? entry.account.db.getTM(copied) : entry.account.db.getTermBase(copied);
+    });
+    ipc.handle(CLOUD_CHANNELS.cloudResolveConflict, (event) =>
+      this.resolveConflict(this.requireEntry(event.sender.id)),
     );
     await this.connection.initialize();
   }
-
-  private requireSession(id: number): WindowSession {
-    const entry = this.windows.get(id);
-    if (!entry) throw new Error('Open a cloud project first');
-    return entry;
+  private get localDbPath(): string {
+    return this.deps.localDbPath ?? join(this.deps.userDataPath, 'cat_v1.db');
   }
-  private cacheDirectory(id: string): string {
-    const account = this.connection.account;
-    if (!account || !/^[a-zA-Z0-9_-]+$/.test(account.id)) throw new Error('Sign in first');
-    return join(
+  private get localProjectsDir(): string {
+    return this.deps.localProjectsDir ?? join(this.deps.userDataPath, 'projects');
+  }
+  private assertAccountChange(): void {
+    if (this.hasOpenProjects || this.opening.size || this.accountOpening)
+      throw new Error('Leave cloud projects before changing accounts');
+  }
+  private assertAccountIdle(): void {
+    if (this.opening.size) throw new Error('Wait for the cloud context to open');
+    for (const entry of this.windows.values()) entry.assertIdle();
+    this.account?.assertWritable();
+  }
+  private async getAccount(): Promise<CloudAccountSession> {
+    if (!this.connection.account || !this.connection.baseURL) throw new Error('Sign in first');
+    if (this.account) return this.account;
+    if (this.accountOpening) return this.accountOpening;
+    const directory = join(
       this.deps.userDataPath,
       'cloud',
-      createHash('sha256').update(this.connection.baseURL!).digest('hex').slice(0, 16),
-      account.id,
-      id,
+      createHash('sha256').update(this.connection.baseURL).digest('hex').slice(0, 16),
+      this.id(this.connection.account.id),
+      'account-v2',
     );
+    this.accountOpening = (async () => {
+      const account = new CloudAccountSession(directory, this.connection);
+      await account.initialize();
+      this.account = account;
+      return account;
+    })();
+    try {
+      return await this.accountOpening;
+    } finally {
+      this.accountOpening = undefined;
+    }
   }
-
-  private async createProject(args: unknown[]): Promise<CloudProject> {
-    if (!this.connection.account) throw new Error('Sign in first');
+  private async listProjects() {
+    const account = await this.getAccount();
+    const drafts = account.db.listProjects().map((project) => ({
+      id: project.uuid,
+      name: project.name,
+      revision: account.tracker.ensure('project', project.uuid).revision,
+    }));
+    try {
+      const [current, legacy] = await Promise.all([
+        this.connection.json<CloudProjectV2[]>('/v2/projects'),
+        this.connection.json<CloudProject[]>('/v1/projects'),
+      ]);
+      const remote = [
+        ...current,
+        ...legacy.filter((project) => !current.some((other) => other.id === project.id)),
+      ];
+      return [
+        ...remote,
+        ...drafts.filter((project) => !remote.some((other) => other.id === project.id)),
+      ];
+    } catch (error) {
+      if (drafts.length) return drafts;
+      throw error;
+    }
+  }
+  private async createProject(args: unknown[]) {
     const [name, src, tgt, type] = args;
     if (
       ![name, src, tgt].every(
-        (v) => typeof v === 'string' && v.trim().length > 0 && v.length <= 200,
+        (value) => typeof value === 'string' && value.trim().length > 0 && value.length <= 200,
       ) ||
       !isProjectType(type)
     )
       throw new Error('Invalid project details');
-    const stagingRoot = join(this.deps.userDataPath, 'cloud', 'staging');
-    await mkdir(stagingRoot, { recursive: true });
-    const directory = await mkdtemp(join(stagingRoot, 'create-'));
-    try {
-      const path = join(directory, 'cat_v1.db');
-      const db = new CATDatabase(path);
-      let projectId: number;
-      try {
-        projectId = db.createProject(String(name).trim(), String(src), String(tgt), type);
-      } finally {
-        db.close();
-      }
-      const snapshot = exportCloudProject(path, projectId);
-      const state = await this.connection.upload(Buffer.from(JSON.stringify(snapshot.state)));
-      const resources = await this.connection.upload(
-        Buffer.from(JSON.stringify(snapshot.resources)),
-      );
-      return await this.connection.json<CloudProject>('/v1/projects', 'POST', {
-        mode: 'relay',
-        id: randomUUID(),
-        name: String(name).trim(),
-        manifest: { protocol: 1, schema: 15, state, resources, files: [] },
-      });
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
+    this.assertAccountIdle();
+    return (await this.getAccount()).createProject(
+      String(name).trim(),
+      String(src),
+      String(tgt),
+      type,
+    );
   }
-
-  private async openProject(
+  private async switchContext(
     window: BrowserWindow,
-    id: string,
-    keepLocal: boolean,
-  ): Promise<number> {
+    open: (
+      account: CloudAccountSession,
+    ) => Promise<{ projectId?: number; resourceKind?: CloudResourceKind }>,
+  ) {
     const senderId = window.webContents.id;
-    if (this.opening.has(senderId)) throw new Error('A project is already opening');
-    const previous = this.windows.get(senderId);
-    if (!previous && (this.localRunning.size || this.deps.router.isBusy(senderId)))
-      throw new Error('Wait for active local operations to finish before opening a cloud project');
-    if (previous?.session.remote.id === id) return previous.session.projectId;
-    if (previous) {
-      previous.assertIdle();
-      if (previous.session.status().pending && !keepLocal)
-        throw new Error('Confirm keeping changes on this device first');
-    }
-    if ([...this.windows.values()].some((w) => w.session.remote.id === id))
-      throw new Error('This cloud project is already open in another window');
+    if (this.opening.has(senderId)) throw new Error('A cloud context is already opening');
+    this.assertAccountIdle();
+    if (
+      !this.windows.has(senderId) &&
+      (this.localRunning.size || this.deps.router.isBusy(senderId))
+    )
+      throw new Error('Wait for local operations to finish');
     this.opening.add(senderId);
+    const previous = this.windows.get(senderId);
     if (previous) previous.busy = true;
-    let session: CloudProjectSession | undefined;
     try {
-      const remote = await this.connection.json<CloudProject>(`/v1/projects/${id}`);
-      session = new CloudProjectSession(remote, this.connection, this.cacheDirectory(id));
-      await session.open();
+      const account = await this.getAccount();
+      const context = await open(account);
       if (previous) await previous.dispose();
-      this.attach(window, session);
-      return session.projectId;
-    } catch (error) {
-      session?.dispose();
-      throw error;
+      this.attach(window, account, context);
+      return context;
     } finally {
       this.opening.delete(senderId);
       if (previous) previous.busy = false;
     }
   }
-
-  private async pull(entry: WindowSession): Promise<number> {
-    entry.assertIdle();
-    if (entry.session.status().pending)
-      throw new Error(
-        'This device has changes not saved to cloud. Keep them here; a newer version cannot replace them.',
-      );
-    entry.busy = true;
-    const directory = entry.session.directory;
-    const staging = `${directory}.download-${randomUUID()}`;
-    const backup = `${directory}.previous-${randomUUID()}`;
-    let replacement: CloudProjectSession | undefined;
-    let detached = false;
-    let archived = false;
-    let installed = false;
-    try {
-      const remote = await this.connection.json<CloudProject>(
-        `/v1/projects/${entry.session.remote.id}`,
-      );
-      if (remote.revision === entry.session.status().revision) return entry.session.projectId;
-      replacement = new CloudProjectSession(remote, this.connection, staging);
-      await replacement.open();
-      replacement.dispose();
-      await entry.dispose();
-      detached = true;
-      await rename(directory, backup);
-      archived = true;
-      await rename(staging, directory);
-      installed = true;
-      replacement = new CloudProjectSession(remote, this.connection, directory);
-      await replacement.open();
-      this.attach(entry.window, replacement);
-      return replacement.projectId;
-    } catch (error) {
-      replacement?.dispose();
-      if (detached) {
-        if (installed) await rename(directory, staging);
-        if (archived) await rename(backup, directory);
-        const restored = new CloudProjectSession(entry.session.remote, this.connection, directory);
-        await restored.open();
-        this.attach(entry.window, restored);
+  private async openProject(window: BrowserWindow, id: string): Promise<number> {
+    const context = await this.switchContext(window, async (account) => {
+      try {
+        return { projectId: await account.openProject(id) };
+      } catch (error) {
+        if (!(error instanceof CloudRequestError) || error.status !== 404) throw error;
+        return { projectId: await migrateLegacyCloudProject(account, this.connection, id) };
       }
-      throw error;
+    });
+    return context.projectId!;
+  }
+  private async openResources(window: BrowserWindow, kind: CloudResourceKind): Promise<void> {
+    await this.switchContext(window, async (account) => {
+      await account.openResources();
+      return { resourceKind: kind };
+    });
+  }
+  private invalidate(): void {
+    for (const entry of this.windows.values())
+      entry.notify({ projectId: entry.projectId ?? 0, kind: 'tm', reason: 'tm-imported' });
+    for (const entry of this.windows.values())
+      entry.notify({ projectId: entry.projectId ?? 0, kind: 'tb', reason: 'tb-imported' });
+  }
+  private async synchronize(entry: WindowSession, allProjects = false): Promise<CloudSyncResult> {
+    this.assertAccountIdle();
+    entry.busy = true;
+    try {
+      return await entry.account.synchronize(entry.projectId, allProjects);
     } finally {
       entry.busy = false;
-      await rm(staging, { recursive: true, force: true });
+      this.invalidate();
     }
   }
-
-  private attach(window: BrowserWindow, session: CloudProjectSession): void {
+  private async resolveConflict(entry: WindowSession): Promise<CloudSyncResult> {
+    this.assertAccountIdle();
+    if (this.localRunning.size) throw new Error('Wait for local operations to finish');
+    const conflicts = entry.account.getConflicts();
+    if (!conflicts.length) throw new Error('Synchronize first to check for conflicts');
+    let localCopyProjectId: number | undefined;
+    let localCopyName: string | undefined;
+    for (const row of conflicts) {
+      if (row.kind === 'project') {
+        const projectId = entry.account.projectId(row.id)!;
+        const sourceFiles = entry.account.db.listFiles(projectId);
+        const staged: string[] = [];
+        try {
+          localCopyProjectId = cloneCloudProjectAsLocal(
+            entry.account.dbPath,
+            this.localDbPath,
+            projectId,
+            (copyId, files) => {
+              const destination = join(this.localProjectsDir, String(copyId));
+              mkdirSync(destination, { recursive: true });
+              staged.push(destination);
+              files.forEach((file) => {
+                const source = sourceFiles.find((original) => original.uuid === file.sourceUUID);
+                if (!source) throw new Error('Original project file mapping is unavailable');
+                copyFileSync(
+                  internalProjectFilePath(entry.account.projectsDir, source),
+                  internalProjectFilePath(this.localProjectsDir, file),
+                );
+              });
+            },
+          );
+          localCopyName = this.deps.localDb.getProject(localCopyProjectId)?.name;
+        } catch (error) {
+          for (const directory of staged) rmSync(directory, { recursive: true, force: true });
+          throw error;
+        }
+      } else {
+        const id = cloneLocalCloudResource(
+          entry.account.dbPath,
+          this.localDbPath,
+          row.kind,
+          row.id,
+        );
+        localCopyName = (
+          row.kind === 'tm' ? this.deps.localDb.getTM(id) : this.deps.localDb.getTermBase(id)
+        )?.name;
+      }
+    }
+    entry.busy = true;
+    try {
+      await entry.account.acceptCloud(conflicts);
+      return { projectId: entry.projectId, changed: true, localCopyProjectId, localCopyName };
+    } finally {
+      entry.busy = false;
+      this.invalidate();
+    }
+  }
+  private attach(
+    window: BrowserWindow,
+    account: CloudAccountSession,
+    context: { projectId?: number; resourceKind?: CloudResourceKind },
+  ): void {
     const senderId = window.webContents.id;
     const jobs = new JobManager();
     const running = new Set<string>();
-    jobs.on('progress', (p) => {
-      if (p.status === 'running') running.add(p.jobId);
-      else running.delete(p.jobId);
+    jobs.on('progress', (event) => {
+      if (event.status === 'running') running.add(event.jobId);
+      else running.delete(event.jobId);
     });
     const send = (channel: string, data: unknown) => {
       if (!window.isDestroyed()) window.webContents.send(channel, data);
     };
-    const ipc: IpcMainLike = this.deps.router.bind(senderId, (channel) => {
-      if (entry.busy) throw new Error('Wait for the cloud operation to finish');
-      if (cloudWrites.has(channel)) session.assertWritable();
+    const ipc = this.deps.router.bind(senderId, (channel) => {
+      if (entry.busy || account.busy || this.opening.size)
+        throw new Error('Wait for synchronization to finish');
+      if (cloudWrites.has(channel)) account.assertWritable();
       else if (!cloudReads.has(channel))
-        throw new Error('This action is unavailable inside a cloud project');
+        throw new Error('This action is unavailable in cloud projects');
     });
-    const service = new ProjectService(session.db, session.projectsDir, session.dbPath, {
+    const service = new ProjectService(account.db, account.projectsDir, account.dbPath, {
       aiRuntimeConfigProvider: this.deps.runtime,
       settingsRepo: new SqliteSettingsRepository(this.deps.localDb),
     });
-    const lookup = new ReferenceLookupWorkerManager({ dbPath: session.dbPath });
-    const prefetch = new ReferenceLookupWorkerManager({ dbPath: session.dbPath });
+    const lookup = new ReferenceLookupWorkerManager({ dbPath: account.dbPath });
+    const prefetch = new ReferenceLookupWorkerManager({ dbPath: account.dbPath });
+    const notify = (event: ReferenceDataChangedEvent) => {
+      void lookup.invalidateReferenceData().catch(() => {});
+      void prefetch.invalidateReferenceData().catch(() => {});
+      send(IPC_CHANNELS.events.referenceDataChanged, event);
+    };
     const referenceDeps = {
       ipcMain: ipc,
       projectService: service,
@@ -286,9 +417,7 @@ export class CloudWorkspace {
       referenceLookup: lookup,
       referenceLookupPrefetch: prefetch,
       notifyReferenceDataChanged: (event: ReferenceDataChangedEvent) => {
-        void lookup.invalidateReferenceData().catch(() => {});
-        void prefetch.invalidateReferenceData().catch(() => {});
-        send(IPC_CHANNELS.events.referenceDataChanged, event);
+        for (const other of this.windows.values()) other.notify(event);
       },
     };
     const unsubscribe = subscribeToWorkingTMReferenceDataChanges(
@@ -296,7 +425,6 @@ export class CloudWorkspace {
       referenceDeps.notifyReferenceDataChanged,
     );
     registerProjectHandlers({ ipcMain: ipc, projectService: service });
-    // The sidebar always keeps the device's local project catalog.
     ipc.handle(IPC_CHANNELS.project.list, () => this.deps.localDb.listProjects());
     registerTMHandlers(referenceDeps);
     registerTBHandlers(referenceDeps);
@@ -313,14 +441,14 @@ export class CloudWorkspace {
       send('cloud-close-requested', null);
     };
     const entry: WindowSession = {
-      session,
+      account,
+      ...context,
       window,
       busy: false,
+      notify,
       assertIdle: () => {
-        if (entry.busy || !session.writable || running.size || this.deps.router.isBusy(senderId))
-          throw new Error(
-            'Wait for the active operation to finish before saving or switching projects',
-          );
+        if (entry.busy || account.busy || running.size || this.deps.router.isBusy(senderId))
+          throw new Error('Wait for active operations to finish');
       },
       dispose: async () => {
         entry.busy = true;
@@ -328,15 +456,18 @@ export class CloudWorkspace {
         await prefetch.dispose();
         unsubscribe();
         unsubscribeQA();
-        session.dispose();
         this.deps.router.remove(senderId);
         this.windows.delete(senderId);
         window.removeListener('close', onClose);
-        window.setTitle('momoCAT');
+        window.setTitle(this.deps.windowTitle ?? 'momoCAT');
       },
     };
     this.windows.set(senderId, entry);
-    window.setTitle(`momoCAT · ${session.remote.name}`);
     window.on('close', onClose);
+  }
+  async dispose(): Promise<void> {
+    for (const entry of [...this.windows.values()]) await entry.dispose();
+    this.account?.dispose();
+    this.account = undefined;
   }
 }

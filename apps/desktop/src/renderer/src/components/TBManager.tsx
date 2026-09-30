@@ -34,7 +34,11 @@ const CREATE_SOURCE_OPTIONS: Array<{ value: CreateSource; label: string; hint: s
   { value: 'sync', label: 'Sync with Excel', hint: 'Mirror a linked local file' },
 ];
 
-export const TBManager: React.FC = () => {
+export const TBManager: React.FC<{
+  storage?: 'local' | 'cloud';
+  cloudAvailable?: boolean;
+  onStorageChange?: (storage: 'local' | 'cloud') => void;
+}> = ({ storage = 'local', cloudAvailable = false, onStorageChange }) => {
   const [tbs, setTBs] = useState<TBWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -109,7 +113,7 @@ export const TBManager: React.FC = () => {
 
     // A standard TB starts empty and is updated later via the card's upload
     // button; a synced TB is unusable without its binding, so link it now.
-    if (createSource === 'sync') {
+    if (storage === 'local' && createSource === 'sync') {
       await handleStartLink(tbId);
     }
   };
@@ -331,9 +335,22 @@ export const TBManager: React.FC = () => {
               Manage reusable term bases for consistency.
             </p>
           </div>
-          <Button variant="primary" onClick={() => setShowCreate(true)}>
-            Create Term Base
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            {onStorageChange && cloudAvailable && (
+              <ChoiceGroup
+                label="TB storage"
+                value={storage}
+                onValueChange={onStorageChange}
+                options={[
+                  { value: 'local', label: 'Local' },
+                  { value: 'cloud', label: 'Cloud' },
+                ]}
+              />
+            )}
+            <Button variant="primary" onClick={() => setShowCreate(true)}>
+              Create Term Base
+            </Button>
+          </div>
         </div>
 
         {importNotice && (
@@ -361,21 +378,23 @@ export const TBManager: React.FC = () => {
         {showCreate && (
           <div className="mb-8 p-6 surface-card animate-in fade-in slide-in-from-top-4">
             <h2 className="field-label !text-caption mb-4">Create New Term Base</h2>
-            <div className="mb-4">
-              <label className="field-label !text-caption">Type</label>
-              <ChoiceGroup
-                label="TB creation type"
-                variant="cards"
-                value={createSource}
-                onValueChange={setCreateSource}
-                options={CREATE_SOURCE_OPTIONS.map((option) => ({
-                  value: option.value,
-                  label: option.label,
-                  description: option.hint,
-                }))}
-                className="mt-1"
-              />
-            </div>
+            {storage === 'local' && (
+              <div className="mb-4">
+                <label className="field-label !text-caption">Type</label>
+                <ChoiceGroup
+                  label="TB creation type"
+                  variant="cards"
+                  value={createSource}
+                  onValueChange={setCreateSource}
+                  options={CREATE_SOURCE_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                    description: option.hint,
+                  }))}
+                  className="mt-1"
+                />
+              </div>
+            )}
             <form onSubmit={handleCreate} className="grid grid-cols-4 gap-4 items-end">
               <div className="col-span-2">
                 <label className="field-label !text-caption">Name</label>
@@ -430,6 +449,7 @@ export const TBManager: React.FC = () => {
               <TBCard
                 key={tb.id}
                 tb={tb}
+                cloud={storage === 'cloud'}
                 onPreview={(tbId) => void handleOpenPreview(tbId)}
                 onImport={(tbId) => void handleStartImport(tbId)}
                 onSync={(target) => void handleSyncNow(target)}

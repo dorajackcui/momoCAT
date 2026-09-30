@@ -1,17 +1,21 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CloudStatus } from '../../../shared/cloud';
-import { Button } from './ui';
+import { Button, Icon, IconButton, Modal } from './ui';
 
 export function useCloudStatus() {
   const [status, setStatus] = useState<CloudStatus | null>(null);
+  const generation = useRef(0);
   const refresh = useCallback(async () => {
+    const request = ++generation.current;
     const next = await window.api.cloudStatus?.();
-    if (next) setStatus(next);
+    if (next && request === generation.current) setStatus(next);
     return next;
   }, []);
   useEffect(() => {
     // This only reads main-process local state; it makes no cloud requests.
-    void refresh().catch(() => {});
+    void Promise.resolve()
+      .then(refresh)
+      .catch(() => {});
     const timer = setInterval(() => {
       void refresh().catch(() => {});
     }, 2000);
@@ -72,7 +76,7 @@ export function CloudAccountControls({ status }: { status: CloudStatus | null })
           Sign in with GitHub
         </Button>
       )}
-      {status?.account && !status.project && (
+      {status?.account && !status.project && !status.context && (
         <Button
           type="button"
           disabled={busy}
@@ -97,40 +101,109 @@ export function CloudAccountControls({ status }: { status: CloudStatus | null })
 
 export function CloudBanner({
   status,
-  onSave,
-  onPull,
-  onClose,
+  onSync,
+  onResolveConflict,
 }: {
   status: CloudStatus;
-  onSave: () => void;
-  onPull: () => void;
-  onClose: () => void;
+  onSync: () => void;
+  onResolveConflict: () => void;
 }) {
-  if (!status.project) return null;
-  const project = status.project;
+  if (!status.project && status.context !== 'cloud') return null;
+  const syncing = status.syncing || status.project?.syncing;
+  const pending = status.pending ?? status.project?.pending;
+  const conflict = status.conflict || status.project?.conflict;
+  const error = status.error || status.project?.error;
+  const lastSyncedAt = status.lastSyncedAt || status.project?.lastSyncedAt;
+  const label = syncing
+    ? 'Syncing…'
+    : conflict
+      ? 'Sync conflict'
+      : error
+        ? 'Sync failed'
+        : pending
+          ? 'Unsynced changes'
+          : lastSyncedAt
+            ? 'Synced'
+            : 'Ready to sync';
   return (
-    <div className="shrink-0 border-b border-border px-4 py-2 text-sm" role="status">
+    <div className="shrink-0 border-b border-border px-4 py-2 text-sm">
       <div className="flex items-center justify-between gap-3">
-        <span>
-          Cloud · {project.name} · v{project.revision} ·{' '}
-          {project.pending ? 'Changes saved on this device' : 'Saved to cloud'}
-        </span>
-        <div className="flex gap-2">
-          <Button size="sm" disabled={!project.writable} onClick={onSave}>
-            Save to cloud
-          </Button>
-          <Button size="sm" disabled={!project.writable} onClick={onPull}>
-            Get latest
-          </Button>
-          <Button size="sm" disabled={!project.writable} onClick={onClose}>
-            Close project
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1" role="status">
+          <span className="flex items-center gap-2">
+            <Icon name="cloud" />
+            {status.project?.name ||
+              (status.resourceKind === 'tm' ? 'Cloud TMs' : 'Cloud term bases')}
+          </span>
+          <span className={error || conflict ? 'text-danger' : 'text-text-muted'}>{label}</span>
+          {lastSyncedAt && (
+            <span className="text-xs text-text-muted" title={lastSyncedAt}>
+              Last sync {new Date(lastSyncedAt).toLocaleString()}
+            </span>
+          )}
+        </div>
+        <IconButton
+          size="sm"
+          variant="ghost"
+          disabled={!!syncing || status.project?.writable === false}
+          onClick={onSync}
+          title="Sync with cloud"
+          aria-label="Sync with cloud"
+        >
+          <Icon name="refresh-cw" className={`h-4 w-4${syncing ? ' animate-spin' : ''}`} />
+        </IconButton>
+      </div>
+      {error && (
+        <p className="mt-1 text-xs text-danger" role="alert">
+          {error}
+        </p>
+      )}
+      {conflict && (
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+          <span className="text-text-muted">
+            Both this device and cloud have changes. Your local work is preserved.
+          </span>
+          <Button size="xs" variant="secondary" disabled={!!syncing} onClick={onResolveConflict}>
+            Save local copy and get latest
           </Button>
         </div>
-      </div>
-      {project.error && <p className="mt-2">{project.error}</p>}
-      <p className="mt-1 text-xs text-text-muted">
-        Save to cloud before switching devices. Changes stay on this device until you save.
-      </p>
+      )}
     </div>
+  );
+}
+
+export type CloudCloseChoice = 'sync' | 'keep' | 'cancel';
+
+export function CloudCloseDialog({
+  open,
+  onChoose,
+}: {
+  open: boolean;
+  onChoose: (choice: CloudCloseChoice) => void;
+}) {
+  return (
+    <Modal
+      open={open}
+      title="Sync before closing?"
+      size="sm"
+      onClose={() => onChoose('cancel')}
+      closeOnBackdrop={false}
+      footer={
+        <>
+          <Button variant="secondary" onClick={() => onChoose('cancel')}>
+            Cancel
+          </Button>
+          <Button variant="secondary" onClick={() => onChoose('keep')}>
+            Keep on this device and close
+          </Button>
+          <Button variant="primary" onClick={() => onChoose('sync')}>
+            Sync and close
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-text-muted">
+        You have changes saved on this device. Sync to continue them on another computer.
+      </p>
+    </Modal>
   );
 }

@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow, ipcMain, dialog, clipboard, Menu } from 'ele
 import type { MenuItemConstructorOptions } from 'electron';
 import { join } from 'path';
 import { mkdir, readFile } from 'fs/promises';
+import { mkdirSync } from 'node:fs';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import electronUpdater from 'electron-updater';
@@ -44,8 +45,11 @@ import { focusPrimaryWindow } from './singleInstance';
 import { resolveDesktopUserDataPath } from './userDataPath';
 import { CloudWorkspace } from './cloud/CloudWorkspace';
 import { IpcContextRouter } from './cloud/IpcContextRouter';
+import { getDesktopBuildProfile } from './desktopBuildFlavor';
 
 const { autoUpdater } = electronUpdater;
+const buildProfile = getDesktopBuildProfile();
+if (buildProfile.appName) app.setName(buildProfile.appName);
 let cloudWorkspace: CloudWorkspace | undefined;
 const localWindows = () =>
   BrowserWindow.getAllWindows().filter(
@@ -64,8 +68,12 @@ const userDataPath = resolveDesktopUserDataPath({
   appPath: app.getAppPath(),
   defaultUserDataPath: app.getPath('userData'),
   isDev: is.dev,
+  buildFlavor: buildProfile.flavor,
+  appDataPath: app.getPath('appData'),
 });
+if (buildProfile.flavor === 'cloud') mkdirSync(userDataPath, { recursive: true });
 app.setPath('userData', userDataPath);
+if (buildProfile.flavor === 'cloud') app.setPath('sessionData', userDataPath);
 
 const primaryInstanceReady = app.requestSingleInstanceLock() ? app.whenReady() : null;
 if (!primaryInstanceReady) {
@@ -125,6 +133,7 @@ function createWindow(): BrowserWindow {
     width: 1200,
     height: 800,
     show: false,
+    title: buildProfile.displayName,
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -135,6 +144,8 @@ function createWindow(): BrowserWindow {
   mainWindow.on('ready-to-show', () => {
     mainWindow.show();
   });
+  if (buildProfile.flavor === 'cloud')
+    mainWindow.on('page-title-updated', (event) => event.preventDefault());
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url);
@@ -199,7 +210,7 @@ function configureApplicationMenu(updateService: AppUpdateService) {
     process.platform === 'darwin'
       ? [
           {
-            label: 'momoCAT',
+            label: buildProfile.displayName,
             submenu: [
               { role: 'about' },
               { type: 'separator' },
@@ -250,7 +261,7 @@ function broadcastReferenceDataChanged(event: ReferenceDataChangedEvent) {
 }
 
 primaryInstanceReady?.then(async () => {
-  electronApp.setAppUserModelId('com.cat.tool');
+  electronApp.setAppUserModelId(buildProfile.appUserModelId);
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window);
@@ -320,25 +331,30 @@ primaryInstanceReady?.then(async () => {
   const router = new IpcContextRouter(ipcMain);
   const localIpc = router.local;
   const jobManager = new JobManager();
+  let cloudQuitRequested = false;
   cloudWorkspace = new CloudWorkspace({
     ipcMain,
     router,
     userDataPath,
     localDb: db,
+    localDbPath: dbPath,
+    localProjectsDir: projectsDir,
+    windowTitle: buildProfile.displayName,
+    onCloseCancelled: () => {
+      cloudQuitRequested = false;
+    },
     runtime: aiRuntimeConfigService,
     localJobs: jobManager,
   });
   void cloudWorkspace.initialize();
-  app.on('before-quit', (event) => {
-    if (!cloudWorkspace?.hasOpenProjects) return;
-    event.preventDefault();
-    void dialog.showMessageBox({
-      type: 'info',
-      title: 'Close cloud projects before quitting',
-      message:
-        'Close the current cloud project, keeping changes on this device or saving them to cloud, then quit momoCAT.',
-      buttons: ['Keep open'],
-    });
+  app.on('before-quit', () => {
+    cloudQuitRequested = true;
+  });
+  app.on('window-all-closed', () => {
+    if (cloudQuitRequested) app.quit();
+  });
+  app.on('will-quit', () => {
+    void cloudWorkspace?.dispose();
   });
 
   const projectService = new ProjectService(db, projectsDir, dbPath, {
@@ -404,13 +420,14 @@ primaryInstanceReady?.then(async () => {
   registerSystemHandlers({ ipcMain: localIpc, shell });
 
   const appUpdateService = createAppUpdateService({
-    appName: 'momoCAT',
+    appName: buildProfile.displayName,
     app,
     dialog,
     isDev: is.dev,
     logger: console,
     notifyStatus: broadcastAppUpdateStatus,
     updater: autoUpdater,
+    enabled: buildProfile.updatesEnabled,
   });
   configureApplicationMenu(appUpdateService);
   ipcMain.handle(IPC_CHANNELS.app.checkForUpdates, async () => {

@@ -1,3 +1,4 @@
+import type { CloudResourceSummary } from '../../../../shared/cloud';
 import type { MountedTB, TBWithStats } from '../../../../shared/ipc';
 import { Select } from '../ui';
 import {
@@ -9,11 +10,20 @@ import {
 interface ProjectTBPaneProps {
   mountedTBs: MountedTB[];
   allTBs: TBWithStats[];
+  localResources?: CloudResourceSummary[];
+  onCopyAndMount?: (id: string) => void;
   onMountTB: (tbId: string) => void;
   onUnmountTB: (tbId: string) => void;
 }
 
-export function ProjectTBPane({ mountedTBs, allTBs, onMountTB, onUnmountTB }: ProjectTBPaneProps) {
+export function ProjectTBPane({
+  mountedTBs,
+  allTBs,
+  onMountTB,
+  onUnmountTB,
+  localResources,
+  onCopyAndMount,
+}: ProjectTBPaneProps) {
   return (
     <div className="w-full max-w-3xl">
       <section aria-label="Mounted term bases">
@@ -23,7 +33,9 @@ export function ProjectTBPane({ mountedTBs, allTBs, onMountTB, onUnmountTB }: Pr
             aria-label="Mount term base"
             className="w-auto max-w-full sm:max-w-xs"
             onChange={(event) => {
-              if (event.target.value) onMountTB(event.target.value);
+              const value = event.target.value;
+              if (value.startsWith('local:')) onCopyAndMount?.(value.slice(6));
+              else if (value) onMountTB(value);
             }}
             value=""
           >
@@ -37,6 +49,15 @@ export function ProjectTBPane({ mountedTBs, allTBs, onMountTB, onUnmountTB }: Pr
                   {tb.name} ({tb.srcLang} → {tb.tgtLang})
                 </option>
               ))}
+            {!!localResources?.length && (
+              <optgroup label="Create cloud copy from local">
+                {localResources.map((resource) => (
+                  <option key={`local:${resource.id}`} value={`local:${resource.id}`}>
+                    {resource.name} ({resource.srcLang} → {resource.tgtLang}) · create cloud copy
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </Select>
         </ProjectSectionHeader>
         {mountedTBs.length === 0 ? (

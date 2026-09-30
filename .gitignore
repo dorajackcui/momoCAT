@@ -10,12 +10,14 @@ packages/*/dist/
 apps/cli/dist/
 apps/desktop/out/
 apps/desktop/dist/
+apps/desktop/dist-cloud/
 out/
 release/
 coverage/
 
 # Local App Data & Database
 .cat_data/
+.cat_data-cloud/
 *.db
 *.db-journal
 *.db-shm

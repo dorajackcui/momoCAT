@@ -4,13 +4,14 @@ import { handleBlob } from './blobs';
 import { isAllowedEmail, type Env } from './env';
 import { devicePage } from './pages';
 import { handleProjects } from './projects';
+import { handleProjectsV2, handleResourcesV2 } from './catalogV2';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
       const url = new URL(request.url);
       if (url.pathname === '/health' && request.method === 'GET')
-        return Response.json({ service: 'momocat-cloud', protocol: 1 });
+        return Response.json({ service: 'momocat-cloud', protocol: 1, protocols: [1, 2] });
       if (
         !env.BETTER_AUTH_URL ||
         !env.BETTER_AUTH_SECRET ||
@@ -30,7 +31,7 @@ export default {
       if (!session) throw new HttpError(401, 'Please sign in');
       if (!session.user.emailVerified || !isAllowedEmail(env, session.user.email))
         throw new HttpError(403, 'This account is not invited');
-      if (url.pathname === '/v1/me' && request.method === 'GET')
+      if ((url.pathname === '/v1/me' || url.pathname === '/v2/me') && request.method === 'GET')
         return Response.json({
           id: session.user.id,
           email: session.user.email,
@@ -45,6 +46,27 @@ export default {
         );
       if (url.pathname === '/v1/projects' || url.pathname.startsWith('/v1/projects/'))
         return await handleProjects(
+          request,
+          env,
+          session.user.id,
+          url.pathname.split('/').slice(3).filter(Boolean),
+        );
+      if (url.pathname.startsWith('/v2/blobs/'))
+        return await handleBlob(
+          request,
+          env,
+          session.user.id,
+          url.pathname.slice('/v2/blobs/'.length),
+        );
+      if (url.pathname === '/v2/projects' || url.pathname.startsWith('/v2/projects/'))
+        return await handleProjectsV2(
+          request,
+          env,
+          session.user.id,
+          url.pathname.split('/').slice(3).filter(Boolean),
+        );
+      if (url.pathname === '/v2/resources' || url.pathname.startsWith('/v2/resources/'))
+        return await handleResourcesV2(
           request,
           env,
           session.user.id,

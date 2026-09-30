@@ -14,7 +14,18 @@ import {
 export const MAX_RESERVED_BYTES = 128 * 1024 * 1024;
 
 export async function requireBlobs(env: Env, userId: string, manifest: Manifest): Promise<void> {
-  const hashes = manifestHashes(manifest);
+  return requireBlobHashes(env, userId, manifestHashes(manifest));
+}
+
+// Both protocol catalogs reference the same account-private immutable storage.
+export async function requireBlobHashes(
+  env: Env,
+  userId: string,
+  values: readonly string[],
+): Promise<void> {
+  const hashes = [...new Set(values)];
+  if (hashes.length > 256 || hashes.some((hash) => !/^[a-f0-9]{64}$/.test(hash)))
+    throw new HttpError(400, 'Invalid blob references');
   for (let start = 0; start < hashes.length; start += 80) {
     const chunk = hashes.slice(start, start + 80);
     const result = await env.DB.prepare(

@@ -18,15 +18,47 @@ import { useAppUpdates } from './hooks/useAppUpdates';
 import { useWorkspaceNavigation, type WorkspaceView } from './hooks/useWorkspaceNavigation';
 import { ThemeProvider } from './theme/ThemeProvider';
 import { TypographyProvider } from './theme/TypographyProvider';
-import { CloudAccountControls, CloudBanner, useCloudStatus } from './components/CloudControls';
+import {
+  CloudAccountControls,
+  CloudBanner,
+  CloudCloseDialog,
+  useCloudStatus,
+  type CloudCloseChoice,
+} from './components/CloudControls';
 
 function App(): JSX.Element {
   const { view, pending, runGuarded, registerGuard } = useWorkspaceNavigation();
   const appearanceScope = view.kind === 'editor' ? 'editor' : 'workspace';
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [cloudClosePrompt, setCloudClosePrompt] = useState(false);
+  const cloudCloseResolver = useRef<((choice: CloudCloseChoice) => void) | null>(null);
+  const cloudCloseInProgress = useRef(false);
+  const chooseCloudClose = useCallback((choice: CloudCloseChoice) => {
+    const resolve = cloudCloseResolver.current;
+    cloudCloseResolver.current = null;
+    setCloudClosePrompt(false);
+    resolve?.(choice);
+  }, []);
+  const requestCloudClose = useCallback(
+    () =>
+      new Promise<CloudCloseChoice>((resolve) => {
+        cloudCloseResolver.current = resolve;
+        setCloudClosePrompt(true);
+      }),
+    [],
+  );
+  useEffect(
+    () => () => {
+      cloudCloseResolver.current?.('cancel');
+    },
+    [],
+  );
   const [workspaceGeneration, setWorkspaceGeneration] = useState(0);
   const [editorPositions, setEditorPositions] = useState<Record<string, string | null>>({});
-  const scope = view.cloudId ?? 'local';
+  const { status: cloudStatus, refresh: refreshStatus } = useCloudStatus();
+  const scope =
+    view.cloudId ??
+    (view.cloudResources ? `cloud-resources:${cloudStatus?.account?.id ?? ''}` : 'local');
   const rememberEditorPosition = useCallback(
     (fileId: number, segmentId: string | null) => {
       setEditorPositions((positions) => ({ ...positions, [`${scope}:${fileId}`]: segmentId }));
@@ -34,7 +66,6 @@ function App(): JSX.Element {
     [scope],
   );
   const updates = useAppUpdates();
-  const { status: cloudStatus, refresh: refreshStatus } = useCloudStatus();
   const accountId = cloudStatus?.account?.id;
   const [cloudCatalog, setCloudCatalog] = useState<{
     accountId?: string;
@@ -70,72 +101,144 @@ function App(): JSX.Element {
 
   const confirmKeepLocal = useCallback(async () => {
     const latest = await window.api.cloudStatus?.();
-    if (!latest?.project?.pending) return true;
+    if (!(latest?.pending ?? latest?.project?.pending) && !latest?.pendingElsewhere) return true;
     return feedbackService.confirm({
       title: 'Keep changes on this device?',
       message:
-        'Your changes have not been saved to cloud. They will remain on this device. To continue them on another computer, stay here and save to cloud first.',
+        'These changes are saved on this device. Sync before continuing on another computer.',
       confirmLabel: 'Keep on this device',
-      cancelLabel: 'Stay in project',
+      cancelLabel: 'Stay here',
     });
   }, []);
-  const closeCloud = useCallback(
-    (closeWindow = false) => {
-      void runGuarded(async () => {
-        if (!(await confirmKeepLocal())) return null;
-        await window.api.cloudCloseProject(true, closeWindow);
-        await refreshStatus();
-        return { kind: 'home' };
-      });
-    },
-    [runGuarded, confirmKeepLocal, refreshStatus],
-  );
-  useEffect(() => window.api.onCloudCloseRequested?.(() => closeCloud(true)), [closeCloud]);
+  const closeCloud = useCallback(() => {
+    if (cloudCloseInProgress.current) return;
+    cloudCloseInProgress.current = true;
+    let closed = false;
+    let before = 0;
+    void runGuarded(async () => {
+      try {
+        const latest = await window.api.cloudStatus();
+        before = latest.cacheRevision ?? 0;
+        if ((latest.pending ?? latest.project?.pending) || latest.pendingElsewhere) {
+          const choice = await requestCloudClose();
+          if (choice === 'cancel') return null;
+          if (choice === 'sync') {
+            await window.api.cloudSync(true);
+            const synced = await refreshStatus();
+            if (
+              (synced?.pending ?? synced?.project?.pending) ||
+              synced?.pendingElsewhere ||
+              synced?.conflict ||
+              synced?.project?.conflict
+            ) {
+              feedbackService.error(
+                'Some changes could not be synced. Your work remains on this device.',
+              );
+              return null;
+            }
+          }
+        }
+        await window.api.cloudLeaveContext(true, true);
+        closed = true;
+      } catch (error) {
+        const latest = await refreshStatus();
+        feedbackService.error(
+          error instanceof Error ? error.message : 'Could not close the cloud workspace.',
+        );
+        if ((latest?.cacheRevision ?? 0) !== before) {
+          setWorkspaceGeneration((value) => value + 1);
+          if (latest?.project && (view.kind === 'editor' || view.kind === 'project'))
+            return {
+              kind: 'project',
+              projectId: latest.project.projectId,
+              cloudId: latest.project.id,
+            };
+          return view;
+        }
+      }
+      return null;
+    }).finally(() => {
+      cloudCloseInProgress.current = false;
+      if (!closed) void window.api.cloudCancelClose().catch(() => {});
+    });
+  }, [runGuarded, requestCloudClose, refreshStatus, view]);
+  useEffect(() => window.api.onCloudCloseRequested?.(closeCloud), [closeCloud]);
 
   const navigate = (next: WorkspaceView) =>
     runGuarded(async () => {
       const current = await window.api.cloudStatus?.();
-      if (current?.project) {
-        if (next.kind === 'tm' || next.kind === 'tb')
-          next = { ...next, cloudId: current.project.id };
-        if (next.cloudId !== current.project.id) {
+      if (current?.context === 'cloud' || current?.project) {
+        if (next.kind === 'tm' || next.kind === 'tb') {
+          await window.api.cloudOpenResources(next.kind, true);
+          await refreshStatus();
+          return { kind: next.kind, cloudResources: true };
+        }
+        if (!next.cloudId || next.cloudId !== current.project?.id) {
           if (!(await confirmKeepLocal())) return null;
-          await window.api.cloudCloseProject(true);
+          await window.api.cloudLeaveContext(true);
           await refreshStatus();
         }
       }
       return next;
     });
+  const changeResourceStorage = (kind: 'tm' | 'tb', storage: 'local' | 'cloud') => {
+    void runGuarded(async () => {
+      if (storage === 'cloud') {
+        await window.api.cloudOpenResources(kind, true);
+      } else {
+        if (!(await confirmKeepLocal())) return null;
+        await window.api.cloudLeaveContext(true);
+      }
+      await refreshStatus();
+      return { kind, cloudResources: storage === 'cloud' };
+    });
+  };
   const openCloud = (id: string) =>
     runGuarded(async () => {
-      if (cloudStatus?.project?.id !== id && !(await confirmKeepLocal())) return null;
       const projectId = await window.api.cloudOpenProject(id, true);
       await refreshStatus();
       return { kind: 'project', projectId, cloudId: id };
     });
-  const cloudAction = (action: 'save' | 'pull') => {
+  const cloudAction = (resolveConflict = false) => {
     void runGuarded(async () => {
+      const before = (await window.api.cloudStatus()).cacheRevision ?? 0;
       try {
-        if (action === 'save') await window.api.cloudSync();
-        else {
-          const projectId = await window.api.cloudPull();
-          await refreshStatus();
-          setWorkspaceGeneration((value) => value + 1);
-          feedbackService.success('Latest cloud version is ready.');
-          return { kind: 'project', projectId, cloudId: view.cloudId };
-        }
+        const result = resolveConflict
+          ? await window.api.cloudResolveConflict()
+          : await window.api.cloudSync();
         await refreshStatus();
         void refreshCloudProjects();
-        feedbackService.success('Saved to cloud. You can continue on another device.');
+        if (result.changed) setWorkspaceGeneration((value) => value + 1);
+        if (resolveConflict) await loadProjects();
+        feedbackService.success(
+          resolveConflict
+            ? 'Local copy saved. Latest cloud version is ready.'
+            : 'Synced with cloud.',
+        );
+        if (
+          result.changed &&
+          result.projectId &&
+          (view.kind === 'project' || view.kind === 'editor')
+        )
+          return { kind: 'project', projectId: result.projectId, cloudId: view.cloudId };
       } catch (error) {
-        await refreshStatus();
+        const latest = await refreshStatus();
         feedbackService.error(error instanceof Error ? error.message : 'Cloud operation failed');
+        if ((latest?.cacheRevision ?? 0) !== before) {
+          setWorkspaceGeneration((value) => value + 1);
+          if (latest?.project && (view.kind === 'editor' || view.kind === 'project'))
+            return {
+              kind: 'project',
+              projectId: latest.project.projectId,
+              cloudId: latest.project.id,
+            };
+        }
       }
       return view;
     });
   };
 
-  const { projects, loading, createProject, deleteProject } = useProjects();
+  const { projects, loading, loadProjects, createProject, deleteProject } = useProjects();
   const aiFileJobTracker = useAIFileJobTracker();
   const handleCreateProject = async (
     name: string,
@@ -145,7 +248,7 @@ function App(): JSX.Element {
     storage: 'local' | 'cloud',
   ) => {
     await runGuarded(async () => {
-      if (!(await confirmKeepLocal())) return null;
+      if (storage === 'local' && !(await confirmKeepLocal())) return null;
       if (storage === 'cloud') {
         const project = await window.api.cloudCreateProject(name, srcLang, tgtLang, projectType);
         await refreshCloudProjects();
@@ -154,7 +257,7 @@ function App(): JSX.Element {
         await refreshStatus();
         return { kind: 'project', projectId, cloudId: project.id };
       }
-      await window.api.cloudCloseProject?.(true);
+      await window.api.cloudLeaveContext?.(true);
       await refreshStatus();
       const newProject = await createProject(name, srcLang, tgtLang, projectType);
       if (!newProject?.id) return { kind: 'home' };
@@ -166,9 +269,9 @@ function App(): JSX.Element {
     if (!project.id) return;
     void runGuarded(async () => {
       // Local catalog actions must not be routed through a cloud cache.
-      if (cloudStatus?.project) {
+      if (cloudStatus?.context === 'cloud' || cloudStatus?.project) {
         if (!(await confirmKeepLocal())) return null;
-        await window.api.cloudCloseProject(true);
+        await window.api.cloudLeaveContext(true);
         await refreshStatus();
       }
       const deleted = await deleteProject(project.id!, project.name);
@@ -183,6 +286,7 @@ function App(): JSX.Element {
     <ThemeProvider scope={appearanceScope}>
       <TypographyProvider scope={appearanceScope}>
         <FeedbackHost />
+        <CloudCloseDialog open={cloudClosePrompt} onChoose={chooseCloudClose} />
         <div className="workspace-shell">
           <WorkspaceSidebar
             hidden={view.kind === 'editor'}
@@ -226,12 +330,11 @@ function App(): JSX.Element {
               if (element) element.inert = pending;
             }}
           >
-            {cloudStatus?.project && (
+            {(cloudStatus?.context === 'cloud' || cloudStatus?.project) && (
               <CloudBanner
                 status={cloudStatus}
-                onClose={() => closeCloud()}
-                onSave={() => cloudAction('save')}
-                onPull={() => cloudAction('pull')}
+                onSync={() => cloudAction()}
+                onResolveConflict={() => cloudAction(true)}
               />
             )}
             <ErrorBoundary
@@ -261,6 +364,7 @@ function App(): JSX.Element {
               {view.kind === 'project' && (
                 <ProjectDetail
                   projectId={view.projectId}
+                  cloud={!!view.cloudId}
                   onBack={() => {
                     void navigate({ kind: 'home' });
                   }}
@@ -291,8 +395,20 @@ function App(): JSX.Element {
                   onRememberPosition={rememberEditorPosition}
                 />
               )}
-              {view.kind === 'tm' && <TMManager />}
-              {view.kind === 'tb' && <TBManager />}
+              {view.kind === 'tm' && (
+                <TMManager
+                  storage={view.cloudResources ? 'cloud' : 'local'}
+                  cloudAvailable={!!cloudStatus?.account}
+                  onStorageChange={(storage) => changeResourceStorage('tm', storage)}
+                />
+              )}
+              {view.kind === 'tb' && (
+                <TBManager
+                  storage={view.cloudResources ? 'cloud' : 'local'}
+                  cloudAvailable={!!cloudStatus?.account}
+                  onStorageChange={(storage) => changeResourceStorage('tb', storage)}
+                />
+              )}
               {view.kind === 'settings' && (
                 <SettingsPage
                   updates={updates}
