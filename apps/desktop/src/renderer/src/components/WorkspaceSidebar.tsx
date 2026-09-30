@@ -287,16 +287,31 @@ export function WorkspaceSidebar({
           </div>
         )}
         <div className="workspace-project-section">
-          <button
-            type="button"
-            className="workspace-project-heading"
-            aria-expanded={!preferences.projectsCollapsed}
-            aria-label={`${preferences.projectsCollapsed ? 'Expand' : 'Collapse'} Projects`}
-            onClick={() => toggleSection('projects')}
-          >
-            <span>Projects</span>
-            <SectionChevron collapsed={preferences.projectsCollapsed} />
-          </button>
+          <div className="flex items-center">
+            <button
+              type="button"
+              className="workspace-project-heading"
+              aria-expanded={!preferences.projectsCollapsed}
+              aria-label={`${preferences.projectsCollapsed ? 'Expand' : 'Collapse'} Projects`}
+              onClick={() => toggleSection('projects')}
+            >
+              <span>Projects</span>
+              <SectionChevron collapsed={preferences.projectsCollapsed} />
+            </button>
+            {onRefreshCloud && (
+              <IconButton
+                variant="ghost"
+                size="xs"
+                className="shrink-0"
+                disabled={disabled}
+                onClick={onRefreshCloud}
+                title="Refresh cloud projects"
+                aria-label="Refresh cloud projects"
+              >
+                <Icon name="refresh-cw" />
+              </IconButton>
+            )}
+          </div>
           {!preferences.projectsCollapsed && (
             <div role="group" aria-label="Projects list">
               {regularProjects.map(renderProject)}
@@ -323,17 +338,6 @@ export function WorkspaceSidebar({
             </div>
           )}
         </div>
-        {onRefreshCloud && (
-          <button
-            type="button"
-            className="workspace-nav-item"
-            disabled={disabled}
-            onClick={onRefreshCloud}
-          >
-            <NavIcon name="cloud" />
-            <span>Refresh cloud projects</span>
-          </button>
-        )}
         {cloudError && (
           <p className="px-3 py-1 text-xs text-text-muted" role="status">
             {cloudError}
