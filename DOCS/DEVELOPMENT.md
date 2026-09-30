@@ -196,7 +196,7 @@ Record baseline failures and concise errors in the task/PR. Treat new failures a
 
 `gate:check` does not replace `npm test` or desktop e2e. Choose them based on behavioral risk.
 
-There is currently no tracked `.github/workflows` directory. Do not assume a remote CI gate has run; record and run the required local validation until CI is added.
+The experimental branch has a [Windows Cloud installer workflow](../.github/workflows/cloud-windows.yml), restricted to `codex/cloud-project-v1`. It runs desktop typecheck, focused cloud cache/isolation tests, native Windows packaging, and packaged SQLite validation. This workflow is not the full repository gate or a real-service cross-device test; record the applicable local checks and inspect the actual run result before claiming Windows build validation.
 
 ## Test organization
 
@@ -247,6 +247,8 @@ npm run pack:mac
 `npm run pack` packages only for the current host. It is not cross-platform release signoff.
 
 The experimental cloud app is packaged separately with `npm run pack:cloud:mac` or `npm run pack:cloud:win` on the matching native host. The [cloud builder configuration](../apps/desktop/electron-builder.cloud.cjs) gives **momoCAT Cloud** its own application ID, package name, and `dist-cloud` output. Its compiled build flavor selects a separate user-data directory and browser cache; its macOS encryption key and single-instance lock use its separate app identity. Ordinary momoCAT builds retain their existing identity and data paths. The cloud experiment disables the ordinary GitHub updater and never publishes from these commands, so it cannot replace or update the local app. Install it beside momoCAT and log in separately; neither application imports the other's profile automatically.
+
+Pushing the experiment branch runs its Windows installer workflow on a native Windows x64 runner. A successful run uploads an Actions artifact containing the Cloud `.exe` installer and SHA256 checksum, retained for fourteen days; downloading requires GitHub sign-in. It uses read-only repository permissions and no cloud credentials, creates no GitHub Release, and does not feed the ordinary updater. The installer still requires desktop login and a real Mac/Windows relay check; packaging and native SQLite validation alone do not establish that user workflow.
 
 The cloud macOS experiment uses an ad-hoc signature so its modified Apple Silicon application has a valid bundle seal. Its [cloud entitlements](../apps/desktop/build/entitlements.cloud.mac.plist) support Electron JIT and native modules under hardened runtime without enabling Mac App Store sandboxing; automatic team-ID entitlement generation is disabled for the ad-hoc identity. This is not Developer ID signing or notarization; verify the resulting app with `codesign --verify --deep --strict` and do not describe the experimental installer as a notarized public release.
 

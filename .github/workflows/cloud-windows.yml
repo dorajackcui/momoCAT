@@ -1,0 +1,108 @@
+name: Cloud Windows installer
+
+on:
+  push:
+    branches: [codex/cloud-project-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    if: github.ref == 'refs/heads/codex/cloud-project-v1'
+    runs-on: windows-2022
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out experiment
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up pinned Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20.19.0
+          architecture: x64
+          cache: npm
+
+      - name: Set up pinned npm
+        run: npm install --global npm@10.8.2
+
+      - name: Install native Windows dependencies
+        run: npm ci
+
+      - name: Check desktop types
+        run: npm run typecheck --workspace=apps/desktop
+
+      - name: Validate cloud cache and application isolation
+        run: |
+          npm run rebuild:test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx vitest run apps/desktop/src/main/cloud packages/db/src/cloud apps/desktop/src/main/desktopBuildFlavor.test.ts apps/desktop/src/main/userDataPath.test.ts apps/desktop/src/main/services/AppUpdateService.test.ts apps/desktop/src/preload/api/createDesktopApi.test.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test scripts/pack-platform.test.mjs
+
+      - name: Package standalone Cloud app
+        run: npm run pack:cloud:win -- -- --x64
+
+      - name: Verify packaged native SQLite and checksum
+        run: |
+          $appDirectory = (Resolve-Path 'apps/desktop/dist-cloud/win-unpacked').Path
+          $smokeScript = Join-Path $env:RUNNER_TEMP 'cloud-native-smoke.cjs'
+          @'
+          const assert = require('node:assert/strict');
+          const path = require('node:path');
+          const Database = require(path.join(process.argv[2], 'resources', 'node_modules', 'better-sqlite3'));
+          assert.equal(process.platform, 'win32');
+          assert.equal(process.arch, 'x64');
+          const db = new Database(':memory:');
+          db.exec('CREATE TABLE smoke (value INTEGER); INSERT INTO smoke VALUES (42)');
+          assert.equal(db.prepare('SELECT value FROM smoke').get().value, 42);
+          db.close();
+          console.log(JSON.stringify({ platform: process.platform, arch: process.arch, abi: process.versions.modules, sqlite: 'passed' }));
+          '@ | Set-Content -LiteralPath $smokeScript -Encoding utf8
+          $probeRunner = Join-Path $env:RUNNER_TEMP 'cloud-native-runner.cjs'
+          @'
+          const assert = require('node:assert/strict');
+          const result = require('node:child_process').spawnSync(process.argv[2], process.argv.slice(3), {
+            encoding: 'utf8',
+            env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+          });
+          process.stdout.write(result.stdout ?? '');
+          process.stderr.write(result.stderr ?? '');
+          if (result.error) throw result.error;
+          assert.equal(result.status, 0, 'Packaged SQLite smoke must exit successfully');
+          const report = JSON.parse(result.stdout.trim().split(/\r?\n/).at(-1));
+          assert.equal(report.platform, 'win32');
+          assert.equal(report.arch, 'x64');
+          assert.equal(report.sqlite, 'passed');
+          '@ | Set-Content -LiteralPath $probeRunner -Encoding utf8
+          node $probeRunner (Join-Path $appDirectory 'momoCAT Cloud.exe') $smokeScript $appDirectory
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installers = @(Get-ChildItem -LiteralPath 'apps/desktop/dist-cloud' -Filter '*-Setup-*-x64.exe')
+          if ($installers.Count -ne 1) { throw 'Expected one x64 Cloud installer' }
+          $installer = $installers[0]
+          $digest = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$digest  $($installer.Name)" | Set-Content -LiteralPath "$($installer.FullName).sha256" -Encoding utf8
+          "Installer: $($installer.Name)" | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+          "Source commit: $env:GITHUB_SHA" | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+          "SHA256: $digest" | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload Cloud installer
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: momoCAT-Cloud-Windows-x64-${{ github.sha }}
+          path: |
+            apps/desktop/dist-cloud/*-Setup-*-x64.exe
+            apps/desktop/dist-cloud/*-Setup-*-x64.exe.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
