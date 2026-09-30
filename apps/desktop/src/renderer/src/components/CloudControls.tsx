@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { CloudStatus } from '../../../shared/cloud';
 import { Button, Icon, IconButton, Modal } from './ui';
 
@@ -99,21 +99,26 @@ export function CloudAccountControls({ status }: { status: CloudStatus | null })
   );
 }
 
-export function CloudBanner({
+export function CloudSyncControl({
   status,
   onSync,
   onResolveConflict,
+  disabled = false,
 }: {
-  status: CloudStatus;
+  status: CloudStatus | null;
   onSync: () => void;
   onResolveConflict: () => void;
+  disabled?: boolean;
 }) {
-  if (!status.project && status.context !== 'cloud') return null;
+  const descriptionId = useId();
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  if (!status?.account) return null;
   const syncing = status.syncing || status.project?.syncing;
-  const pending = status.pending ?? status.project?.pending;
+  const pending = status.pending || status.pendingElsewhere || status.project?.pending;
   const conflict = status.conflict || status.project?.conflict;
   const error = status.error || status.project?.error;
   const lastSyncedAt = status.lastSyncedAt || status.project?.lastSyncedAt;
+  const blocked = disabled || !!syncing || status.project?.writable === false;
   const label = syncing
     ? 'Syncing…'
     : conflict
@@ -125,49 +130,85 @@ export function CloudBanner({
           : lastSyncedAt
             ? 'Synced'
             : 'Ready to sync';
+  const description = `${label}${lastSyncedAt ? `. Last sync ${new Date(lastSyncedAt).toLocaleString()}` : ''}`;
+  const hasIssue = !!(error || conflict);
   return (
-    <div className="shrink-0 border-b border-border px-4 py-2 text-sm">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1" role="status">
-          <span className="flex items-center gap-2">
-            <Icon name="cloud" />
-            {status.project?.name ||
-              (status.resourceKind === 'tm' ? 'Cloud TMs' : 'Cloud term bases')}
-          </span>
-          <span className={error || conflict ? 'text-danger' : 'text-text-muted'}>{label}</span>
-          {lastSyncedAt && (
-            <span className="text-xs text-text-muted" title={lastSyncedAt}>
-              Last sync {new Date(lastSyncedAt).toLocaleString()}
-            </span>
-          )}
-        </div>
+    <>
+      <span className="relative inline-flex shrink-0">
         <IconButton
           size="sm"
           variant="ghost"
-          disabled={!!syncing || status.project?.writable === false}
-          onClick={onSync}
-          title="Sync with cloud"
+          tone={hasIssue ? 'danger' : 'neutral'}
+          disabled={blocked}
+          onClick={() => (hasIssue ? setDetailsOpen(true) : onSync())}
+          title={`Sync with cloud · ${description}`}
           aria-label="Sync with cloud"
+          aria-describedby={descriptionId}
+          aria-haspopup={hasIssue ? 'dialog' : undefined}
         >
-          <Icon name="refresh-cw" className={`h-4 w-4${syncing ? ' animate-spin' : ''}`} />
+          <Icon
+            name={syncing ? 'refresh-cw' : hasIssue ? 'shield-alert' : 'cloud'}
+            className={`h-4 w-4${syncing ? ' animate-spin' : ''}`}
+          />
         </IconButton>
-      </div>
-      {error && (
-        <p className="mt-1 text-xs text-danger" role="alert">
-          {error}
+        {pending && !hasIssue && !syncing && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-brand-solid"
+          />
+        )}
+        <span id={descriptionId} className="sr-only" role="status">
+          {description}
+        </span>
+      </span>
+      <Modal
+        open={detailsOpen}
+        title={conflict ? 'Sync conflict' : error ? 'Sync failed' : 'Cloud sync'}
+        size="sm"
+        onClose={() => setDetailsOpen(false)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDetailsOpen(false)}>
+              Close
+            </Button>
+            {conflict ? (
+              <Button
+                variant="primary"
+                disabled={blocked}
+                onClick={() => {
+                  setDetailsOpen(false);
+                  onResolveConflict();
+                }}
+              >
+                Save local copy and get latest
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                disabled={blocked}
+                onClick={() => {
+                  setDetailsOpen(false);
+                  onSync();
+                }}
+              >
+                Retry sync
+              </Button>
+            )}
+          </>
+        }
+      >
+        {error && (
+          <p className="text-sm text-danger" role="alert">
+            {error}
+          </p>
+        )}
+        <p className="text-sm text-text-muted">
+          {conflict
+            ? 'Both this device and cloud have changes. Your local work is preserved. Save a local copy before receiving the cloud version.'
+            : 'Your local work is preserved. Retry when you are ready.'}
         </p>
-      )}
-      {conflict && (
-        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
-          <span className="text-text-muted">
-            Both this device and cloud have changes. Your local work is preserved.
-          </span>
-          <Button size="xs" variant="secondary" disabled={!!syncing} onClick={onResolveConflict}>
-            Save local copy and get latest
-          </Button>
-        </div>
-      )}
-    </div>
+      </Modal>
+    </>
   );
 }
 

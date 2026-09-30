@@ -285,6 +285,28 @@ describe('manual account cloud relay', () => {
     expect(b.status(first).pending).toBe(false);
   });
 
+  it('discovers new cloud TM/TB on global sync while preserving and publishing existing local edits', async () => {
+    const f = await seeded();
+    const b = await f.session('b');
+    const first = await b.openProject(f.firstUUID);
+    b.db.renameTM(f.tm, 'Device B draft');
+    const newTM = f.a.db.createTM('New cloud TM', 'en', 'zh', 'main');
+    const newTB = f.a.db.createTermBase('New cloud TB', 'en', 'zh');
+    await f.a.synchronize(undefined, true);
+    expect(b.db.getTM(newTM)).toBeFalsy();
+    expect(b.db.getTermBase(newTB)).toBeFalsy();
+    const result = await b.synchronize(first, true);
+    expect(result.changed).toBe(true);
+    expect(b.db.getTM(newTM)?.name).toBe('New cloud TM');
+    expect(b.db.getTermBase(newTB)?.name).toBe('New cloud TB');
+    expect(b.db.getTM(f.tm)?.name).toBe('Device B draft');
+    expect(f.resources.get(f.tm)?.name).toBe('Device B draft');
+    expect(b.status(first).pending).toBe(false);
+    expect(b.status(first).pendingElsewhere).toBe(false);
+    expect(f.projects.get(f.firstUUID)?.revision).toBe(1);
+    expect(f.projects.get(f.secondUUID)?.revision).toBe(1);
+  });
+
   it('syncs resource-only edits without creating new project versions', async () => {
     const f = await seeded();
     const b = await f.session('b');

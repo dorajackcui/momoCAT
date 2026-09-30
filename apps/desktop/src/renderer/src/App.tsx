@@ -20,7 +20,7 @@ import { ThemeProvider } from './theme/ThemeProvider';
 import { TypographyProvider } from './theme/TypographyProvider';
 import {
   CloudAccountControls,
-  CloudBanner,
+  CloudSyncControl,
   CloudCloseDialog,
   useCloudStatus,
   type CloudCloseChoice,
@@ -99,17 +99,6 @@ function App(): JSX.Element {
     };
   }, [accountId, refreshCloudProjects]);
 
-  const confirmKeepLocal = useCallback(async () => {
-    const latest = await window.api.cloudStatus?.();
-    if (!(latest?.pending ?? latest?.project?.pending) && !latest?.pendingElsewhere) return true;
-    return feedbackService.confirm({
-      title: 'Keep changes on this device?',
-      message:
-        'These changes are saved on this device. Sync before continuing on another computer.',
-      confirmLabel: 'Keep on this device',
-      cancelLabel: 'Stay here',
-    });
-  }, []);
   const closeCloud = useCallback(() => {
     if (cloudCloseInProgress.current) return;
     cloudCloseInProgress.current = true;
@@ -145,7 +134,7 @@ function App(): JSX.Element {
         feedbackService.error(
           error instanceof Error ? error.message : 'Could not close the cloud workspace.',
         );
-        if ((latest?.cacheRevision ?? 0) !== before) {
+        if ((view.cloudId || view.cloudResources) && (latest?.cacheRevision ?? 0) !== before) {
           setWorkspaceGeneration((value) => value + 1);
           if (latest?.project && (view.kind === 'editor' || view.kind === 'project'))
             return {
@@ -174,7 +163,6 @@ function App(): JSX.Element {
           return { kind: next.kind, cloudResources: true };
         }
         if (!next.cloudId || next.cloudId !== current.project?.id) {
-          if (!(await confirmKeepLocal())) return null;
           await window.api.cloudLeaveContext(true);
           await refreshStatus();
         }
@@ -186,7 +174,6 @@ function App(): JSX.Element {
       if (storage === 'cloud') {
         await window.api.cloudOpenResources(kind, true);
       } else {
-        if (!(await confirmKeepLocal())) return null;
         await window.api.cloudLeaveContext(true);
       }
       await refreshStatus();
@@ -202,29 +189,28 @@ function App(): JSX.Element {
   const cloudAction = (resolveConflict = false) => {
     void runGuarded(async () => {
       const before = (await window.api.cloudStatus()).cacheRevision ?? 0;
+      const cloudView = !!view.cloudId || !!view.cloudResources;
       try {
         const result = resolveConflict
           ? await window.api.cloudResolveConflict()
-          : await window.api.cloudSync();
+          : await window.api.cloudSync(true);
         await refreshStatus();
-        void refreshCloudProjects();
-        if (result.changed) setWorkspaceGeneration((value) => value + 1);
-        if (resolveConflict) await loadProjects();
-        feedbackService.success(
-          resolveConflict
-            ? 'Local copy saved. Latest cloud version is ready.'
-            : 'Synced with cloud.',
-        );
+        if (result.changed && cloudView) setWorkspaceGeneration((value) => value + 1);
+        if (resolveConflict) {
+          await loadProjects();
+          feedbackService.success('Local copy saved. Latest cloud version is ready.');
+        }
         if (
           result.changed &&
           result.projectId &&
+          view.cloudId &&
           (view.kind === 'project' || view.kind === 'editor')
         )
           return { kind: 'project', projectId: result.projectId, cloudId: view.cloudId };
       } catch (error) {
         const latest = await refreshStatus();
         feedbackService.error(error instanceof Error ? error.message : 'Cloud operation failed');
-        if ((latest?.cacheRevision ?? 0) !== before) {
+        if (cloudView && (latest?.cacheRevision ?? 0) !== before) {
           setWorkspaceGeneration((value) => value + 1);
           if (latest?.project && (view.kind === 'editor' || view.kind === 'project'))
             return {
@@ -233,6 +219,8 @@ function App(): JSX.Element {
               cloudId: latest.project.id,
             };
         }
+      } finally {
+        void refreshCloudProjects();
       }
       return view;
     });
@@ -248,7 +236,6 @@ function App(): JSX.Element {
     storage: 'local' | 'cloud',
   ) => {
     await runGuarded(async () => {
-      if (storage === 'local' && !(await confirmKeepLocal())) return null;
       if (storage === 'cloud') {
         const project = await window.api.cloudCreateProject(name, srcLang, tgtLang, projectType);
         await refreshCloudProjects();
@@ -265,12 +252,20 @@ function App(): JSX.Element {
       return { kind: 'project', projectId: newProject.id };
     });
   };
+
+  const cloudControl = (
+    <CloudSyncControl
+      status={cloudStatus}
+      disabled={pending || loading}
+      onSync={() => cloudAction()}
+      onResolveConflict={() => cloudAction(true)}
+    />
+  );
   const handleDeleteProject = (project: Project) => {
     if (!project.id) return;
     void runGuarded(async () => {
       // Local catalog actions must not be routed through a cloud cache.
       if (cloudStatus?.context === 'cloud' || cloudStatus?.project) {
-        if (!(await confirmKeepLocal())) return null;
         await window.api.cloudLeaveContext(true);
         await refreshStatus();
       }
@@ -301,13 +296,7 @@ function App(): JSX.Element {
             onOpenCloud={(id) => {
               void openCloud(id);
             }}
-            onRefreshCloud={
-              cloudStatus?.account
-                ? () => {
-                    void refreshCloudProjects();
-                  }
-                : undefined
-            }
+            cloudControl={view.kind === 'editor' ? undefined : cloudControl}
             onCreate={() => setIsCreateOpen(true)}
             onDelete={handleDeleteProject}
           />
@@ -330,13 +319,6 @@ function App(): JSX.Element {
               if (element) element.inert = pending;
             }}
           >
-            {(cloudStatus?.context === 'cloud' || cloudStatus?.project) && (
-              <CloudBanner
-                status={cloudStatus}
-                onSync={() => cloudAction()}
-                onResolveConflict={() => cloudAction(true)}
-              />
-            )}
             <ErrorBoundary
               key={`${workspaceGeneration}:${scope}:${view.kind === 'editor' ? `editor:${view.fileId}` : view.kind === 'project' ? `project:${view.projectId}` : view.kind}`}
             >
@@ -393,6 +375,7 @@ function App(): JSX.Element {
                   registerNavigationGuard={registerGuard}
                   initialActiveSegmentId={editorPositions[`${scope}:${view.fileId}`]}
                   onRememberPosition={rememberEditorPosition}
+                  cloudControl={cloudControl}
                 />
               )}
               {view.kind === 'tm' && (

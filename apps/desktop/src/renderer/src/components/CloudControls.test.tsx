@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { CloudStatus } from '../../../shared/cloud';
-import { CloudBanner } from './CloudControls';
+import { CloudSyncControl } from './CloudControls';
 
 const base: CloudStatus = {
   configured: true,
@@ -19,49 +19,115 @@ const base: CloudStatus = {
   },
 };
 
-function show(status: CloudStatus) {
+function show(status: CloudStatus | null, disabled = false) {
   const onSync = vi.fn();
   const onResolveConflict = vi.fn();
-  render(<CloudBanner status={status} onSync={onSync} onResolveConflict={onResolveConflict} />);
-  return { onSync, onResolveConflict };
+  const result = render(
+    <CloudSyncControl
+      status={status}
+      onSync={onSync}
+      onResolveConflict={onResolveConflict}
+      disabled={disabled}
+    />,
+  );
+  return { ...result, onSync, onResolveConflict };
 }
 
 describe('cloud sync control', () => {
-  it('offers one sync action and reports unsynced changes', () => {
-    const { onSync } = show({ ...base, pending: true });
-    expect(screen.getByText('Unsynced changes')).toBeVisible();
+  it('offers one compact sync action without a project banner', () => {
+    const { onSync } = show(base);
+    const button = screen.getByRole('button', { name: 'Sync with cloud' });
+    expect(button).toHaveAccessibleDescription('Ready to sync');
     expect(screen.getAllByRole('button')).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Sync with cloud' }));
+    expect(screen.queryByText('Product')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.click(button);
     expect(onSync).toHaveBeenCalledOnce();
-    expect(screen.queryByText('Save to cloud')).not.toBeInTheDocument();
-    expect(screen.queryByText('Get latest')).not.toBeInTheDocument();
   });
 
-  it('blocks duplicate sync and displays the last success time', () => {
-    show({ ...base, syncing: true, lastSyncedAt: '2026-09-30T01:00:00.000Z' });
-    expect(screen.getByText('Syncing…')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Sync with cloud' })).toBeDisabled();
-    expect(screen.getByTitle('2026-09-30T01:00:00.000Z')).toBeVisible();
+  it.each([
+    { ...base, pending: true },
+    { ...base, pending: false, pendingElsewhere: true },
+    { ...base, pending: false, project: { ...base.project!, pending: true } },
+  ])('reports pending work anywhere in the account', (status) => {
+    show(status);
+    expect(screen.getByRole('button', { name: 'Sync with cloud' })).toHaveAccessibleDescription(
+      'Unsynced changes',
+    );
   });
 
-  it('keeps failure visible and allows retry', () => {
+  it('keeps last success in the tooltip and blocks duplicate sync', () => {
+    const lastSyncedAt = '2026-09-30T01:00:00.000Z';
+    const { onSync } = show({ ...base, syncing: true, lastSyncedAt });
+    const button = screen.getByRole('button', { name: 'Sync with cloud' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute(
+      'title',
+      `Sync with cloud · Syncing…. Last sync ${new Date(lastSyncedAt).toLocaleString()}`,
+    );
+    fireEvent.click(button);
+    expect(onSync).not.toHaveBeenCalled();
+  });
+
+  it('opens accessible failure details and retries only by explicit action', () => {
     const { onSync } = show({ ...base, error: 'Network unavailable', pending: true });
-    expect(screen.getByText('Sync failed')).toBeVisible();
-    expect(screen.getByRole('alert')).toHaveTextContent('Network unavailable');
-    fireEvent.click(screen.getByRole('button', { name: 'Sync with cloud' }));
+    const button = screen.getByRole('button', { name: 'Sync with cloud' });
+    expect(button).toHaveAccessibleDescription('Sync failed');
+    expect(button).toHaveAttribute('aria-haspopup', 'dialog');
+    fireEvent.click(button);
+    const dialog = screen.getByRole('dialog', { name: 'Sync failed' });
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Network unavailable');
+    expect(onSync).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Retry sync' }));
     expect(onSync).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('offers explicit local-copy recovery only when there is a conflict', () => {
-    const { onResolveConflict } = show({ ...base, conflict: true });
-    expect(screen.getByText('Sync conflict')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Save local copy and get latest' }));
+  it('explains a conflict before explicit local-copy recovery', () => {
+    const { onResolveConflict, onSync } = show({ ...base, conflict: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Sync with cloud' }));
+    const dialog = screen.getByRole('dialog', { name: 'Sync conflict' });
+    expect(within(dialog).getByText(/Your local work is preserved/)).toBeVisible();
+    expect(onResolveConflict).not.toHaveBeenCalled();
+    expect(onSync).not.toHaveBeenCalled();
+    expect(within(dialog).queryByRole('button', { name: 'Retry sync' })).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save local copy and get latest' }));
     expect(onResolveConflict).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('supports independent resource management without an open project', () => {
-    show({ ...base, project: undefined, resourceKind: 'tb', pending: true });
-    expect(screen.getByText('Cloud term bases')).toBeVisible();
+  it('lets users dismiss conflict details without changing their work', () => {
+    const { onSync, onResolveConflict } = show({ ...base, conflict: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Sync with cloud' }));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(onSync).not.toHaveBeenCalled();
+    expect(onResolveConflict).not.toHaveBeenCalled();
+  });
+
+  it('stays available in local and independent resource views after sign-in', () => {
+    show({ ...base, context: undefined, project: undefined, pendingElsewhere: true });
     expect(screen.getByRole('button', { name: 'Sync with cloud' })).toBeEnabled();
+  });
+
+  it('does not appear before sign-in', () => {
+    const { rerender } = show(null);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    rerender(
+      <CloudSyncControl
+        status={{ ...base, account: null }}
+        onSync={vi.fn()}
+        onResolveConflict={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('respects an active-operation navigation guard', () => {
+    const { onSync } = show(base, true);
+    const button = screen.getByRole('button', { name: 'Sync with cloud' });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(onSync).not.toHaveBeenCalled();
   });
 });

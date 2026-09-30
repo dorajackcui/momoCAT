@@ -236,6 +236,13 @@ export class CloudAccountSession {
         ...resources.map((r) => [`${r.kind}:${r.id}`, r] as const),
         ...projects.map((p) => [`project:${p.id}`, p] as const),
       ]);
+      if (allProjects) {
+        for (const resource of resources) {
+          const before = this.cacheRevision;
+          await this.ensureResource(resource);
+          if (this.cacheRevision !== before) changed = true;
+        }
+      }
       for (const object of this.objects(projectId, allProjects)) {
         let row = this.tracker.ensure(object.kind, object.id);
         // Retry the exact durable operation first, including an acknowledged

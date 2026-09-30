@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import type { CloudProjectSummary } from '../../../shared/cloud';
 import type { Project, ProjectType } from '@cat/core/project';
 import type { WorkspaceView } from '../hooks/useWorkspaceNavigation';
@@ -125,7 +125,7 @@ interface WorkspaceSidebarProps {
   projects: Project[];
   cloudProjects?: CloudProjectSummary[];
   onOpenCloud?: (id: string) => void;
-  onRefreshCloud?: () => void;
+  cloudControl?: ReactNode;
   cloudError?: string;
   view: WorkspaceView;
   disabled: boolean;
@@ -139,7 +139,7 @@ export function WorkspaceSidebar({
   projects,
   cloudProjects = [],
   onOpenCloud,
-  onRefreshCloud,
+  cloudControl,
   cloudError,
   view,
   disabled,
@@ -287,31 +287,16 @@ export function WorkspaceSidebar({
           </div>
         )}
         <div className="workspace-project-section">
-          <div className="flex items-center">
-            <button
-              type="button"
-              className="workspace-project-heading"
-              aria-expanded={!preferences.projectsCollapsed}
-              aria-label={`${preferences.projectsCollapsed ? 'Expand' : 'Collapse'} Projects`}
-              onClick={() => toggleSection('projects')}
-            >
-              <span>Projects</span>
-              <SectionChevron collapsed={preferences.projectsCollapsed} />
-            </button>
-            {onRefreshCloud && (
-              <IconButton
-                variant="ghost"
-                size="xs"
-                className="shrink-0"
-                disabled={disabled}
-                onClick={onRefreshCloud}
-                title="Refresh cloud projects"
-                aria-label="Refresh cloud projects"
-              >
-                <Icon name="refresh-cw" />
-              </IconButton>
-            )}
-          </div>
+          <button
+            type="button"
+            className="workspace-project-heading"
+            aria-expanded={!preferences.projectsCollapsed}
+            aria-label={`${preferences.projectsCollapsed ? 'Expand' : 'Collapse'} Projects`}
+            onClick={() => toggleSection('projects')}
+          >
+            <span>Projects</span>
+            <SectionChevron collapsed={preferences.projectsCollapsed} />
+          </button>
           {!preferences.projectsCollapsed && (
             <div role="group" aria-label="Projects list">
               {regularProjects.map(renderProject)}
@@ -348,7 +333,10 @@ export function WorkspaceSidebar({
         {navItem('tm', 'Translation memory', 'tm')}
         {navItem('tb', 'Term bases', 'tb')}
       </nav>
-      <div className="workspace-settings-nav">{navItem('settings', 'Settings', 'settings')}</div>
+      <div className="workspace-settings-nav flex items-center gap-1">
+        {navItem('settings', 'Settings', 'settings')}
+        {cloudControl}
+      </div>
       {disabled && (
         <span className="sr-only" role="status">
           Loading workspace…

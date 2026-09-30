@@ -622,4 +622,205 @@ describe('V2 account workspace context', () => {
       );
     }
   });
+
+  it('reports and synchronizes all retained cloud drafts without switching the local database', async () => {
+    workspace.watchWindow(window as unknown as import('electron').BrowserWindow);
+    await call(CC.cloudOpenProject, remote.id);
+    await call(C.project.updatePrompt, 1, 'First cloud draft');
+    await call(CC.cloudOpenProject, other.id);
+    await call(C.project.updatePrompt, 2, 'Second cloud draft');
+    await call(C.tb.rename, tb, 'Edited shared TB');
+    await call(CC.cloudLeaveContext, true);
+    json.mockClear();
+    const status = await call(CC.cloudStatus);
+    expect(status).toMatchObject({ pending: true, account: { id: 'alice' } });
+    expect(status).not.toHaveProperty('context');
+    expect(status).not.toHaveProperty('resourceKind');
+    expect((status as { project?: unknown }).project).toBeUndefined();
+    expect(json).not.toHaveBeenCalled();
+    expect(await call(C.project.get, 1)).toMatchObject({ name: 'Local project' });
+    await expect(call(CC.cloudSync)).rejects.toThrow('Open a cloud project');
+    const result = await call(CC.cloudSync, true);
+    expect(result).toMatchObject({ projectId: undefined });
+    expect(state(accounts.get('alice')!.projects.get(remote.id)!).project.aiPrompt).toBe(
+      'First cloud draft',
+    );
+    expect(state(accounts.get('alice')!.projects.get(other.id)!).project.aiPrompt).toBe(
+      'Second cloud draft',
+    );
+    expect(accounts.get('alice')!.resources.get(tb)).toMatchObject({ name: 'Edited shared TB' });
+    expect(await call(CC.cloudStatus)).toMatchObject({ pending: false, pendingElsewhere: false });
+    expect(workspace.hasWindow(42)).toBe(false);
+    expect(await call(C.project.get, 1)).toMatchObject({ name: 'Local project', aiPrompt: null });
+    expect(local.listTermBases()).toHaveLength(0);
+  });
+
+  it('preserves conflict originals and waits for local operations when recovery starts from local', async () => {
+    await call(CC.cloudOpenProject, remote.id);
+    await call(C.project.updatePrompt, 1, 'Preserved global draft');
+    await call(CC.cloudLeaveContext, true);
+    revise(remote, (snapshot) => {
+      snapshot.project.aiPrompt = 'Remote winner';
+    });
+    await expect(call(CC.cloudSync, true)).rejects.toThrow('both have changes');
+    expect(await call(CC.cloudStatus)).toMatchObject({ conflict: true, pendingElsewhere: true });
+    const entered = deferred();
+    const gate = deferred();
+    router.local.handle(C.clipboard.read, async () => {
+      entered.resolve();
+      await gate.promise;
+      return 'local';
+    });
+    const operation = call(C.clipboard.read);
+    await entered.promise;
+    try {
+      await expect(call(CC.cloudResolveConflict)).rejects.toThrow('local operations');
+      expect(local.listProjects()).toHaveLength(1);
+    } finally {
+      gate.resolve();
+      await operation;
+    }
+    const result = (await call(CC.cloudResolveConflict)) as { localCopyProjectId: number };
+    const copy = local.getProject(result.localCopyProjectId)!;
+    expect(copy).toMatchObject({ aiPrompt: 'Preserved global draft' });
+    expect(copy.uuid).not.toBe(remote.id);
+    for (const file of local.listFiles(copy.id))
+      expect(
+        readFileSync(join(localProjectsDir, String(copy.id), `${file.id}_${file.name}`), 'utf8'),
+      ).toBe(`original ${file.name}`);
+    expect(workspace.hasWindow(42)).toBe(false);
+    expect(await call(C.project.get, 1)).toMatchObject({ name: 'Local project' });
+    expect(await call(CC.cloudStatus)).toMatchObject({ conflict: false, pendingElsewhere: false });
+    await call(CC.cloudOpenProject, remote.id);
+    expect(await call(C.project.get, 1)).toMatchObject({ aiPrompt: 'Remote winner' });
+  });
+
+  it('blocks global sync and recovery while another cloud window may hold unsaved editor work', async () => {
+    await call(CC.cloudOpenProject, remote.id);
+    harness.windows.set(43, new TestWindow(43));
+    await callAs(43, CC.cloudOpenProject, other.id);
+    await call(C.project.updatePrompt, 1, 'Keep first draft');
+    json.mockClear();
+    await expect(call(CC.cloudSync, true)).rejects.toThrow('Close other cloud windows');
+    await expect(call(CC.cloudResolveConflict)).rejects.toThrow('Close other cloud windows');
+    await call(CC.cloudLeaveContext, true);
+    await expect(call(CC.cloudSync, true)).rejects.toThrow('Close other cloud windows');
+    await expect(call(CC.cloudResolveConflict)).rejects.toThrow('Close other cloud windows');
+    expect(json).not.toHaveBeenCalled();
+    expect(local.listProjects()).toHaveLength(1);
+    expect(await callAs(43, C.project.get, 2)).toMatchObject({ name: 'Other cloud project' });
+    await callAs(43, CC.cloudLeaveContext, true);
+    await call(CC.cloudOpenProject, remote.id);
+    expect(await call(C.project.get, 1)).toMatchObject({ aiPrompt: 'Keep first draft' });
+  });
+
+  it('guards account changes and context opening during global synchronization from a local page', async () => {
+    const entered = deferred();
+    const gate = deferred();
+    const originalJSON = harness.connection.json as typeof json;
+    harness.connection.json = async (
+      route: string,
+      method?: string,
+      body?: Record<string, unknown>,
+    ) => {
+      if (route === '/v2/projects') {
+        entered.resolve();
+        await gate.promise;
+      }
+      return originalJSON(route, method, body);
+    };
+    const syncing = call(CC.cloudSync, true);
+    await entered.promise;
+    try {
+      const status = await call(CC.cloudStatus);
+      expect(status).toMatchObject({ syncing: true });
+      expect(status).not.toHaveProperty('context');
+      await expect(call(CC.cloudLogout)).rejects.toThrow('synchronization');
+      await expect(call(CC.cloudStartLogin)).rejects.toThrow('synchronization');
+      await expect(call(CC.cloudPollLogin)).rejects.toThrow('synchronization');
+      await expect(call(CC.cloudOpenProject, remote.id)).rejects.toThrow('synchronization');
+      await expect(call(CC.cloudLeaveContext, true, true)).rejects.toThrow('synchronization');
+      expect(await call(C.project.get, 1)).toMatchObject({ name: 'Local project' });
+    } finally {
+      gate.resolve();
+      await syncing;
+      harness.connection.json = originalJSON;
+    }
+  });
+
+  it('does not start global transfers during asynchronous logout or expose the old account cache afterward', async () => {
+    await call(CC.cloudOpenProject, remote.id);
+    await call(C.project.updatePrompt, 1, 'Account-private draft');
+    await call(CC.cloudLeaveContext, true);
+    const entered = deferred();
+    const gate = deferred();
+    harness.connection.logout = async () => {
+      entered.resolve();
+      await gate.promise;
+      harness.connection.account = null;
+    };
+    const logout = call(CC.cloudLogout);
+    await entered.promise;
+    try {
+      await expect(call(CC.cloudSync, true)).rejects.toThrow('account change');
+      await expect(call(CC.cloudOpenProject, remote.id)).rejects.toThrow('account change');
+    } finally {
+      gate.resolve();
+      await logout;
+    }
+    const status = await call(CC.cloudStatus);
+    expect(status).toMatchObject({ account: null });
+    expect(status).not.toHaveProperty('pending');
+    expect(status).not.toHaveProperty('pendingElsewhere');
+    expect(status).not.toHaveProperty('error');
+    expect(status).not.toHaveProperty('context');
+    await expect(call(CC.cloudSync, true)).rejects.toThrow('Sign in first');
+  });
+
+  it('leaves clean local window close alone but retains the close guard after leaving a dirty cloud context', async () => {
+    const cleanWindow = new TestWindow(43);
+    workspace.watchWindow(cleanWindow as unknown as import('electron').BrowserWindow);
+    cleanWindow.close();
+    expect(cleanWindow.isDestroyed()).toBe(true);
+    expect(cleanWindow.webContents.send).not.toHaveBeenCalled();
+    await call(CC.cloudOpenProject, remote.id);
+    await call(C.project.updatePrompt, 1, 'Retained cloud draft');
+    await call(CC.cloudLeaveContext, true);
+    window.close();
+    expect(window.isDestroyed()).toBe(false);
+    expect(window.webContents.send).toHaveBeenCalledWith('cloud-close-requested', null);
+    await expect(call(CC.cloudLeaveContext, false, true)).rejects.toThrow('keeping changes');
+    vi.useFakeTimers();
+    await call(CC.cloudLeaveContext, true, true);
+    expect(window.isDestroyed()).toBe(false);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(window.isDestroyed()).toBe(true);
+  });
+
+  it('loads pending account work at startup and protects native close before opening a cloud page', async () => {
+    await call(CC.cloudOpenProject, remote.id);
+    await call(C.project.updatePrompt, 1, 'Draft kept over restart');
+    await workspace.dispose();
+    workspace = new CloudWorkspace({
+      ipcMain: {
+        handle: (channel: string, fn: IpcMainListener) => handlers.set(channel, fn),
+      } as unknown as IpcMain,
+      router,
+      userDataPath: directory,
+      localDb: local,
+      localDbPath: join(directory, 'local.db'),
+      localProjectsDir,
+      runtime: {} as AIRuntimeConfigService,
+    });
+    workspace.watchWindow(window as unknown as import('electron').BrowserWindow);
+    json.mockClear();
+    await workspace.initialize();
+    expect(await call(CC.cloudStatus)).toMatchObject({ pending: false, pendingElsewhere: true });
+    expect(json).not.toHaveBeenCalled();
+    window.close();
+    expect(window.isDestroyed()).toBe(false);
+    expect(window.webContents.send).toHaveBeenCalledWith('cloud-close-requested', null);
+    expect(workspace.hasOpenProjects).toBe(false);
+    expect(await call(C.project.get, 1)).toMatchObject({ name: 'Local project' });
+  });
 });

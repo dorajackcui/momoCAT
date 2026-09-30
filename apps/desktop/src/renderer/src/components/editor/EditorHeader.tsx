@@ -11,6 +11,7 @@ interface EditorHeaderProps {
   totalSegments: number;
   onBack: () => void;
   onExport: () => void;
+  cloudControl?: React.ReactNode;
 }
 
 const EditorHeaderComponent: React.FC<EditorHeaderProps> = ({
@@ -23,6 +24,7 @@ const EditorHeaderComponent: React.FC<EditorHeaderProps> = ({
   totalSegments,
   onBack,
   onExport,
+  cloudControl,
 }) => {
   const progress =
     totalSegments > 0 ? Math.min(100, Math.max(0, (confirmedSegments / totalSegments) * 100)) : 0;
@@ -88,6 +90,7 @@ const EditorHeaderComponent: React.FC<EditorHeaderProps> = ({
         <Button size="xs" variant="primary" onClick={onExport}>
           Export
         </Button>
+        {cloudControl}
       </div>
     </header>
   );

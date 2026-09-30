@@ -8,7 +8,6 @@ import type { CloudProject, CloudProjectV2 } from '@cat/cloud-contracts';
 import { CLOUD_CHANNELS, type CloudResourceKind, type CloudSyncResult } from '../../shared/cloud';
 import { IPC_CHANNELS } from '../../shared/ipcChannels';
 import type { ReferenceDataChangedEvent } from '../../shared/ipc';
-import type { IpcMainLike } from '../ipc/types';
 import { isProjectType } from '../ipc/projectPayloadValidation';
 import { ProjectService } from '../services/ProjectService';
 import { SqliteSettingsRepository } from '../services/adapters/SqliteSettingsRepository';
@@ -56,8 +55,12 @@ export class CloudWorkspace {
   private readonly windows = new Map<number, WindowSession>();
   private readonly opening = new Set<number>();
   private readonly localRunning = new Set<string>();
+  private readonly watchedWindows = new Map<number, () => void>();
+  private readonly closingWindows = new Set<number>();
   private account?: CloudAccountSession;
+  private accountId?: string;
   private accountOpening?: Promise<CloudAccountSession>;
+  private accountChanging = false;
   constructor(private readonly deps: Dependencies) {
     deps.localJobs?.on('progress', (job) => {
       if (job.status === 'running') this.localRunning.add(job.jobId);
@@ -73,6 +76,34 @@ export class CloudWorkspace {
   }
   get hasOpenProjects(): boolean {
     return this.windows.size > 0;
+  }
+  watchWindow(window: BrowserWindow): void {
+    const id = window.webContents.id;
+    if (this.watchedWindows.has(id)) return;
+    const onClose = (event: { preventDefault: () => void }) => {
+      const account = this.connection.account?.id === this.accountId ? this.account : undefined;
+      if (
+        !this.closingWindows.has(id) &&
+        (this.windows.has(id) ||
+          this.opening.has(id) ||
+          this.accountOpening ||
+          (this.connection.account && !account) ||
+          account?.busy ||
+          account?.hasPending(undefined, true))
+      ) {
+        event.preventDefault();
+        window.webContents.send('cloud-close-requested', null);
+      }
+    };
+    const stopWatching = () => {
+      window.removeListener('close', onClose);
+      window.removeListener('closed', stopWatching);
+      this.watchedWindows.delete(id);
+      this.closingWindows.delete(id);
+    };
+    this.watchedWindows.set(id, stopWatching);
+    window.on('close', onClose);
+    window.on('closed', stopWatching);
   }
   private requireEntry(id: number): WindowSession {
     const entry = this.windows.get(id);
@@ -95,33 +126,41 @@ export class CloudWorkspace {
   }
   async initialize(): Promise<void> {
     const ipc = this.deps.ipcMain;
-    ipc.handle(CLOUD_CHANNELS.cloudStatus, (event) => {
+    ipc.handle(CLOUD_CHANNELS.cloudStatus, async (event) => {
       const entry = this.windows.get(event.sender.id);
+      const account = this.connection.account ? await this.getAccount() : undefined;
+      const currentAccount =
+        this.account === account && this.connection.account?.id === this.accountId
+          ? account
+          : undefined;
       return {
         configured: !!this.connection.baseURL,
         configurationError: this.connection.configurationError,
         account: this.connection.account,
+        ...(currentAccount ? currentAccount.status(entry?.projectId) : {}),
         ...(entry
           ? {
               context: 'cloud',
               resourceKind: entry.resourceKind,
-              ...entry.account.status(entry.projectId),
             }
           : {}),
       };
     });
     ipc.handle('cloud-cancel-close', () => this.deps.onCloseCancelled?.());
-    ipc.handle(CLOUD_CHANNELS.cloudStartLogin, () => {
-      this.assertAccountChange();
-      return this.connection.startLogin();
-    });
-    ipc.handle(CLOUD_CHANNELS.cloudPollLogin, () => this.connection.pollLogin());
-    ipc.handle(CLOUD_CHANNELS.cloudLogout, async () => {
-      this.assertAccountChange();
-      await this.connection.logout();
-      this.account?.dispose();
-      this.account = undefined;
-    });
+    ipc.handle(CLOUD_CHANNELS.cloudStartLogin, () =>
+      this.changeAccount(() => this.connection.startLogin()),
+    );
+    ipc.handle(CLOUD_CHANNELS.cloudPollLogin, () =>
+      this.changeAccount(() => this.connection.pollLogin()),
+    );
+    ipc.handle(CLOUD_CHANNELS.cloudLogout, () =>
+      this.changeAccount(async () => {
+        await this.connection.logout();
+        this.account?.dispose();
+        this.account = undefined;
+        this.accountId = undefined;
+      }),
+    );
     ipc.handle(CLOUD_CHANNELS.cloudListProjects, () => this.listProjects());
     ipc.handle(CLOUD_CHANNELS.cloudCreateProject, (_event, ...args: unknown[]) =>
       this.createProject(args),
@@ -135,7 +174,9 @@ export class CloudWorkspace {
     ipc.handle(CLOUD_CHANNELS.cloudSync, (event, allProjects: unknown) => {
       if (allProjects !== undefined && typeof allProjects !== 'boolean')
         throw new Error('Invalid synchronization scope');
-      return this.synchronize(this.requireEntry(event.sender.id), allProjects === true);
+      const entry = this.windows.get(event.sender.id);
+      if (!entry && allProjects !== true) this.requireEntry(event.sender.id);
+      return this.synchronize(entry, allProjects === true, event.sender.id);
     });
     ipc.handle(CLOUD_CHANNELS.cloudPull, async (event) => {
       const entry = this.requireEntry(event.sender.id);
@@ -150,15 +191,21 @@ export class CloudWorkspace {
       closeWindow: unknown,
     ) => {
       const entry = this.windows.get(event.sender.id);
-      if (!entry) return;
-      entry.assertIdle();
-      if (entry.account.hasPending(entry.projectId, true) && keepLocal !== true)
+      if (!entry && closeWindow !== true) return;
+      if (this.opening.has(event.sender.id)) throw new Error('Wait for the cloud context to open');
+      const account = this.connection.account ? await this.getAccount() : undefined;
+      entry?.assertIdle();
+      account?.assertWritable();
+      if (account?.hasPending(entry?.projectId, true) && keepLocal !== true)
         throw new Error('Confirm keeping changes on this device first');
-      await entry.dispose();
-      if (closeWindow === true)
+      await entry?.dispose();
+      if (closeWindow === true) {
+        const window = this.window(event);
+        this.closingWindows.add(window.webContents.id);
         setTimeout(() => {
-          if (!entry.window.isDestroyed()) entry.window.close();
+          if (!window.isDestroyed()) window.close();
         }, 0);
+      }
     };
     ipc.handle(CLOUD_CHANNELS.cloudCloseProject, leave);
     ipc.handle(CLOUD_CHANNELS.cloudLeaveContext, leave);
@@ -175,9 +222,10 @@ export class CloudWorkspace {
       return type === 'tm' ? entry.account.db.getTM(copied) : entry.account.db.getTermBase(copied);
     });
     ipc.handle(CLOUD_CHANNELS.cloudResolveConflict, (event) =>
-      this.resolveConflict(this.requireEntry(event.sender.id)),
+      this.resolveConflict(this.windows.get(event.sender.id), event.sender.id),
     );
     await this.connection.initialize();
+    if (this.connection.account) await this.getAccount();
   }
   private get localDbPath(): string {
     return this.deps.localDbPath ?? join(this.deps.userDataPath, 'cat_v1.db');
@@ -188,27 +236,52 @@ export class CloudWorkspace {
   private assertAccountChange(): void {
     if (this.hasOpenProjects || this.opening.size || this.accountOpening)
       throw new Error('Leave cloud projects before changing accounts');
+    if (this.accountChanging) throw new Error('Wait for the account change to finish');
+    this.account?.assertWritable();
+  }
+  private async changeAccount<T>(change: () => Promise<T>): Promise<T> {
+    this.assertAccountChange();
+    this.accountChanging = true;
+    try {
+      return await change();
+    } finally {
+      this.accountChanging = false;
+    }
   }
   private assertAccountIdle(): void {
+    if (this.accountChanging) throw new Error('Wait for the account change to finish');
     if (this.opening.size) throw new Error('Wait for the cloud context to open');
     for (const entry of this.windows.values()) entry.assertIdle();
     this.account?.assertWritable();
   }
   private async getAccount(): Promise<CloudAccountSession> {
     if (!this.connection.account || !this.connection.baseURL) throw new Error('Sign in first');
-    if (this.account) return this.account;
+    const accountId = this.id(this.connection.account.id);
+    if (this.account && this.accountId === accountId) return this.account;
+    if (this.account) {
+      this.assertAccountIdle();
+      if (this.hasOpenProjects) throw new Error('Leave cloud projects before changing accounts');
+      this.account.dispose();
+      this.account = undefined;
+      this.accountId = undefined;
+    }
     if (this.accountOpening) return this.accountOpening;
     const directory = join(
       this.deps.userDataPath,
       'cloud',
       createHash('sha256').update(this.connection.baseURL).digest('hex').slice(0, 16),
-      this.id(this.connection.account.id),
+      accountId,
       'account-v2',
     );
     this.accountOpening = (async () => {
       const account = new CloudAccountSession(directory, this.connection);
       await account.initialize();
+      if (this.connection.account?.id !== accountId) {
+        account.dispose();
+        throw new Error('Cloud account changed while opening its cache');
+      }
       this.account = account;
+      this.accountId = accountId;
       return account;
     })();
     try {
@@ -310,31 +383,52 @@ export class CloudWorkspace {
     for (const entry of this.windows.values())
       entry.notify({ projectId: entry.projectId ?? 0, kind: 'tb', reason: 'tb-imported' });
   }
-  private async synchronize(entry: WindowSession, allProjects = false): Promise<CloudSyncResult> {
+  private assertSingleCloudWindow(senderId: number): void {
+    if ([...this.windows.keys()].some((id) => id !== senderId))
+      throw new Error('Close other cloud windows before synchronizing all cloud work');
+  }
+  private async synchronize(
+    entry?: WindowSession,
+    allProjects = false,
+    senderId?: number,
+  ): Promise<CloudSyncResult> {
+    const account = entry?.account ?? (await this.getAccount());
     this.assertAccountIdle();
-    entry.busy = true;
+    if (allProjects && senderId !== undefined) this.assertSingleCloudWindow(senderId);
+    if (entry) entry.busy = true;
     try {
-      return await entry.account.synchronize(entry.projectId, allProjects);
+      return await account.synchronize(entry?.projectId, allProjects);
     } finally {
-      entry.busy = false;
+      if (entry) entry.busy = false;
       this.invalidate();
     }
   }
-  private async resolveConflict(entry: WindowSession): Promise<CloudSyncResult> {
+  private async resolveConflict(
+    entry: WindowSession | undefined,
+    senderId: number,
+  ): Promise<CloudSyncResult> {
+    const account = entry?.account ?? (await this.getAccount());
     this.assertAccountIdle();
-    if (this.localRunning.size) throw new Error('Wait for local operations to finish');
-    const conflicts = entry.account.getConflicts();
+    this.assertSingleCloudWindow(senderId);
+    if (
+      this.localRunning.size ||
+      [...this.watchedWindows.keys()].some(
+        (id) => !this.windows.has(id) && this.deps.router.isBusy(id),
+      )
+    )
+      throw new Error('Wait for local operations to finish');
+    const conflicts = account.getConflicts();
     if (!conflicts.length) throw new Error('Synchronize first to check for conflicts');
     let localCopyProjectId: number | undefined;
     let localCopyName: string | undefined;
     for (const row of conflicts) {
       if (row.kind === 'project') {
-        const projectId = entry.account.projectId(row.id)!;
-        const sourceFiles = entry.account.db.listFiles(projectId);
+        const projectId = account.projectId(row.id)!;
+        const sourceFiles = account.db.listFiles(projectId);
         const staged: string[] = [];
         try {
           localCopyProjectId = cloneCloudProjectAsLocal(
-            entry.account.dbPath,
+            account.dbPath,
             this.localDbPath,
             projectId,
             (copyId, files) => {
@@ -345,7 +439,7 @@ export class CloudWorkspace {
                 const source = sourceFiles.find((original) => original.uuid === file.sourceUUID);
                 if (!source) throw new Error('Original project file mapping is unavailable');
                 copyFileSync(
-                  internalProjectFilePath(entry.account.projectsDir, source),
+                  internalProjectFilePath(account.projectsDir, source),
                   internalProjectFilePath(this.localProjectsDir, file),
                 );
               });
@@ -357,23 +451,18 @@ export class CloudWorkspace {
           throw error;
         }
       } else {
-        const id = cloneLocalCloudResource(
-          entry.account.dbPath,
-          this.localDbPath,
-          row.kind,
-          row.id,
-        );
+        const id = cloneLocalCloudResource(account.dbPath, this.localDbPath, row.kind, row.id);
         localCopyName = (
           row.kind === 'tm' ? this.deps.localDb.getTM(id) : this.deps.localDb.getTermBase(id)
         )?.name;
       }
     }
-    entry.busy = true;
+    if (entry) entry.busy = true;
     try {
-      await entry.account.acceptCloud(conflicts);
-      return { projectId: entry.projectId, changed: true, localCopyProjectId, localCopyName };
+      await account.acceptCloud(conflicts);
+      return { projectId: entry?.projectId, changed: true, localCopyProjectId, localCopyName };
     } finally {
-      entry.busy = false;
+      if (entry) entry.busy = false;
       this.invalidate();
     }
   }
@@ -436,10 +525,6 @@ export class CloudWorkspace {
       send(IPC_CHANNELS.events.qaInvalidated, id),
     );
     jobs.on('progress', (event) => send(IPC_CHANNELS.events.jobProgress, event));
-    const onClose = (event: { preventDefault: () => void }) => {
-      event.preventDefault();
-      send('cloud-close-requested', null);
-    };
     const entry: WindowSession = {
       account,
       ...context,
@@ -458,16 +543,17 @@ export class CloudWorkspace {
         unsubscribeQA();
         this.deps.router.remove(senderId);
         this.windows.delete(senderId);
-        window.removeListener('close', onClose);
         window.setTitle(this.deps.windowTitle ?? 'momoCAT');
       },
     };
     this.windows.set(senderId, entry);
-    window.on('close', onClose);
+    this.watchWindow(window);
   }
   async dispose(): Promise<void> {
     for (const entry of [...this.windows.values()]) await entry.dispose();
+    for (const stopWatching of [...this.watchedWindows.values()]) stopWatching();
     this.account?.dispose();
     this.account = undefined;
+    this.accountId = undefined;
   }
 }

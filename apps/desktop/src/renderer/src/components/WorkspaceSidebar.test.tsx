@@ -166,28 +166,26 @@ it('shows local and cloud projects together without confusing equal internal ids
   expect(callbacks.onNavigate).not.toHaveBeenCalled();
 });
 
-it('presents cloud refresh as a heading action without selecting or opening a project', () => {
+it('keeps the global cloud control beside Settings without selecting or opening a project', () => {
   const callbacks = props();
   const onOpenCloud = vi.fn();
-  const onRefreshCloud = vi.fn();
+  const onSync = vi.fn();
   render(
     <WorkspaceSidebar
       {...callbacks}
       view={{ kind: 'project', projectId: 1, cloudId: 'remote-1' }}
       cloudProjects={[{ id: 'remote-1', name: 'Cloud translation', revision: 3 }]}
       onOpenCloud={onOpenCloud}
-      onRefreshCloud={onRefreshCloud}
+      cloudControl={<button onClick={onSync}>Sync with cloud</button>}
     />,
   );
-  const refresh = screen.getByRole('button', { name: 'Refresh cloud projects' });
-  const heading = screen.getByRole('button', { name: 'Collapse Projects' });
-  expect(heading.parentElement).toContainElement(refresh);
-  expect(refresh.textContent).toBe('');
-  expect(refresh).toHaveAttribute('title', 'Refresh cloud projects');
-  expect(screen.getByRole('group', { name: 'Projects list' })).not.toContainElement(refresh);
+  const sync = screen.getByRole('button', { name: 'Sync with cloud' });
+  expect(screen.getByRole('button', { name: 'Settings' }).parentElement).toContainElement(sync);
+  expect(screen.getByRole('navigation', { name: 'Projects' })).not.toContainElement(sync);
+  expect(screen.queryByRole('button', { name: 'Refresh cloud projects' })).not.toBeInTheDocument();
 
-  fireEvent.click(refresh);
-  expect(onRefreshCloud).toHaveBeenCalledOnce();
+  fireEvent.click(sync);
+  expect(onSync).toHaveBeenCalledOnce();
   expect(onOpenCloud).not.toHaveBeenCalled();
   expect(callbacks.onNavigate).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: 'Cloud translation' })).toHaveAttribute(
@@ -196,26 +194,23 @@ it('presents cloud refresh as a heading action without selecting or opening a pr
   );
 });
 
-it('keeps cloud refresh available with an empty or collapsed list and respects navigation locking', () => {
+it('keeps the cloud control reachable with an empty or collapsed list without adding it to local-only navigation', () => {
   const callbacks = props();
-  const onRefreshCloud = vi.fn();
+  const onSync = vi.fn();
   const { rerender } = render(
-    <WorkspaceSidebar {...callbacks} projects={[]} onRefreshCloud={onRefreshCloud} />,
+    <WorkspaceSidebar
+      {...callbacks}
+      projects={[]}
+      cloudControl={<button onClick={onSync}>Sync with cloud</button>}
+    />,
   );
   fireEvent.click(screen.getByRole('button', { name: 'Collapse Projects' }));
   expect(screen.queryByRole('group', { name: 'Projects list' })).not.toBeInTheDocument();
-  const refresh = screen.getByRole('button', { name: 'Refresh cloud projects' });
-  expect(refresh).toBeVisible();
-  fireEvent.click(refresh);
-  expect(onRefreshCloud).toHaveBeenCalledOnce();
-
-  rerender(
-    <WorkspaceSidebar {...callbacks} projects={[]} onRefreshCloud={onRefreshCloud} disabled />,
-  );
-  expect(refresh).toBeDisabled();
-  fireEvent.click(refresh);
-  expect(onRefreshCloud).toHaveBeenCalledOnce();
+  const sync = screen.getByRole('button', { name: 'Sync with cloud' });
+  expect(sync).toBeVisible();
+  fireEvent.click(sync);
+  expect(onSync).toHaveBeenCalledOnce();
 
   rerender(<WorkspaceSidebar {...callbacks} projects={[]} />);
-  expect(screen.queryByRole('button', { name: 'Refresh cloud projects' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Sync with cloud' })).not.toBeInTheDocument();
 });

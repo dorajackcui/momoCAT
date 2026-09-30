@@ -19,6 +19,9 @@ const state = vi.hoisted(() => ({
   loadProjects: vi.fn(async () => {}),
   closeHandler: undefined as (() => void) | undefined,
   cancelClose: vi.fn(async () => {}),
+  listCloudProjects: vi.fn(async () => [{ id: 'project-cloud', name: 'Product', revision: 1 }]),
+  editorMount: vi.fn(),
+  editorUnmount: vi.fn(),
 }));
 vi.mock('./components/CloudControls', async (original) => {
   const actual = await original<typeof import('./components/CloudControls')>();
@@ -39,12 +42,15 @@ vi.mock('./components/WorkspaceSidebar', () => ({
   WorkspaceSidebar: ({
     onOpenCloud,
     onNavigate,
+    cloudControl,
+    hidden,
   }: React.ComponentProps<typeof import('./components/WorkspaceSidebar').WorkspaceSidebar>) => (
-    <aside>
+    <aside hidden={hidden}>
       <button onClick={() => onOpenCloud?.('project-cloud')}>Open cloud</button>
       <button onClick={() => onNavigate({ kind: 'project', projectId: 1 })}>Open local</button>
       <button onClick={() => onNavigate({ kind: 'tm' })}>Manage TM</button>
       <button onClick={() => onNavigate({ kind: 'settings' })}>Settings</button>
+      {!hidden && cloudControl}
     </aside>
   ),
 }));
@@ -64,9 +70,19 @@ vi.mock('./components/Editor', async () => {
   return {
     Editor: ({
       registerNavigationGuard,
+      cloudControl,
     }: React.ComponentProps<typeof import('./components/Editor').Editor>) => {
       useEffect(() => registerNavigationGuard?.(state.guard), [registerNavigationGuard]);
-      return <div>Editor open</div>;
+      useEffect(() => {
+        state.editorMount();
+        return () => state.editorUnmount();
+      }, []);
+      return (
+        <div>
+          <header aria-label="Editor actions">{cloudControl}</header>
+          Editor open
+        </div>
+      );
     },
   };
 });
@@ -136,7 +152,7 @@ beforeEach(() => {
     configurable: true,
     value: {
       cloudStatus: async () => state.status,
-      cloudListProjects: async () => [{ id: 'project-cloud', name: 'Product', revision: 1 }],
+      cloudListProjects: state.listCloudProjects,
       cloudOpenProject: async () => {
         state.status = {
           ...state.status,
@@ -196,6 +212,9 @@ describe('cloud workspace navigation and sync', () => {
       finish(true);
     });
     await waitFor(() => expect(state.sync).toHaveBeenCalledOnce());
+    expect(state.sync).toHaveBeenCalledWith(true);
+    expect(state.success).not.toHaveBeenCalled();
+    expect(screen.getAllByRole('button', { name: 'Sync with cloud' })).toHaveLength(1);
     expect(screen.getByText('Editor open')).toBeInTheDocument();
   });
 
@@ -244,9 +263,63 @@ describe('cloud workspace navigation and sync', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Local resources' }));
     await screen.findByText('local TM manager');
     expect(state.leave).toHaveBeenCalledWith(true);
-    expect(screen.queryByRole('button', { name: 'Sync with cloud' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sync with cloud' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Cloud resources' }));
     await screen.findByText('cloud TM manager');
+  });
+
+  it('syncs all cloud work from a local editor without remounting it or changing its project identity', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open local' }));
+    await screen.findByText('Local project detail');
+    fireEvent.click(screen.getByRole('button', { name: 'Open editor' }));
+    await screen.findByText('Editor open');
+    state.sync.mockImplementation(async () => {
+      state.status.cacheRevision = 1;
+      return { changed: true, projectId: 1 };
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Sync with cloud' }));
+    await waitFor(() => expect(state.sync).toHaveBeenCalledWith(true));
+    await waitFor(() => expect(state.listCloudProjects).toHaveBeenCalledTimes(2));
+    expect(state.guard).toHaveBeenCalledOnce();
+    expect(state.editorMount).toHaveBeenCalledOnce();
+    expect(state.editorUnmount).not.toHaveBeenCalled();
+    expect(screen.getByText('Editor open')).toBeInTheDocument();
+    expect(screen.queryByText('Cloud project detail')).not.toBeInTheDocument();
+    expect(state.success).not.toHaveBeenCalled();
+  });
+
+  it('preserves the local editor when a partial cloud pull fails', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open local' }));
+    await screen.findByText('Local project detail');
+    fireEvent.click(screen.getByRole('button', { name: 'Open editor' }));
+    await screen.findByText('Editor open');
+    state.sync.mockImplementation(async () => {
+      state.status.cacheRevision = 1;
+      throw new Error('Later cloud download failed');
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Sync with cloud' }));
+    await waitFor(() => expect(state.error).toHaveBeenCalledWith('Later cloud download failed'));
+    expect(state.editorMount).toHaveBeenCalledOnce();
+    expect(state.editorUnmount).not.toHaveBeenCalled();
+    expect(screen.getByText('Editor open')).toBeInTheDocument();
+  });
+
+  it('keeps the global sync entry while leaving a cloud draft without an extra prompt', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open cloud' }));
+    await screen.findByText('Cloud project detail');
+    state.status.pendingElsewhere = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Open local' }));
+    await screen.findByText('Local project detail');
+    expect(state.leave).toHaveBeenCalledWith(true);
+    expect(state.confirm).not.toHaveBeenCalled();
+    expect(state.sync).not.toHaveBeenCalled();
+    expect(screen.getAllByRole('button', { name: 'Sync with cloud' })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Sync with cloud' }));
+    await waitFor(() => expect(state.sync).toHaveBeenCalledWith(true));
+    expect(screen.getByText('Local project detail')).toBeVisible();
   });
 });
 
@@ -268,6 +341,19 @@ describe('cloud window close guard', () => {
     });
     act(() => state.closeHandler?.());
     await screen.findByRole('dialog', { name: 'Sync before closing?' });
+    fireEvent.click(screen.getByRole('button', { name: 'Sync and close' }));
+    await waitFor(() => expect(state.leave).toHaveBeenCalledWith(true, true));
+    expect(state.sync).toHaveBeenCalledWith(true);
+  });
+  it('offers cloud sync before closing a local page with retained cloud changes', async () => {
+    state.status.pendingElsewhere = true;
+    render(<App />);
+    act(() => state.closeHandler?.());
+    await screen.findByRole('dialog', { name: 'Sync before closing?' });
+    state.sync.mockImplementation(async () => {
+      state.status.pendingElsewhere = false;
+      return { changed: false };
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Sync and close' }));
     await waitFor(() => expect(state.leave).toHaveBeenCalledWith(true, true));
     expect(state.sync).toHaveBeenCalledWith(true);
@@ -373,6 +459,6 @@ describe('settings route', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
     await screen.findByText('Settings page');
     expect(state.leave).toHaveBeenCalledWith(true);
-    expect(screen.queryByRole('button', { name: 'Sync with cloud' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sync with cloud' })).toBeVisible();
   });
 });

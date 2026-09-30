@@ -39,6 +39,7 @@ interface EditorProps {
   registerNavigationGuard: (guard: WorkspaceNavigationGuard) => () => void;
   initialActiveSegmentId?: string | null;
   onRememberPosition?: (fileId: number, segmentId: string | null) => void;
+  cloudControl?: React.ReactNode;
 }
 
 function clampJobProgress(progress: number): number {
@@ -59,6 +60,7 @@ export const Editor: React.FC<EditorProps> = ({
   registerNavigationGuard,
   initialActiveSegmentId,
   onRememberPosition,
+  cloudControl,
 }) => {
   const positionRestoredRef = useRef(false);
   const [file, setFile] = useState<ProjectFile | null>(null);
@@ -447,6 +449,7 @@ export const Editor: React.FC<EditorProps> = ({
         totalSegments={totalSegments}
         onBack={onBack}
         onExport={handleBatchExport}
+        cloudControl={cloudControl}
       />
 
       {activeBatchAIJob && (
