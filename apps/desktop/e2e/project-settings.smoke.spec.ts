@@ -212,6 +212,9 @@ test('shares project settings while preserving independent AI and QA drafts and 
     await ignoredTags.pressSequentially('</b>');
     await expect(ignoredTags).toHaveValue('<b>\n</b>');
     await page.getByRole('checkbox', { name: '[color=…] tags', exact: true }).uncheck();
+    const verticalBars = page.getByRole('checkbox', { name: '| vertical bars', exact: true });
+    await expect(verticalBars).toBeChecked();
+    await verticalBars.uncheck();
     await page.screenshot({
       path: testInfo.outputPath('qa-tag-options.png'),
       animations: 'disabled',
@@ -257,6 +260,7 @@ test('shares project settings while preserving independent AI and QA drafts and 
     await tagOptions.click();
     await expect(ignoredTags).toHaveValue('<b>\n</b>');
     await expect(page.getByRole('checkbox', { name: '[color=…] tags' })).not.toBeChecked();
+    await expect(verticalBars).not.toBeChecked();
     await page.getByRole('button', { name: 'Done', exact: true }).click();
     await page.getByRole('button', { name: 'Terminology options', exact: true }).click();
     await expect(page.getByRole('checkbox', { name: '【 】', exact: true })).not.toBeChecked();

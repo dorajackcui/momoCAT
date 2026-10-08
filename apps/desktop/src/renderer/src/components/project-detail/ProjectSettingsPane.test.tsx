@@ -120,11 +120,15 @@ describe('Project settings', () => {
     expect(screen.queryByRole('checkbox', { name: 'Extra tags' })).not.toBeInTheDocument();
     const tagOrder = screen.getByRole('checkbox', { name: 'Check tag order', exact: true });
     fireEvent.click(tagOrder);
+    const verticalBars = screen.getByRole('checkbox', { name: '| vertical bars', exact: true });
+    expect(verticalBars).toBeChecked();
+    fireEvent.click(verticalBars);
     done();
     expect(apiClient.updateProjectQASettings).not.toHaveBeenCalled();
     fireEvent.click(tagRule());
     openOptions();
     expect(screen.getByRole('checkbox', { name: 'Check tag order' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: '| vertical bars' })).not.toBeChecked();
     done();
     fireEvent.click(tagRule());
     openOptions();
@@ -136,7 +140,14 @@ describe('Project settings', () => {
     );
     expect(apiClient.updateProjectQASettings).toHaveBeenCalledWith(
       1,
-      expect.objectContaining({ disabledCheckIds: [] }),
+      expect.objectContaining({
+        disabledCheckIds: [],
+        options: expect.objectContaining({
+          tagTypes: DEFAULT_PROJECT_QA_SETTINGS.options!.tagTypes!.filter(
+            (type) => type !== 'pipe',
+          ),
+        }),
+      }),
     );
   });
 

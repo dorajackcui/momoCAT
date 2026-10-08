@@ -13,10 +13,21 @@ export function checkDocumentTags(segment: Segment, settings: ProjectQASettings)
         ? 'brace'
         : tag.startsWith('[')
           ? 'color'
-          : 'newline';
-  const extract = (tokens: readonly Token[]) =>
-    scanQaMarkers(qaText(tokens))
+          : tag === '|'
+            ? 'pipe'
+            : 'newline';
+  const extract = (tokens: readonly Token[]) => {
+    const text = qaText(tokens);
+    const markers = scanQaMarkers(text);
+    if (types.has('pipe') && !ignored.has('|')) {
+      for (const match of text.matchAll(/\|/g)) {
+        markers.push({ text: '|', start: match.index!, end: match.index! + 1 });
+      }
+      markers.sort((left, right) => left.start - right.start);
+    }
+    return markers
       .map((marker) => marker.text)
       .filter((tag) => !ignored.has(tag) && types.has(markerType(tag)));
+  };
   return checkTagIntegrity(extract(segment.sourceTokens), extract(segment.targetTokens));
 }

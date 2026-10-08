@@ -158,6 +158,20 @@ describe('document QA', () => {
       [],
     );
   });
+  it('accepts vertical bar settings without adding them to saved tag selections', () => {
+    const config = normalizeQASettings({
+      enabledRuleIds: ['tag-integrity'],
+      options: { tagTypes: ['pipe'] },
+    });
+    expect(isQASettings(config)).toBe(true);
+    expect(normalizeQASettings(JSON.parse(JSON.stringify(config))).options?.tagTypes).toEqual([
+      'pipe',
+    ]);
+    expect(
+      normalizeQASettings({ options: { tagTypes: ['angle', 'brace', 'color', 'newline'] } })
+        .options?.tagTypes,
+    ).toEqual(['angle', 'brace', 'color', 'newline']);
+  });
   it('always checks the basics when their parent is enabled, including legacy disabled settings', () => {
     const config = settings('tag-integrity', 'terminology-consistency');
     config.disabledCheckIds = [

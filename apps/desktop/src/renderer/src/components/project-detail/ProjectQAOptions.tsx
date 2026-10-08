@@ -18,6 +18,7 @@ const tagTypes: Array<[QaTagType, string]> = [
   ['color', '[color=…] tags'],
   ['brace', '{…} placeholders'],
   ['newline', '\\n markers'],
+  ['pipe', '| vertical bars'],
 ];
 
 export function ProjectQAOptions({

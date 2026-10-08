@@ -75,7 +75,7 @@ export const QA_OPTIONAL_CHECK_IDS: readonly QaCheckId[] = [
   'mixed-width',
   'paired-symbols',
 ];
-export const QA_TAG_TYPES = ['angle', 'brace', 'color', 'newline'] as const;
+export const QA_TAG_TYPES = ['angle', 'brace', 'color', 'newline', 'pipe'] as const;
 export type QaTagType = (typeof QA_TAG_TYPES)[number];
 
 export interface ProjectQASettings {

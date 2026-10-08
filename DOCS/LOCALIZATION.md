@@ -164,9 +164,9 @@ Consistency normalizes whole surrounding quotes/brackets while retaining interna
 | File import mode                    | QA behavior                                                                                                                                                                                          |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Protect CAT markers** (`default`) | [`checkProtectedTokens`](../packages/core/src/qa/protectedTokens.ts) compares tokenizer-generated tokens whenever QA runs, independently of category switches, optional tag types, and ignore lists. |
-| **Plain marker-like text** (`none`) | Configurable **Standard tags** scans angle/color/brace/literal-newline text and optional tag order.                                                                                                  |
+| **Plain marker-like text** (`none`) | Configurable **Standard tags** scans selected angle/color/brace/literal-newline/vertical-bar text and optional tag order.                                                                            |
 
-One project may contain both file modes. Literal text is never promoted to a protected token just because it resembles `{1}`; editor markers represent existing tokens. Comparisons preserve token content and occurrences, including Unicode angle tags, printf placeholders, and protected newline escapes. Actual line breaks belong to the line-break check. Invalid source nesting is not a structural baseline. Protected-token checks omit pure order differences.
+One project may contain both file modes. Literal text is never promoted to a protected token just because it resembles `{1}`; editor markers represent existing tokens. Comparisons preserve token content and occurrences, including Unicode angle tags, printf placeholders, and protected newline escapes. The vertical-bar option compares literal ASCII `|` occurrences, including adjacent bars and bars inside marker text; full-width `｜` is a different character. It follows the selected tag types, exact ignore list, and optional tag order. Actual line breaks belong to the line-break check. Invalid source nesting is not a structural baseline. Protected-token checks omit pure order differences.
 
 All persisted-file QA entrypoints use the shared [import-policy parser](../packages/localization/src/tagPolicy.ts). Missing options/policy use Protect; malformed JSON, non-object options, or unsupported policies fail with the file ID and a clear reason, preserving saved findings.
 
@@ -217,19 +217,19 @@ When enabled, Instant QA includes protected-token checks and enabled single-row 
 
 对照基准为 [QAtools 0.1.8 / 5ed8410](https://github.com/dorajackcui/QAtools/tree/5ed84103f3936473cf519b9c23f7acb154d10808) 的“一键质量检查”，以该版本实际代码与运行结果为准。**11 个检查大类均已具备，但检查结果并不严格等价。** 下表及差异样例用于判断覆盖范围；“覆盖样例一致”不代表所有边界等价，也不要求两边报告措辞、条数或分组结构相同。
 
-| 检查项                | 当前能力与对照结果                                                                                                                         |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| 空译文                | 内容规则一致；QAtools 固定执行，momoCAT 可开关、默认开。                                                                                   |
-| 术语                  | 支持 `【】`、`[]`，兼容 `［］`；按出现顺序配对；挂载 TB 与 marker 学习术语一起检查。边界差异见下表。                                       |
-| 同 source 不同 target | 空译文算一个译文变体；去除整串外层引号/括号，保留内部文本及大小写。覆盖样例一致。                                                          |
-| 同 target 不同 source | 忽略空 target，默认关闭。覆盖样例一致。                                                                                                    |
-| 子串译文一致性        | 使用唯一非空参考译文、边界和最短字母数；排除已检查术语及纯 printf 占位符参考译文，可定位参考行。默认关闭。                                 |
-| Tag / Placeholder     | Plain 文件支持 angle/color/brace/literal newline、数量、闭合/嵌套及可选顺序；Protect 文件使用固定 token 检查。高级过滤配置不等价，见下文。 |
-| 换行数量              | CRLF 按一个换行；真实换行与字面 `\n` 分开。覆盖样例一致。                                                                                  |
-| 数字一致性            | 比较重复出现次数；支持千分位分隔、千分号、编码字符排除及破折号归一化。覆盖样例一致。                                                       |
-| URL 一致性            | 支持单引号、中文包围符、尾标点与起始单词边界。覆盖样例一致。                                                                               |
-| Target 中文           | 覆盖样例一致；QAtools 默认开，momoCAT 默认关。                                                                                             |
-| Target 文本规范       | 包括混合重复标点、连续/首尾空格、同类全半角标点混用及括号引号配对。覆盖样例一致。                                                          |
+| 检查项                | 当前能力与对照结果                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 空译文                | 内容规则一致；QAtools 固定执行，momoCAT 可开关、默认开。                                                                                                |
+| 术语                  | 支持 `【】`、`[]`，兼容 `［］`；按出现顺序配对；挂载 TB 与 marker 学习术语一起检查。边界差异见下表。                                                    |
+| 同 source 不同 target | 空译文算一个译文变体；去除整串外层引号/括号，保留内部文本及大小写。覆盖样例一致。                                                                       |
+| 同 target 不同 source | 忽略空 target，默认关闭。覆盖样例一致。                                                                                                                 |
+| 子串译文一致性        | 使用唯一非空参考译文、边界和最短字母数；排除已检查术语及纯 printf 占位符参考译文，可定位参考行。默认关闭。                                              |
+| Tag / Placeholder     | Plain 文件支持 angle/color/brace/literal newline/vertical bar、数量、闭合/嵌套及可选顺序；Protect 文件使用固定 token 检查。高级过滤配置不等价，见下文。 |
+| 换行数量              | CRLF 按一个换行；真实换行与字面 `\n` 分开。覆盖样例一致。                                                                                               |
+| 数字一致性            | 比较重复出现次数；支持千分位分隔、千分号、编码字符排除及破折号归一化。覆盖样例一致。                                                                    |
+| URL 一致性            | 支持单引号、中文包围符、尾标点与起始单词边界。覆盖样例一致。                                                                                            |
+| Target 中文           | 覆盖样例一致；QAtools 默认开，momoCAT 默认关。                                                                                                          |
+| Target 文本规范       | 包括混合重复标点、连续/首尾空格、同类全半角标点混用及括号引号配对。覆盖样例一致。                                                                       |
 
 **Marker 与挂载 TB 的组合：** 两者可以同时启用。TB 优先，marker 配对用于学习当前文件中的新术语；学习完成后回扫全文件，包括学习行之前和之后的未标记行。学到的术语只用于本次检查，不写入 TB。这与 QAtools 的基本流程一致，但冲突处理和匹配边界存在以下六种已知差异：
 
