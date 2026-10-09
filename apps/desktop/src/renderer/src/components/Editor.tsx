@@ -559,6 +559,7 @@ export const Editor: React.FC<EditorProps> = ({
               onConfirm={confirmAndAdvance}
               aiTranslatingSegmentIds={aiTranslatingSegmentIds}
               segmentSaveErrors={segmentSaveErrors}
+              qaHighlightSelection={qaFilter?.highlightSelection}
               sourceHighlightQuery={debouncedSourceQuery}
               targetHighlightQuery={targetSearchScope === 'target' ? debouncedTargetQuery : ''}
               contextHighlightQuery={targetSearchScope === 'context' ? debouncedTargetQuery : ''}

@@ -155,7 +155,7 @@ The eleven categories are empty targets, terminology, same source/different targ
 
 Terminology combines mounted TB matches and optional square/corner-bracket term pairs. TB terms take precedence; conflicting marked pairs do not replace the baseline. Learned terms are indexed after establishing the document baseline and scanned against each distinct source. Findings group by term pair. The [QAtools comparison](#qatools-comparison) records matching boundaries and differences.
 
-Consistency normalizes whole surrounding quotes/brackets while retaining internal text. Substring checks use unique reference translations, minimum letter counts, and locatable reference rows. Numbers and URLs compare occurrences without enforcing order. Target text checks punctuation, spaces, width mixing, and paired symbols.
+Consistency normalizes whole surrounding quotes/brackets while retaining internal text. Substring checks use unique reference translations, minimum letter counts, and locatable reference rows. Numbers and URLs compare occurrences without enforcing order. Target text checks punctuation, spaces, width mixing, and paired symbols. Terminology, number/URL, tag, Chinese, repeated-punctuation, mixed-width, and paired-symbol findings include optional highlight locations. Each side carries its exact checked editor-text snapshot and UTF-16 ranges; protected tags map to complete editor markers. Terminology locations cover source text only. Mixed-width letter/digit locations emphasize the full-width characters, while mixed punctuation marks the affected character family. Whitespace, line-break, empty-target, substring, and cross-row consistency checks do not emit highlights.
 
 ### Shared tag rules
 

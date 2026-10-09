@@ -66,7 +66,7 @@ Reference rows are deduplicated per group and excluded from finding counts. A su
 
 ### Filtering and freshness
 
-Category names and group buttons filter affected CAT rows, including collapsed categories. Row items navigate to their segment. Entering QA filtering clears ordinary filters; exiting clears all filters without restoring the previous state. The selected row set stays stable while editing.
+Category names and group buttons filter affected CAT rows, including collapsed categories, and select the corresponding QA highlights. Row items navigate to their segment with the same group selected. Terminology highlights source terms only; numbers, URLs, and tags highlight the affected side; Chinese, repeated punctuation, mixed-width characters, and paired symbols highlight target fragments. These use the existing search marks in source cells, target previews, and the live editor. Switching selection replaces the QA marks; exiting clears them. A mark applies only while its checked text snapshot exactly matches the current editor text, so edits hide outdated locations immediately. Older saved findings without locations remain navigable and gain highlights after recheck. Entering QA filtering clears ordinary filters; exiting clears all filters without restoring the previous state. The selected row set stays stable while editing.
 
 | Result state                                      | Panel behavior                                   |
 | ------------------------------------------------- | ------------------------------------------------ |
@@ -79,7 +79,7 @@ Category names and group buttons filter affected CAT rows, including collapsed c
 
 Panel, inline feedback, and file counts use the segment result source. [`useSegmentConfirmation`](../apps/desktop/src/renderer/src/hooks/editor/useSegmentConfirmation.ts) owns confirmation; editor composition calls [`refreshInstantQA`](../apps/desktop/src/renderer/src/hooks/editor/refreshInstantQA.ts) for the optional follow-up described in [Confirm and instant QA](LOCALIZATION.md#confirm-and-instant-qa). Save errors and QA feedback remain separate.
 
-[QA hook tests](../apps/desktop/src/renderer/src/hooks/editor/useEditorQA.test.tsx), [panel tests](../apps/desktop/src/renderer/src/components/editor/QAPanel.test.tsx), and [QA E2E](../apps/desktop/e2e/qa.smoke.spec.ts) cover retention, filters, late results, and large-file responsiveness.
+[QA hook tests](../apps/desktop/src/renderer/src/hooks/editor/useEditorQA.test.tsx), [panel tests](../apps/desktop/src/renderer/src/components/editor/QAPanel.test.tsx), and [QA E2E](../apps/desktop/e2e/qa.smoke.spec.ts) cover retention, filters, late results, and large-file responsiveness. [Highlight E2E](../apps/desktop/e2e/qa-highlights.smoke.spec.ts) covers selection, source/target marks, and clearing stale marks during edits.
 
 ## UI foundation
 

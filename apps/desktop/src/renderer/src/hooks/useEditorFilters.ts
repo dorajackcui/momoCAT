@@ -1,3 +1,4 @@
+import type { QaHighlightSelection } from '../components/qaHighlights';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   EditorFilterCriteria,
@@ -99,6 +100,7 @@ export function useEditorFilters({
     fileId: number;
     ids: string[];
     label: string;
+    highlightSelection?: QaHighlightSelection;
   } | null>(null);
   const qaFilter = qaSelection?.fileId === fileId ? qaSelection : null;
   const [filterState, setFilterState] = useState<EditorFilterCriteria>(
@@ -148,9 +150,9 @@ export function useEditorFilters({
     closeMenus();
   }, [closeMenus]);
   const applyQAFilter = useCallback(
-    (ids: string[], label: string) => {
+    (ids: string[], label: string, highlightSelection?: QaHighlightSelection) => {
       clearFilters();
-      setQASelection({ fileId, ids: [...new Set(ids)], label });
+      setQASelection({ fileId, ids: [...new Set(ids)], label, highlightSelection });
     },
     [clearFilters, fileId],
   );

@@ -1,4 +1,5 @@
 import { EditorMatchMode } from '../editorFilterUtils';
+import type { QaHighlight } from '@cat/core/models';
 
 export type EditorCommand =
   | { type: 'confirm' }
@@ -23,6 +24,7 @@ export interface EditorEngineOptions {
   editable: boolean;
   showNonPrintingSymbols: boolean;
   highlightQuery: string;
+  qaHighlights?: QaHighlight[];
   highlightMode: EditorMatchMode;
 }
 

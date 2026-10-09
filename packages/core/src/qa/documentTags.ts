@@ -2,6 +2,7 @@ import type { QaIssue, Segment, Token } from '../models';
 import { QA_TAG_TYPES, type ProjectQASettings, type QaTagType } from '../project/qaSettings';
 import { checkTagIntegrity } from './tagRules';
 import { qaText, scanQaMarkers } from './text';
+import { withTagHighlights } from './highlights';
 
 export function checkDocumentTags(segment: Segment, settings: ProjectQASettings): QaIssue[] {
   const ignored = new Set(settings.options?.ignoredTags ?? []);
@@ -25,9 +26,17 @@ export function checkDocumentTags(segment: Segment, settings: ProjectQASettings)
       }
       markers.sort((left, right) => left.start - right.start);
     }
-    return markers
-      .map((marker) => marker.text)
-      .filter((tag) => !ignored.has(tag) && types.has(markerType(tag)));
+    return {
+      text,
+      markers: markers.filter(
+        (marker) => !ignored.has(marker.text) && types.has(markerType(marker.text)),
+      ),
+    };
   };
-  return checkTagIntegrity(extract(segment.sourceTokens), extract(segment.targetTokens));
+  const source = extract(segment.sourceTokens),
+    target = extract(segment.targetTokens);
+  return checkTagIntegrity(
+    source.markers.map((marker) => marker.text),
+    target.markers.map((marker) => marker.text),
+  ).map((issue) => withTagHighlights(issue, source, target));
 }

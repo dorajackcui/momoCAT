@@ -38,6 +38,18 @@ export function normalizeSegmentStatus(
 
 export type QaSeverity = 'error' | 'warning' | 'info';
 
+export interface QaTextRange {
+  start: number;
+  end: number;
+}
+
+export interface QaHighlight {
+  side: 'source' | 'target';
+  /** Exact editor text checked by QA; ranges are UTF-16 offsets in this snapshot. */
+  text: string;
+  ranges: QaTextRange[];
+}
+
 export interface QaIssue {
   ruleId: string;
   /** Legacy transport compatibility only; QA presentation does not rank findings. */
@@ -46,6 +58,7 @@ export interface QaIssue {
   groupId?: string;
   groupLabel?: string;
   origins?: string[];
+  highlights?: QaHighlight[];
   references?: Array<{ segmentId: string; row: number }>;
 }
 

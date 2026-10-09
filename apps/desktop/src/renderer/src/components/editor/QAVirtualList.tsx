@@ -5,6 +5,7 @@ import { QAResultRow } from './QAResultRow';
 import type { QAPanelProps, groupQaIssues } from './QAPanel';
 import { Button, Icon, IconButton } from '../ui';
 import { QAReferenceSummary } from './QAReferenceSummary';
+import { qaSelectionForIssues, type QaHighlightSelection } from '../qaHighlights';
 
 interface Props extends Pick<QAPanelProps, 'segmentStore' | 'onFilter' | 'onLocate'> {
   categories: ReturnType<typeof groupQaIssues>;
@@ -13,8 +14,23 @@ interface Props extends Pick<QAPanelProps, 'segmentStore' | 'onFilter' | 'onLoca
 }
 
 type Entry =
-  | { kind: 'category'; key: string; id: string; label: string; ids: string[] }
-  | { kind: 'group'; key: string; label: string; filterLabel: string; ids: string[]; title: string }
+  | {
+      kind: 'category';
+      key: string;
+      id: string;
+      label: string;
+      ids: string[];
+      selection: QaHighlightSelection;
+    }
+  | {
+      kind: 'group';
+      key: string;
+      label: string;
+      filterLabel: string;
+      ids: string[];
+      title: string;
+      selection: QaHighlightSelection;
+    }
   | {
       kind: 'references';
       key: string;
@@ -27,6 +43,7 @@ type Entry =
       key: string;
       segmentId: string;
       issues: FileQaIssueRecord[];
+      selection: QaHighlightSelection;
       filterLabel: string;
       ids: string[];
     };
@@ -50,6 +67,7 @@ export function QAVirtualList({
         id,
         label: category.label,
         ids: [...new Set(category.issues.map((issue) => issue.segmentId))],
+        selection: qaSelectionForIssues(category.issues, 'category'),
       });
       if (collapsed.has(id)) continue;
       for (const [key, group] of category.groups) {
@@ -63,6 +81,7 @@ export function QAVirtualList({
             label: group.label,
             filterLabel,
             ids,
+            selection: qaSelectionForIssues(group.issues),
             title: [group.label, origins.length ? `Sources: ${origins.join(', ')}` : '']
               .filter(Boolean)
               .join('\n'),
@@ -82,6 +101,7 @@ export function QAVirtualList({
             key: `${id}/${key}/${segmentId}`,
             segmentId,
             issues,
+            selection: qaSelectionForIssues(group.issues),
             filterLabel,
             ids,
           });
@@ -132,7 +152,7 @@ export function QAVirtualList({
                     tone="inherit"
                     className="min-w-0 flex-1 justify-between gap-3 whitespace-normal text-left"
                     aria-label={`${entry.label} · ${entry.ids.length} rows`}
-                    onClick={() => onFilter(entry.ids, entry.label)}
+                    onClick={() => onFilter(entry.ids, entry.label, entry.selection)}
                   >
                     <span className="min-w-0 break-words text-sm font-semibold">{entry.label}</span>
                     <span className="shrink-0 text-xs font-normal text-text-muted">
@@ -148,7 +168,7 @@ export function QAVirtualList({
                     className="w-full justify-between gap-3 text-left"
                     aria-label={`${entry.label} · ${entry.ids.length} rows`}
                     title={entry.title}
-                    onClick={() => onFilter(entry.ids, entry.filterLabel)}
+                    onClick={() => onFilter(entry.ids, entry.filterLabel, entry.selection)}
                   >
                     <span className="min-w-0 truncate text-sm font-normal">{entry.label}</span>
                     <span className="shrink-0 text-xs font-normal text-text-muted">
@@ -171,7 +191,7 @@ export function QAVirtualList({
                     issues={entry.issues}
                     segmentStore={segmentStore}
                     onLocate={() => {
-                      onFilter(entry.ids, entry.filterLabel);
+                      onFilter(entry.ids, entry.filterLabel, entry.selection);
                       onLocate(entry.segmentId);
                     }}
                   />

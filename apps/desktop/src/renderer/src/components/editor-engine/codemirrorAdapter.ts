@@ -8,7 +8,9 @@ import {
   keymap,
 } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { buildHighlightChunks, EditorMatchMode } from '../editorFilterUtils';
+import { EditorMatchMode } from '../editorFilterUtils';
+import type { QaHighlight } from '@cat/core/models';
+import { buildEditorHighlightChunks } from '../highlightRanges';
 import { resolveEditorShortcutAction } from './shortcut';
 import {
   EditorCommand,
@@ -170,20 +172,24 @@ function nonPrintingExtension(enabled: boolean): Extension {
   return plugin;
 }
 
-function highlightExtension(query: string, mode: EditorMatchMode): Extension {
-  if (!query.trim()) return [];
+function highlightExtension(
+  query: string,
+  mode: EditorMatchMode,
+  highlights: QaHighlight[] = [],
+): Extension {
+  if (!query.trim() && !highlights.length) return [];
 
   const plugin = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
 
       constructor(view: EditorView) {
-        this.decorations = buildHighlightDecorations(view, query, mode);
+        this.decorations = buildHighlightDecorations(view, query, mode, highlights);
       }
 
       update(update: { docChanged: boolean; view: EditorView }): void {
         if (update.docChanged) {
-          this.decorations = buildHighlightDecorations(update.view, query, mode);
+          this.decorations = buildHighlightDecorations(update.view, query, mode, highlights);
         }
       }
     },
@@ -199,8 +205,9 @@ function buildHighlightDecorations(
   view: EditorView,
   query: string,
   mode: EditorMatchMode,
+  highlights: QaHighlight[],
 ): DecorationSet {
-  const chunks = buildHighlightChunks(view.state.doc.toString(), query, mode);
+  const chunks = buildEditorHighlightChunks(view.state.doc.toString(), query, mode, highlights);
   const builder = new RangeSetBuilder<Decoration>();
   let cursor = 0;
   for (const chunk of chunks) {
@@ -267,7 +274,7 @@ export function createCodeMirrorAdapter({
     editableCompartment.reconfigure(editableExtension(options.editable)),
     nonPrintingCompartment.reconfigure(nonPrintingExtension(options.showNonPrintingSymbols)),
     highlightCompartment.reconfigure(
-      highlightExtension(options.highlightQuery, options.highlightMode),
+      highlightExtension(options.highlightQuery, options.highlightMode, options.qaHighlights),
     ),
   ];
 
@@ -308,7 +315,11 @@ export function createCodeMirrorAdapter({
             editableCompartment.of(editableExtension(options.editable)),
             nonPrintingCompartment.of(nonPrintingExtension(options.showNonPrintingSymbols)),
             highlightCompartment.of(
-              highlightExtension(options.highlightQuery, options.highlightMode),
+              highlightExtension(
+                options.highlightQuery,
+                options.highlightMode,
+                options.qaHighlights,
+              ),
             ),
           ],
         });

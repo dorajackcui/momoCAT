@@ -5,6 +5,7 @@ export {
   parseDisplayTextToTokens,
   parseEditorTextToTokens,
   serializeTokensToEditorText,
+  serializeTokensToEditorParts,
   type ParseDisplayTextOptions,
   type ParseEditorTextOptions,
   type TagPolicy,

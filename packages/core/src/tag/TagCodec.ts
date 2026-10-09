@@ -168,7 +168,7 @@ export function formatTagAsMemoQMarker(tagContent: string, tagNumber: number): s
   return `{${safeNumber}}`;
 }
 
-export function serializeTokensToEditorText(tokens: Token[], sourceTokens: Token[]): string {
+export function serializeTokensToEditorParts(tokens: Token[], sourceTokens: Token[]): string[] {
   const resolveTagNumber = createTagNumberResolver(sourceTokens);
   let fallbackTagNumber = getUniqueTagContents(sourceTokens).length + 1;
 
@@ -178,8 +178,11 @@ export function serializeTokensToEditorText(tokens: Token[], sourceTokens: Token
       if (isActualLineBreak(token.content)) return token.content;
       const tagNumber = resolveTagNumber(token) ?? fallbackTagNumber++;
       return formatTagAsMemoQMarker(token.content, tagNumber);
-    })
-    .join('');
+    });
+}
+
+export function serializeTokensToEditorText(tokens: Token[], sourceTokens: Token[]): string {
+  return serializeTokensToEditorParts(tokens, sourceTokens).join('');
 }
 
 export function parseDisplayTextToTokens(

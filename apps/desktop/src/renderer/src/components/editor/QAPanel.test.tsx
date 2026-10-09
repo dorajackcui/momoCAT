@@ -60,7 +60,9 @@ describe('QA result list', () => {
     expect(group).not.toBeVisible();
     expect(input.onFilter).not.toHaveBeenCalled();
     fireEvent.click(category);
-    expect(input.onFilter).toHaveBeenCalledWith(['a'], 'Terminology');
+    expect(input.onFilter).toHaveBeenCalledWith(['a'], 'Terminology', {
+      ruleIds: ['tb-term-missing', 'term-mark-count', 'term-conflict'],
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Expand Terminology' }));
     expect(group).toBeVisible();
     expect(screen.getByRole('button', { name: 'Row 8 开启' })).toBeVisible();
@@ -83,7 +85,10 @@ describe('QA result list', () => {
     );
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Row 8 开启' }));
-    expect(input.onFilter).toHaveBeenCalledWith(['a'], 'Terminology › Open → 打开');
+    expect(input.onFilter).toHaveBeenCalledWith(['a'], 'Terminology › Open → 打开', {
+      groupId: 'term-open',
+      ruleIds: ['tb-term-missing', 'term-conflict'],
+    });
     expect(input.onLocate).toHaveBeenCalledWith('a');
     act(() =>
       (input.segmentStore as ReturnType<typeof createEditorSegmentStore>).updateSegment('a', () =>

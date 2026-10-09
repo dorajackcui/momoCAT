@@ -75,12 +75,14 @@ export function useEditorEngineBridge({
       editable: options.editable,
       showNonPrintingSymbols: options.showNonPrintingSymbols,
       highlightQuery: options.highlightQuery,
+      qaHighlights: options.qaHighlights,
       highlightMode: options.highlightMode,
     });
   }, [
     options.editable,
     options.highlightMode,
     options.highlightQuery,
+    options.qaHighlights,
     options.showNonPrintingSymbols,
   ]);
 

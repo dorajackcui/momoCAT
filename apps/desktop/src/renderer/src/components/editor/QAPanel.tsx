@@ -6,6 +6,7 @@ import { Button, Icon, IconButton } from '../ui';
 import { QAVirtualList } from './QAVirtualList';
 import { QAReferenceSummary } from './QAReferenceSummary';
 import { QA_GROUP_ORDER } from '../qaSections';
+import { qaSelectionForIssues, type QaHighlightSelection } from '../qaHighlights';
 
 export interface QAPanelProps {
   issues: FileQaIssueRecord[];
@@ -15,7 +16,7 @@ export interface QAPanelProps {
   hasResults?: boolean;
   segmentStore: Pick<EditorSegmentStore, 'getSegment' | 'subscribeSegment'>;
   onRun: () => void;
-  onFilter: (ids: string[], label: string) => void;
+  onFilter: (ids: string[], label: string, selection?: QaHighlightSelection) => void;
   onLocate: (id: string) => void;
 }
 
@@ -147,7 +148,13 @@ export function QAPanel({
                   tone="inherit"
                   className="min-w-0 flex-1 justify-between gap-3 whitespace-normal text-left"
                   aria-label={`${category.label} · ${rowCount(rowIds(category.issues).length)}`}
-                  onClick={() => onFilter(rowIds(category.issues), category.label)}
+                  onClick={() =>
+                    onFilter(
+                      rowIds(category.issues),
+                      category.label,
+                      qaSelectionForIssues(category.issues, 'category'),
+                    )
+                  }
                 >
                   <span className="min-w-0 break-words text-sm font-semibold">
                     {category.label}
@@ -182,7 +189,7 @@ export function QAPanel({
                           ]
                             .filter(Boolean)
                             .join('\n')}
-                          onClick={() => onFilter(ids, label)}
+                          onClick={() => onFilter(ids, label, qaSelectionForIssues(group.issues))}
                         >
                           <span className="min-w-0 truncate text-sm font-normal">
                             {group.label}
@@ -207,7 +214,7 @@ export function QAPanel({
                               issues={rowIssues}
                               segmentStore={segmentStore}
                               onLocate={() => {
-                                onFilter(ids, label);
+                                onFilter(ids, label, qaSelectionForIssues(group.issues));
                                 onLocate(segmentId);
                               }}
                             />

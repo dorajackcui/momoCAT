@@ -1,6 +1,8 @@
 import React from 'react';
 import type { EditorEngineSelection } from '../editor-engine/types';
-import { buildHighlightChunks, type EditorMatchMode } from '../editorFilterUtils';
+import { type EditorMatchMode } from '../editorFilterUtils';
+import type { QaHighlight } from '@cat/core/models';
+import { buildEditorHighlightChunks } from '../highlightRanges';
 import { visualizeNonPrintingSymbols } from './editorRowUtils';
 
 interface EditorRowTargetCellProps {
@@ -8,6 +10,7 @@ interface EditorRowTargetCellProps {
   isActive: boolean;
   previewText: string;
   highlightQuery: string;
+  qaHighlights?: QaHighlight[];
   highlightMode: EditorMatchMode;
   showNonPrintingSymbols: boolean;
 }
@@ -67,25 +70,29 @@ export const EditorRowTargetCell: React.FC<EditorRowTargetCellProps> = ({
   isActive,
   previewText,
   highlightQuery,
+  qaHighlights = [],
   highlightMode,
   showNonPrintingSymbols,
 }) => {
-  const previewContent = highlightQuery.trim()
-    ? buildHighlightChunks(previewText, highlightQuery, highlightMode).map((chunk, index) => {
-        const displayChunkText = showNonPrintingSymbols
-          ? visualizeNonPrintingSymbols(chunk.text)
-          : chunk.text;
-        return chunk.isMatch ? (
-          <mark key={index} className="cm-target-highlight">
-            {displayChunkText}
-          </mark>
-        ) : (
-          <span key={index}>{displayChunkText}</span>
-        );
-      })
-    : showNonPrintingSymbols
-      ? visualizeNonPrintingSymbols(previewText)
-      : previewText;
+  const previewContent =
+    highlightQuery.trim() || qaHighlights.length
+      ? buildEditorHighlightChunks(previewText, highlightQuery, highlightMode, qaHighlights).map(
+          (chunk, index) => {
+            const displayChunkText = showNonPrintingSymbols
+              ? visualizeNonPrintingSymbols(chunk.text)
+              : chunk.text;
+            return chunk.isMatch ? (
+              <mark key={index} className="cm-target-highlight">
+                {displayChunkText}
+              </mark>
+            ) : (
+              <span key={index}>{displayChunkText}</span>
+            );
+          },
+        )
+      : showNonPrintingSymbols
+        ? visualizeNonPrintingSymbols(previewText)
+        : previewText;
 
   return (
     <div className="relative">

@@ -11,6 +11,7 @@ import { checkProtectedTokens } from './protectedTokens';
 import { checkDocumentTerminology } from './documentTerminology';
 import { checkTextRules } from './targetText';
 import { qaRow, qaText } from './text';
+import { withEditorHighlights } from './highlights';
 
 export interface DocumentQaOptions {
   settings?: ProjectQASettings;
@@ -30,7 +31,7 @@ export function evaluateDocumentQa(
   const findings = new Map<string, QaIssue[]>();
   const add = (segment: Segment, issue: QaIssue) => {
     const list = findings.get(segment.segmentId) ?? [];
-    list.push(issue);
+    list.push(withEditorHighlights(segment, issue));
     findings.set(segment.segmentId, list);
   };
   for (const segment of segments) {

@@ -1,5 +1,6 @@
 import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EditorMatchMode } from '../editorFilterUtils';
+import type { QaHighlight } from '@cat/core/models';
 import {
   EditorEngineAdapter,
   EditorEngineSelection,
@@ -12,6 +13,7 @@ interface UseEditorRowDraftControllerParams {
   segmentId: string;
   targetEditorText: string;
   targetHighlightQuery: string;
+  qaHighlights?: QaHighlight[];
   highlightMode: EditorMatchMode;
   isActive: boolean;
   disableAutoFocus: boolean;
@@ -100,6 +102,7 @@ export function useEditorRowDraftController({
   segmentId,
   targetEditorText,
   targetHighlightQuery,
+  qaHighlights,
   highlightMode,
   isActive,
   disableAutoFocus,
@@ -181,9 +184,10 @@ export function useEditorRowDraftController({
       editable: isActive,
       showNonPrintingSymbols,
       highlightQuery: targetHighlightQuery,
+      qaHighlights,
       highlightMode,
     }),
-    [highlightMode, isActive, showNonPrintingSymbols, targetHighlightQuery],
+    [highlightMode, isActive, showNonPrintingSymbols, targetHighlightQuery, qaHighlights],
   );
 
   const { editorHostRef, adapterRef } = useEditorEngineBridge({

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo } from 'react';
 import type { Segment, Token } from '@cat/core/models';
 import { serializeTokensToEditorText } from '@cat/core/tag';
 import { TagInsertionUI } from './TagInsertionUI';
+import { selectedQaHighlights, type QaHighlightSelection } from './qaHighlights';
 import { EditorMatchMode, type RepeatedSourceRole } from './editorFilterUtils';
 import { EditorRowSourceCell } from './editor-row/EditorRowSourceCell';
 import { EditorRowNumberCell } from './editor-row/EditorRowNumberCell';
@@ -29,6 +30,7 @@ interface EditorRowProps {
   repeatedSourceRole?: RepeatedSourceRole;
   disableAutoFocus?: boolean;
   saveError?: string;
+  qaHighlightSelection?: QaHighlightSelection;
   sourceHighlightQuery?: string;
   targetHighlightQuery?: string;
   contextHighlightQuery?: string;
@@ -67,6 +69,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
   repeatedSourceRole,
   disableAutoFocus = false,
   saveError,
+  qaHighlightSelection,
   sourceHighlightQuery = '',
   targetHighlightQuery = '',
   contextHighlightQuery = '',
@@ -84,7 +87,15 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
   isAITranslating = false,
   isAIRefining = false,
 }) => {
-  const qaIssues = segment.qaIssues || [];
+  const qaIssues = useMemo(() => segment.qaIssues ?? [], [segment.qaIssues]);
+  const sourceQaHighlights = useMemo(
+    () => selectedQaHighlights(qaIssues, qaHighlightSelection, 'source'),
+    [qaIssues, qaHighlightSelection],
+  );
+  const targetQaHighlights = useMemo(
+    () => selectedQaHighlights(qaIssues, qaHighlightSelection, 'target'),
+    [qaIssues, qaHighlightSelection],
+  );
 
   const sourceTags = useMemo(() => {
     const seen = new Set<string>();
@@ -124,6 +135,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
     segmentId: segment.segmentId,
     targetEditorText,
     targetHighlightQuery,
+    qaHighlights: targetQaHighlights,
     highlightMode,
     isActive,
     disableAutoFocus,
@@ -161,6 +173,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
     sourceEditorText,
     sourceTagsCount: sourceTags.length,
     sourceHighlightQuery,
+    qaHighlights: sourceQaHighlights,
     highlightMode,
     showNonPrintingSymbols,
   });
@@ -267,6 +280,7 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
           editorHostRef={editorHostRef as React.Ref<HTMLDivElement>}
           isActive={isActive}
           previewText={targetEditorText}
+          qaHighlights={targetQaHighlights}
           highlightQuery={targetHighlightQuery}
           highlightMode={highlightMode}
           showNonPrintingSymbols={showNonPrintingSymbols}
@@ -331,6 +345,7 @@ const areEditorRowPropsEqual = (prev: EditorRowProps, next: EditorRowProps): boo
   prev.repeatedSourceRole === next.repeatedSourceRole &&
   prev.disableAutoFocus === next.disableAutoFocus &&
   prev.saveError === next.saveError &&
+  prev.qaHighlightSelection === next.qaHighlightSelection &&
   prev.sourceHighlightQuery === next.sourceHighlightQuery &&
   prev.targetHighlightQuery === next.targetHighlightQuery &&
   prev.contextHighlightQuery === next.contextHighlightQuery &&

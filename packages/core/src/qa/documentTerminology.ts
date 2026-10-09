@@ -6,11 +6,13 @@ import {
   StrictTermRecognizer,
 } from '../text';
 import { caseFold, normalizeQaComparison, qaKey, qaText, scanQaMarkers } from './text';
+import { termSourceHighlight } from './highlights';
 
 interface Term {
   source: string;
   target: string;
   origins: Set<string>;
+  positions?: Array<{ start: number; end: number }>;
 }
 export interface DocumentTerminology {
   issues: Map<string, QaIssue[]>;
@@ -53,6 +55,7 @@ export function checkDocumentTerminology(
     target: string,
     message: string,
     origins?: Set<string>,
+    positions?: Array<{ start: number; end: number }>,
   ) => {
     const list = issues.get(segment.segmentId) ?? [];
     const groupId = qaKey('term', caseFold(source), caseFold(target));
@@ -64,6 +67,7 @@ export function checkDocumentTerminology(
         groupLabel: `${source} → ${target || '[missing translation]'}`,
         message,
         origins: origins ? [...origins] : undefined,
+        highlights: termSourceHighlight(segment.sourceTokens, source, sourceLocale, positions),
       });
     issues.set(segment.segmentId, list);
   };
@@ -151,14 +155,21 @@ export function checkDocumentTerminology(
         target = plainTerm(match.tgtTerm);
       if (source && target) {
         const key = qaKey(caseFold(source), caseFold(target));
-        const term = candidates.get(key) ?? { source, target, origins: new Set<string>() };
+        const term = candidates.get(key) ?? {
+          source,
+          target,
+          origins: new Set<string>(),
+          positions: match.positions,
+        };
         term.origins.add(match.tbName);
         candidates.set(key, term);
       }
     }
     let learned = learnedBySource.get(sourceText);
     if (!learned) {
-      learned = learnedRecognizer.scan(sourceText).map((match) => match.entry);
+      learned = learnedRecognizer
+        .scan(sourceText)
+        .map((match) => ({ ...match.entry, positions: match.positions }));
       learnedBySource.set(sourceText, learned);
     }
     for (const term of learned)
@@ -172,6 +183,7 @@ export function checkDocumentTerminology(
           term.target,
           `“${term.source}” expects “${term.target}” (${[...term.origins].join(', ')}).`,
           term.origins,
+          term.positions,
         );
       }
   }

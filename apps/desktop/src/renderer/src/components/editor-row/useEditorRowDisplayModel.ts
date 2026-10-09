@@ -1,6 +1,8 @@
 import type { Segment } from '@cat/core/models';
 import { useMemo } from 'react';
 import { buildHighlightChunks, EditorMatchMode } from '../editorFilterUtils';
+import type { QaHighlight } from '@cat/core/models';
+import { buildEditorHighlightChunks } from '../highlightRanges';
 import { hasRefinableTargetText, visualizeNonPrintingSymbols } from './editorRowUtils';
 
 interface UseEditorRowDisplayModelParams {
@@ -11,6 +13,7 @@ interface UseEditorRowDisplayModelParams {
   sourceEditorText: string;
   sourceTagsCount: number;
   sourceHighlightQuery: string;
+  qaHighlights?: QaHighlight[];
   highlightMode: EditorMatchMode;
   showNonPrintingSymbols: boolean;
 }
@@ -81,6 +84,7 @@ export function buildEditorRowDisplayModel({
   sourceEditorText,
   sourceTagsCount,
   sourceHighlightQuery,
+  qaHighlights = [],
   highlightMode,
   showNonPrintingSymbols,
 }: UseEditorRowDisplayModelParams): EditorRowDisplayModel {
@@ -93,11 +97,17 @@ export function buildEditorRowDisplayModel({
   const sourceDisplayQuery = showNonPrintingSymbols
     ? visualizeNonPrintingSymbols(sourceHighlightQuery)
     : sourceHighlightQuery;
-  const sourceHighlightChunks = buildHighlightChunks(
-    sourceDisplayText,
-    sourceDisplayQuery,
-    highlightMode,
-  );
+  const sourceHighlightChunks = qaHighlights.length
+    ? buildEditorHighlightChunks(
+        sourceEditorText,
+        sourceHighlightQuery,
+        highlightMode,
+        qaHighlights,
+      ).map((chunk) => ({
+        ...chunk,
+        text: showNonPrintingSymbols ? visualizeNonPrintingSymbols(chunk.text) : chunk.text,
+      }))
+    : buildHighlightChunks(sourceDisplayText, sourceDisplayQuery, highlightMode);
   const { canInsertTags, canAITranslate, hasRefinableTarget, showTargetActionButtons } =
     getEditorRowActionVisibility({
       isActive,
@@ -129,6 +139,7 @@ export function useEditorRowDisplayModel(
     sourceEditorText,
     sourceTagsCount,
     sourceHighlightQuery,
+    qaHighlights,
     highlightMode,
     showNonPrintingSymbols,
   } = params;
@@ -143,6 +154,7 @@ export function useEditorRowDisplayModel(
         sourceEditorText,
         sourceTagsCount,
         sourceHighlightQuery,
+        qaHighlights,
         highlightMode,
         showNonPrintingSymbols,
       }),
@@ -154,6 +166,7 @@ export function useEditorRowDisplayModel(
       sourceEditorText,
       sourceTagsCount,
       sourceHighlightQuery,
+      qaHighlights,
       highlightMode,
       showNonPrintingSymbols,
     ],

@@ -4,6 +4,7 @@ import type { EditorViewRow } from '../../hooks/editor/editorView';
 import { EditorRow } from '../EditorRow';
 import type { EditorMatchMode } from '../editorFilterUtils';
 import type { EditorSegmentStore } from '../../hooks/editor/editorSegmentStore';
+import type { QaHighlightSelection } from '../qaHighlights';
 import type { TargetEditorController } from '../editor-row/useEditorRowDraftController';
 import {
   ESTIMATED_EDITOR_ROW_HEIGHT,
@@ -36,6 +37,7 @@ interface EditorListPaneProps {
   onConfirm: (segmentId: string) => void;
   aiTranslatingSegmentIds: Record<string, boolean>;
   segmentSaveErrors: Record<string, string>;
+  qaHighlightSelection?: QaHighlightSelection;
   sourceHighlightQuery: string;
   targetHighlightQuery: string;
   contextHighlightQuery: string;
@@ -101,6 +103,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
   onConfirm,
   aiTranslatingSegmentIds,
   segmentSaveErrors,
+  qaHighlightSelection,
   sourceHighlightQuery,
   targetHighlightQuery,
   contextHighlightQuery,
@@ -144,6 +147,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
         isAITranslating={Boolean(aiTranslatingSegmentIds[item.segmentId])}
         isAIRefining={Boolean(aiTranslatingSegmentIds[item.segmentId])}
         saveError={segmentSaveErrors[item.segmentId]}
+        qaHighlightSelection={qaHighlightSelection}
         sourceHighlightQuery={sourceHighlightQuery}
         targetHighlightQuery={targetHighlightQuery}
         contextHighlightQuery={contextHighlightQuery}
@@ -158,6 +162,7 @@ const EditorListPaneComponent: React.FC<EditorListPaneProps> = ({
       onSelectSegment,
       aiTranslatingSegmentIds,
       contextHighlightQuery,
+      qaHighlightSelection,
       highlightMode,
       isSearchInputFocused,
       manualActivationSegmentId,

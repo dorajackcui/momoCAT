@@ -1,4 +1,5 @@
 import { _electron as electron, expect } from '@playwright/test';
+import type { ProjectQASettings } from '@cat/core/project';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -30,7 +31,15 @@ function createFixtureSpreadsheet(tempDir: string, rows?: string[][]): string {
   return fixturePath;
 }
 
-export async function createEditorSmokeSession(rows?: string[][]): Promise<EditorSmokeSession> {
+export async function createEditorSmokeSession(
+  rows?: string[][],
+  options?: {
+    tagPolicy?: 'default' | 'none';
+    srcLang?: string;
+    tgtLang?: string;
+    qaSettings?: ProjectQASettings;
+  },
+): Promise<EditorSmokeSession> {
   const tempDir = mkdtempSync(join(tmpdir(), 'simple-cat-cm6-smoke-'));
   const fixturePath = createFixtureSpreadsheet(tempDir, rows);
   const projectName = `cm6-smoke-${Date.now()}`;
@@ -48,14 +57,25 @@ export async function createEditorSmokeSession(rows?: string[][]): Promise<Edito
   await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible();
 
   const seeded = await page.evaluate(
-    async ({ nextProjectName, nextFixturePath }) => {
+    async ({ nextProjectName, nextFixturePath, nextOptions }) => {
       const api = (window as unknown as { api: any }).api;
-      const project = await api.createProject(nextProjectName, 'en', 'zh', 'translation');
+      const project = await api.createProject(
+        nextProjectName,
+        nextOptions?.srcLang ?? 'en',
+        nextOptions?.tgtLang ?? 'zh',
+        'translation',
+      );
+      if (nextOptions?.qaSettings)
+        await api.updateProjectQASettings(project.id, {
+          ...project.qaSettings,
+          ...nextOptions.qaSettings,
+        });
       const file = await api.addFileToProject(project.id, nextFixturePath, {
         hasHeader: true,
         sourceCol: 0,
         targetCol: 1,
         contextCol: 2,
+        ...(nextOptions?.tagPolicy ? { tagPolicy: nextOptions.tagPolicy } : {}),
       });
       return {
         projectName: project.name as string,
@@ -66,6 +86,7 @@ export async function createEditorSmokeSession(rows?: string[][]): Promise<Edito
     {
       nextProjectName: projectName,
       nextFixturePath: fixturePath,
+      nextOptions: options,
     },
   );
 

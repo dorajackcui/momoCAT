@@ -123,3 +123,31 @@ describe('CodeMirror term insertion', () => {
     }
   });
 });
+
+describe('CodeMirror QA highlights', () => {
+  it('uses the shared mark, updates selection options and removes stale marks immediately on edits', () => {
+    const text = 'Read 12 now.';
+    const adapter = createCodeMirrorAdapter({
+      callbacks: { onTextChange: vi.fn(), onFocusChange: vi.fn(), onShortcutAction: vi.fn() },
+      initialOptions: { qaHighlights: [{ side: 'target', text, ranges: [{ start: 5, end: 7 }] }] },
+    });
+    const host = document.createElement('div');
+    document.body.append(host);
+    try {
+      adapter.mount(host, text);
+      expect(host.querySelector('.cm-target-highlight')?.textContent).toBe('12');
+      const view = EditorView.findFromDOM(host)!;
+      view.dispatch({ changes: { from: 6, to: 7, insert: '3' } });
+      expect(host.querySelector('.cm-target-highlight')).toBeNull();
+      adapter.setOptions({
+        qaHighlights: [{ side: 'target', text: 'Read 13 now.', ranges: [{ start: 5, end: 7 }] }],
+      });
+      expect(host.querySelector('.cm-target-highlight')?.textContent).toBe('13');
+      adapter.setOptions({ qaHighlights: [] });
+      expect(host.querySelector('.cm-target-highlight')).toBeNull();
+    } finally {
+      adapter.destroy();
+      host.remove();
+    }
+  });
+});
