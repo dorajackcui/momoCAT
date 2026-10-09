@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { EditorView } from '@codemirror/view';
+import { redo, undo } from '@codemirror/commands';
+import { EditorView, runScopeHandlers } from '@codemirror/view';
 import { describe, expect, it, vi } from 'vitest';
 import { applyTermAtEditorSelection } from '../../hooks/editor/editorTokenPolicy';
 import { codeMirrorEditorThemeSpec, createCodeMirrorAdapter } from './codemirrorAdapter';
@@ -120,6 +121,79 @@ describe('CodeMirror term insertion', () => {
       adapter.destroy();
       host.remove();
       outsideButton.remove();
+    }
+  });
+});
+
+describe('CodeMirror nonbreaking spaces', () => {
+  const shortcut = () =>
+    new KeyboardEvent('keydown', {
+      key: ' ',
+      code: 'Space',
+      ctrlKey: !/Mac/.test(navigator.platform),
+      metaKey: /Mac/.test(navigator.platform),
+      shiftKey: true,
+    });
+
+  it.each([
+    { text: 'Salut!', anchor: 5, head: 5 },
+    { text: 'Salut monde !', anchor: 5, head: 12 },
+  ])('inserts NBSP at the caret or replaces a selection: $text', ({ text, anchor, head }) => {
+    const onTextChange = vi.fn();
+    const onShortcutAction = vi.fn();
+    const adapter = createCodeMirrorAdapter({
+      callbacks: { onTextChange, onFocusChange: vi.fn(), onShortcutAction },
+      initialOptions: { showNonPrintingSymbols: true },
+    });
+    const host = document.createElement('div');
+    document.body.append(host);
+    try {
+      adapter.mount(host, text);
+      adapter.focus(undefined, { anchor, head });
+      const view = EditorView.findFromDOM(host)!;
+      expect(runScopeHandlers(view, shortcut(), 'editor')).toBe(true);
+      expect(adapter.getSnapshot()).toMatchObject({
+        text: 'Salut\u00A0!',
+        selectionFrom: 6,
+        selectionTo: 6,
+      });
+      expect(onTextChange).toHaveBeenLastCalledWith('Salut\u00A0!');
+      expect(onShortcutAction).not.toHaveBeenCalled();
+      expect(host.querySelector('.cm-np-nbsp')?.textContent).toBe('\u00A0');
+      expect(undo(view)).toBe(true);
+      expect(adapter.getSnapshot()).toMatchObject({
+        text,
+        selectionFrom: anchor,
+        selectionTo: head,
+      });
+      expect(redo(view)).toBe(true);
+      expect(adapter.getSnapshot().text).toBe('Salut\u00A0!');
+      adapter.setOptions({ showNonPrintingSymbols: false });
+      expect(host.querySelector('.cm-np-nbsp')).toBeNull();
+      expect(adapter.getSnapshot().text).toBe('Salut\u00A0!');
+    } finally {
+      adapter.destroy();
+      host.remove();
+    }
+  });
+
+  it('does not insert NBSP into a read-only editor', () => {
+    const onTextChange = vi.fn();
+    const adapter = createCodeMirrorAdapter({
+      callbacks: { onTextChange, onFocusChange: vi.fn(), onShortcutAction: vi.fn() },
+    });
+    const host = document.createElement('div');
+    document.body.append(host);
+    try {
+      adapter.mount(host, 'Salut!');
+      adapter.focus(undefined, { anchor: 5, head: 5 });
+      adapter.setEditable(false);
+      expect(runScopeHandlers(EditorView.findFromDOM(host)!, shortcut(), 'editor')).toBe(false);
+      expect(adapter.getSnapshot().text).toBe('Salut!');
+      expect(onTextChange).not.toHaveBeenCalled();
+    } finally {
+      adapter.destroy();
+      host.remove();
     }
   });
 });

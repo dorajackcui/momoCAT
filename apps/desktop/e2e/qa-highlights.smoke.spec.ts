@@ -41,6 +41,7 @@ test('QA selection highlights only the relevant fragments and stays consistent d
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.setViewportSize({ width: 1440, height: 960 });
+    await page.getByRole('button', { name: 'Toggle non-printing symbols' }).click();
     await page.getByRole('button', { name: 'Run batch QA', exact: true }).click();
     const category = (label: string) => page.getByRole('region', { name: label, exact: true });
     const choose = async (label: string) => {

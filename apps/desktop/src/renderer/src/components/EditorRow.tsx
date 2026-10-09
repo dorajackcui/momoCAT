@@ -5,6 +5,7 @@ import { TagInsertionUI } from './TagInsertionUI';
 import { selectedQaHighlights, type QaHighlightSelection } from './qaHighlights';
 import { EditorMatchMode, type RepeatedSourceRole } from './editorFilterUtils';
 import { EditorRowSourceCell } from './editor-row/EditorRowSourceCell';
+import { NonPrintingText } from './NonPrintingText';
 import { EditorRowNumberCell } from './editor-row/EditorRowNumberCell';
 import { EditorRowTargetActions } from './editor-row/EditorRowTargetActions';
 import { EditorRowFeedback } from './editor-row/EditorRowFeedback';
@@ -52,9 +53,7 @@ interface EditorRowProps {
 export {
   hasRefinableTargetText,
   normalizeRefinementInstruction,
-  parseVisualizedNonPrintingSymbols,
   shouldSyncDraftFromExternalTarget,
-  visualizeNonPrintingSymbols,
 } from './editor-row/editorRowUtils';
 
 const EditorRowComponent: React.FC<EditorRowProps> = ({
@@ -183,13 +182,15 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
       chunks.map((chunk, index) =>
         chunk.isMatch ? (
           <mark key={index} className="editor-search-highlight">
-            {chunk.text}
+            <NonPrintingText text={chunk.text} enabled={showNonPrintingSymbols} />
           </mark>
         ) : (
-          <span key={index}>{chunk.text}</span>
+          <span key={index}>
+            <NonPrintingText text={chunk.text} enabled={showNonPrintingSymbols} />
+          </span>
         ),
       ),
-    [],
+    [showNonPrintingSymbols],
   );
 
   useEffect(() => {
@@ -238,8 +239,6 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
             ? resolvePreviewSelection(
                 preview,
                 preview.ownerDocument.defaultView?.getSelection() ?? null,
-                targetEditorText,
-                showNonPrintingSymbols,
               )
             : null,
         );

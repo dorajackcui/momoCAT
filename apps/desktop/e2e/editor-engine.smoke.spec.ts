@@ -439,7 +439,14 @@ test.describe('CodeMirror editor engine smoke', () => {
       const firstEditor = page.locator('.editor-target-editor-host .cm-editor').first();
       await expect(firstEditor.locator('.cm-np-space').first()).toBeVisible();
       await expect(firstEditor.locator('.cm-np-tab').first()).toBeVisible();
-      await expect(firstEditor.locator('.cm-np-newline').first()).toBeVisible();
+      const lineBreak = firstEditor.locator('.cm-np-newline').first();
+      await expect(lineBreak).toBeAttached();
+      expect(
+        await lineBreak.evaluate((element) => {
+          const style = getComputedStyle(element, '::before');
+          return { content: style.content, visibility: style.visibility, opacity: style.opacity };
+        }),
+      ).toEqual({ content: '"↵"', visibility: 'visible', opacity: '1' });
       await expect(
         page.locator('.editor-target-overlay-text, .editor-target-textarea, .editor-target-mirror'),
       ).toHaveCount(0);

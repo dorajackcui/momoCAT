@@ -46,8 +46,29 @@ describe('useEditorRowDisplayModel.buildEditorRowDisplayModel', () => {
 
     expect(model.statusIndicatorClass).toBe('border-status-empty bg-transparent');
     expect(model.sourceHighlightChunks.some((chunk) => chunk.isMatch)).toBe(true);
-    expect(model.sourceDisplayText).toContain('·');
+    expect(model.sourceDisplayText).toBe('S T');
+    expect(model.sourceHighlightChunks.map((chunk) => chunk.text).join('')).toBe('S T');
   });
+
+  it.each([' ', '\u00A0', '\u202F', '\t'])(
+    'matches whitespace regexes against actual source characters: %j',
+    (space) => {
+      const model = buildEditorRowDisplayModel({
+        segmentStatus: 'draft',
+        qaIssues: [],
+        isActive: false,
+        draftText: '',
+        sourceEditorText: 'S' + space + 'T',
+        sourceTagsCount: 0,
+        sourceHighlightQuery: '\\s+',
+        highlightMode: 'regex',
+        showNonPrintingSymbols: true,
+      });
+      expect(model.sourceHighlightChunks.filter((chunk) => chunk.isMatch)).toEqual([
+        { text: space, isMatch: true },
+      ]);
+    },
+  );
 
   it('keeps action visibility and status signals while editing', () => {
     const model = buildEditorRowDisplayModel({

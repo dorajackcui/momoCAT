@@ -59,37 +59,6 @@ export const codeMirrorEditorThemeSpec = {
     borderLeftColor: 'rgb(var(--color-caret))',
     borderLeftWidth: '2px',
   },
-  '.cm-np-space, .cm-np-tab, .cm-np-nbsp, .cm-np-nnbsp': {
-    position: 'relative',
-    color: 'transparent',
-  },
-  '.cm-np-space::before, .cm-np-tab::before, .cm-np-nbsp::before, .cm-np-nnbsp::before': {
-    position: 'absolute',
-    left: '0',
-    top: '0',
-    color: 'rgb(var(--color-editor-text))',
-    opacity: '0.72',
-    pointerEvents: 'none',
-  },
-  '.cm-np-space::before': {
-    content: '"·"',
-  },
-  '.cm-np-tab::before': {
-    content: '"⇥"',
-  },
-  '.cm-np-nbsp::before': {
-    content: '"⍽"',
-  },
-  '.cm-np-nnbsp::before': {
-    content: '"⎵"',
-  },
-  '.cm-np-newline': {
-    color: 'rgb(var(--color-editor-text))',
-    opacity: '0.72',
-    marginLeft: '2px',
-    userSelect: 'none',
-    pointerEvents: 'none',
-  },
 };
 
 const editorThemeExtension = EditorView.theme(codeMirrorEditorThemeSpec);
@@ -98,7 +67,7 @@ class LineBreakWidget extends WidgetType {
   toDOM(): HTMLElement {
     const span = document.createElement('span');
     span.className = 'cm-np-newline';
-    span.textContent = '↵';
+    span.setAttribute('aria-hidden', 'true');
     return span;
   }
 }
@@ -302,7 +271,21 @@ export function createCodeMirrorAdapter({
             editorThemeExtension,
             history(),
             EditorView.lineWrapping,
-            keymap.of([...defaultKeymap, ...historyKeymap]),
+            keymap.of([
+              {
+                key: 'Mod-Shift-Space',
+                run: (editor) => {
+                  if (editor.state.readOnly) return false;
+                  editor.dispatch(editor.state.replaceSelection('\u00A0'), {
+                    userEvent: 'input',
+                    scrollIntoView: true,
+                  });
+                  return true;
+                },
+              },
+              ...defaultKeymap,
+              ...historyKeymap,
+            ]),
             shortcutExtension,
             EditorView.updateListener.of((update) => {
               if (update.docChanged) {

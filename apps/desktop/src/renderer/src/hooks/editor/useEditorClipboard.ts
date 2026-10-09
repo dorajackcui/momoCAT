@@ -62,8 +62,37 @@ export function useEditorClipboard({
   };
 
   const onCopy = (event: ClipboardInputEvent) => {
-    if (!event.clipboardData || !handlesRows(event.target) || window.getSelection()?.toString())
-      return;
+    if (!event.clipboardData) return;
+    const target =
+      event.target === document.body || event.target === document.documentElement
+        ? document.activeElement
+        : event.target;
+    const selection = window.getSelection();
+    if (
+      selection &&
+      !selection.isCollapsed &&
+      selection.rangeCount === 1 &&
+      !(
+        target instanceof Element &&
+        target.closest('input, textarea, select, [role="dialog"], .cm-content')
+      )
+    ) {
+      const range = selection.getRangeAt(0);
+      const start =
+        range.startContainer instanceof Element
+          ? range.startContainer
+          : range.startContainer.parentElement;
+      const preview = start?.closest('.editor-source-text, .editor-target-preview');
+      if (preview?.closest('.editor-scrollbar') && preview.contains(range.endContainer)) {
+        // Chromium's rendered-text copy normalizes NBSP and drops terminal line
+        // breaks. DOM ranges retain the real characters, excluding CSS markers.
+        event.clipboardData.setData('text/plain', range.toString());
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+    }
+    if (!handlesRows(event.target) || selection?.toString()) return;
     const rows = orderedSelection().map((id): [string, string] => {
       const segment = getSegment(id);
       if (!segment) throw new Error('Selected segment is unavailable.');

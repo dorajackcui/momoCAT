@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { buildHighlightChunks, EditorMatchMode } from '../editorFilterUtils';
 import type { QaHighlight } from '@cat/core/models';
 import { buildEditorHighlightChunks } from '../highlightRanges';
-import { hasRefinableTargetText, visualizeNonPrintingSymbols } from './editorRowUtils';
+import { hasRefinableTargetText } from './editorRowUtils';
 
 interface UseEditorRowDisplayModelParams {
   segmentStatus: Segment['status'];
@@ -86,28 +86,17 @@ export function buildEditorRowDisplayModel({
   sourceHighlightQuery,
   qaHighlights = [],
   highlightMode,
-  showNonPrintingSymbols,
 }: UseEditorRowDisplayModelParams): EditorRowDisplayModel {
   const statusIndicatorClass = getEditorRowStatusIndicatorClass(segmentStatus);
   const statusTitle = getEditorRowStatusTitle(segmentStatus, qaIssues.length > 0);
 
-  const sourceDisplayText = showNonPrintingSymbols
-    ? visualizeNonPrintingSymbols(sourceEditorText)
-    : sourceEditorText;
-  const sourceDisplayQuery = showNonPrintingSymbols
-    ? visualizeNonPrintingSymbols(sourceHighlightQuery)
-    : sourceHighlightQuery;
-  const sourceHighlightChunks = qaHighlights.length
-    ? buildEditorHighlightChunks(
-        sourceEditorText,
-        sourceHighlightQuery,
-        highlightMode,
-        qaHighlights,
-      ).map((chunk) => ({
-        ...chunk,
-        text: showNonPrintingSymbols ? visualizeNonPrintingSymbols(chunk.text) : chunk.text,
-      }))
-    : buildHighlightChunks(sourceDisplayText, sourceDisplayQuery, highlightMode);
+  const sourceDisplayText = sourceEditorText;
+  const sourceHighlightChunks = buildEditorHighlightChunks(
+    sourceEditorText,
+    sourceHighlightQuery,
+    highlightMode,
+    qaHighlights,
+  );
   const { canInsertTags, canAITranslate, hasRefinableTarget, showTargetActionButtons } =
     getEditorRowActionVisibility({
       isActive,

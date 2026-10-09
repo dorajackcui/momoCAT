@@ -6,9 +6,7 @@ import {
   EditorRow,
   hasRefinableTargetText,
   normalizeRefinementInstruction,
-  parseVisualizedNonPrintingSymbols,
   shouldSyncDraftFromExternalTarget,
-  visualizeNonPrintingSymbols,
 } from './EditorRow';
 import { resolveEditorRowShortcutAction } from './editor-row/useEditorRowCommandHandlers';
 import {
@@ -27,16 +25,6 @@ describe('EditorRow AI refine decisions', () => {
   it('normalizes refine instruction before submit', () => {
     expect(normalizeRefinementInstruction('  make it concise  ')).toBe('make it concise');
     expect(normalizeRefinementInstruction('   ')).toBe('');
-  });
-
-  it('visualizes non-printing symbols with distinct markers', () => {
-    const input = 'A B\u00A0C\u202FD\tE\nF';
-    expect(visualizeNonPrintingSymbols(input)).toBe('A·B⍽C⎵D⇥E↵\nF');
-  });
-
-  it('parses visualized non-printing symbols back to raw text', () => {
-    const visualized = 'A·B⍽C⎵D⇥E↵\nF';
-    expect(parseVisualizedNonPrintingSymbols(visualized)).toBe('A B\u00A0C\u202FD\tE\nF');
   });
 });
 

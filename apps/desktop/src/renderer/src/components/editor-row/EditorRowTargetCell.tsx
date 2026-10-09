@@ -3,7 +3,7 @@ import type { EditorEngineSelection } from '../editor-engine/types';
 import { type EditorMatchMode } from '../editorFilterUtils';
 import type { QaHighlight } from '@cat/core/models';
 import { buildEditorHighlightChunks } from '../highlightRanges';
-import { visualizeNonPrintingSymbols } from './editorRowUtils';
+import { NonPrintingText } from '../NonPrintingText';
 
 interface EditorRowTargetCellProps {
   editorHostRef: React.Ref<HTMLDivElement>;
@@ -30,8 +30,6 @@ function getTextOffset(root: HTMLElement, node: Node, offset: number): number {
 export function resolvePreviewSelection(
   root: HTMLElement,
   selection: PreviewSelection | null,
-  previewText: string,
-  showNonPrintingSymbols: boolean,
 ): EditorEngineSelection | null {
   if (
     !selection ||
@@ -44,24 +42,9 @@ export function resolvePreviewSelection(
     return null;
   }
 
-  const toEditorOffset = (node: Node, offset: number) => {
-    const previewOffset = getTextOffset(root, node, offset);
-    if (!showNonPrintingSymbols) return previewOffset;
-
-    let editorOffset = 0;
-    let visualizedOffset = 0;
-    while (editorOffset < previewText.length) {
-      const visualizedWidth = previewText[editorOffset] === '\n' ? 2 : 1;
-      if (visualizedOffset + visualizedWidth > previewOffset) break;
-      visualizedOffset += visualizedWidth;
-      editorOffset += 1;
-    }
-    return editorOffset;
-  };
-
   return {
-    anchor: toEditorOffset(selection.anchorNode, selection.anchorOffset),
-    head: toEditorOffset(selection.focusNode, selection.focusOffset),
+    anchor: getTextOffset(root, selection.anchorNode, selection.anchorOffset),
+    head: getTextOffset(root, selection.focusNode, selection.focusOffset),
   };
 }
 
@@ -75,24 +58,26 @@ export const EditorRowTargetCell: React.FC<EditorRowTargetCellProps> = ({
   showNonPrintingSymbols,
 }) => {
   const previewContent =
-    highlightQuery.trim() || qaHighlights.length
-      ? buildEditorHighlightChunks(previewText, highlightQuery, highlightMode, qaHighlights).map(
-          (chunk, index) => {
-            const displayChunkText = showNonPrintingSymbols
-              ? visualizeNonPrintingSymbols(chunk.text)
-              : chunk.text;
-            return chunk.isMatch ? (
-              <mark key={index} className="cm-target-highlight">
-                {displayChunkText}
-              </mark>
-            ) : (
-              <span key={index}>{displayChunkText}</span>
-            );
-          },
-        )
-      : showNonPrintingSymbols
-        ? visualizeNonPrintingSymbols(previewText)
-        : previewText;
+    highlightQuery.trim() || qaHighlights.length ? (
+      buildEditorHighlightChunks(previewText, highlightQuery, highlightMode, qaHighlights).map(
+        (chunk, index) => {
+          const displayChunkText = (
+            <NonPrintingText text={chunk.text} enabled={showNonPrintingSymbols} />
+          );
+          return chunk.isMatch ? (
+            <mark key={index} className="cm-target-highlight">
+              {displayChunkText}
+            </mark>
+          ) : (
+            <span key={index}>{displayChunkText}</span>
+          );
+        },
+      )
+    ) : showNonPrintingSymbols ? (
+      <NonPrintingText text={previewText} enabled />
+    ) : (
+      previewText
+    );
 
   return (
     <div className="relative">

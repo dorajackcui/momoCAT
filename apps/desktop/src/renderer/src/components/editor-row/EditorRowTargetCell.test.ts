@@ -58,14 +58,17 @@ describe('EditorRowTargetCell', () => {
       React.createElement(EditorRowTargetCell, {
         editorHostRef: { current: null },
         isActive: false,
-        previewText: 'A B\tC',
+        previewText: 'A B\u00A0C\u202FD\tE',
         highlightQuery: '',
         highlightMode: 'contains',
         showNonPrintingSymbols: true,
       }),
     );
 
-    expect(html).not.toContain('A B\tC');
+    const root = document.createElement('div');
+    root.innerHTML = html;
+    expect(root.textContent).toBe('A B\u00A0C\u202FD\tE');
+    expect(root.querySelector('.cm-np-nbsp')?.textContent).toBe('\u00A0');
   });
 
   it('matches regex against raw whitespace before visualizing inactive preview text', () => {
@@ -92,39 +95,37 @@ describe('EditorRowTargetCell', () => {
     root.append(prefix, mark, document.createTextNode(' gamma'));
 
     expect(
-      resolvePreviewSelection(
-        root,
-        {
-          anchorNode: prefix,
-          anchorOffset: 2,
-          focusNode: markedText,
-          focusOffset: 2,
-          isCollapsed: false,
-        },
-        'Alpha beta gamma',
-        false,
-      ),
+      resolvePreviewSelection(root, {
+        anchorNode: prefix,
+        anchorOffset: 2,
+        focusNode: markedText,
+        focusOffset: 2,
+        isCollapsed: false,
+      }),
     ).toEqual({ anchor: 2, head: 8 });
   });
 
-  it('removes visual-only line break markers from preview selection offsets', () => {
+  it('preserves offsets across decorated spaces and line breaks', () => {
+    const { content } = renderCell({
+      isActive: false,
+      previewText: 'A B\nC',
+      showNonPrintingSymbols: true,
+    });
     const root = document.createElement('div');
-    const text = document.createTextNode('A·B↵\nC');
-    root.append(text);
+    root.innerHTML = renderToStaticMarkup(content);
+    const preview = root.querySelector<HTMLElement>('.editor-target-preview')!;
+    const beforeBreak = preview.querySelector('.cm-np-newline')!.previousSibling!;
+    const afterBreak = preview.querySelector('.cm-np-newline')!.nextSibling!;
+    expect(preview.textContent).toBe('A B\nC');
 
     expect(
-      resolvePreviewSelection(
-        root,
-        {
-          anchorNode: text,
-          anchorOffset: 2,
-          focusNode: text,
-          focusOffset: 5,
-          isCollapsed: false,
-        },
-        'A B\nC',
-        true,
-      ),
+      resolvePreviewSelection(preview, {
+        anchorNode: beforeBreak,
+        anchorOffset: 0,
+        focusNode: afterBreak,
+        focusOffset: 1,
+        isCollapsed: false,
+      }),
     ).toEqual({ anchor: 2, head: 4 });
   });
 
@@ -134,18 +135,13 @@ describe('EditorRowTargetCell', () => {
     root.append(text);
 
     expect(
-      resolvePreviewSelection(
-        root,
-        {
-          anchorNode: text,
-          anchorOffset: 1,
-          focusNode: text,
-          focusOffset: 4,
-          isCollapsed: false,
-        },
-        'A·⇥↵B',
-        true,
-      ),
+      resolvePreviewSelection(root, {
+        anchorNode: text,
+        anchorOffset: 1,
+        focusNode: text,
+        focusOffset: 4,
+        isCollapsed: false,
+      }),
     ).toEqual({ anchor: 1, head: 4 });
   });
 });

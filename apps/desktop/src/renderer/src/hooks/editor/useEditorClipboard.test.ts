@@ -50,6 +50,84 @@ function setup(selectedIds = new Set(['c', 'a'])) {
   return { ...hook, event, pasteSegments };
 }
 
+describe('preview text clipboard routing', () => {
+  it.each(['editor-source-text', 'editor-target-preview'])(
+    'copies exact whitespace and literal symbols from %s without display decorations',
+    (className) => {
+      const hook = setup(new Set());
+      hook.rerender({ fileId: 1, disabled: true, isRowSelection: false });
+      const event = hook.event('');
+      const root = (event.target as HTMLElement).parentElement!;
+      const preview = event.target as HTMLElement;
+      preview.className = className;
+      preview.innerHTML =
+        'Avant<mark>\u00A0!<span class="cm-np-newline"></span>\n</mark>\u202F·⇥↵\n';
+      document.body.append(root);
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(preview);
+        window.getSelection()!.addRange(range);
+        act(() => hook.result.current.onCopy(event));
+        expect(event.clipboardData.setData).toHaveBeenCalledWith(
+          'text/plain',
+          'Avant\u00A0!\n\u202F·⇥↵\n',
+        );
+        expect(event.preventDefault).toHaveBeenCalled();
+        expect(feedbackService.success).not.toHaveBeenCalled();
+        expect(hook.pasteSegments).not.toHaveBeenCalled();
+      } finally {
+        root.remove();
+      }
+    },
+  );
+
+  it('leaves input copy native when a previous preview selection is retained', () => {
+    const hook = setup();
+    const event = hook.event('', '', 'input');
+    const root = (event.target as HTMLElement).parentElement!;
+    const preview = document.createElement('div');
+    preview.className = 'editor-source-text';
+    preview.textContent = 'Source\u00A0text';
+    root.append(preview);
+    document.body.append(root);
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(preview);
+      window.getSelection()!.addRange(range);
+      act(() => hook.result.current.onCopy(event));
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      expect(event.clipboardData.setData).not.toHaveBeenCalled();
+    } finally {
+      root.remove();
+    }
+  });
+
+  it('leaves selections crossing cells native rather than treating them as a row copy', () => {
+    const hook = setup();
+    const event = hook.event('');
+    const root = (event.target as HTMLElement).parentElement!;
+    const source = event.target as HTMLElement;
+    source.className = 'editor-source-text';
+    source.textContent = 'Source';
+    const target = document.createElement('div');
+    target.className = 'editor-target-preview';
+    target.textContent = 'Target';
+    root.append(target);
+    document.body.append(root);
+    try {
+      const range = document.createRange();
+      range.setStart(source.firstChild!, 1);
+      range.setEnd(target.firstChild!, 2);
+      window.getSelection()!.addRange(range);
+      act(() => hook.result.current.onCopy(event));
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      expect(event.clipboardData.setData).not.toHaveBeenCalled();
+    } finally {
+      root.remove();
+    }
+  });
+});
+
 describe('row clipboard routing', () => {
   it('copies current drafts in display order without saving', () => {
     const hook = setup();

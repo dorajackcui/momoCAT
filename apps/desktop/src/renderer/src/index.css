@@ -197,6 +197,7 @@
 
   .editor-text-base {
     @apply reading-text w-full min-h-[36px] whitespace-pre-wrap break-words;
+    tab-size: 4;
   }
 
   .editor-row {
@@ -233,6 +234,82 @@
 
   .editor-target-editor-host {
     @apply relative w-full;
+  }
+
+  /* Mark real whitespace without changing its advance or break behavior. */
+  .cm-np-space,
+  .cm-np-tab,
+  .cm-np-nbsp,
+  .cm-np-nnbsp {
+    position: relative;
+  }
+
+  .cm-np-space::before,
+  .cm-np-tab::before,
+  .cm-np-nbsp::before,
+  .cm-np-nnbsp::before {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    text-align: center;
+    line-height: 1;
+    color: inherit;
+    opacity: 1;
+    pointer-events: none;
+  }
+
+  .cm-np-space::before,
+  .cm-np-nbsp::before {
+    content: '';
+    border-radius: 50%;
+    box-sizing: border-box;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  .cm-np-space::before {
+    width: 0.1em;
+    height: 0.1em;
+    background-color: currentColor;
+  }
+
+  .cm-np-tab::before {
+    content: '⇥';
+  }
+
+  .cm-np-nbsp::before {
+    width: 0.23em;
+    height: 0.23em;
+    border: 1px solid currentColor;
+  }
+
+  .cm-np-nnbsp::before {
+    content: '';
+    width: 80%;
+    height: 0.2em;
+    border: solid currentColor;
+    border-width: 0 1px 1px;
+    box-sizing: border-box;
+    left: 10%;
+    top: 0.65em;
+  }
+
+  .cm-np-newline {
+    position: relative;
+    color: inherit;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  .cm-np-newline::before {
+    content: '↵';
+    position: absolute;
+    left: 2px;
+    top: 0;
+    line-height: 1;
+    color: inherit;
   }
 
   /* Shared by source, inactive target previews and live CodeMirror matches. */
