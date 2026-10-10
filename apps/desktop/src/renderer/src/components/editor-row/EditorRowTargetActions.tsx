@@ -50,7 +50,7 @@ export const EditorRowTargetActions: React.FC<EditorRowTargetActionsProps> = ({
         <ControlGroup
           label="Segment actions"
           orientation="vertical"
-          className="absolute top-1.5 right-1.5 z-20"
+          className="editor-target-actions absolute top-1.5 right-1.5 z-20"
         >
           {canAITranslate && (
             <IconButton

@@ -8,7 +8,6 @@ interface UseEditorRowCommandHandlersParams {
   segmentId: string;
   isActive: boolean;
   sourceTags: Token[];
-  sourceEditorText: string;
   onActivate: (id: string, options?: { autoFocusTarget?: boolean }) => void;
   onConfirm: (id: string) => void;
   editorController: {
@@ -17,7 +16,6 @@ interface UseEditorRowCommandHandlersParams {
       selectionFrom: number;
       selectionTo: number;
     } | null;
-    setText: (nextText: string, preserveSelection?: boolean) => void;
     replaceSelection: (insertText: string) => void;
     focus: () => void;
   };
@@ -39,7 +37,6 @@ interface EditorRowCommandHandlersResult {
   closeTagInsertionUI: () => void;
   handleInsertTag: (tagIndex: number) => void;
   handleInsertAllTags: () => void;
-  handleCopySourceToTarget: (event: React.MouseEvent<HTMLButtonElement>) => void;
   handleSourceCellClick: (event: React.MouseEvent<HTMLDivElement>) => void;
   handleShortcutAction: (action: EditorRowShortcutAction) => void;
 }
@@ -58,7 +55,6 @@ export function useEditorRowCommandHandlers({
   segmentId,
   isActive,
   sourceTags,
-  sourceEditorText,
   onActivate,
   onConfirm,
   editorController,
@@ -91,18 +87,6 @@ export function useEditorRowCommandHandlers({
     insertAtSelection(allMarkers);
     setShowTagInsertionUI(false);
   }, [insertAtSelection, sourceTags]);
-
-  const handleCopySourceToTarget = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.stopPropagation();
-      onActivate(segmentId);
-      editorController.setText(sourceEditorText, false);
-      requestAnimationFrame(() => {
-        editorController.focus();
-      });
-    },
-    [editorController, onActivate, segmentId, sourceEditorText],
-  );
 
   const handleSourceCellClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
@@ -148,7 +132,6 @@ export function useEditorRowCommandHandlers({
     closeTagInsertionUI,
     handleInsertTag,
     handleInsertAllTags,
-    handleCopySourceToTarget,
     handleSourceCellClick,
     handleShortcutAction,
   };

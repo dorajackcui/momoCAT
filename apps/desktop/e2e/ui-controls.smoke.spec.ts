@@ -220,6 +220,35 @@ test.describe('Shared UI controls smoke', () => {
       await rows.first().click();
       const emptyAI = rows.first().getByRole('button', { name: 'AI translate this segment' });
       expect((await rows.first().boundingBox())!.height).toBe(64);
+      const source = rows.first().locator('.editor-source-text');
+      const actions = rows.first().getByRole('group', { name: 'Segment actions', exact: true });
+      await source.hover();
+      await expect(source.locator('..').getByRole('button')).toHaveCount(0);
+      await expect(
+        page.getByRole('button', { name: 'Copy source to selected targets', exact: true }),
+      ).toBeVisible();
+      const padding = (element: Element) => {
+        const style = getComputedStyle(element);
+        return [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft];
+      };
+      expect(await rows.first().locator('.editor-target-editor-host').evaluate(padding)).toEqual(
+        await source.evaluate(padding),
+      );
+      expect(await rows.nth(1).locator('.editor-target-preview').evaluate(padding)).toEqual(
+        await rows.nth(1).locator('.editor-source-text').evaluate(padding),
+      );
+      await expect(actions.getByRole('button')).toHaveCount(2);
+      await expect(actions).toHaveCSS('opacity', '0.1');
+      const actionBounds = await actions.boundingBox();
+      await actions.hover({ position: { x: 1, y: actionBounds!.height / 2 } });
+      await expect(actions).toHaveCSS('opacity', '1');
+      await page.screenshot({ path: test.info().outputPath('target-actions-hover.png') });
+      await source.hover();
+      await expect(actions).toHaveCSS('opacity', '0.1');
+      await emptyAI.focus();
+      await expect(actions).toHaveCSS('opacity', '1');
+      await rows.first().locator('.cm-content').focus();
+      await expect(actions).toHaveCSS('opacity', '0.1');
       await emptyAI.click();
       await expect(rows.first().locator('.cm-content')).toHaveText('translate result');
       await expect(page.getByRole('dialog', { name: 'Refine translation' })).toBeHidden();

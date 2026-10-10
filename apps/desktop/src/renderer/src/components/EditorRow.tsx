@@ -151,14 +151,12 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
     closeTagInsertionUI,
     handleInsertTag,
     handleInsertAllTags,
-    handleCopySourceToTarget,
     handleSourceCellClick,
     handleShortcutAction,
   } = useEditorRowCommandHandlers({
     segmentId: segment.segmentId,
     isActive,
     sourceTags,
-    sourceEditorText,
     onActivate,
     onConfirm,
     editorController,
@@ -260,7 +258,6 @@ const EditorRowComponent: React.FC<EditorRowProps> = ({
       <EditorRowSourceCell
         sourceContent={renderChunks(displayModel.sourceHighlightChunks)}
         onSourceCellClick={handleSourceCellClick}
-        onCopySourceToTarget={handleCopySourceToTarget}
       />
 
       <div

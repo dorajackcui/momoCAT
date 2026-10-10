@@ -228,8 +228,12 @@
   }
 
   .editor-target-text-layer {
-    @apply editor-text-base pl-0.5 pr-12 py-0.5;
+    @apply editor-text-base px-0.5 pr-1.5 py-0;
     color: rgb(var(--color-editor-text));
+  }
+
+  .editor-target-actions {
+    @apply opacity-10 transition-opacity hover:opacity-100 focus-within:opacity-100 motion-reduce:transition-none;
   }
 
   .editor-target-editor-host {
