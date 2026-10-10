@@ -34,6 +34,7 @@ describe('createDesktopApi smoke', () => {
     const api = createDesktopApi({ invoke } as unknown as IpcRendererLike);
     const options = {
       segmentIds: ['s10', 's30'],
+      tips: 'Use short verbs.\nKeep product names.',
       targetBaseline: 'ignore-current-targets' as const,
     };
     expect(await api.aiTranslateFile(7, options)).toBe('job-filtered');

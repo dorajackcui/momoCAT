@@ -27,7 +27,7 @@ export interface EditorBatchActionsController {
   activeBatchAIJob: AIFileJob | null;
   openBatchAIModal: () => void;
   closeBatchAIModal: () => void;
-  handleBatchAITranslate: (options: ProjectAITranslateSubmit) => Promise<void>;
+  handleBatchAITranslate: (options: ProjectAITranslateSubmit) => Promise<boolean>;
   cancelBatchAITranslate: () => Promise<void>;
   handleBatchQA: () => Promise<void>;
   handleExport: () => Promise<void>;
@@ -169,32 +169,35 @@ export function useEditorBatchActions({
 
   const handleBatchAITranslate = useCallback(
     async (options: ProjectAITranslateSubmit) => {
-      if (!supportsBatchActions) return;
+      if (!supportsBatchActions) return false;
 
       const segmentIds = options.scope === 'file' ? null : batchAISegmentIds;
       if (segmentIds?.length === 0) {
         feedbackService.info('No segments match the current filters.');
-        return;
+        return false;
       }
 
-      setIsBatchAIModalOpen(false);
       const saved = await flushPendingSegmentUpdatesForAction({
         actionLabel: 'AI translation',
         flushPendingSegmentUpdates,
       });
-      if (!saved) return;
+      if (!saved) return false;
 
       try {
         const jobId = await apiClient.aiTranslateFile(fileId, {
           targetBaseline: options.targetBaseline,
+          ...(options.tips ? { tips: options.tips } : {}),
           ...(segmentIds ? { segmentIds: [...segmentIds] } : {}),
         });
         aiFileJobTracker.trackFileJobStart(fileId, jobId);
         setTrackedBatchAIJobId(jobId);
+        setIsBatchAIModalOpen(false);
+        return true;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setTrackedBatchAIJobId(null);
         feedbackService.error(`Failed to start AI translation: ${message}`);
+        return false;
       }
     },
     [aiFileJobTracker, batchAISegmentIds, fileId, flushPendingSegmentUpdates, supportsBatchActions],

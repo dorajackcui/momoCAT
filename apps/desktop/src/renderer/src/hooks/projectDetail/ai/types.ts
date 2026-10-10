@@ -36,6 +36,7 @@ export interface AITestMetaInput {
 export type TrackedAIJob = AIFileJob;
 
 export interface StartAITranslateFileOptions {
+  tips?: string;
   targetBaseline?: AIBatchTargetBaseline;
   confirm?: boolean;
 }
@@ -87,7 +88,7 @@ export interface ProjectAIController {
     fileId: number,
     fileName: string,
     options?: StartAITranslateFileOptions,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   cancelAITranslateFile: (fileId: number) => Promise<void>;
   getFileJob: (fileId: number) => TrackedAIJob | null;
   subscribeFileJobs: (listener: () => void) => () => void;

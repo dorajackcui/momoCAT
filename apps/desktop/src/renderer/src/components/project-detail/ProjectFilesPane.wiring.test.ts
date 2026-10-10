@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { AIBatchTargetBaseline, ProjectFileRecord } from '../../../../shared/ipc';
 import type { ProjectAIController } from '../../hooks/projectDetail/useProjectAI';
+import { ProjectFilesPane } from './ProjectFilesPane';
 
 const hookMocks = vi.hoisted(() => ({
   useState: vi.fn(),
@@ -11,7 +12,7 @@ const hookMocks = vi.hoisted(() => ({
 
 const modalMock = vi.hoisted(() => ({
   onConfirm: undefined as
-    | ((options: { targetBaseline: AIBatchTargetBaseline }) => void)
+    | ((options: { targetBaseline: AIBatchTargetBaseline; tips?: string }) => Promise<boolean>)
     | undefined,
 }));
 
@@ -30,7 +31,10 @@ vi.mock('./ProjectAIPane', () => ({
 
 vi.mock('./ProjectAITranslateModal', () => ({
   ProjectAITranslateModal: (props: {
-    onConfirm: (options: { targetBaseline: AIBatchTargetBaseline }) => void;
+    onConfirm: (options: {
+      targetBaseline: AIBatchTargetBaseline;
+      tips?: string;
+    }) => Promise<boolean>;
   }) => {
     modalMock.onConfirm = props.onConfirm;
     return React.createElement('div', null, 'mock translate modal');
@@ -63,7 +67,7 @@ function createAIControllerMock(): {
   ai: ProjectAIController;
   startAITranslateFile: ReturnType<typeof vi.fn>;
 } {
-  const startAITranslateFile = vi.fn().mockResolvedValue(undefined);
+  const startAITranslateFile = vi.fn().mockResolvedValue(true);
   const ai = {
     providerOptions: [],
     modelDraft: '',
@@ -110,13 +114,12 @@ function createAIControllerMock(): {
 }
 
 describe('ProjectFilesPane wiring', () => {
-  it('forwards selected modal target baseline to the AI file translate action', async () => {
+  it('forwards baseline and Tips, retaining the dialog until a job starts', async () => {
     hookMocks.useState.mockReturnValue([
       { id: 1, name: 'demo.xlsx' },
       hookMocks.setAiTranslateFile,
     ]);
     const { ai, startAITranslateFile } = createAIControllerMock();
-    const { ProjectFilesPane } = await import('./ProjectFilesPane');
 
     renderToStaticMarkup(
       React.createElement(ProjectFilesPane, {
@@ -135,10 +138,24 @@ describe('ProjectFilesPane wiring', () => {
       }),
     );
 
-    modalMock.onConfirm?.({ targetBaseline: 'ignore-current-targets' });
+    startAITranslateFile.mockResolvedValueOnce(false);
+    expect(
+      await modalMock.onConfirm?.({
+        targetBaseline: 'ignore-current-targets',
+        tips: 'Keep names concise.',
+      }),
+    ).toBe(false);
+    expect(hookMocks.setAiTranslateFile).not.toHaveBeenCalled();
+    expect(
+      await modalMock.onConfirm?.({
+        targetBaseline: 'ignore-current-targets',
+        tips: 'Keep names concise.',
+      }),
+    ).toBe(true);
 
     expect(startAITranslateFile).toHaveBeenCalledWith(1, 'demo.xlsx', {
       targetBaseline: 'ignore-current-targets',
+      tips: 'Keep names concise.',
       confirm: false,
     });
     expect(hookMocks.setAiTranslateFile).toHaveBeenCalledWith(null);

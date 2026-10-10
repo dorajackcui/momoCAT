@@ -55,6 +55,7 @@ export interface FileQaReport {
 
 export {
   buildAISystemPrompt,
+  buildAIProjectPromptWithTips,
   buildAITextPromptBundle,
   buildAIUserPrompt,
   normalizeProjectType,

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_PROJECT_AI_MODEL,
   buildAISystemPrompt,
+  buildAIProjectPromptWithTips,
+  buildAIWindowModePromptBundle,
   buildAITextPromptBundle,
   buildAIUserPrompt,
   isProjectAIModel,
@@ -534,4 +536,65 @@ describe("Project AI Prompt Templates", () => {
     expect(bundle.userPrompt).toContain("Input:");
     expect(bundle.userPrompt).toContain("Process this text");
   });
+});
+
+
+describe('file-run prompt Tips', () => {
+  it.each(['translation', 'custom'] as const)(
+    'appends Tips before fixed %s rules',
+    (projectType) => {
+      const projectPrompt = buildAIProjectPromptWithTips(
+        projectType,
+        '  Project instructions.  ',
+        '  Use short verbs.\nKeep product names.  ',
+      );
+      expect(projectPrompt).toBe(
+        'Project instructions.\n\nTips:\nUse short verbs.\nKeep product names.',
+      );
+      const bundle = buildAIWindowModePromptBundle({
+        projectType,
+        srcLang: 'en',
+        tgtLang: 'fr',
+        projectPrompt,
+        currentSegments: [{ id: 's1', sourcePayload: 'Save' }],
+      });
+      expect(bundle.systemPrompt.startsWith(projectPrompt + '\n\n')).toBe(true);
+      expect(bundle.systemPrompt).toContain('Window Mode batch rules:');
+      expect(bundle.systemPrompt).toContain('Return strict JSON only.');
+      expect(bundle.systemPrompt).toContain('preserve each id exactly as provided');
+      expect(bundle.userPrompt).not.toContain('Tips:');
+      if (projectType === 'translation')
+        expect(bundle.systemPrompt).toContain('From en to fr. Output in fr ONLY.');
+    },
+  );
+
+  it.each([undefined, '', ' \n '])('omits empty Tips (%s)', (tips) => {
+    expect(buildAIProjectPromptWithTips('translation', ' Project instructions. ', tips)).toBe(
+      'Project instructions.',
+    );
+    expect(buildAIProjectPromptWithTips('custom', null, tips)).toBe('');
+  });
+
+  it.each(['translation', 'custom'] as const)(
+    'keeps the default %s instructions when only Tips are supplied',
+    (projectType) => {
+      const original = buildAIWindowModePromptBundle({
+        projectType,
+        srcLang: 'en',
+        tgtLang: 'fr',
+        currentSegments: [{ id: 's1', sourcePayload: 'Save' }],
+      });
+      const withTips = buildAIWindowModePromptBundle({
+        projectType,
+        srcLang: 'en',
+        tgtLang: 'fr',
+        projectPrompt: buildAIProjectPromptWithTips(projectType, null, 'Keep it short.'),
+        currentSegments: [{ id: 's1', sourcePayload: 'Save' }],
+      });
+      expect(withTips.systemPrompt.replace('\n\nTips:\nKeep it short.', '')).toBe(
+        original.systemPrompt,
+      );
+      expect(withTips.userPrompt).toBe(original.userPrompt);
+    },
+  );
 });

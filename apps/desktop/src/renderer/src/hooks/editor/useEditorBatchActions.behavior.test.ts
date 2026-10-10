@@ -48,12 +48,16 @@ describe('editor filtered AI translation', () => {
     getFilteredSegmentIds.mockReturnValue(['s90']);
     expect(result.current.batchAIFilteredCount).toBe(3);
     await act(async () =>
-      result.current.handleBatchAITranslate({ targetBaseline: 'ignore-current-targets' }),
+      result.current.handleBatchAITranslate({
+        targetBaseline: 'ignore-current-targets',
+        tips: 'Keep names concise.',
+      }),
     );
     expect(flush).toHaveBeenCalledOnce();
     expect(apiClient.aiTranslateFile).toHaveBeenCalledWith(1, {
       targetBaseline: 'ignore-current-targets',
       segmentIds: ['s10', 's30', 's80'],
+      tips: 'Keep names concise.',
     });
     expect(tracker.getFileJob(1)?.jobId).toBe('job-filtered');
   });
@@ -91,6 +95,37 @@ describe('editor filtered AI translation', () => {
     );
     expect(apiClient.aiTranslateFile).not.toHaveBeenCalled();
     expect(feedbackService.error).toHaveBeenCalledWith(expect.stringContaining('save failed'));
+    expect(result.current.isBatchAIModalOpen).toBe(true);
+  });
+
+  it('retains the dialog and filtered scope after a rejected start request', async () => {
+    const { result, getFilteredSegmentIds } = setup(['s10']);
+    act(() => result.current.openBatchAIModal());
+    vi.mocked(apiClient.aiTranslateFile).mockRejectedValueOnce(new Error('start failed'));
+    await act(async () => {
+      expect(
+        await result.current.handleBatchAITranslate({
+          targetBaseline: 'use-current-targets',
+          tips: 'Keep names concise.',
+        }),
+      ).toBe(false);
+    });
+    expect(result.current.isBatchAIModalOpen).toBe(true);
+    getFilteredSegmentIds.mockReturnValue(['s90']);
+    await act(async () => {
+      expect(
+        await result.current.handleBatchAITranslate({
+          targetBaseline: 'use-current-targets',
+          tips: 'Keep names concise.',
+        }),
+      ).toBe(true);
+    });
+    expect(result.current.isBatchAIModalOpen).toBe(false);
+    expect(apiClient.aiTranslateFile).toHaveBeenLastCalledWith(1, {
+      targetBaseline: 'use-current-targets',
+      tips: 'Keep names concise.',
+      segmentIds: ['s10'],
+    });
   });
 
   it('clears the snapshot when switching files', () => {

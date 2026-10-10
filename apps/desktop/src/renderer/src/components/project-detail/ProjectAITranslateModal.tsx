@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ProjectType } from '@cat/core/project';
 import type { AIBatchTargetBaseline } from '../../../../shared/ipc';
-import { Button, Modal, Select } from '../ui';
+import { Button, Modal, Select, Textarea } from '../ui';
 
 export interface ProjectAITranslateSubmit {
   targetBaseline: AIBatchTargetBaseline;
   scope?: 'file' | 'filtered';
+  tips?: string;
 }
 
 interface ProjectAITranslateModalProps {
@@ -15,14 +16,42 @@ interface ProjectAITranslateModalProps {
   filteredSegmentCount?: number;
   totalSegmentCount?: number;
   onClose: () => void;
-  onConfirm: (options: ProjectAITranslateSubmit) => void;
+  onConfirm: (options: ProjectAITranslateSubmit) => boolean | Promise<boolean>;
 }
 
 function formatSegmentCount(count: number): string {
   return `${count} ${count === 1 ? 'segment' : 'segments'}`;
 }
 
-export function ProjectAITranslateModal({
+export function ProjectAITranslateModal(props: ProjectAITranslateModalProps) {
+  const [tips, setTips] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitPending = useRef(false);
+  const confirm = async (options: ProjectAITranslateSubmit) => {
+    if (submitPending.current) return false;
+    submitPending.current = true;
+    setIsSubmitting(true);
+    try {
+      const started = await props.onConfirm(options);
+      if (started) setTips('');
+      return started;
+    } finally {
+      submitPending.current = false;
+      setIsSubmitting(false);
+    }
+  };
+  return props.open ? (
+    <ProjectAITranslateForm
+      {...props}
+      onConfirm={confirm}
+      tips={tips}
+      setTips={setTips}
+      isSubmitting={isSubmitting}
+    />
+  ) : null;
+}
+
+function ProjectAITranslateForm({
   open,
   projectType = 'translation',
   fileName,
@@ -30,7 +59,14 @@ export function ProjectAITranslateModal({
   totalSegmentCount,
   onClose,
   onConfirm,
-}: ProjectAITranslateModalProps) {
+  tips,
+  setTips,
+  isSubmitting,
+}: ProjectAITranslateModalProps & {
+  tips: string;
+  setTips: (value: string) => void;
+  isSubmitting: boolean;
+}) {
   const isCustom = projectType === 'custom';
   const action = isCustom ? 'Process' : 'Translate';
   const noun = isCustom ? 'processing' : 'translation';
@@ -43,21 +79,32 @@ export function ProjectAITranslateModal({
   const hasFilteredScope = filteredSegmentCount !== undefined;
   const selectedCount = scope === 'filtered' ? filteredSegmentCount : totalSegmentCount;
 
+  const submit = () => {
+    if (selectedCount === 0 || isSubmitting) return;
+    const instruction = tips.trim();
+    void onConfirm({
+      targetBaseline,
+      ...(hasFilteredScope ? { scope } : {}),
+      ...(instruction ? { tips: instruction } : {}),
+    });
+  };
+
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={isSubmitting ? undefined : onClose}
       size="md"
       title={`AI ${action} Options`}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
             Cancel
           </Button>
           <Button
             variant="primary"
             disabled={selectedCount === 0}
-            onClick={() => onConfirm({ targetBaseline, ...(hasFilteredScope ? { scope } : {}) })}
+            loading={isSubmitting}
+            onClick={submit}
           >
             Start AI {action}
           </Button>
@@ -77,6 +124,7 @@ export function ProjectAITranslateModal({
             <Select
               aria-label={isCustom ? 'Processing Scope' : 'Translation Scope'}
               value={scope}
+              disabled={isSubmitting}
               onChange={(event) => setScope(event.target.value as 'file' | 'filtered')}
             >
               <option value="filtered">
@@ -113,12 +161,38 @@ export function ProjectAITranslateModal({
           <Select
             aria-label={isCustom ? 'Output Baseline' : 'Target Baseline'}
             value={targetBaseline}
+            disabled={isSubmitting}
             onChange={(event) => setTargetBaseline(event.target.value as AIBatchTargetBaseline)}
           >
             <option value="use-current-targets">Use Current {output}</option>
             <option value="ignore-current-targets">Ignore Current {output}</option>
           </Select>
         </label>
+        <div className="space-y-1">
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-text-muted">Tips (optional)</span>
+            <Textarea
+              size="sm"
+              rows={3}
+              aria-label="AI translation tips"
+              value={tips}
+              disabled={isSubmitting}
+              onChange={(event) => setTips(event.target.value)}
+              placeholder="e.g. These are UI labels. Keep them concise."
+              onKeyDown={(event) => {
+                if (
+                  event.nativeEvent.isComposing ||
+                  event.key !== 'Enter' ||
+                  !(event.ctrlKey || event.metaKey)
+                )
+                  return;
+                event.preventDefault();
+                submit();
+              }}
+            />
+          </label>
+          <p className="text-xs text-text-muted">Additional instructions for this run only.</p>
+        </div>
       </div>
 
       <p className="text-2xs text-text-faint mt-4">Confirmed segments stay locked.</p>

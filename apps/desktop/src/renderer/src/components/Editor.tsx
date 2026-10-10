@@ -425,8 +425,9 @@ export const Editor: React.FC<EditorProps> = ({
           onClose={clipboard.cancelPaste}
         />
       )}
-      {supportsBatchActions && batchActions.isBatchAIModalOpen && (
+      {supportsBatchActions && (
         <ProjectAITranslateModal
+          key={fileId}
           projectType={project?.projectType}
           open={batchActions.isBatchAIModalOpen}
           fileName={file?.name || null}

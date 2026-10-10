@@ -26,6 +26,7 @@ interface ProjectFilesPaneProps {
 export function buildProjectAITranslateStartOptions(options: ProjectAITranslateSubmit) {
   return {
     targetBaseline: options.targetBaseline,
+    ...(options.tips ? { tips: options.tips } : {}),
     confirm: false,
   };
 }
@@ -308,13 +309,14 @@ export function ProjectFilesPane({
           open={true}
           fileName={aiTranslateFile.name}
           onClose={() => setAiTranslateFile(null)}
-          onConfirm={(options) => {
-            void ai.startAITranslateFile(
+          onConfirm={async (options) => {
+            const started = await ai.startAITranslateFile(
               aiTranslateFile.id,
               aiTranslateFile.name,
               buildProjectAITranslateStartOptions(options),
             );
-            setAiTranslateFile(null);
+            if (started) setAiTranslateFile(null);
+            return started;
           }}
         />
       )}

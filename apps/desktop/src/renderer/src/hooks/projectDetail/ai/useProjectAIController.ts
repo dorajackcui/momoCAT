@@ -267,24 +267,27 @@ export function useProjectAI({
       const shouldConfirm = options.confirm !== false;
       if (providerActionBlockMessage) {
         feedbackService.info(providerActionBlockMessage);
-        return;
+        return false;
       }
 
       if (shouldConfirm) {
         const confirmed = await feedbackService.confirm(
           buildAIStartConfirmMessage(fileName, config),
         );
-        if (!confirmed) return;
+        if (!confirmed) return false;
       }
 
       try {
         const jobId = await apiClient.aiTranslateFile(fileId, {
           targetBaseline: config.effectiveTargetBaseline,
+          ...(options.tips ? { tips: options.tips } : {}),
         });
         fileJobTracker.trackFileJobStart(fileId, jobId);
+        return true;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         feedbackService.error(`Failed to start AI ${config.actionLabel}: ${message}`);
+        return false;
       }
     },
     [fileJobTracker, project?.projectType, providerActionBlockMessage],

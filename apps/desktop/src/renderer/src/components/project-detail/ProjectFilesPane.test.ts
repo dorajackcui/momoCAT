@@ -264,9 +264,13 @@ describe('ProjectFilesPane', () => {
     });
 
     expect(
-      buildProjectAITranslateStartOptions({ targetBaseline: 'ignore-current-targets' }),
+      buildProjectAITranslateStartOptions({
+        targetBaseline: 'ignore-current-targets',
+        tips: 'Keep names concise.',
+      }),
     ).toEqual({
       targetBaseline: 'ignore-current-targets',
+      tips: 'Keep names concise.',
       confirm: false,
     });
   });

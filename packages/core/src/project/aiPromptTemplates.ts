@@ -303,6 +303,22 @@ export function normalizeProjectType(projectType?: ProjectType): ProjectType {
   return "translation";
 }
 
+export function buildAIProjectPromptWithTips(
+  projectType: ProjectType,
+  projectPrompt?: string | null,
+  tips?: string,
+): string {
+  const prompt = projectPrompt?.trim() ?? '';
+  const instruction = tips?.trim() ?? '';
+  if (!instruction) return prompt;
+  const base =
+    prompt ||
+    (normalizeProjectType(projectType) === 'custom'
+      ? CUSTOM_PROMPTS.defaultSystemBody
+      : 'You are a professional translator.');
+  return [base, 'Tips:\n' + instruction].join('\n\n');
+}
+
 export function buildAISystemPrompt(
   projectType: ProjectType,
   params: SystemPromptBuildParams,

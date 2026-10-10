@@ -58,6 +58,7 @@ function isAITranslationOptionsShape(value: unknown): value is AITranslationOpti
     isRecord(value) &&
     value.mode === undefined &&
     value.targetScope === undefined &&
+    isOptional(value.tips, isString) &&
     (value.targetBaseline === undefined ||
       value.targetBaseline === 'use-current-targets' ||
       value.targetBaseline === 'ignore-current-targets')
@@ -67,5 +68,9 @@ function isAITranslationOptionsShape(value: unknown): value is AITranslationOpti
 export function readAITranslateFileOptions(value: unknown): AITranslateFileOptions | undefined {
   if (value === undefined) return undefined;
   const options = readArgument(value, 'AI translation options', isAITranslationOptionsShape);
-  return { ...options, segmentIds: parseAITranslationSegmentIds(options.segmentIds) };
+  return {
+    ...options,
+    tips: options.tips?.trim() || undefined,
+    segmentIds: parseAITranslationSegmentIds(options.segmentIds),
+  };
 }

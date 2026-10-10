@@ -146,6 +146,7 @@ export function registerAIHandlers({ ipcMain, projectService, jobManager }: AIHa
         .aiTranslateFile(fileId, {
           targetBaseline: options?.targetBaseline,
           segmentIds: options?.segmentIds,
+          ...(options?.tips ? { tips: options.tips } : {}),
           cancellationToken,
           onProgress: (data) => {
             if (jobManager.isCancellationRequested(jobId)) {

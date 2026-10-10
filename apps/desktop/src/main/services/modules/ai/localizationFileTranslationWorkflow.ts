@@ -1,5 +1,5 @@
 import { normalizeSegmentStatus, type Segment } from '@cat/core/models';
-import type { Project } from '@cat/core/project';
+import { buildAIProjectPromptWithTips, type Project } from '@cat/core/project';
 import { parseDisplayTextToTokens, type TagPolicy } from '@cat/core/tag';
 import { serializeTokensToDisplayText } from '@cat/core/text';
 import type {
@@ -19,6 +19,7 @@ export interface LocalizationFileTranslationParams {
   fileId: number;
   fileName: string;
   segmentIds?: string[];
+  tips?: string;
   project: Project;
   targetBaseline: AIBatchTargetBaseline;
   tagPolicy: TagPolicy;
@@ -45,6 +46,14 @@ export async function runLocalizationFileTranslation(
   const segmentsById = new Map(segments.map((segment) => [segment.segmentId, segment]));
   const units = segments.map(mapSegmentToLocalizationUnit);
   const providerId = params.providerId?.trim();
+  const tips = params.tips?.trim();
+  const systemPrompt = tips
+    ? buildAIProjectPromptWithTips(
+        params.project.projectType ?? 'translation',
+        params.project.aiPrompt,
+        tips,
+      )
+    : undefined;
 
   logAIBatchDebug({
     event: 'localization_file_start',
@@ -68,7 +77,14 @@ export async function runLocalizationFileTranslation(
         requestMode: 'window-partial',
         targetBaseline: params.targetBaseline,
         tagPolicy: params.tagPolicy,
-        ...(providerId ? { mt: { providerId } } : {}),
+        ...(providerId || systemPrompt
+          ? {
+              mt: {
+                ...(providerId ? { providerId } : {}),
+                ...(systemPrompt ? { systemPrompt } : {}),
+              },
+            }
+          : {}),
       },
       onResult: async (unitResult) => {
         await applyLocalizationUnitResult(

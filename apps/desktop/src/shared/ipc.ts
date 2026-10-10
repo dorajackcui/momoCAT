@@ -337,6 +337,7 @@ export interface AISegmentTranslateResult {
 export type AIBatchTargetBaseline = 'use-current-targets' | 'ignore-current-targets';
 
 export interface AITranslateFileOptions {
+  tips?: string;
   targetBaseline?: AIBatchTargetBaseline;
   /** Omit for the entire file; selected rows form one context sequence in file order. */
   segmentIds?: string[];

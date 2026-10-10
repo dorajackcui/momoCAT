@@ -14,6 +14,25 @@ function createIpcMainStub() {
 }
 
 describe('ai handlers', () => {
+  it.each([null, 42, {}, []].map((tips) => ({ tips })))(
+    'rejects invalid Tips $tips before starting a job',
+    ({ tips }) => {
+      const { handlers, ipcMain } = createIpcMainStub();
+      const startJob = vi.fn();
+      const aiTranslateFile = vi.fn();
+      registerAIHandlers({
+        ipcMain,
+        projectService: { aiTranslateFile } as never,
+        jobManager: { startJob } as never,
+      });
+      expect(() => handlers.get(IPC_CHANNELS.ai.translateFile)?.({}, 1, { tips })).toThrow(
+        'AI translation options',
+      );
+      expect(startJob).not.toHaveBeenCalled();
+      expect(aiTranslateFile).not.toHaveBeenCalled();
+    },
+  );
+
   it.each([[], null, 's1', [''], ['  '], [1], new Array(1)].map((segmentIds) => ({ segmentIds })))(
     'rejects invalid segment scope $segmentIds before starting a job',
     ({ segmentIds }) => {
@@ -117,6 +136,7 @@ describe('ai handlers', () => {
     const jobId = handler?.({}, 1, {
       targetBaseline: 'ignore-current-targets',
       segmentIds: ['s10', 's30', 's10'],
+      tips: '  Use short verbs.\nKeep product names.  ',
     }) as string;
     expect(typeof jobId).toBe('string');
     expect(startJob).toHaveBeenCalledWith(jobId, 'AI translation started');
@@ -125,6 +145,7 @@ describe('ai handlers', () => {
       expect.objectContaining({
         targetBaseline: 'ignore-current-targets',
         segmentIds: ['s10', 's30'],
+        tips: 'Use short verbs.\nKeep product names.',
         onProgress: expect.any(Function),
       }),
     );

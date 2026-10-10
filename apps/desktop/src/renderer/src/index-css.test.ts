@@ -3,11 +3,12 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('renderer editor typography CSS', () => {
-  it('keeps target text close to the segment start', () => {
+  it('keeps source and target text padding aligned without reserving space for row actions', () => {
     const css = readFileSync(resolve(__dirname, 'index.css'), 'utf8');
 
-    expect(css).toContain('@apply editor-text-base pl-0.5 pr-12 py-0.5;');
-    expect(css).not.toContain('@apply editor-text-base pl-1.5 pr-12 py-0.5;');
+    expect(css).toContain('@apply editor-text-base px-0.5 pr-1.5 py-0 select-text;');
+    expect(css).toContain('@apply editor-text-base px-0.5 pr-1.5 py-0;');
+    expect(css).not.toContain('@apply editor-text-base pl-0.5 pr-12 py-0.5;');
   });
 
   it('keeps a subtle but visible scroll position marker in the editor', () => {

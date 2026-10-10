@@ -59,6 +59,7 @@ export class AITranslationOrchestrator {
       fileId,
       fileName: file.name,
       segmentIds,
+      tips: options?.tips,
       project,
       targetBaseline: options?.targetBaseline ?? 'use-current-targets',
       tagPolicy: resolveFileTagPolicy(file),

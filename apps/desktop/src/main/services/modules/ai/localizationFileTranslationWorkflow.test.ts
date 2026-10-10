@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { CATDatabase } from '@cat/db';
 import { LocalizationEngine } from '@cat/localization';
 import type { Segment } from '@cat/core/models';
-import type { Project } from '@cat/core/project';
+import { buildAIProjectPromptWithTips, type Project } from '@cat/core/project';
 import { runLocalizationFileTranslation } from './localizationFileTranslationWorkflow';
 import { AITranslationOrchestrator } from './AITranslationOrchestrator';
 
@@ -145,6 +145,7 @@ describe('filtered localization file translation', () => {
         const result = await orchestrator.aiTranslateFile(1, {
           segmentIds: [...selected.map((row) => row.segmentId).reverse(), 's10'],
           targetBaseline,
+          tips: '  Use short verbs.\nKeep product names.  ',
           onProgress,
         });
         if (projectType === 'custom') {
@@ -164,6 +165,19 @@ describe('filtered localization file translation', () => {
           total: 6,
         });
         expect(prompts).toHaveLength(2);
+        for (const [request] of createResponse.mock.calls) {
+          expect(request.systemPrompt).toContain(
+            '\n\nTips:\nUse short verbs.\nKeep product names.\n\n',
+          );
+          expect(request.systemPrompt.match(/Tips:/g)).toHaveLength(1);
+        }
+        expect(db.getProject(projectId)?.aiPrompt).toBe(
+          projectType === 'custom' ? 'Classify each input.' : null,
+        );
+        if (projectType === 'translation')
+          expect(createResponse.mock.calls[0][0].systemPrompt).toContain(
+            'You are a professional translator.',
+          );
         expect([...prompts[0].matchAll(/^id: (.+)$/gm)]).toHaveLength(overwrite ? 4 : 3);
         expect([...prompts[1].matchAll(/^id: (.+)$/gm)]).toHaveLength(1);
         expect(prompts.join('\n')).not.toContain('outside');
@@ -210,6 +224,28 @@ describe('filtered localization file translation', () => {
       ).rejects.toThrow();
       expect(translateProjectSegments).not.toHaveBeenCalled();
       expect(updateSegment).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([undefined, ' \n '])(
+    'preserves project prompt resolution with empty Tips (%s)',
+    async (tips) => {
+      const translateProjectSegments = vi.fn().mockResolvedValue({
+        summary: { total: 1, translated: 0, skipped: 1, failed: 0 },
+        results: [],
+      });
+      await runLocalizationFileTranslation({
+        fileId: 1,
+        fileName: 'names.xlsx',
+        project: { id: 1, aiPrompt: 'Saved prompt.' } as Project,
+        tips,
+        targetBaseline: 'use-current-targets',
+        tagPolicy: 'none',
+        localizationEngine: { translateProjectSegments },
+        segmentPagingIterator: { iterateFileSegments: () => [segment('s10', 9)].values() } as never,
+        segmentService: { updateSegment: vi.fn() } as never,
+      });
+      expect(translateProjectSegments.mock.calls[0][0].options).not.toHaveProperty('mt');
     },
   );
 
@@ -266,17 +302,19 @@ describe('Custom shared job execution', () => {
         const projectId = db.createProject('Processing', 'en', 'fr', 'custom');
         configureProvider(db, projectId);
         let cancelled = false;
-        const createResponse = vi.fn(async (request: { userPrompt: string }) => {
-          if (createResponse.mock.calls.length === 1)
-            return { content: 'invalid JSON', status: 200, endpoint: '/mock' };
-          const ids = [...request.userPrompt.matchAll(/^id: (.+)$/gm)].map((match) => match[1]);
-          if (cancel) cancelled = true;
-          return {
-            content: JSON.stringify({ translations: ids.map((id) => ({ id, text: 'Label' })) }),
-            status: 200,
-            endpoint: '/mock',
-          };
-        });
+        const createResponse = vi.fn(
+          async (request: { systemPrompt: string; userPrompt: string }) => {
+            if (createResponse.mock.calls.length === 1)
+              return { content: 'invalid JSON', status: 200, endpoint: '/mock' };
+            const ids = [...request.userPrompt.matchAll(/^id: (.+)$/gm)].map((match) => match[1]);
+            if (cancel) cancelled = true;
+            return {
+              content: JSON.stringify({ translations: ids.map((id) => ({ id, text: 'Label' })) }),
+              status: 200,
+              endpoint: '/mock',
+            };
+          },
+        );
         const engine = new LocalizationEngine(db, {
           dbPath: ':memory:',
           aiTransport: { createResponse, testConnection: vi.fn() },
@@ -286,9 +324,18 @@ describe('Custom shared job execution', () => {
           documentId: 'file',
           units: Array.from({ length: 6 }, (_, i) => ({ id: String(i), source: 'Same input' })),
           job: { maxAttempts: 2 },
+          options: {
+            mt: {
+              systemPrompt: buildAIProjectPromptWithTips('custom', null, 'Keep names concise.'),
+            },
+          },
           cancellationToken: { isCancellationRequested: () => cancelled },
         });
         expect(createResponse).toHaveBeenCalledTimes(cancel ? 2 : 3);
+        const systems = createResponse.mock.calls.map(([request]) => request.systemPrompt);
+        expect(new Set(systems).size).toBe(1);
+        expect(systems[0]).toContain('Tips:\nKeep names concise.');
+        expect(systems[0]).toContain('You are a precise text processing assistant.');
         expect(result.runtimeTm).toBeUndefined();
         if (!cancel) {
           expect(result.summary).toMatchObject({ translated: 6, failed: 0 });

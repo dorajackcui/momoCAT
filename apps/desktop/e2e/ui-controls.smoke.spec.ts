@@ -322,6 +322,89 @@ test.describe('Shared UI controls smoke', () => {
     }
   });
 
+  test('retains AI Tips after startup failure and clears them only when a job starts', async () => {
+    const session = await createSmokeSession();
+    try {
+      const { page, electronApp, fileId } = session;
+      await electronApp.evaluate(({ ipcMain }, channel) => {
+        const state = {
+          calls: [] as Array<{ fileId: number; options: { tips?: string } }>,
+          finish: undefined as (() => void) | undefined,
+        };
+        (globalThis as unknown as { tipsSmoke: typeof state }).tipsSmoke = state;
+        ipcMain.removeHandler(channel);
+        ipcMain.handle(channel, (_event, id, options) => {
+          state.calls.push({ fileId: id, options });
+          if (state.calls.length === 1) throw new Error('Simulated startup failure');
+          return new Promise<string>((resolve) => {
+            state.finish = () => resolve('job-tips-smoke');
+          });
+        });
+      }, IPC_CHANNELS.ai.translateFile);
+      const translate = page.getByRole('button', { name: 'AI batch translate' });
+      await translate.click();
+      const modal = page.getByRole('dialog', { name: 'AI Translate Options' });
+      const tips = modal.getByRole('textbox', { name: 'AI translation tips' });
+      const start = modal.getByRole('button', { name: 'Start AI Translate' });
+      await tips.fill('  Use short verbs.\nKeep product names.  ');
+      await start.click();
+      await expect(start).toBeEnabled();
+      await expect(modal).toBeVisible();
+      await expect(tips).toHaveValue('  Use short verbs.\nKeep product names.  ');
+      await start.click();
+      await expect(start).toBeDisabled();
+      await expect(tips).toBeDisabled();
+      await expect(modal.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
+      await page.keyboard.press('Escape');
+      await expect(modal).toBeVisible();
+      await expect
+        .poll(() =>
+          electronApp.evaluate(
+            () =>
+              (globalThis as unknown as { tipsSmoke: { calls: unknown[] } }).tipsSmoke.calls.length,
+          ),
+        )
+        .toBe(2);
+      const calls = await electronApp.evaluate(() => {
+        const state = (
+          globalThis as unknown as { tipsSmoke: { calls: unknown[]; finish: () => void } }
+        ).tipsSmoke;
+        state.finish();
+        return state.calls;
+      });
+      expect(calls).toEqual([
+        {
+          fileId,
+          options: {
+            targetBaseline: 'use-current-targets',
+            tips: 'Use short verbs.\nKeep product names.',
+          },
+        },
+        {
+          fileId,
+          options: {
+            targetBaseline: 'use-current-targets',
+            tips: 'Use short verbs.\nKeep product names.',
+          },
+        },
+      ]);
+      await expect(modal).toBeHidden();
+      await electronApp.evaluate(({ BrowserWindow }, channel) => {
+        for (const window of BrowserWindow.getAllWindows())
+          window.webContents.send(channel, {
+            jobId: 'job-tips-smoke',
+            progress: 100,
+            status: 'completed',
+          });
+      }, IPC_CHANNELS.events.jobProgress);
+      await translate.click();
+      await expect(tips).toHaveValue('');
+      await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
+    } finally {
+      await closeSmokeSession(session);
+    }
+  });
+
   test('preserves CAT search, editor focus and drafts across popups and dialogs', async () => {
     const session = await createSmokeSession();
     try {
@@ -380,6 +463,8 @@ test.describe('Shared UI controls smoke', () => {
       await translate.click();
       const modal = page.getByRole('dialog', { name: 'AI Translate Options' });
       await expect(modal).toBeVisible();
+      const tips = modal.getByRole('textbox', { name: 'AI translation tips' });
+      await tips.fill('Use short verbs.\nKeep product names.');
       for (let index = 0; index < 7; index++) {
         await page.keyboard.press('Tab');
         expect(await modal.evaluate((element) => element.contains(document.activeElement))).toBe(
@@ -387,6 +472,11 @@ test.describe('Shared UI controls smoke', () => {
         );
       }
       await page.keyboard.press('Escape');
+      await expect(modal).toBeHidden();
+      await expect(translate).toBeFocused();
+      await translate.click();
+      await expect(tips).toHaveValue('Use short verbs.\nKeep product names.');
+      await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
       await expect(modal).toBeHidden();
       await expect(translate).toBeFocused();
       await expect(target).toHaveText('Draft before controls');
