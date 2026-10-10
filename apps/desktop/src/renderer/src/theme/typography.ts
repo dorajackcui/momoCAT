@@ -2,14 +2,13 @@ import type { ThemeScope } from './themePreferences';
 
 export const LATIN_FONTS = [
   { id: 'source-serif', label: 'Source Serif 4' },
-  { id: 'source-sans', label: 'Source Sans 3' },
-  { id: 'libron', label: 'Libron' },
+  { id: 'inter', label: 'Inter' },
 ] as const;
 export const CJK_FONTS = [
   { id: 'noto-sans', label: 'Noto Sans SC · 黑体' },
   { id: 'noto-serif', label: 'Noto Serif SC · 宋体' },
 ] as const;
-export const CONTENT_FONT_SIZES = [14, 16] as const;
+export const CONTENT_FONT_SIZES = [14, 15, 16] as const;
 export interface TypographyPreference {
   latin: (typeof LATIN_FONTS)[number]['id'];
   cjk: (typeof CJK_FONTS)[number]['id'];
@@ -28,8 +27,11 @@ export const TYPOGRAPHY_STORAGE_KEYS = {
 function readTypography(scope: ThemeScope): TypographyPreference {
   try {
     const saved = JSON.parse(localStorage.getItem(TYPOGRAPHY_STORAGE_KEYS[scope]) ?? 'null');
+    // Preserve existing reading preferences when retiring Western font choices.
+    const latin =
+      saved?.latin === 'source-sans' || saved?.latin === 'libron' ? 'inter' : saved?.latin;
     return {
-      latin: LATIN_FONTS.find((font) => font.id === saved?.latin)?.id ?? DEFAULT_TYPOGRAPHY.latin,
+      latin: LATIN_FONTS.find((font) => font.id === latin)?.id ?? DEFAULT_TYPOGRAPHY.latin,
       cjk: CJK_FONTS.find((font) => font.id === saved?.cjk)?.id ?? DEFAULT_TYPOGRAPHY.cjk,
       fontSize:
         CONTENT_FONT_SIZES.find((size) => size === saved?.fontSize) ?? DEFAULT_TYPOGRAPHY.fontSize,

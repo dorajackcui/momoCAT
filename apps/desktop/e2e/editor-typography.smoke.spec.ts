@@ -1,9 +1,21 @@
 import { expect, test } from '@playwright/test';
 import { closeEditorSmokeSession, createEditorSmokeSession } from './support/editorSmokeSession';
 
-for (const family of ['Source Serif 4', 'Source Sans 3']) {
+for (const font of [
+  {
+    label: 'Source Serif 4',
+    family: 'Source Serif 4 Variable',
+    reading: 'Source Serif 4 Reading 450',
+    weight: 450,
+  },
+  { label: 'Inter', family: 'Inter', reading: 'Inter', weight: 400 },
+]) {
   test(
-    'renders CAT ' + family + ' at 450 while preserving Chinese and context weights',
+    'renders CAT ' +
+      font.label +
+      ' at ' +
+      font.weight +
+      ' while preserving Chinese and context weights',
     async () => {
       const session = await createEditorSmokeSession();
       try {
@@ -11,25 +23,25 @@ for (const family of ['Source Serif 4', 'Source Sans 3']) {
         await page.getByRole('button', { name: 'Editor appearance' }).click();
         await page
           .getByRole('group', { name: 'Western font' })
-          .getByText(family, { exact: true })
+          .getByText(font.label, { exact: true })
           .click();
         await page.getByRole('button', { name: 'Editor appearance' }).click();
         const row = page.locator('.editor-row').nth(1);
         await row.click();
         const target = row.locator('.cm-content');
         await target.fill('中文 café œuvre — 0123456789');
-        await expect(target).toHaveCSS('font-family', new RegExp(family + ' Reading 450'));
-        // Inherited 400 preserves CJK; the selected Western face clamps its axis to 450.
+        await expect(target).toHaveCSS('font-family', new RegExp(font.reading));
+        // Inherited 400 preserves CJK; only the serif reading face clamps its axis to 450.
         await expect(target).toHaveCSS('font-weight', '400');
-        const widths = await target.evaluate(async (element, family) => {
+        const widths = await target.evaluate(async (element, font) => {
           const style = getComputedStyle(element);
-          for (const font of [
-            '400 16px "' + family + ' Reading 450"',
-            '400 16px "' + family + ' Variable"',
-            '450 16px "' + family + ' Variable"',
+          for (const specification of [
+            '400 16px "' + font.reading + '"',
+            '400 16px "' + font.family + '"',
+            '450 16px "' + font.family + '"',
             '400 16px "Noto Sans SC Variable"',
           ])
-            await document.fonts.load(font, '中文 café œuvre — 0123456789');
+            await document.fonts.load(specification, '中文 café œuvre — 0123456789');
           await document.fonts.ready;
           const context = document.createElement('canvas').getContext('2d')!;
           const latin = 'Hamburgefontsiv café œuvre 0123456789';
@@ -40,14 +52,16 @@ for (const family of ['Source Serif 4', 'Source Sans 3']) {
           const actualFont = style.fontWeight + ' ' + style.fontSize + ' ' + style.fontFamily;
           return {
             actual: measure(actualFont, latin),
-            regular: measure('400 16px "' + family + ' Variable"', latin),
-            medium: measure('450 16px "' + family + ' Variable"', latin),
+            regular: measure('400 16px "' + font.family + '"', latin),
+            medium: measure('450 16px "' + font.family + '"', latin),
             chinese: measure(actualFont, '中文'),
             chineseRegular: measure('400 16px "Noto Sans SC Variable"', '中文'),
           };
-        }, family);
-        expect(widths.actual).toBeCloseTo(widths.medium, 3);
-        expect(widths.actual).not.toBeCloseTo(widths.regular, 3);
+        }, font);
+        const expected = font.weight === 400 ? widths.regular : widths.medium;
+        const other = font.weight === 400 ? widths.medium : widths.regular;
+        expect(widths.actual).toBeCloseTo(expected, 3);
+        expect(widths.actual).not.toBeCloseTo(other, 3);
         expect(widths.chinese).toBeCloseTo(widths.chineseRegular, 3);
         await expect(row.locator('[title="ctx-2"]')).toHaveCSS(
           'font-family',
@@ -61,7 +75,7 @@ for (const family of ['Source Serif 4', 'Source Sans 3']) {
             .getByRole('group', { name: 'Color scheme' })
             .getByText(theme, { exact: true })
             .click();
-          await expect(target).toHaveCSS('font-family', new RegExp(family + ' Reading 450'));
+          await expect(target).toHaveCSS('font-family', new RegExp(font.reading));
         }
       } finally {
         await closeEditorSmokeSession(session);
@@ -70,7 +84,7 @@ for (const family of ['Source Serif 4', 'Source Sans 3']) {
   );
 }
 
-test('loads local fonts and preserves editing while switching scripts and 14/16px sizes', async () => {
+test('loads local fonts and preserves editing while switching scripts and 14/15/16px sizes', async () => {
   const session = await createEditorSmokeSession();
   try {
     const { page, projectName } = session;
@@ -95,24 +109,25 @@ test('loads local fonts and preserves editing while switching scripts and 14/16p
     const western = page.getByRole('group', { name: 'Western font' });
     const size = page.getByRole('group', { name: 'Font size' });
     await expect(size.getByRole('radio', { name: '16 px' })).toBeChecked();
-    await expect(western.getByRole('radio')).toHaveCount(3);
+    await expect(size.getByRole('radio')).toHaveCount(3);
+    await expect(western.getByRole('radio')).toHaveCount(2);
     await expect(
       page.getByRole('dialog', { name: 'Editor appearance' }).getByRole('group'),
     ).toHaveCount(4);
     for (const choice of [
       {
         cjk: 'noto-sans',
-        latin: 'libron',
-        family: 'Libron',
+        latin: 'inter',
+        family: 'Inter',
         chineseFamily: 'Noto Sans SC',
         fontSize: '16',
       },
       {
         cjk: 'noto-serif',
-        latin: 'source-sans',
-        family: 'Source Sans 3 Variable',
+        latin: 'inter',
+        family: 'Inter',
         chineseFamily: 'Noto Serif SC',
-        fontSize: '16',
+        fontSize: '15',
       },
       {
         cjk: 'noto-sans',
@@ -136,11 +151,11 @@ test('loads local fonts and preserves editing while switching scripts and 14/16p
           '中文翻译',
         );
         const stylesLoaded =
-          family !== 'Libron' ||
+          family !== 'Inter' ||
           (
             await Promise.all(
               ['400', '700', 'italic 400', 'italic 700'].map((style) =>
-                document.fonts.load(`${style} 16px "Libron"`, 'café œuvre'),
+                document.fonts.load(`${style} 16px "Inter"`, 'café œuvre'),
               ),
             )
           ).every((faces) => faces.length > 0 && faces.every((face) => face.status === 'loaded'));
@@ -208,13 +223,13 @@ test('loads local fonts and preserves editing while switching scripts and 14/16p
         animations: 'disabled',
       });
     }
-    await western.getByText('Libron', { exact: true }).click();
+    await western.getByText('Inter', { exact: true }).click();
     await page.getByRole('button', { name: 'Back to Project' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-content-latin', 'source-serif');
     await expect(page.locator('html')).toHaveAttribute('data-content-size', '16');
     await page.getByText('cm6-smoke-fixture.xlsx', { exact: true }).click();
     await button.click();
-    await expect(western.getByRole('radio', { name: 'Libron' })).toBeChecked();
+    await expect(western.getByRole('radio', { name: 'Inter' })).toBeChecked();
     await expect(size.getByRole('radio', { name: '14 px' })).toBeChecked();
     await page.reload();
     await page
@@ -223,7 +238,7 @@ test('loads local fonts and preserves editing while switching scripts and 14/16p
       .click();
     await page.getByText('cm6-smoke-fixture.xlsx', { exact: true }).click();
     await button.click();
-    await expect(western.getByRole('radio', { name: 'Libron' })).toBeChecked();
+    await expect(western.getByRole('radio', { name: 'Inter' })).toBeChecked();
     await expect(size.getByRole('radio', { name: '14 px' })).toBeChecked();
     expect(remoteFonts).toEqual([]);
   } finally {

@@ -77,8 +77,8 @@ test('shares control and typography tokens across workspace and CAT with indepen
       .click();
     for (const [group, label] of [
       ['Chinese font', 'Noto Serif SC · 宋体'],
-      ['Western font', 'Source Sans 3'],
-      ['Font size', '14 px'],
+      ['Western font', 'Inter'],
+      ['Font size', '15 px'],
     ])
       await page.getByRole('group', { name: group }).getByText(label, { exact: true }).click();
     await page.evaluate(() =>
@@ -104,11 +104,11 @@ test('shares control and typography tokens across workspace and CAT with indepen
     await page.getByRole('button', { name: 'Translation memory', exact: true }).click();
     await page.getByRole('button', { name: 'Preview Typography preview', exact: true }).click();
     const source = page.getByRole('cell', { name: 'Reading text', exact: true });
-    await expect(source).toHaveCSS('font-size', '14px');
-    await expect(source).toHaveCSS('font-family', /Source Sans 3 Variable.*Noto Serif SC Variable/);
+    await expect(source).toHaveCSS('font-size', '15px');
+    await expect(source).toHaveCSS('font-family', /Inter.*Noto Serif SC Variable/);
     await expect(page.getByRole('cell', { name: '阅读正文', exact: true })).toHaveCSS(
       'font-size',
-      '14px',
+      '15px',
     );
     await page
       .getByRole('navigation', { name: 'Projects', exact: true })
