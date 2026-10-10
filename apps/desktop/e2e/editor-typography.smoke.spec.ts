@@ -95,11 +95,18 @@ test('loads local fonts and preserves editing while switching scripts and 14/16p
     const western = page.getByRole('group', { name: 'Western font' });
     const size = page.getByRole('group', { name: 'Font size' });
     await expect(size.getByRole('radio', { name: '16 px' })).toBeChecked();
-    await expect(western.getByRole('radio')).toHaveCount(2);
+    await expect(western.getByRole('radio')).toHaveCount(3);
     await expect(
       page.getByRole('dialog', { name: 'Editor appearance' }).getByRole('group'),
     ).toHaveCount(4);
     for (const choice of [
+      {
+        cjk: 'noto-sans',
+        latin: 'libron',
+        family: 'Libron',
+        chineseFamily: 'Noto Sans SC',
+        fontSize: '16',
+      },
       {
         cjk: 'noto-serif',
         latin: 'source-sans',
@@ -128,8 +135,17 @@ test('loads local fonts and preserves editing while switching scripts and 14/16p
           `400 16px "${getComputedStyle(document.documentElement).getPropertyValue('--font-content-cjk').trim().replaceAll("'", '')}"`,
           '中文翻译',
         );
+        const stylesLoaded =
+          family !== 'Libron' ||
+          (
+            await Promise.all(
+              ['400', '700', 'italic 400', 'italic 700'].map((style) =>
+                document.fonts.load(`${style} 16px "Libron"`, 'café œuvre'),
+              ),
+            )
+          ).every((faces) => faces.length > 0 && faces.every((face) => face.status === 'loaded'));
         await document.fonts.ready;
-        return latin.length > 0 && cjk.length > 0;
+        return latin.length > 0 && cjk.length > 0 && stylesLoaded;
       }, choice.family);
       expect(loaded).toBe(true);
       const { root } = await cdp.send('DOM.getDocument');
@@ -192,11 +208,13 @@ test('loads local fonts and preserves editing while switching scripts and 14/16p
         animations: 'disabled',
       });
     }
+    await western.getByText('Libron', { exact: true }).click();
     await page.getByRole('button', { name: 'Back to Project' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-content-latin', 'source-serif');
     await expect(page.locator('html')).toHaveAttribute('data-content-size', '16');
     await page.getByText('cm6-smoke-fixture.xlsx', { exact: true }).click();
     await button.click();
-    await expect(western.getByRole('radio', { name: 'Source Serif 4' })).toBeChecked();
+    await expect(western.getByRole('radio', { name: 'Libron' })).toBeChecked();
     await expect(size.getByRole('radio', { name: '14 px' })).toBeChecked();
     await page.reload();
     await page
@@ -205,6 +223,7 @@ test('loads local fonts and preserves editing while switching scripts and 14/16p
       .click();
     await page.getByText('cm6-smoke-fixture.xlsx', { exact: true }).click();
     await button.click();
+    await expect(western.getByRole('radio', { name: 'Libron' })).toBeChecked();
     await expect(size.getByRole('radio', { name: '14 px' })).toBeChecked();
     expect(remoteFonts).toEqual([]);
   } finally {

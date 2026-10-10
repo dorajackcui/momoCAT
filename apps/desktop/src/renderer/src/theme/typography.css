@@ -4,6 +4,36 @@
 @import '@fontsource-variable/noto-sans-sc';
 @import '@fontsource-variable/noto-serif-sc';
 
+/* Unmodified Libron v0.31 webfonts; notice in public/licenses/libron.txt. */
+@font-face {
+  font-family: 'Libron';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('../assets/fonts/libron/Libron-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Libron';
+  font-style: italic;
+  font-display: swap;
+  font-weight: 400;
+  src: url('../assets/fonts/libron/Libron-Italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Libron';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url('../assets/fonts/libron/Libron-Bold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Libron';
+  font-style: italic;
+  font-display: swap;
+  font-weight: 700;
+  src: url('../assets/fonts/libron/Libron-BoldItalic.woff2') format('woff2');
+}
+
 /* Fixed face weight raises Western glyphs to 450 while inherited
    weight stays 400 for CJK. Use the existing weight-only font assets. */
 /* source-serif-4-cyrillic-ext-wght-normal */
@@ -166,6 +196,9 @@
 }
 [data-content-latin='source-serif'] {
   --font-content-latin: 'Source Serif 4 Variable';
+}
+[data-content-latin='libron'] {
+  --font-content-latin: 'Libron';
 }
 [data-typography-scope='editor'][data-content-latin='source-sans'] {
   --font-content-latin: 'Source Sans 3 Reading 450';

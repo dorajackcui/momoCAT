@@ -3,6 +3,7 @@ import type { ThemeScope } from './themePreferences';
 export const LATIN_FONTS = [
   { id: 'source-serif', label: 'Source Serif 4' },
   { id: 'source-sans', label: 'Source Sans 3' },
+  { id: 'libron', label: 'Libron' },
 ] as const;
 export const CJK_FONTS = [
   { id: 'noto-sans', label: 'Noto Sans SC · 黑体' },

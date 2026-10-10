@@ -16,35 +16,41 @@ const example = (scope: ThemeScope) => (
   </ThemeProvider>
 );
 
-it('keeps scripts, palettes and workspace preferences independent across remounts', async () => {
-  const { rerender, unmount } = render(example('editor'));
-  fireEvent.click(screen.getByRole('button', { name: 'Appearance' }));
-  expect(await screen.findByRole('radio', { name: 'Noto Sans SC · 黑体' })).toBeChecked();
-  expect(screen.getByRole('radio', { name: 'Source Serif 4' })).toBeChecked();
-  expect(screen.getByRole('radio', { name: '16 px' })).toBeChecked();
-  expect(document.documentElement).toHaveAttribute('data-typography-scope', 'editor');
-  expect(screen.queryAllByRole('combobox')).toHaveLength(0);
-  expect(screen.getAllByRole('group')).toHaveLength(4);
-  fireEvent.click(screen.getByRole('radio', { name: 'Noto Serif SC · 宋体' }));
-  fireEvent.click(screen.getByRole('radio', { name: 'Source Sans 3' }));
-  fireEvent.click(screen.getByRole('radio', { name: '14 px' }));
-  fireEvent.click(screen.getByRole('radio', { name: 'Nord' }));
-  expect(document.documentElement).toHaveAttribute('data-content-latin', 'source-sans');
-  expect(document.documentElement).toHaveAttribute('data-content-cjk', 'noto-serif');
-  expect(document.documentElement).toHaveAttribute('data-content-size', '14');
-  rerender(example('workspace'));
-  expect(document.documentElement).toHaveAttribute('data-typography-scope', 'workspace');
-  expect(document.documentElement).toHaveAttribute('data-content-cjk', 'noto-sans');
-  expect(document.documentElement).toHaveAttribute('data-content-size', '16');
-  unmount();
-  expect(document.documentElement).not.toHaveAttribute('data-typography-scope');
-  expect(document.documentElement).not.toHaveAttribute('data-content-latin');
-  expect(document.documentElement).not.toHaveAttribute('data-content-size');
-  render(example('editor'));
-  expect(document.documentElement).toHaveAttribute('data-content-latin', 'source-sans');
-  expect(document.documentElement).toHaveAttribute('data-content-cjk', 'noto-serif');
-  expect(document.documentElement).toHaveAttribute('data-content-size', '14');
-});
+it.each([
+  { label: 'Source Sans 3', id: 'source-sans' },
+  { label: 'Libron', id: 'libron' },
+])(
+  'keeps $label, scripts, palettes and workspace preferences independent across remounts',
+  async (font) => {
+    const { rerender, unmount } = render(example('editor'));
+    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }));
+    expect(await screen.findByRole('radio', { name: 'Noto Sans SC · 黑体' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Source Serif 4' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: '16 px' })).toBeChecked();
+    expect(document.documentElement).toHaveAttribute('data-typography-scope', 'editor');
+    expect(screen.queryAllByRole('combobox')).toHaveLength(0);
+    expect(screen.getAllByRole('group')).toHaveLength(4);
+    fireEvent.click(screen.getByRole('radio', { name: 'Noto Serif SC · 宋体' }));
+    fireEvent.click(screen.getByRole('radio', { name: font.label }));
+    fireEvent.click(screen.getByRole('radio', { name: '14 px' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Nord' }));
+    expect(document.documentElement).toHaveAttribute('data-content-latin', font.id);
+    expect(document.documentElement).toHaveAttribute('data-content-cjk', 'noto-serif');
+    expect(document.documentElement).toHaveAttribute('data-content-size', '14');
+    rerender(example('workspace'));
+    expect(document.documentElement).toHaveAttribute('data-typography-scope', 'workspace');
+    expect(document.documentElement).toHaveAttribute('data-content-cjk', 'noto-sans');
+    expect(document.documentElement).toHaveAttribute('data-content-size', '16');
+    unmount();
+    expect(document.documentElement).not.toHaveAttribute('data-typography-scope');
+    expect(document.documentElement).not.toHaveAttribute('data-content-latin');
+    expect(document.documentElement).not.toHaveAttribute('data-content-size');
+    render(example('editor'));
+    expect(document.documentElement).toHaveAttribute('data-content-latin', font.id);
+    expect(document.documentElement).toHaveAttribute('data-content-cjk', 'noto-serif');
+    expect(document.documentElement).toHaveAttribute('data-content-size', '14');
+  },
+);
 
 it.each(['{invalid', JSON.stringify({ latin: 'missing', cjk: 'missing', fontSize: 18 })])(
   'recovers invalid font preferences: %s',
