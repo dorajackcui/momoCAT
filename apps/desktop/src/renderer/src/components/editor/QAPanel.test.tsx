@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Segment } from '@cat/core/models';
 import type { FileQaIssueRecord } from '@cat/core/project';
 import { createEditorSegmentStore } from '../../hooks/editor/editorSegmentStore';
-import { QAPanel, type QAPanelProps } from './QAPanel';
+import { QAPanel, QA_DISPLAY_STORAGE_KEY, type QAPanelProps } from './QAPanel';
+
+beforeEach(() => localStorage.clear());
 
 function segment(source: string, target: string): Segment {
   return {
@@ -43,6 +45,162 @@ const term: FileQaIssueRecord = {
   message: '“Open” expects “打开” (Main TB).',
   origins: ['Main TB'],
 };
+
+const number: FileQaIssueRecord = {
+  ...term,
+  ruleId: 'number',
+  groupId: undefined,
+  groupLabel: undefined,
+  message: 'Missing: 12; Extra: 13',
+};
+
+describe('QA display modes', () => {
+  it('lists each affected row once in file order and selects row, finding and reference scopes', () => {
+    const reference = { segmentId: 'reference', row: 2 };
+    const conflict = { ...term, ruleId: 'term-conflict', message: 'Expected 打开, found 开启.' };
+    const input = props([
+      { ...term, references: [reference] },
+      number,
+      conflict,
+      { ...number, segmentId: 'b', row: 3, message: 'Missing: 20; Extra: 2' },
+    ]);
+    input.segmentStore = createEditorSegmentStore([
+      segment('Open', '开启'),
+      { ...segment('Count 20', '数量 2'), segmentId: 'b' },
+    ]);
+    render(<QAPanel {...input} />);
+    expect(screen.getByRole('button', { name: 'Show QA by row' })).toHaveAttribute(
+      'title',
+      'By type · Switch to By row',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Show QA by row' }));
+    expect(input.onRun).not.toHaveBeenCalled();
+    expect(input.onFilter).not.toHaveBeenCalled();
+    expect(input.onLocate).not.toHaveBeenCalled();
+    expect(
+      screen.getAllByRole('region', { name: /^Row / }).map((row) => row.getAttribute('aria-label')),
+    ).toEqual(['Row 3', 'Row 8']);
+    expect(screen.getByText('4 findings · 2 rows')).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Row 2' })).not.toBeInTheDocument();
+    const row = within(screen.getByRole('region', { name: 'Row 8' }));
+    expect(row.getByRole('button', { name: 'Row 8 · 3 findings' })).toHaveTextContent('Row 83');
+    expect(row.getByText('Numbers')).toBeVisible();
+    expect(row.getByText('Terminology')).toBeVisible();
+    expect(row.queryByText('Target', { exact: true })).not.toBeInTheDocument();
+    expect(row.queryByText('开启', { exact: true })).not.toBeInTheDocument();
+    expect(row.queryByText('Open → 打开', { exact: true })).not.toBeInTheDocument();
+    expect(row.getByRole('button', { name: term.message })).toHaveAttribute(
+      'title',
+      'Open → 打开\n' + term.message + '\nSources: Main TB',
+    );
+    fireEvent.click(row.getByRole('button', { name: 'Row 8 · 3 findings' }));
+    expect(input.onFilter).toHaveBeenLastCalledWith(['a'], 'Row 8', {
+      ruleIds: ['tb-term-missing', 'number', 'term-conflict'],
+    });
+    expect(input.onLocate).toHaveBeenLastCalledWith('a');
+    fireEvent.click(row.getByRole('button', { name: conflict.message }));
+    expect(input.onFilter).toHaveBeenLastCalledWith(['a'], 'Row 8 › Terminology › Open → 打开', {
+      ruleIds: ['term-conflict'],
+      groupId: 'term-open',
+    });
+    fireEvent.click(row.getByRole('button', { name: 'Reference row 2' }));
+    expect(input.onFilter).toHaveBeenLastCalledWith(
+      ['a', 'reference'],
+      'Row 8 › Terminology › Open → 打开',
+    );
+    expect(input.onLocate).toHaveBeenLastCalledWith('reference');
+  });
+
+  it('preserves independent category and row collapse states when switching modes', () => {
+    const input = props([term, number]);
+    render(<QAPanel {...input} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Terminology' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show QA by row' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Row 8' }));
+    expect(screen.queryByRole('button', { name: number.message })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show QA by type' }));
+    expect(screen.getByRole('button', { name: 'Expand Terminology' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Show QA by row' }));
+    expect(screen.getByRole('button', { name: 'Expand Row 8' })).toBeVisible();
+    expect(input.onFilter).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Row 8 · 2 findings' }));
+    expect(input.onLocate).toHaveBeenCalledWith('a');
+  });
+
+  it('retains diagnostic findings after edits without repeating the target text', () => {
+    const input = props([term, number]);
+    const { rerender } = render(<QAPanel {...input} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show QA by row' }));
+    act(() =>
+      (input.segmentStore as ReturnType<typeof createEditorSegmentStore>).updateSegment('a', () =>
+        segment('Open', '打开'),
+      ),
+    );
+    rerender(<QAPanel {...input} stale />);
+    expect(screen.queryByText('打开', { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText('Target', { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: number.message })).toBeVisible();
+    expect(screen.getByText('2 findings · 1 row')).toBeVisible();
+    expect(screen.getByText('Changed · Recheck needed')).toBeVisible();
+    act(() =>
+      (input.segmentStore as ReturnType<typeof createEditorSegmentStore>).updateSegment('a', () =>
+        segment('Open', ''),
+      ),
+    );
+    expect(screen.queryByText('[Empty target]')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: number.message })).toBeVisible();
+    expect(input.onRun).not.toHaveBeenCalled();
+  });
+
+  it('restores the chosen mode on remount and allows switching while QA runs', () => {
+    const input = props([term]);
+    const { unmount } = render(<QAPanel {...input} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show QA by row' }));
+    unmount();
+    render(<QAPanel {...input} running />);
+    expect(screen.getByRole('button', { name: 'Show QA by type' })).toHaveAttribute(
+      'title',
+      'By row · Switch to By type',
+    );
+    expect(screen.getByRole('region', { name: 'Row 8' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Show QA by type' }));
+    expect(screen.getByRole('region', { name: 'Terminology' })).toBeVisible();
+    expect(input.onRun).not.toHaveBeenCalled();
+    expect(input.onFilter).not.toHaveBeenCalled();
+  });
+
+  it('uses the default type mode for an unknown saved preference', () => {
+    localStorage.setItem(QA_DISPLAY_STORAGE_KEY, 'unknown');
+    render(<QAPanel {...props([term])} />);
+    expect(screen.getByRole('button', { name: 'Show QA by row' })).toHaveAttribute(
+      'title',
+      'By type · Switch to By row',
+    );
+  });
+
+  it('still switches modes when preference storage is unavailable', () => {
+    const read = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('full');
+    });
+    try {
+      const input = props([term]);
+      render(<QAPanel {...input} />);
+      expect(screen.getByRole('button', { name: 'Show QA by row' })).toHaveAttribute(
+        'title',
+        'By type · Switch to By row',
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Show QA by row' }));
+      expect(screen.getByRole('region', { name: 'Row 8' })).toBeVisible();
+      expect(input.onRun).not.toHaveBeenCalled();
+    } finally {
+      read.mockRestore();
+      write.mockRestore();
+    }
+  });
+});
 
 describe('QA result list', () => {
   it('collapses only the category and keeps its filter and numeric counts available', () => {

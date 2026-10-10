@@ -3,20 +3,24 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ThemeProvider } from './ThemeProvider';
 import { TypographyProvider } from './TypographyProvider';
-import { AppearancePicker } from '../components/ui/AppearancePicker';
-import { readTypographyPreferences, TYPOGRAPHY_STORAGE_KEYS } from './typography';
+import { AppearanceControls, AppearancePicker } from '../components/ui/AppearancePicker';
+import { readTypography, TYPOGRAPHY_STORAGE_KEY } from './typography';
 import type { ThemeScope } from './themePreferences';
 
 beforeEach(() => localStorage.clear());
 const example = (scope: ThemeScope) => (
   <ThemeProvider scope={scope}>
     <TypographyProvider scope={scope}>
-      <AppearancePicker />
+      {scope === 'editor' ? <AppearancePicker /> : <AppearanceControls layout="settings" />}
     </TypographyProvider>
   </ThemeProvider>
 );
 
-it('keeps Inter, scripts, palettes and workspace preferences independent across remounts', async () => {
+it('restores CAT fonts across workspace navigation and remounts while ignoring retired workspace fonts', async () => {
+  localStorage.setItem(
+    'momocat.workspace.typography',
+    JSON.stringify({ latin: 'inter', cjk: 'noto-serif', fontSize: 14 }),
+  );
   const { rerender, unmount } = render(example('editor'));
   fireEvent.click(screen.getByRole('button', { name: 'Appearance' }));
   expect(await screen.findByRole('radio', { name: 'Noto Sans SC · 黑体' })).toBeChecked();
@@ -33,9 +37,14 @@ it('keeps Inter, scripts, palettes and workspace preferences independent across 
   expect(document.documentElement).toHaveAttribute('data-content-cjk', 'noto-serif');
   expect(document.documentElement).toHaveAttribute('data-content-size', '15');
   rerender(example('workspace'));
-  expect(document.documentElement).toHaveAttribute('data-typography-scope', 'workspace');
-  expect(document.documentElement).toHaveAttribute('data-content-cjk', 'noto-sans');
-  expect(document.documentElement).toHaveAttribute('data-content-size', '16');
+  expect(document.documentElement).not.toHaveAttribute('data-typography-scope');
+  expect(document.documentElement).not.toHaveAttribute('data-content-latin');
+  expect(document.documentElement).not.toHaveAttribute('data-content-cjk');
+  expect(document.documentElement).not.toHaveAttribute('data-content-size');
+  expect(screen.getByRole('group', { name: 'Color scheme' })).toBeVisible();
+  expect(screen.queryByRole('heading', { name: 'Fonts' })).not.toBeInTheDocument();
+  for (const name of ['Chinese font', 'Western font', 'Font size'])
+    expect(screen.queryByRole('group', { name })).not.toBeInTheDocument();
   unmount();
   expect(document.documentElement).not.toHaveAttribute('data-typography-scope');
   expect(document.documentElement).not.toHaveAttribute('data-content-latin');
@@ -49,7 +58,7 @@ it('keeps Inter, scripts, palettes and workspace preferences independent across 
 it.each(['{invalid', JSON.stringify({ latin: 'missing', cjk: 'missing', fontSize: 18 })])(
   'recovers invalid font preferences: %s',
   (saved) => {
-    localStorage.setItem(TYPOGRAPHY_STORAGE_KEYS.editor, saved);
+    localStorage.setItem(TYPOGRAPHY_STORAGE_KEY, saved);
     render(example('editor'));
     expect(document.documentElement).toHaveAttribute('data-content-latin', 'source-serif');
     expect(document.documentElement).toHaveAttribute('data-content-cjk', 'noto-sans');
@@ -59,7 +68,7 @@ it.each(['{invalid', JSON.stringify({ latin: 'missing', cjk: 'missing', fontSize
 
 it('restores older choices with the default size and replaces the retired Western font', () => {
   localStorage.setItem(
-    TYPOGRAPHY_STORAGE_KEYS.editor,
+    TYPOGRAPHY_STORAGE_KEY,
     JSON.stringify({ latin: 'noto-serif', cjk: 'noto-serif' }),
   );
   render(example('editor'));
@@ -68,19 +77,12 @@ it('restores older choices with the default size and replaces the retired Wester
   expect(document.documentElement).toHaveAttribute('data-content-size', '16');
 });
 
-it.each(['source-sans', 'libron'])('migrates saved %s choices to Inter in both scopes', (latin) => {
+it.each(['source-sans', 'libron'])('migrates saved CAT %s choices to Inter', (latin) => {
   localStorage.setItem(
-    TYPOGRAPHY_STORAGE_KEYS.editor,
+    TYPOGRAPHY_STORAGE_KEY,
     JSON.stringify({ latin, cjk: 'noto-serif', fontSize: 14 }),
   );
-  localStorage.setItem(
-    TYPOGRAPHY_STORAGE_KEYS.workspace,
-    JSON.stringify({ latin, cjk: 'noto-sans', fontSize: 16 }),
-  );
-  expect(readTypographyPreferences()).toEqual({
-    editor: { latin: 'inter', cjk: 'noto-serif', fontSize: 14 },
-    workspace: { latin: 'inter', cjk: 'noto-sans', fontSize: 16 },
-  });
+  expect(readTypography()).toEqual({ latin: 'inter', cjk: 'noto-serif', fontSize: 14 });
 });
 
 it('allows font changes when storage fails', async () => {

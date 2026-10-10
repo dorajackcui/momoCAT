@@ -48,7 +48,7 @@ export function AppearancePicker({ label = 'Appearance' }: { label?: string }) {
 }
 
 export function AppearanceControls({ layout = 'compact' }: { layout?: 'compact' | 'settings' }) {
-  const { typography, setTypography } = useTypography();
+  const { scope, typography, setTypography } = useTypography();
   const { theme, setTheme } = useTheme();
   const labelClass =
     layout === 'settings' ? 'text-sm font-medium text-text' : 'text-xs text-text-muted';
@@ -77,44 +77,46 @@ export function AppearanceControls({ layout = 'compact' }: { layout?: 'compact' 
           }))}
         />
       </div>
-      <div className={layout === 'settings' ? 'workspace-config-section space-y-4' : 'space-y-3'}>
-        {layout === 'settings' && <h3 className="workspace-section-heading">Fonts</h3>}
-        <div className={groupClass}>
-          <p className={labelClass}>Chinese font</p>
-          <ChoiceGroup
-            label="Chinese font"
-            value={typography.cjk}
-            onValueChange={(cjk) => setTypography({ ...typography, cjk })}
-            options={CJK_FONTS.map((font) => ({ value: font.id, label: font.label }))}
-          />
+      {scope === 'editor' && (
+        <div className={layout === 'settings' ? 'workspace-config-section space-y-4' : 'space-y-3'}>
+          {layout === 'settings' && <h3 className="workspace-section-heading">Fonts</h3>}
+          <div className={groupClass}>
+            <p className={labelClass}>Chinese font</p>
+            <ChoiceGroup
+              label="Chinese font"
+              value={typography.cjk}
+              onValueChange={(cjk) => setTypography({ ...typography, cjk })}
+              options={CJK_FONTS.map((font) => ({ value: font.id, label: font.label }))}
+            />
+          </div>
+          <div className={groupClass}>
+            <p className={labelClass}>Western font</p>
+            <ChoiceGroup
+              label="Western font"
+              value={typography.latin}
+              onValueChange={(latin) => setTypography({ ...typography, latin })}
+              options={LATIN_FONTS.map((font) => ({ value: font.id, label: font.label }))}
+            />
+          </div>
+          <div className={groupClass}>
+            <p className={labelClass}>Font size</p>
+            <ChoiceGroup
+              label="Font size"
+              value={String(typography.fontSize)}
+              onValueChange={(size) =>
+                setTypography({
+                  ...typography,
+                  fontSize: Number(size) as TypographyPreference['fontSize'],
+                })
+              }
+              options={CONTENT_FONT_SIZES.map((size) => ({
+                value: String(size),
+                label: `${size} px`,
+              }))}
+            />
+          </div>
         </div>
-        <div className={groupClass}>
-          <p className={labelClass}>Western font</p>
-          <ChoiceGroup
-            label="Western font"
-            value={typography.latin}
-            onValueChange={(latin) => setTypography({ ...typography, latin })}
-            options={LATIN_FONTS.map((font) => ({ value: font.id, label: font.label }))}
-          />
-        </div>
-        <div className={groupClass}>
-          <p className={labelClass}>Font size</p>
-          <ChoiceGroup
-            label="Font size"
-            value={String(typography.fontSize)}
-            onValueChange={(size) =>
-              setTypography({
-                ...typography,
-                fontSize: Number(size) as TypographyPreference['fontSize'],
-              })
-            }
-            options={CONTENT_FONT_SIZES.map((size) => ({
-              value: String(size),
-              label: `${size} px`,
-            }))}
-          />
-        </div>
-      </div>
+      )}
     </div>
   );
 }

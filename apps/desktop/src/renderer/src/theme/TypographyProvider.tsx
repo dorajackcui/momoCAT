@@ -8,9 +8,10 @@ import {
   type ReactNode,
 } from 'react';
 import type { ThemeScope } from './themePreferences';
-import { readTypographyPreferences, saveTypography, type TypographyPreference } from './typography';
+import { readTypography, saveTypography, type TypographyPreference } from './typography';
 
 interface ActiveTypography {
+  scope: ThemeScope;
   typography: TypographyPreference;
   setTypography: (next: TypographyPreference) => void;
 }
@@ -23,9 +24,9 @@ export function TypographyProvider({
   scope: ThemeScope;
   children: ReactNode;
 }) {
-  const [preferences, setPreferences] = useState(readTypographyPreferences);
-  const typography = preferences[scope];
+  const [typography, setPreference] = useState(readTypography);
   useLayoutEffect(() => {
+    if (scope !== 'editor') return;
     const root = document.documentElement;
     const attributes = {
       'data-content-latin': typography.latin,
@@ -43,12 +44,16 @@ export function TypographyProvider({
   }, [scope, typography]);
   const setTypography = useCallback(
     (next: TypographyPreference) => {
-      setPreferences((current) => ({ ...current, [scope]: next }));
-      saveTypography(scope, next);
+      if (scope !== 'editor') return;
+      setPreference(next);
+      saveTypography(next);
     },
     [scope],
   );
-  const value = useMemo(() => ({ typography, setTypography }), [typography, setTypography]);
+  const value = useMemo(
+    () => ({ scope, typography, setTypography }),
+    [scope, typography, setTypography],
+  );
   return <TypographyContext.Provider value={value}>{children}</TypographyContext.Provider>;
 }
 export function useTypography(): ActiveTypography {

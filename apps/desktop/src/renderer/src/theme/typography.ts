@@ -1,5 +1,3 @@
-import type { ThemeScope } from './themePreferences';
-
 export const LATIN_FONTS = [
   { id: 'source-serif', label: 'Source Serif 4' },
   { id: 'inter', label: 'Inter' },
@@ -19,14 +17,11 @@ export const DEFAULT_TYPOGRAPHY: TypographyPreference = {
   cjk: 'noto-sans',
   fontSize: 16,
 };
-export const TYPOGRAPHY_STORAGE_KEYS = {
-  workspace: 'momocat.workspace.typography',
-  editor: 'momocat.editor.typography',
-} as const;
+export const TYPOGRAPHY_STORAGE_KEY = 'momocat.editor.typography';
 
-function readTypography(scope: ThemeScope): TypographyPreference {
+export function readTypography(): TypographyPreference {
   try {
-    const saved = JSON.parse(localStorage.getItem(TYPOGRAPHY_STORAGE_KEYS[scope]) ?? 'null');
+    const saved = JSON.parse(localStorage.getItem(TYPOGRAPHY_STORAGE_KEY) ?? 'null');
     // Preserve existing reading preferences when retiring Western font choices.
     const latin =
       saved?.latin === 'source-sans' || saved?.latin === 'libron' ? 'inter' : saved?.latin;
@@ -40,12 +35,9 @@ function readTypography(scope: ThemeScope): TypographyPreference {
     return { ...DEFAULT_TYPOGRAPHY };
   }
 }
-export function readTypographyPreferences(): Record<ThemeScope, TypographyPreference> {
-  return { editor: readTypography('editor'), workspace: readTypography('workspace') };
-}
-export function saveTypography(scope: ThemeScope, preference: TypographyPreference): void {
+export function saveTypography(preference: TypographyPreference): void {
   try {
-    localStorage.setItem(TYPOGRAPHY_STORAGE_KEYS[scope], JSON.stringify(preference));
+    localStorage.setItem(TYPOGRAPHY_STORAGE_KEY, JSON.stringify(preference));
   } catch {
     /* Storage failures must not block the current choice. */
   }

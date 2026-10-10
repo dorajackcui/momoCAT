@@ -343,6 +343,24 @@ for (const problemCount of [3, 501]) {
         });
       await group.click();
       await expect(page.locator('.editor-source-text').first()).toHaveText('Artwork in sentence 0');
+      await page.getByRole('button', { name: 'Show QA by row', exact: true }).click();
+      await expect(page.getByRole('region', { name: 'Row 42', exact: true })).toBeVisible();
+      await expect(
+        page
+          .getByRole('region', { name: 'Row 42', exact: true })
+          .getByRole('button', { name: 'Reference row 2', exact: true }),
+      ).toBeVisible();
+      const rowsViewport = page.locator('[aria-label="QA results by row"]');
+      await rowsViewport.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+      });
+      const lastRow = 41 + problemCount;
+      const last = page.getByRole('region', { name: 'Row ' + lastRow, exact: true });
+      await expect(last).toBeVisible();
+      await last.getByRole('button', { name: 'Row ' + lastRow + ' · 1 finding' }).click();
+      await expect(page.locator('.editor-source-text')).toHaveText(
+        'Artwork in sentence ' + (problemCount - 1),
+      );
     } finally {
       await closeEditorSmokeSession(session);
     }

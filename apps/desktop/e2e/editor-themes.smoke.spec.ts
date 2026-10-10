@@ -23,7 +23,7 @@ function contrast(a: string, b: string): number {
   return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
 }
 
-test('shares control and typography tokens across workspace and CAT with independent appearance choices', async () => {
+test('keeps workspace previews in interface fonts and CAT fonts independent with shared appearance tokens', async () => {
   const session = await createEditorSmokeSession();
   try {
     const { page, projectName } = session;
@@ -66,6 +66,12 @@ test('shares control and typography tokens across workspace and CAT with indepen
       .getByRole('group', { name: 'Color scheme' })
       .getByText('Nord', { exact: true })
       .click();
+    for (const [group, label] of [
+      ['Chinese font', 'Noto Serif SC · 宋体'],
+      ['Western font', 'Inter'],
+      ['Font size', '15 px'],
+    ])
+      await page.getByRole('group', { name: group }).getByText(label, { exact: true }).click();
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Back to Project', exact: true }).click();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -75,15 +81,18 @@ test('shares control and typography tokens across workspace and CAT with indepen
       .getByRole('group', { name: 'Color scheme' })
       .getByText('Classic', { exact: true })
       .click();
-    for (const [group, label] of [
-      ['Chinese font', 'Noto Serif SC · 宋体'],
-      ['Western font', 'Inter'],
-      ['Font size', '15 px'],
-    ])
-      await page.getByRole('group', { name: group }).getByText(label, { exact: true }).click();
-    await page.evaluate(() =>
-      (window as unknown as { api: DesktopApi }).api.createTM('Typography preview', 'en', 'zh'),
-    );
+    await expect(page.getByRole('heading', { name: 'Fonts' })).toHaveCount(0);
+    for (const name of ['Chinese font', 'Western font', 'Font size'])
+      await expect(page.getByRole('group', { name })).toHaveCount(0);
+    await page.evaluate(async () => {
+      localStorage.setItem(
+        'momocat.workspace.typography',
+        JSON.stringify({ latin: 'inter', cjk: 'noto-serif', fontSize: 15 }),
+      );
+      const api = (window as unknown as { api: DesktopApi }).api;
+      await api.createTM('Typography preview', 'en', 'zh');
+      await api.createTB('Terminology preview', 'en', 'zh');
+    });
     await session.electronApp.evaluate(({ ipcMain }, channel) => {
       ipcMain.removeHandler(channel);
       ipcMain.handle(channel, (_event, tmId) => ({
@@ -99,23 +108,49 @@ test('shares control and typography tokens across workspace and CAT with indepen
         ],
       }));
     }, IPC_CHANNELS.tm.preview);
+    await session.electronApp.evaluate(({ ipcMain }, channel) => {
+      ipcMain.removeHandler(channel);
+      ipcMain.handle(channel, (_event, tbId) => ({
+        tbId,
+        rows: [
+          {
+            id: 'term-preview',
+            sourceTerm: 'Preview term',
+            targetTerm: '预览术语',
+            note: 'Term note',
+            usageCount: 1,
+          },
+        ],
+      }));
+    }, IPC_CHANNELS.tb.preview);
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-color-theme', 'classic');
     await page.getByRole('button', { name: 'Translation memory', exact: true }).click();
     await page.getByRole('button', { name: 'Preview Typography preview', exact: true }).click();
     const source = page.getByRole('cell', { name: 'Reading text', exact: true });
-    await expect(source).toHaveCSS('font-size', '15px');
-    await expect(source).toHaveCSS('font-family', /Inter.*Noto Serif SC Variable/);
-    await expect(page.getByRole('cell', { name: '阅读正文', exact: true })).toHaveCSS(
-      'font-size',
-      '15px',
-    );
+    await expect(page.locator('html')).not.toHaveAttribute('data-content-latin');
+    for (const cell of [source, page.getByRole('cell', { name: '阅读正文', exact: true })]) {
+      await expect(cell).toHaveCSS('font-size', '14px');
+      await expect(cell).toHaveCSS('font-family', /Source Sans 3 Variable.*Noto Sans SC Variable/);
+      await expect(cell).toHaveCSS('font-weight', '400');
+    }
+    await page.getByRole('button', { name: 'Term bases', exact: true }).click();
+    await page.getByRole('button', { name: 'Preview Terminology preview', exact: true }).click();
+    for (const name of ['Preview term', '预览术语', 'Term note']) {
+      const cell = page.getByRole('cell', { name, exact: true });
+      await expect(cell).toHaveCSS('font-size', '14px');
+      await expect(cell).toHaveCSS('font-family', /Source Sans 3 Variable.*Noto Sans SC Variable/);
+    }
     await page
       .getByRole('navigation', { name: 'Projects', exact: true })
       .getByRole('button', { name: projectName, exact: true })
       .click();
     await page.getByText('cm6-smoke-fixture.xlsx', { exact: true }).click();
     await expect(page.locator('html')).toHaveAttribute('data-color-theme', 'nord');
+    await appearance.click();
+    await expect(page.getByRole('radio', { name: 'Inter', exact: true })).toBeChecked();
+    await expect(page.getByRole('radio', { name: 'Noto Serif SC · 宋体' })).toBeChecked();
+    await expect(page.getByRole('radio', { name: '15 px', exact: true })).toBeChecked();
   } finally {
     await closeEditorSmokeSession(session);
   }

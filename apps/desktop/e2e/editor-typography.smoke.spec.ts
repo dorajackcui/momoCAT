@@ -225,8 +225,8 @@ test('loads local fonts and preserves editing while switching scripts and 14/15/
     }
     await western.getByText('Inter', { exact: true }).click();
     await page.getByRole('button', { name: 'Back to Project' }).click();
-    await expect(page.locator('html')).toHaveAttribute('data-content-latin', 'source-serif');
-    await expect(page.locator('html')).toHaveAttribute('data-content-size', '16');
+    await expect(page.locator('html')).not.toHaveAttribute('data-content-latin');
+    await expect(page.locator('html')).not.toHaveAttribute('data-content-size');
     await page.getByText('cm6-smoke-fixture.xlsx', { exact: true }).click();
     await button.click();
     await expect(western.getByRole('radio', { name: 'Inter' })).toBeChecked();

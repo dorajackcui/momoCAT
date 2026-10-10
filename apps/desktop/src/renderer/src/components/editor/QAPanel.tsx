@@ -1,11 +1,12 @@
 import { useId, useMemo, useState } from 'react';
 import type { EditorSegmentStore } from '../../hooks/editor/editorSegmentStore';
-import { qaGroupForRule, type FileQaIssueRecord } from '@cat/core/project';
+import type { FileQaIssueRecord } from '@cat/core/project';
 import { QAResultRow } from './QAResultRow';
 import { Button, Icon, IconButton } from '../ui';
 import { QAVirtualList } from './QAVirtualList';
 import { QAReferenceSummary } from './QAReferenceSummary';
-import { QA_GROUP_ORDER } from '../qaSections';
+import { groupQaIssues, groupQaIssuesByRow } from './qaResultGroups';
+import { QARowList } from './QARowList';
 import { qaSelectionForIssues, type QaHighlightSelection } from '../qaHighlights';
 
 export interface QAPanelProps {
@@ -20,48 +21,15 @@ export interface QAPanelProps {
   onLocate: (id: string) => void;
 }
 
-export function groupQaIssues(issues: FileQaIssueRecord[]) {
-  type Group = {
-    label: string;
-    issues: FileQaIssueRecord[];
-    rows: Map<string, FileQaIssueRecord[]>;
-    references: Map<string, NonNullable<FileQaIssueRecord['references']>[number]>;
-  };
-  type Category = { label: string; issues: FileQaIssueRecord[]; groups: Map<string, Group> };
-  const categories = new Map<string, Category>();
-  for (const issue of issues) {
-    const definition = qaGroupForRule(issue.ruleId);
-    const id = definition?.id ?? issue.ruleId;
-    const category: Category = categories.get(id) ?? {
-      label: definition?.label ?? 'Other checks',
-      issues: [],
-      groups: new Map(),
-    };
-    category.issues.push(issue);
-    const groupId = issue.groupId ?? issue.ruleId;
-    const group: Group = category.groups.get(groupId) ?? {
-      label:
-        issue.groupLabel ??
-        definition?.checks.find((check) => check[0] === issue.ruleId)?.[1] ??
-        issue.ruleId,
-      issues: [],
-      rows: new Map(),
-      references: new Map(),
-    };
-    group.issues.push(issue);
-    const row = group.rows.get(issue.segmentId) ?? [];
-    row.push(issue);
-    group.rows.set(issue.segmentId, row);
-    for (const reference of issue.references ?? [])
-      group.references.set(reference.segmentId, reference);
-    category.groups.set(groupId, group);
-    categories.set(id, category);
+export const QA_DISPLAY_STORAGE_KEY = 'momocat.editor.qaDisplayMode';
+type QaDisplayMode = 'type' | 'row';
+
+function readQaDisplayMode(): QaDisplayMode {
+  try {
+    return localStorage.getItem(QA_DISPLAY_STORAGE_KEY) === 'row' ? 'row' : 'type';
+  } catch {
+    return 'type';
   }
-  return [...categories.entries()].sort(
-    ([left], [right]) =>
-      (QA_GROUP_ORDER.get(left) ?? Number.MAX_SAFE_INTEGER) -
-      (QA_GROUP_ORDER.get(right) ?? Number.MAX_SAFE_INTEGER),
-  );
 }
 
 const rowIds = (issues: FileQaIssueRecord[]) => [
@@ -80,7 +48,28 @@ export function QAPanel({
   onFilter,
   onLocate,
 }: QAPanelProps) {
+  const [displayMode, setDisplayMode] = useState(readQaDisplayMode);
   const categories = useMemo(() => groupQaIssues(issues), [issues]);
+  const rows = useMemo(
+    () => (displayMode === 'row' ? groupQaIssuesByRow(issues) : []),
+    [displayMode, issues],
+  );
+  const [collapsedRows, setCollapsedRows] = useState<Set<string>>(() => new Set());
+  const changeDisplayMode = (next: QaDisplayMode) => {
+    setDisplayMode(next);
+    try {
+      localStorage.setItem(QA_DISPLAY_STORAGE_KEY, next);
+    } catch {
+      // Storage failures must not block switching the current report.
+    }
+  };
+  const toggleRow = (id: string) =>
+    setCollapsedRows((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const panelId = useId();
   const toggleCategory = (id: string) =>
@@ -98,9 +87,22 @@ export function QAPanel({
             {issues.length} {issues.length === 1 ? 'finding' : 'findings'} ·{' '}
             {rowCount(rowIds(issues).length)}
           </span>
-          <Button size="sm" onClick={onRun} loading={running}>
-            Run QA
-          </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            <IconButton
+              variant="ghost"
+              size="sm"
+              aria-label={displayMode === 'type' ? 'Show QA by row' : 'Show QA by type'}
+              title={
+                displayMode === 'type' ? 'By type · Switch to By row' : 'By row · Switch to By type'
+              }
+              onClick={() => changeDisplayMode(displayMode === 'type' ? 'row' : 'type')}
+            >
+              <Icon name="arrow-left-right" />
+            </IconButton>
+            <Button size="sm" onClick={onRun} loading={running}>
+              Run QA
+            </Button>
+          </div>
         </div>
         {(running || stale || !checked) &&
           ((stale || (!checked && hasResults)) && !running ? (
@@ -113,7 +115,16 @@ export function QAPanel({
             </p>
           ))}
       </div>
-      {issues.length > 500 ? (
+      {displayMode === 'row' && issues.length > 0 ? (
+        <QARowList
+          rows={rows}
+          collapsed={collapsedRows}
+          onToggle={toggleRow}
+          virtualized={issues.length > 500}
+          onFilter={onFilter}
+          onLocate={onLocate}
+        />
+      ) : issues.length > 500 ? (
         <QAVirtualList
           categories={categories}
           collapsed={collapsed}

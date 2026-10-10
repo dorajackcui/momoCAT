@@ -1,5 +1,125 @@
 import { expect, test } from '@playwright/test';
+import type { DesktopApi } from '../src/shared/ipc';
 import { createEditorSmokeSession, closeEditorSmokeSession } from './support/editorSmokeSession';
+
+test('QA row mode keeps all findings together and selects only the requested check highlights', async () => {
+  const session = await createEditorSmokeSession(
+    [
+      ['Count 12 {name}', 'There are 13 items {extra}', ''],
+      [
+        'Count 20 {name} https://docs.example.test/start',
+        'Count 2 {extra}，， AＡ https://docs.example.test/guide (]',
+        '',
+      ],
+      ['Clean', '正确', ''],
+    ],
+    {
+      tagPolicy: 'none',
+      qaSettings: {
+        enabledRuleIds: ['tag-integrity', 'number', 'url', 'target-text'],
+        disabledCheckIds: [],
+      },
+    },
+  );
+  try {
+    const { page, fileId } = session;
+    await page.getByRole('button', { name: 'Run batch QA', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Numbers', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Show QA by row', exact: true })).toHaveAttribute(
+      'title',
+      'By type · Switch to By row',
+    );
+    const saved = await page.evaluate(async (id) => {
+      const rows = await (window as unknown as { api: DesktopApi }).api.getSegments(id, 0, 10);
+      return rows.map((row) => ({ segmentId: row.segmentId, qaIssues: row.qaIssues }));
+    }, fileId);
+    await page.getByRole('button', { name: 'Show QA by row', exact: true }).click();
+    const row = page.getByRole('region', { name: 'Row 2', exact: true });
+    await expect(row.getByText('Tag / Placeholder', { exact: true })).toBeVisible();
+    await expect(row.getByText('Numbers', { exact: true })).toBeVisible();
+    await expect(row.getByText('Missing tags', { exact: true })).toHaveCount(0);
+    await expect(row.getByText('Extra tags', { exact: true })).toHaveCount(0);
+    await expect(row.getByText('Target', { exact: true })).toHaveCount(0);
+    await expect(row.getByText('There are 13 items {extra}', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Row 3', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Row 4', exact: true })).toHaveCount(0);
+    const modeBounds = await page
+      .getByRole('button', { name: 'Show QA by type', exact: true })
+      .boundingBox();
+    const runBounds = await page.getByRole('button', { name: 'Run QA', exact: true }).boundingBox();
+    expect(modeBounds!.x + modeBounds!.width).toBeLessThanOrEqual(runBounds!.x);
+    const typeBounds = await row.getByText('Numbers', { exact: true }).boundingBox();
+    const issueBounds = await row
+      .getByRole('button', { name: 'Missing: 12; Extra: 13' })
+      .boundingBox();
+    expect(typeBounds!.x + typeBounds!.width).toBeLessThanOrEqual(issueBounds!.x);
+    expect(typeBounds!.y + typeBounds!.height).toBeGreaterThan(issueBounds!.y);
+    expect(issueBounds!.y + issueBounds!.height).toBeGreaterThan(typeBounds!.y);
+    await row.getByRole('button', { name: /^Row 2 ·/ }).click();
+    await expect(page.locator('.editor-row')).toHaveCount(1);
+    await expect(page.locator('.editor-source-text mark')).toHaveText(['12', '{name}']);
+    await expect(page.locator('.cm-target-highlight')).toHaveText(['13', '{extra}']);
+    await page.screenshot({
+      path: test.info().outputPath('qa-by-row-multiple-issues.png'),
+      animations: 'disabled',
+    });
+    const denseRow = page.getByRole('region', { name: 'Row 3', exact: true });
+    await denseRow.getByRole('button', { name: 'Row 3 · 7 findings', exact: true }).click();
+    await expect(denseRow.getByText('Tag / Placeholder', { exact: true })).toHaveCount(1);
+    await expect(denseRow.getByText('Target text', { exact: true })).toHaveCount(1);
+    const urlFinding = denseRow.getByRole('button', { name: /^Missing: https/ });
+    await expect(urlFinding).toHaveAttribute(
+      'title',
+      /https:\/\/docs\.example\.test\/start.*https:\/\/docs\.example\.test\/guide/,
+    );
+    expect(
+      await urlFinding
+        .locator('span')
+        .evaluate((element) => element.scrollWidth > element.clientWidth),
+    ).toBe(true);
+    await page.screenshot({
+      path: test.info().outputPath('qa-by-row-seven-issues.png'),
+      animations: 'disabled',
+    });
+    await row.getByRole('button', { name: 'Extra: {extra}', exact: true }).click();
+    await expect(page.locator('.editor-source-text mark')).toHaveCount(0);
+    await expect(page.locator('.cm-target-highlight')).toHaveText(['{extra}']);
+    await row.getByRole('button', { name: /12|13/ }).click();
+    await expect(page.locator('.editor-source-text mark')).toHaveText(['12']);
+    await expect(page.locator('.cm-target-highlight')).toHaveText(['13']);
+    await page.getByRole('button', { name: 'Show QA by type', exact: true }).click();
+    await expect(page.locator('.editor-row')).toHaveCount(1);
+    await expect(page.locator('.cm-target-highlight')).toHaveText(['13']);
+    await page.getByRole('button', { name: 'Show QA by row', exact: true }).click();
+    await page.locator('.cm-content').fill('There are 12 items {extra}');
+    await expect(page.locator('.cm-content')).toHaveText('There are 12 items {extra}');
+    await expect(row.getByText('There are 12 items {extra}', { exact: true })).toHaveCount(0);
+    await expect(row.getByRole('button', { name: /12|13/ })).toBeVisible();
+    await expect(page.getByText('Changed · Recheck needed', { exact: true })).toBeVisible();
+    await expect(page.locator('.cm-target-highlight')).toHaveCount(0);
+    await expect
+      .poll(() =>
+        page.evaluate(async (id) => {
+          const rows = await (window as unknown as { api: DesktopApi }).api.getSegments(id, 0, 10);
+          return rows.map((item) => ({ segmentId: item.segmentId, qaIssues: item.qaIssues }));
+        }, fileId),
+      )
+      .toEqual(saved);
+    await page.screenshot({
+      path: test.info().outputPath('qa-by-row.png'),
+      animations: 'disabled',
+    });
+    await page.getByRole('button', { name: 'Back to Project', exact: true }).click();
+    await page.getByText('cm6-smoke-fixture.xlsx', { exact: true }).click();
+    await page.getByRole('tab', { name: 'QA', exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: 'Show QA by type', exact: true }),
+    ).toHaveAttribute('title', 'By row · Switch to By type');
+    await expect(page.getByRole('region', { name: 'Row 2', exact: true })).toBeVisible();
+  } finally {
+    await closeEditorSmokeSession(session);
+  }
+});
 
 test('QA selection highlights only the relevant fragments and stays consistent during editing', async () => {
   const session = await createEditorSmokeSession(

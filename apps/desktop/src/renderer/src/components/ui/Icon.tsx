@@ -5,6 +5,14 @@ import type { SVGProps } from 'react';
 const shapes = {
   check: <path d="M5 13l4 4L19 7" />,
   'chevron-down': <path d="m6 9 6 6 6-6" />,
+  'arrow-left-right': (
+    <>
+      <path d="M8 3 4 7l4 4" />
+      <path d="M4 7h16" />
+      <path d="m16 21 4-4-4-4" />
+      <path d="M20 17H4" />
+    </>
+  ),
   'shield-alert': (
     <>
       <path d="M12 3 4 7v5c0 5 8 9 8 9s8-4 8-9V7l-8-4ZM12 8v5" />
